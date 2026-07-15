@@ -141,13 +141,16 @@ export function FilterChip({
   selected,
   className = '',
   ...props
-}: { selected: boolean } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+}: { selected: boolean } & Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  'type' | 'aria-pressed'
+>) {
   return (
     <button
+      {...props}
       type="button"
       aria-pressed={selected}
       className={`min-h-11 rounded-full border px-4 aria-pressed:border-[var(--color-primary)] aria-pressed:bg-[var(--color-primary-soft)] ${className}`}
-      {...props}
     />
   );
 }

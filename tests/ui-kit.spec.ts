@@ -41,11 +41,70 @@ test('все публичные размеры действий дают обл�
 
 test('overlays and form controls are keyboard accessible', async ({ page }) => {
   await page.goto('/ui-kit');
-  await page.getByRole('button', { name: 'Открыть окно' }).click();
+  const opener = page.getByRole('button', { name: 'Открыть окно' });
+  await opener.click();
   await expect(page.getByRole('dialog', { name: 'Пример окна' })).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: 'Пример окна' })).toBeHidden();
+  await expect(page.locator('body')).toHaveCSS('overflow', 'hidden');
 
-  await expect(page.getByLabel('Название автомобиля')).toBeVisible();
+  const dialog = page.getByRole('dialog', { name: 'Пример окна' });
+  const firstAction = dialog.getByRole('button').first();
+  const lastAction = dialog.getByRole('button').last();
+  await expect(firstAction).toBeFocused();
+  await dialog.getByRole('button', { name: 'Перерисовать пример' }).click();
+  await expect(dialog.getByRole('button', { name: 'Перерисовать пример' })).toBeFocused();
+  await lastAction.focus();
+  await page.keyboard.press('Tab');
+  await expect(firstAction).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(lastAction).toBeFocused();
+
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(opener).toBeFocused();
+  await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden');
+
+  const vehicleName = page.getByLabel('Название автомобиля');
+  await expect(vehicleName).toBeVisible();
+  await expect(vehicleName).toHaveAttribute('aria-invalid', 'true');
+  await expect(vehicleName).toHaveAttribute('aria-describedby', /hint.*error|error.*hint/);
   await expect(page.getByRole('switch', { name: 'Только онлайн' })).toBeVisible();
+  await expect(page.getByRole('searchbox')).toBeVisible();
+  await expect(dialog).toHaveAttribute('data-testid');
+});
+
+test('scroll lock remains active while another overlay is open', async ({ page }) => {
+  await page.goto('/ui-kit');
+  await page.getByRole('button', { name: 'Открыть два окна' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(2);
+  await page.getByRole('dialog').last().getByRole('button', { name: 'Закрыть' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  await expect(page.locator('body')).toHaveCSS('overflow', 'hidden');
+});
+
+test('tabs, tooltip and bottom sheet expose complete keyboard contracts', async ({ page }) => {
+  await page.goto('/ui-kit');
+
+  const selectedTab = page.getByRole('tab', { selected: true });
+  await selectedTab.focus();
+  await page.keyboard.press('End');
+  await expect(page.getByRole('tab').last()).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(page.getByRole('tab').first()).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab').nth(1)).toBeFocused();
+
+  const tooltipTrigger = page.getByRole('button', { name: 'Подсказка' });
+  await expect(tooltipTrigger).toHaveAttribute('aria-describedby');
+
+  await page.getByRole('button', { name: 'Открыть нижнюю панель' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Пример нижней панели' });
+  await sheet.getByRole('button', { name: 'Развернуть' }).click();
+  await expect(sheet).toHaveAttribute('data-snap', 'expanded');
+
+  for (const action of await sheet.getByRole('button').all()) {
+    const box = await action.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box?.width).toBeGreaterThanOrEqual(44);
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+  }
 });

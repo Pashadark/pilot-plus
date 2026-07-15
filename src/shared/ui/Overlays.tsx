@@ -1,8 +1,22 @@
 'use client';
 
-import { useEffect, useId, useRef, useState, type HTMLAttributes, type ReactNode } from 'react';
+import {
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useEffectEvent,
+  useId,
+  useRef,
+  useState,
+  type HTMLAttributes,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 
-export interface ModalProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title' | 'children'> {
+export interface ModalProps extends Omit<
+  HTMLAttributes<HTMLDivElement>,
+  'title' | 'children' | 'role' | 'aria-modal' | 'aria-labelledby' | 'aria-describedby' | 'tabIndex'
+> {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
@@ -13,6 +27,21 @@ export interface ModalProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'
 
 const focusable =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+let scrollLockCount = 0;
+let savedBodyOverflow = '';
+
+function lockBodyScroll() {
+  if (scrollLockCount === 0) {
+    savedBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+  }
+  scrollLockCount += 1;
+  return () => {
+    scrollLockCount = Math.max(0, scrollLockCount - 1);
+    if (scrollLockCount === 0) document.body.style.overflow = savedBodyOverflow;
+  };
+}
 
 function DialogBoundary({
   open,
@@ -28,26 +57,55 @@ function DialogBoundary({
   const descriptionId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
+  const requestOpenChange = useEffectEvent(onOpenChange);
   useEffect(() => {
     if (!open) return;
     previousFocus.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const unlockBodyScroll = lockBodyScroll();
     const timer = window.setTimeout(() =>
       (panelRef.current?.querySelector<HTMLElement>(focusable) ?? panelRef.current)?.focus(),
     );
-    const escape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') onOpenChange(false);
+    const keyboard = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        requestOpenChange(false);
+        return;
+      }
+      if (event.key !== 'Tab' || !panelRef.current) return;
+      const candidates = Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>(focusable),
+      ).filter((element) => element.getClientRects().length > 0);
+      if (candidates.length === 0) {
+        event.preventDefault();
+        panelRef.current.focus();
+        return;
+      }
+      const first = candidates[0];
+      const last = candidates[candidates.length - 1];
+      if (!panelRef.current.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+        return;
+      }
+      if (
+        event.shiftKey &&
+        (document.activeElement === first || document.activeElement === panelRef.current)
+      ) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
-    document.addEventListener('keydown', escape);
+    document.addEventListener('keydown', keyboard);
     return () => {
       window.clearTimeout(timer);
-      document.removeEventListener('keydown', escape);
-      document.body.style.overflow = overflow;
+      document.removeEventListener('keydown', keyboard);
+      unlockBodyScroll();
       previousFocus.current?.focus();
     };
-  }, [open, onOpenChange]);
+  }, [open]);
   if (!open) return null;
   return (
     <div
@@ -57,6 +115,7 @@ function DialogBoundary({
       }}
     >
       <div
+        {...props}
         ref={panelRef}
         role="dialog"
         aria-modal="true"
@@ -64,7 +123,6 @@ function DialogBoundary({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={`m-auto w-full max-w-lg rounded-[var(--radius-panel)] border bg-[var(--color-surface)] p-5 shadow-[var(--shadow-floating)] outline-none ${className}`}
-        {...props}
       >
         <header className="mb-4">
           <h2 id={titleId} className="text-lg font-semibold">
@@ -95,21 +153,50 @@ export interface BottomSheetProps extends ModalProps {
   onSnapChange: (snap: BottomSheetProps['snap']) => void;
 }
 export function BottomSheet({ snap, onSnapChange, className = '', ...props }: BottomSheetProps) {
-  void onSnapChange;
+  const snaps: readonly BottomSheetProps['snap'][] = ['collapsed', 'intermediate', 'expanded'];
   return (
     <DialogBoundary
       {...props}
       data-snap={snap}
       className={`mb-0 max-w-none rounded-b-none ${snap === 'collapsed' ? 'max-h-[25dvh]' : snap === 'intermediate' ? 'max-h-[60dvh]' : 'max-h-[90dvh]'} ${className}`}
-    />
+    >
+      <div role="group" aria-label="Положение нижней панели" className="mb-3 flex flex-wrap gap-2">
+        {snaps.map((value) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={snap === value}
+            onClick={() => onSnapChange(value)}
+            className="min-h-11 min-w-11 rounded-[var(--radius-sm)] px-3 aria-pressed:bg-[var(--color-primary-soft)]"
+          >
+            {value === 'collapsed'
+              ? 'Свернуть'
+              : value === 'intermediate'
+                ? 'Наполовину'
+                : 'Развернуть'}
+          </button>
+        ))}
+      </div>
+      {props.children}
+    </DialogBoundary>
   );
 }
 
-export function Tooltip({ content, children }: { content: ReactNode; children: ReactNode }) {
+type TooltipTriggerProps = { 'aria-describedby'?: string };
+
+export function Tooltip({
+  content,
+  children,
+}: {
+  content: ReactNode;
+  children: ReactElement<TooltipTriggerProps>;
+}) {
   const id = useId();
+  if (!isValidElement<TooltipTriggerProps>(children)) return children;
+  const describedBy = [children.props['aria-describedby'], id].filter(Boolean).join(' ');
   return (
-    <span className="group relative inline-flex" aria-describedby={id}>
-      {children}
+    <span className="group relative inline-flex">
+      {cloneElement(children, { 'aria-describedby': describedBy })}
       <span
         id={id}
         role="tooltip"

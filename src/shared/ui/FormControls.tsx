@@ -12,11 +12,14 @@ export interface FieldShellProps {
 const controlClass =
   'min-h-11 w-full rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 text-[var(--color-text)] outline-none transition-colors focus-visible:border-[var(--color-primary)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary-soft)] disabled:cursor-not-allowed disabled:opacity-55';
 
-function descriptions(id: string, hint?: string, error?: string) {
-  return [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined;
+function descriptions(id: string, hint?: string, error?: string, supplied?: string) {
+  return (
+    [supplied, hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined
+  );
 }
 
-export type InputProps = FieldShellProps & InputHTMLAttributes<HTMLInputElement>;
+export type InputProps = FieldShellProps &
+  Omit<InputHTMLAttributes<HTMLInputElement>, 'required' | 'aria-invalid'>;
 
 export function Input({
   label,
@@ -24,6 +27,7 @@ export function Input({
   error,
   required,
   id: suppliedId,
+  'aria-describedby': suppliedDescription,
   className = '',
   ...props
 }: InputProps) {
@@ -36,12 +40,12 @@ export function Input({
         {required && <span aria-hidden="true"> *</span>}
       </span>
       <input
+        {...props}
         id={id}
         required={required}
         aria-invalid={Boolean(error)}
-        aria-describedby={descriptions(id, hint, error)}
+        aria-describedby={descriptions(id, hint, error, suppliedDescription)}
         className={`${controlClass} ${className}`}
-        {...props}
       />
       {hint && (
         <span id={`${id}-hint`} className="text-sm text-[var(--color-text-secondary)]">
@@ -57,7 +61,8 @@ export function Input({
   );
 }
 
-export type SelectProps = FieldShellProps & SelectHTMLAttributes<HTMLSelectElement>;
+export type SelectProps = FieldShellProps &
+  Omit<SelectHTMLAttributes<HTMLSelectElement>, 'required' | 'aria-invalid'>;
 
 export function Select({
   label,
@@ -65,6 +70,7 @@ export function Select({
   error,
   required,
   id: suppliedId,
+  'aria-describedby': suppliedDescription,
   className = '',
   children,
   ...props
@@ -78,12 +84,12 @@ export function Select({
         {required && <span aria-hidden="true"> *</span>}
       </span>
       <select
+        {...props}
         id={id}
         required={required}
         aria-invalid={Boolean(error)}
-        aria-describedby={descriptions(id, hint, error)}
+        aria-describedby={descriptions(id, hint, error, suppliedDescription)}
         className={`${controlClass} ${className}`}
-        {...props}
       >
         {children}
       </select>
@@ -101,23 +107,27 @@ export function Select({
   );
 }
 
-export function Checkbox({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
+type CheckboxProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>;
+
+export function Checkbox({ className = '', ...props }: CheckboxProps) {
   return (
     <input
+      {...props}
       type="checkbox"
       className={`min-h-11 min-w-11 accent-[var(--color-primary)] ${className}`}
-      {...props}
     />
   );
 }
 
-export function Switch({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
+type SwitchProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'role'>;
+
+export function Switch({ className = '', ...props }: SwitchProps) {
   return (
     <input
+      {...props}
       type="checkbox"
       role="switch"
       className={`min-h-11 min-w-11 accent-[var(--color-primary)] ${className}`}
-      {...props}
     />
   );
 }
@@ -156,6 +166,9 @@ export function SegmentedControl<T extends string>({
   );
 }
 
-export function SearchInput({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input type="search" className={`${controlClass} ${className}`} {...props} />;
+export function SearchInput({
+  className = '',
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  return <input {...props} type="search" className={`${controlClass} ${className}`} />;
 }
