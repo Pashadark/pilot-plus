@@ -21,7 +21,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem('pilot-theme', theme);
+    try {
+      window.localStorage.setItem('pilot-theme', theme);
+    } catch {
+      // Тема продолжает работать, даже если браузер запретил постоянное хранилище.
+    }
   }, [theme]);
 
   const value = useMemo<ThemeContextValue>(

@@ -17,10 +17,10 @@ const variants: Record<ButtonVariant, string> = {
 };
 
 const sizes: Record<ComponentSize, string> = {
-  xs: 'min-h-8 gap-1.5 rounded-[var(--radius-sm)] px-2.5 text-xs',
-  sm: 'min-h-9 gap-2 rounded-[var(--radius-sm)] px-3 text-sm',
-  md: 'min-h-11 gap-2 rounded-[var(--radius-md)] px-4 text-sm',
-  lg: 'min-h-12 gap-2.5 rounded-[var(--radius-md)] px-5 text-base',
+  xs: 'min-h-11 min-w-11 gap-1.5 rounded-[var(--radius-sm)] px-2.5 text-xs',
+  sm: 'min-h-11 min-w-11 gap-2 rounded-[var(--radius-sm)] px-3 text-sm',
+  md: 'min-h-11 min-w-11 gap-2 rounded-[var(--radius-md)] px-4 text-sm',
+  lg: 'min-h-12 min-w-12 gap-2.5 rounded-[var(--radius-md)] px-5 text-base',
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

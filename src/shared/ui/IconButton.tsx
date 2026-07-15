@@ -3,8 +3,8 @@ import type { ReactNode } from 'react';
 import { Button, type ButtonProps, type ComponentSize } from './Button';
 
 const iconSizes: Record<ComponentSize, string> = {
-  xs: 'size-8 !p-0',
-  sm: 'size-9 !p-0',
+  xs: 'size-11 !p-0',
+  sm: 'size-11 !p-0',
   md: 'size-11 !p-0',
   lg: 'size-12 !p-0',
 };

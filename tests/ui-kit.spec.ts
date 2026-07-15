@@ -18,3 +18,23 @@ test('theme and action primitives expose accessible states', async ({ page }) =>
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
+
+test('все публичные размеры действий дают область касания не меньше 44 на 44 пикселя', async ({
+  page,
+}) => {
+  await page.goto('/ui-kit');
+
+  const publicSizes = ['xs', 'sm', 'md', 'lg'] as const;
+
+  for (const component of ['button', 'icon-button'] as const) {
+    for (const size of publicSizes) {
+      const action = page.getByTestId(`${component}-size-${size}`);
+      await expect(action).toBeVisible();
+
+      const box = await action.boundingBox();
+      expect(box, `${component} размера ${size} должен иметь область касания`).not.toBeNull();
+      expect(box?.width, `${component} размера ${size}: ширина`).toBeGreaterThanOrEqual(44);
+      expect(box?.height, `${component} размера ${size}: высота`).toBeGreaterThanOrEqual(44);
+    }
+  }
+});
