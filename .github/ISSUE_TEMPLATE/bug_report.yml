@@ -1,0 +1,36 @@
+name: Сообщить об ошибке
+description: Зафиксировать воспроизводимую проблему Pilot+
+title: '[Bug]: '
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Спасибо за помощь в улучшении Pilot+.
+  - type: textarea
+    id: description
+    attributes:
+      label: Описание
+      description: Что произошло и какого результата вы ожидали?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      placeholder: |
+        1. Открыть...
+        2. Нажать...
+        3. Увидеть...
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Окружение
+      placeholder: Windows 11, Chrome 130, local develop
+  - type: textarea
+    id: context
+    attributes:
+      label: Дополнительный контекст
+      description: Логи, скриншоты или другие полезные сведения.

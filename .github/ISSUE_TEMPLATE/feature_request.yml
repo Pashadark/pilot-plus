@@ -1,0 +1,25 @@
+name: Предложить улучшение
+description: Предложить новую возможность Pilot+
+title: '[Feature]: '
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Проблема
+      description: Какую задачу пользователя нужно решить?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Предлагаемое решение
+      description: Как должна работать новая возможность?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы и ограничения
+      description: Какие другие варианты рассматривались?
