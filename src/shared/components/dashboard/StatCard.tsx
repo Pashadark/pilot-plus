@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import type { IconType } from "react-icons";
 
 
 export function StatCard({
@@ -8,13 +9,11 @@ title,
 value,
 change,
 icon:Icon,
-color="blue"
 }:{
 title:string;
 value:string;
 change:string;
-icon:any;
-color?:string;
+icon:IconType;
 }){
 
 

@@ -6,7 +6,6 @@ import {
   FiChevronDown,
   FiMoon,
   FiSearch,
-  FiSun,
   FiUser,
 } from "react-icons/fi";
 

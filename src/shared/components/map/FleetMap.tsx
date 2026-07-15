@@ -9,6 +9,7 @@ import {
 import {
   createRoot,
 } from "react-dom/client";
+import type { Root } from "react-dom/client";
 
 
 import maplibregl from "maplibre-gl";
@@ -20,44 +21,6 @@ import { VehicleMarker } from "./VehicleMarker";
 
 import { VehiclePanel } from "./VehiclePanel";
 
-
-
-const vehicles = [
-
-{
-  name:"Haval Jolion",
-  plate:"А123ВС777",
-  speed:65,
-  status:"moving" as const,
-  lng:37.6173,
-  lat:55.7558,
-},
-
-
-{
-  name:"Geely Atlas",
-  plate:"М456ОР799",
-  speed:0,
-  status:"idle" as const,
-  lng:37.67,
-  lat:55.76,
-},
-
-
-{
-  name:"Kia K5",
-  plate:"Т789КХ197",
-  speed:42,
-  status:"online" as const,
-  lng:37.58,
-  lat:55.74,
-},
-
-
-];
-
-
-
 type VehicleStatus =
 "online"
 |
@@ -67,6 +30,49 @@ type VehicleStatus =
 |
 "alarm";
 
+interface Vehicle {
+  name: string;
+  plate: string;
+  speed: number;
+  status: VehicleStatus;
+  lng: number;
+  lat: number;
+}
+
+
+const vehicles: Vehicle[] = [
+
+{
+  name:"Haval Jolion",
+  plate:"А123ВС777",
+  speed:65,
+  status:"moving",
+  lng:37.6173,
+  lat:55.7558,
+},
+
+
+{
+  name:"Geely Atlas",
+  plate:"М456ОР799",
+  speed:0,
+  status:"idle",
+  lng:37.67,
+  lat:55.76,
+},
+
+
+{
+  name:"Kia K5",
+  plate:"Т789КХ197",
+  speed:42,
+  status:"online",
+  lng:37.58,
+  lat:55.74,
+},
+
+
+];
 
 
 
@@ -84,12 +90,12 @@ useRef<maplibregl.Map|null>(null);
 
 
 const markerRoots =
-useRef<any[]>([]);
+useRef<Root[]>([]);
 
 
 
 const [selectedVehicle,setSelectedVehicle] =
-useState<any>(null);
+useState<Vehicle | null>(null);
 
 
 

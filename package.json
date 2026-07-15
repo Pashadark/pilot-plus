@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"*.{json,md,ts,mjs,yaml}\"",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium"
   },
   "prisma": {
     "schema": "src/database/prisma/schema.prisma"
@@ -21,6 +25,7 @@
     "react-icons": "^5.7.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

@@ -8,6 +8,16 @@ import {
   FiX
 } from "react-icons/fi";
 
+type VehicleStatus = "online" | "moving" | "idle" | "alarm";
+
+interface Vehicle {
+  name: string;
+  plate: string;
+  speed: number;
+  status: VehicleStatus;
+  lng: number;
+  lat: number;
+}
 
 export function VehiclePanel({
 
@@ -16,7 +26,7 @@ onClose
 
 }:{
 
-vehicle:any;
+vehicle:Vehicle;
 
 onClose:()=>void;
 
