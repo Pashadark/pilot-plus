@@ -1,52 +1,18 @@
-"use client";
+import type { HTMLAttributes } from 'react';
 
-import { ReactNode } from "react";
-import { motion } from "framer-motion";
+export function Card({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={`rounded-[var(--radius-panel)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)] ${className}`}
+      {...props}
+    />
+  );
+}
 
+export function CardHeader({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div className={`border-b border-[var(--color-border)] p-5 ${className}`} {...props} />;
+}
 
-export function Card({
-children,
-className=""
-}:{
-children:ReactNode;
-className?:string;
-}){
-
-
-return (
-
-<motion.div
-
-initial={{
-opacity:0,
-y:15
-}}
-
-animate={{
-opacity:1,
-y:0
-}}
-
-transition={{
-duration:0.3
-}}
-
-className={`
-rounded-2xl
-border
-border-[#E2E8F0]
-bg-white
-shadow-sm
-${className}
-`}
-
->
-
-{children}
-
-</motion.div>
-
-);
-
-
+export function CardContent({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div className={`p-5 ${className}`} {...props} />;
 }
