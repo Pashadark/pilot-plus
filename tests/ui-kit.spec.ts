@@ -38,3 +38,14 @@ test('все публичные размеры действий дают обл�
     }
   }
 });
+
+test('overlays and form controls are keyboard accessible', async ({ page }) => {
+  await page.goto('/ui-kit');
+  await page.getByRole('button', { name: 'Открыть окно' }).click();
+  await expect(page.getByRole('dialog', { name: 'Пример окна' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Пример окна' })).toBeHidden();
+
+  await expect(page.getByLabel('Название автомобиля')).toBeVisible();
+  await expect(page.getByRole('switch', { name: 'Только онлайн' })).toBeVisible();
+});

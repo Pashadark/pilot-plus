@@ -2,3 +2,7 @@ export * from './Badge';
 export * from './Button';
 export * from './Card';
 export * from './IconButton';
+export * from './FormControls';
+export * from './Navigation';
+export * from './Feedback';
+export * from './Overlays';
