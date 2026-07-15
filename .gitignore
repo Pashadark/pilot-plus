@@ -43,3 +43,6 @@ next-env.d.ts
 # generated database clients and native query engines
 /src/database/generated/
 /src/database/src/generated/
+
+# local Superpowers visual brainstorming sessions
+/.superpowers/
