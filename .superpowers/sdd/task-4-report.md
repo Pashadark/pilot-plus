@@ -31,3 +31,26 @@
 ## Коммит
 
 Итоговый хеш зафиксирован в выводе `git log -1 --oneline` и передан координатору вместе с этим отчётом.
+
+## Fix report по замечаниям review
+
+### Статус
+
+`MobileNavigation` переведён с самописного overlay на публичный `Drawer` из `shared/ui`. Общая граница диалога теперь обеспечивает начальный фокус, циклический focus trap, блокировку прокрутки `body`, закрытие по Escape и overlay, а также возврат фокуса к кнопке «Открыть меню». Выбор навигационной ссылки закрывает drawer.
+
+### TDD и проверки
+
+- RED: `npm run test:e2e -- --project=desktop tests/dashboard.spec.ts` — 4 теста прошли, accessibility-тест упал; процесс завершён по timeout через 120 секунд из-за lifecycle dev-server.
+- GREEN: `npm run test:e2e -- --project=desktop tests/dashboard.spec.ts` — все 5 Chromium-тестов прошли за 1,3–1,6 секунды; процесс завершён по timeout через 60 секунд уже после результатов из-за lifecycle dev-server.
+- `npm run lint` — PASS, exit code 0.
+- `npm run typecheck` — PASS, exit code 0.
+- `git diff --check` — PASS, exit code 0.
+- WebKit не запускался: доступная проверка выполнена в Chromium согласно ограничению окружения.
+
+### Коммит исправления
+
+`78806b46552c9538c29ca84dafc522ece5efa808` — `fix: use shared drawer for mobile navigation`.
+
+### Оставшиеся замечания
+
+Во время Chromium-прогона существующая dashboard-страница выводит hydration warning из-за различий форматирования `className` и содержит исторические raw hex вне scope Task 4. Все пять целевых тестов при этом завершились успешно; lifecycle команды остаётся проблемой окружения.
