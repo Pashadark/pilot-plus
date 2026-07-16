@@ -21,5 +21,9 @@ export interface FleetMapClientProps {
 }
 
 export function FleetMapClient(props: FleetMapClientProps) {
-  return <FleetMap {...props} />;
+  return (
+    <div className={props.mode === 'mobile' ? 'absolute inset-0' : 'relative h-full w-full'}>
+      <FleetMap {...props} />
+    </div>
+  );
 }

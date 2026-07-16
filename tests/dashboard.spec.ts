@@ -85,3 +85,61 @@ test('мобильная панель управления является по
   const box = await workspace.boundingBox();
   expect(box?.height ?? 0).toBeGreaterThan(600);
 });
+
+test('нижняя панель имеет три различимые высоты и доступные элементы управления', async ({
+  page,
+}) => {
+  const sheet = page.getByTestId('vehicle-bottom-sheet');
+  const snapButtons = page.getByRole('group', { name: 'Положение нижней панели' }).getByRole('button');
+  const heights: number[] = [];
+
+  for (const name of ['Свернуть панель', 'Открыть панель наполовину', 'Развернуть панель']) {
+    const button = page.getByRole('button', { name });
+    await button.click();
+    await expect(button).toHaveAttribute('aria-pressed', 'true');
+    heights.push((await sheet.boundingBox())?.height ?? 0);
+  }
+
+  expect(heights[0]).toBeLessThan(heights[1]);
+  expect(heights[1]).toBeLessThan(heights[2]);
+  for (const button of await snapButtons.all()) {
+    const box = await button.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test('фильтры и поиск меняют набор транспорта на карте', async ({ page }) => {
+  const movingFilter = page.getByRole('button', { name: 'В движении' });
+  await movingFilter.click();
+  await expect(movingFilter).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Все автомобили' })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
+  await expect(page.getByRole('button', { name: 'Выбрать Haval Jolion' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Выбрать Geely Atlas' })).toHaveCount(0);
+
+  await page.getByRole('searchbox', { name: 'Поиск транспорта' }).fill('несуществующий');
+  await expect(page.getByText('На карте пока нет транспорта')).toBeVisible();
+});
+
+test('карта сохраняет canvas и атрибуцию после изменения viewport', async ({ page }) => {
+  const workspace = page.getByTestId('mobile-map-workspace');
+  const map = workspace.getByLabel('Карта автопарка');
+  await expect(map.locator('canvas')).toBeVisible();
+  await expect(workspace.getByText('OpenStreetMap', { exact: false })).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(async () => {
+      const mapBox = await workspace.boundingBox();
+      const canvasBox = await map.locator('canvas').boundingBox();
+      return {
+        sameWidth: Math.round(canvasBox?.width ?? 0) === Math.round(mapBox?.width ?? 0),
+        sameHeight: Math.round(canvasBox?.height ?? 0) === Math.round(mapBox?.height ?? 0),
+        hasSize: (mapBox?.width ?? 0) > 0 && (mapBox?.height ?? 0) > 600,
+      };
+    })
+    .toEqual({ sameWidth: true, sameHeight: true, hasSize: true });
+});

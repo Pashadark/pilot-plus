@@ -51,9 +51,10 @@ export function FleetMap({
   useEffect(() => {
     if (!containerRef.current || vehicles.length === 0) return;
 
+    const container = containerRef.current;
     const markerResources: MarkerResource[] = [];
     const map = new maplibregl.Map({
-      container: containerRef.current,
+      container,
       style: {
         version: 8,
         sources: {
@@ -71,7 +72,14 @@ export function FleetMap({
     });
 
     map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
-    map.on('error', () => setFailed(true));
+    const handleError = () => setFailed(true);
+    const handleLoad = () => map.resize();
+    map.on('error', handleError);
+    map.once('load', handleLoad);
+
+    const initialResizeFrame = window.requestAnimationFrame(() => map.resize());
+    const resizeObserver = new ResizeObserver(() => map.resize());
+    resizeObserver.observe(container);
 
     for (const vehicle of vehicles) {
       const element = document.createElement('button');
@@ -100,6 +108,10 @@ export function FleetMap({
     map.on('zoom', updateMarkers);
 
     return () => {
+      window.cancelAnimationFrame(initialResizeFrame);
+      resizeObserver.disconnect();
+      map.off('error', handleError);
+      map.off('load', handleLoad);
       map.off('zoom', updateMarkers);
       markerResources.forEach(({ marker, root }) => {
         marker.remove();
@@ -119,7 +131,7 @@ export function FleetMap({
 
   return (
     <div className="relative h-full w-full" data-selected-vehicle={selectedVehicle?.id}>
-      <div ref={containerRef} className="absolute inset-0" aria-label="Карта автопарка" />
+      <div ref={containerRef} className="h-full w-full" aria-label="Карта автопарка" />
       {failed && (
         <div className="absolute inset-4 z-10 grid place-items-center">
           <ErrorState

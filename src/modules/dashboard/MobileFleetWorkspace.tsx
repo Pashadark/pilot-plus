@@ -77,7 +77,7 @@ export function MobileFleetWorkspace({ vehicles }: { vehicles: readonly Vehicle[
         data-testid="vehicle-bottom-sheet"
         data-snap={snap}
         aria-label="Выбранный автомобиль"
-        className={`absolute right-0 bottom-0 left-0 z-20 overflow-auto rounded-t-[var(--radius-panel)] border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-floating)] transition-transform ${snap === 'collapsed' ? 'max-h-[28dvh]' : snap === 'intermediate' ? 'max-h-[60dvh]' : 'max-h-[90dvh]'}`}
+        className={`absolute right-0 bottom-0 left-0 z-20 flex max-h-[calc(100%-0.5rem)] flex-col overflow-hidden rounded-t-[var(--radius-panel)] border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-floating)] transition-[height] ${snap === 'collapsed' ? 'h-[28dvh]' : snap === 'intermediate' ? 'h-[60dvh]' : 'h-[90dvh]'}`}
       >
         <div className="mx-auto mb-2 h-1.5 w-12 rounded-full bg-[var(--color-border-strong)]" aria-hidden="true" />
         <div className="mb-3 flex items-center justify-between gap-2">
@@ -103,7 +103,9 @@ export function MobileFleetWorkspace({ vehicles }: { vehicles: readonly Vehicle[
             ))}
           </div>
         </div>
-        <VehicleSummary vehicle={selectedVehicle ?? vehicles[0]} />
+        <div className="min-h-0 overflow-y-auto">
+          <VehicleSummary vehicle={selectedVehicle ?? vehicles[0]} />
+        </div>
       </aside>
     </section>
   );
