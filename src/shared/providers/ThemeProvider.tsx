@@ -24,7 +24,7 @@ function getThemeServerSnapshot(): Theme {
 
 function subscribeToTheme(onStoreChange: () => void) {
   const handleStorage = (event: StorageEvent) => {
-    if (event.key !== storageKey) return;
+    if (event.key !== storageKey && event.key !== null) return;
     document.documentElement.dataset.theme = event.newValue === 'dark' ? 'dark' : 'light';
     onStoreChange();
   };
