@@ -6,3 +6,4 @@ export * from './FormControls';
 export * from './Navigation';
 export * from './Feedback';
 export * from './Overlays';
+export * from './DataDisplay';

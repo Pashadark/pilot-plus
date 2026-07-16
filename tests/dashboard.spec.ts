@@ -6,6 +6,27 @@ test('настольная оболочка показывает постоян�
 
   await expect(page.getByRole('navigation', { name: 'Основная навигация' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Дизайн-система' })).toBeVisible();
+  const header = page.getByRole('banner');
+  await expect(header.getByRole('navigation', { name: 'Хлебные крошки' })).toBeVisible();
+  await expect(header.getByRole('link', { name: 'Pilot+' })).toBeVisible();
+  await expect(header.getByText('Панель управления')).toHaveAttribute('aria-current', 'page');
+  await expect(header.getByRole('searchbox', { name: 'Глобальный поиск' })).toBeVisible();
+  await expect(header.getByRole('button', { name: 'Уведомления' })).toBeVisible();
+  await expect(header.getByRole('button', { name: 'Профиль и компания' })).toBeVisible();
+});
+
+test('перетаскивание ручки меняет положение нижней панели', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/');
+  const sheet = page.getByTestId('vehicle-bottom-sheet');
+  const handle = page.getByTestId('vehicle-sheet-handle');
+  const box = await handle.boundingBox();
+  if (!box) throw new Error('Ручка панели не найдена');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, 180, { steps: 8 });
+  await page.mouse.up();
+  await expect(sheet).toHaveAttribute('data-snap', 'expanded');
 });
 
 test('настольная панель управления отдаёт приоритет карте автопарка', async ({ page }) => {

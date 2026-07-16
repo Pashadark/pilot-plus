@@ -70,3 +70,34 @@ export function ErrorState(props: FeedbackProps) {
     <Feedback {...props} className="border-[var(--color-danger)] bg-[var(--color-danger-soft)]" />
   );
 }
+export function Progress({ value, label }: { value: number; label: string }) {
+  const safe = Math.max(0, Math.min(100, value));
+  return (
+    <div className="grid gap-2">
+      <span>
+        {label}: {safe}%
+      </span>
+      <div
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={safe}
+        className="h-2 overflow-hidden rounded-full bg-[var(--color-border)]"
+      >
+        <span className="block h-full bg-[var(--color-primary)]" style={{ width: `${safe}%` }} />
+      </div>
+    </div>
+  );
+}
+export function Toast({ title, description }: FeedbackProps) {
+  return (
+    <div
+      role="status"
+      className="rounded-[var(--radius-md)] border bg-[var(--color-elevated)] p-4 shadow-[var(--shadow-floating)]"
+    >
+      <strong>{title}</strong>
+      {description && <p>{description}</p>}
+    </div>
+  );
+}

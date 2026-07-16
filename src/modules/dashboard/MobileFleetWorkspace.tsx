@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 
 import { FilterChip, SearchInput } from '@/shared/ui';
 
@@ -22,6 +22,21 @@ export function MobileFleetWorkspace({ vehicles }: { vehicles: readonly Vehicle[
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(vehicles[0] ?? null);
   const [snap, setSnap] = useState<SheetSnap>('collapsed');
+  const dragStart = useRef<{ y: number; snap: SheetSnap } | null>(null);
+  const onPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragStart.current = { y: event.clientY, snap };
+  };
+  const onPointerUp = (event: PointerEvent<HTMLButtonElement>) => {
+    const start = dragStart.current;
+    dragStart.current = null;
+    if (!start) return;
+    const delta = event.clientY - start.y;
+    const order: readonly SheetSnap[] = ['collapsed', 'intermediate', 'expanded'];
+    const current = order.indexOf(start.snap);
+    const steps = Math.abs(delta) > 220 ? 2 : Math.abs(delta) > 55 ? 1 : 0;
+    setSnap(order[Math.max(0, Math.min(2, current + (delta > 0 ? -steps : steps)))]);
+  };
 
   useEffect(() => {
     const synchronization = window.setTimeout(() => {
@@ -79,10 +94,19 @@ export function MobileFleetWorkspace({ vehicles }: { vehicles: readonly Vehicle[
         aria-label="Выбранный автомобиль"
         className={`absolute right-0 bottom-0 left-0 z-20 flex max-h-[calc(100%-0.5rem)] flex-col overflow-hidden rounded-t-[var(--radius-panel)] border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-floating)] transition-[height] ${snap === 'collapsed' ? 'h-[28dvh]' : snap === 'intermediate' ? 'h-[60dvh]' : 'h-[90dvh]'}`}
       >
-        <div
-          className="mx-auto mb-2 h-1.5 w-12 rounded-full bg-[var(--color-border-strong)]"
-          aria-hidden="true"
-        />
+        <button
+          type="button"
+          data-testid="vehicle-sheet-handle"
+          aria-label="Перетащить нижнюю панель"
+          onPointerDown={onPointerDown}
+          onPointerUp={onPointerUp}
+          className="mx-auto mb-2 grid min-h-11 w-20 touch-none place-items-center"
+        >
+          <span
+            aria-hidden="true"
+            className="h-1.5 w-12 rounded-full bg-[var(--color-border-strong)]"
+          />
+        </button>
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="font-semibold">Выбранный автомобиль</h2>
           <div role="group" aria-label="Положение нижней панели" className="flex gap-1">

@@ -1,6 +1,11 @@
 'use client';
 
-import { useId, type InputHTMLAttributes, type SelectHTMLAttributes } from 'react';
+import {
+  useId,
+  type InputHTMLAttributes,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+} from 'react';
 
 export interface FieldShellProps {
   label: string;
@@ -11,6 +16,49 @@ export interface FieldShellProps {
 
 const controlClass =
   'min-h-11 w-full rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 text-[var(--color-text)] outline-none transition-colors focus-visible:border-[var(--color-primary)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary-soft)] disabled:cursor-not-allowed disabled:opacity-55';
+
+export function Textarea({
+  label,
+  hint,
+  error,
+  id,
+  className = '',
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & FieldShellProps) {
+  const generatedId = useId();
+  const controlId = id ?? generatedId;
+  const descriptionId = `${controlId}-description`;
+  return (
+    <label className="grid gap-1.5" htmlFor={controlId}>
+      <span className="font-medium">{label}</span>
+      <textarea
+        {...props}
+        id={controlId}
+        aria-invalid={Boolean(error)}
+        aria-describedby={hint || error ? descriptionId : undefined}
+        className={`${controlClass} min-h-24 py-2 ${className}`}
+      />
+      {(hint || error) && (
+        <span
+          id={descriptionId}
+          className={error ? 'text-[var(--color-danger)]' : 'text-[var(--color-text-secondary)]'}
+        >
+          {error ?? hint}
+        </span>
+      )}
+    </label>
+  );
+}
+
+export function Radio(props: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      type="radio"
+      className={`size-5 min-h-11 min-w-11 accent-[var(--color-primary)] ${props.className ?? ''}`}
+    />
+  );
+}
 
 function descriptions(id: string, hint?: string, error?: string, supplied?: string) {
   return (

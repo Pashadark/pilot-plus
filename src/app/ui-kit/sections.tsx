@@ -5,6 +5,7 @@ import { FiBell, FiMapPin, FiMoreHorizontal, FiTruck } from 'react-icons/fi';
 
 import {
   Alert,
+  Avatar,
   Badge,
   BottomSheet,
   Breadcrumbs,
@@ -19,7 +20,22 @@ import {
   FilterChip,
   IconButton,
   Input,
+  ListItem,
   Modal,
+  Popover,
+  Progress,
+  Radio,
+  StatCard,
+  StatusIndicator,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Textarea,
+  Toast,
+  VehiclePlate,
   Pagination,
   SearchInput,
   SegmentedControl,
@@ -195,6 +211,9 @@ export function UiKitSections() {
               <option value="delivery">Доставка</option>
             </Select>
             <SearchInput aria-label="Поиск компонентов" placeholder="Поиск компонентов" />
+            <div data-testid="showcase-textarea">
+              <Textarea label="Комментарий" hint="Необязательное пояснение" />
+            </div>
           </div>
         </ExampleCard>
         <ExampleCard title="Выбор">
@@ -204,6 +223,9 @@ export function UiKitSections() {
             </label>
             <label className="flex min-h-11 items-center gap-3">
               <Switch aria-label="Только онлайн" /> Только онлайн
+            </label>
+            <label data-testid="showcase-radio" className="flex min-h-11 items-center gap-3">
+              <Radio name="period" defaultChecked /> Сегодня
             </label>
             <SegmentedControl
               aria-label="Состояние транспорта"
@@ -243,6 +265,47 @@ export function UiKitSections() {
             use="для компактной сводки связанных значений."
             avoid="как замену структуре для больших наборов данных."
           />
+        </ExampleCard>
+        <ExampleCard title="Исполняемые контракты данных">
+          <div className="grid gap-3">
+            <div data-testid="showcase-stat-card">
+              <StatCard label="На линии" value="184" />
+            </div>
+            <div data-testid="showcase-status-indicator">
+              <StatusIndicator label="На связи" tone="success" />
+            </div>
+            <div data-testid="showcase-vehicle-plate">
+              <VehiclePlate>А 123 МР 77</VehiclePlate>
+            </div>
+            <ul>
+              <ListItem
+                data-testid="showcase-list-item"
+                leading={
+                  <span data-testid="showcase-avatar">
+                    <Avatar name="Павел Седов" />
+                  </span>
+                }
+                title="Павел Седов"
+                description="Администратор"
+              />
+            </ul>
+            <div data-testid="showcase-table">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Автомобиль</TableHead>
+                    <TableHead>Статус</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>Haval Jolion</TableCell>
+                    <TableCell>На связи</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         </ExampleCard>
       </KitSection>
 
@@ -306,6 +369,12 @@ export function UiKitSections() {
             <Skeleton className="h-11" />
             <EmptyState title="Ничего не найдено" description="Измените условия поиска." />
             <ErrorState title="Данные недоступны" description="Повторите попытку позже." />
+            <div data-testid="showcase-progress">
+              <Progress value={68} label="Загрузка маршрута" />
+            </div>
+            <div data-testid="showcase-toast">
+              <Toast title="Маршрут сохранён" />
+            </div>
           </div>
         </ExampleCard>
         <div className="lg:col-span-2">
@@ -348,6 +417,21 @@ export function UiKitSections() {
                 Открыть карточку
               </Button>
             </DropdownMenu>
+            <div data-testid="showcase-popover">
+              <Popover label="Открыть сведения">
+                <p className="p-3">Последний сигнал получен сейчас.</p>
+              </Popover>
+            </div>
+            <span data-testid="showcase-confirmation-dialog">
+              <Button variant="danger" onClick={() => setModalOpen(true)}>
+                Подтвердить удаление
+              </Button>
+            </span>
+            <span data-testid="showcase-drawer">
+              <Button variant="outline" onClick={() => setFirstDialogOpen(true)}>
+                Открыть боковую панель
+              </Button>
+            </span>
           </div>
         </ExampleCard>
         <div className="lg:col-span-2">
@@ -408,6 +492,12 @@ export function UiKitSections() {
         title="Компоненты автопарка"
         description="Составные примеры показывают единый язык телематики без отдельной бизнес-логики."
       >
+        <div className="grid gap-3" data-testid="showcase-vehicle-marker">
+          <StatusIndicator label="Маркер: в движении" tone="success" />
+          <span data-testid="showcase-speed-indicator">62 км/ч</span>
+          <span data-testid="showcase-connection-status">Сигнал получен сейчас</span>
+          <article data-testid="showcase-event-item">Въезд в геозону · 10:42</article>
+        </div>
         <ExampleCard title="Автомобиль">
           <div className="flex items-start gap-3">
             <span className="grid size-11 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]">

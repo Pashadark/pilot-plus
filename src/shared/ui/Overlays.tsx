@@ -248,3 +248,25 @@ export function DropdownMenu({ label, children }: { label: string; children: Rea
     </div>
   );
 }
+export function Popover({ label, children }: { label: string; children: ReactNode }) {
+  return <DropdownMenu label={label}>{children}</DropdownMenu>;
+}
+export function ConfirmationDialog({
+  onConfirm,
+  ...props
+}: ModalProps & { onConfirm: () => void }) {
+  return (
+    <Modal
+      {...props}
+      footer={
+        <button
+          type="button"
+          onClick={onConfirm}
+          className="min-h-11 rounded-[var(--radius-md)] bg-[var(--color-danger)] px-4 text-[var(--color-text-inverse)]"
+        >
+          Подтвердить
+        </button>
+      }
+    />
+  );
+}

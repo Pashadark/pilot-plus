@@ -24,7 +24,7 @@ test('дизайн-система показывает все утверждён
   }
 });
 
-test('UI Kit is reachable from the application', async ({ page }) => {
+test('дизайн-система доступна из приложения', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto('/');
   await page.getByRole('link', { name: 'Дизайн-система' }).click();
@@ -34,7 +34,7 @@ test('UI Kit is reachable from the application', async ({ page }) => {
   ).toBeVisible();
 });
 
-test('theme and action primitives expose accessible states', async ({ page }) => {
+test('тема и примитивы действий публикуют доступные состояния', async ({ page }) => {
   await page.goto('/ui-kit');
   await expect(page.getByTestId('button-primary')).toBeVisible();
   await expect(page.getByTestId('button-loading')).toHaveAttribute('aria-busy', 'true');
@@ -109,7 +109,7 @@ test('все публичные размеры действий дают обл�
   }
 });
 
-test('overlays and form controls are keyboard accessible', async ({ page }) => {
+test('всплывающие слои и поля доступны с клавиатуры', async ({ page }) => {
   await page.goto('/ui-kit');
   const opener = page.getByRole('button', { name: 'Открыть окно' });
   await opener.click();
@@ -139,10 +139,10 @@ test('overlays and form controls are keyboard accessible', async ({ page }) => {
   await expect(vehicleName).toHaveAttribute('aria-invalid', 'true');
   await expect(vehicleName).toHaveAttribute('aria-describedby', /hint.*error|error.*hint/);
   await expect(page.getByRole('switch', { name: 'Только онлайн' })).toBeVisible();
-  await expect(page.getByRole('searchbox')).toBeVisible();
+  await expect(page.getByRole('searchbox', { name: 'Поиск компонентов' })).toBeVisible();
 });
 
-test('scroll lock remains active while another overlay is open', async ({ page }) => {
+test('блокировка прокрутки сохраняется пока открыт другой слой', async ({ page }) => {
   await page.goto('/ui-kit');
   await page.getByRole('button', { name: 'Открыть два окна' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(2);
@@ -151,7 +151,7 @@ test('scroll lock remains active while another overlay is open', async ({ page }
   await expect(page.locator('body')).toHaveCSS('overflow', 'hidden');
 });
 
-test('tabs, tooltip and bottom sheet expose complete keyboard contracts', async ({ page }) => {
+test('вкладки, подсказка и нижняя панель имеют полные клавиатурные контракты', async ({ page }) => {
   await page.goto('/ui-kit');
 
   const selectedTab = page.getByRole('tab', { selected: true });
@@ -177,4 +177,28 @@ test('tabs, tooltip and bottom sheet expose complete keyboard contracts', async 
     expect(box?.width).toBeGreaterThanOrEqual(44);
     expect(box?.height).toBeGreaterThanOrEqual(44);
   }
+});
+
+test('витрина исполняет полный каталог утверждённых компонентов', async ({ page }) => {
+  await page.goto('/ui-kit');
+  for (const id of [
+    'textarea',
+    'radio',
+    'avatar',
+    'list-item',
+    'table',
+    'progress',
+    'toast',
+    'popover',
+    'confirmation-dialog',
+    'drawer',
+    'stat-card',
+    'status-indicator',
+    'vehicle-plate',
+    'vehicle-marker',
+    'speed-indicator',
+    'connection-status',
+    'event-item',
+  ])
+    await expect(page.getByTestId(`showcase-${id}`)).toBeVisible();
 });
