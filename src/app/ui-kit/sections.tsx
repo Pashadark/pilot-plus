@@ -14,7 +14,9 @@ import {
   CardContent,
   CardHeader,
   Checkbox,
+  ConfirmationDialog,
   DropdownMenu,
+  Drawer,
   EmptyState,
   ErrorState,
   FilterChip,
@@ -47,6 +49,12 @@ import {
   Tooltip,
   type ComponentSize,
 } from '@/shared/ui';
+import {
+  ConnectionStatus,
+  EventItem,
+  SpeedIndicator,
+  VehicleMarker,
+} from '@/shared/components/fleet';
 
 function KitSection({
   id,
@@ -107,6 +115,8 @@ export function UiKitSections() {
   const [modalRevision, setModalRevision] = useState(0);
   const [firstDialogOpen, setFirstDialogOpen] = useState(false);
   const [secondDialogOpen, setSecondDialogOpen] = useState(false);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetSnap, setSheetSnap] = useState<'collapsed' | 'intermediate' | 'expanded'>(
     'intermediate',
@@ -423,12 +433,12 @@ export function UiKitSections() {
               </Popover>
             </div>
             <span data-testid="showcase-confirmation-dialog">
-              <Button variant="danger" onClick={() => setModalOpen(true)}>
+              <Button variant="danger" onClick={() => setConfirmationOpen(true)}>
                 Подтвердить удаление
               </Button>
             </span>
             <span data-testid="showcase-drawer">
-              <Button variant="outline" onClick={() => setFirstDialogOpen(true)}>
+              <Button variant="outline" onClick={() => setDrawerOpen(true)}>
                 Открыть боковую панель
               </Button>
             </span>
@@ -485,6 +495,24 @@ export function UiKitSections() {
         >
           <p>Подходит для дополнительных действий на узком экране.</p>
         </BottomSheet>
+        <ConfirmationDialog
+          open={confirmationOpen}
+          onOpenChange={setConfirmationOpen}
+          title="Удалить автомобиль?"
+          description="Демонстрация опасного необратимого действия."
+          onConfirm={() => setConfirmationOpen(false)}
+        >
+          <p>Автомобиль будет удалён из демонстрационного списка.</p>
+        </ConfirmationDialog>
+        <Drawer
+          open={drawerOpen}
+          onOpenChange={setDrawerOpen}
+          title="Параметры автомобиля"
+          description="Боковая панель сохраняет контекст рабочей области."
+          footer={<Button onClick={() => setDrawerOpen(false)}>Закрыть панель</Button>}
+        >
+          <p>Настройки оповещений и отображения автомобиля.</p>
+        </Drawer>
       </KitSection>
 
       <KitSection
@@ -492,11 +520,24 @@ export function UiKitSections() {
         title="Компоненты автопарка"
         description="Составные примеры показывают единый язык телематики без отдельной бизнес-логики."
       >
-        <div className="grid gap-3" data-testid="showcase-vehicle-marker">
-          <StatusIndicator label="Маркер: в движении" tone="success" />
-          <span data-testid="showcase-speed-indicator">62 км/ч</span>
-          <span data-testid="showcase-connection-status">Сигнал получен сейчас</span>
-          <article data-testid="showcase-event-item">Въезд в геозону · 10:42</article>
+        <div className="grid gap-3">
+          <div data-testid="showcase-vehicle-marker">
+            <VehicleMarker name="Haval Jolion" plate="А 123 МР 77" speedKph={62} status="moving" />
+          </div>
+          <div data-testid="showcase-speed-indicator">
+            <SpeedIndicator speedKph={62} state="moving" />
+          </div>
+          <div data-testid="showcase-connection-status">
+            <ConnectionStatus state="online" lastSeenLabel="сигнал получен сейчас" />
+          </div>
+          <ul data-testid="showcase-event-item">
+            <EventItem
+              title="Въезд в геозону"
+              vehicleName="Haval Jolion"
+              timeLabel="10:42"
+              tone="info"
+            />
+          </ul>
         </div>
         <ExampleCard title="Автомобиль">
           <div className="flex items-start gap-3">

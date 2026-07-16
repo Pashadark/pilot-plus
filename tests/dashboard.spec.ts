@@ -42,6 +42,20 @@ test('настольная панель управления отдаёт при
   ).toBeVisible();
 });
 
+test('рабочая панель использует общие семантические компоненты автопарка', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/');
+
+  await expect(page.getByText('Скорость 65 км/ч').first()).toHaveAttribute('data-state', 'moving');
+  await expect(page.getByText('На связи · только что').first()).toHaveAttribute(
+    'data-state',
+    'online',
+  );
+  await expect(
+    page.getByRole('listitem', { name: 'Автомобиль покинул геозону, Haval Jolion' }),
+  ).toHaveAttribute('data-tone', 'danger');
+});
+
 test('настольная карта остаётся крупнейшей рабочей областью', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto('/');

@@ -1,6 +1,7 @@
-import { FiActivity, FiBell, FiChevronRight, FiMapPin, FiTruck } from 'react-icons/fi';
+import { FiActivity, FiBell, FiChevronRight, FiTruck } from 'react-icons/fi';
 
 import { Badge, Card, CardContent, CardHeader, EmptyState, IconButton } from '@/shared/ui';
+import { ConnectionStatus, EventItem, SpeedIndicator } from '@/shared/components/fleet';
 
 import type { FleetEvent, FleetStat, Vehicle, VehicleStatus } from './types';
 
@@ -66,7 +67,9 @@ export function VehicleSummary({ vehicle }: { vehicle?: Vehicle }) {
       <dl className="grid grid-cols-3 gap-2 text-sm">
         <div>
           <dt className="text-[var(--color-text-secondary)]">Скорость</dt>
-          <dd className="font-medium">{vehicle.speedKph} км/ч</dd>
+          <dd>
+            <SpeedIndicator speedKph={vehicle.speedKph} state={vehicle.status} />
+          </dd>
         </div>
         <div>
           <dt className="text-[var(--color-text-secondary)]">Топливо</dt>
@@ -78,7 +81,10 @@ export function VehicleSummary({ vehicle }: { vehicle?: Vehicle }) {
         </div>
       </dl>
       <p className="text-xs text-[var(--color-text-secondary)]">
-        Последний сигнал: {vehicle.lastSeenLabel}
+        <ConnectionStatus
+          state={vehicle.status === 'offline' ? 'offline' : 'online'}
+          lastSeenLabel={vehicle.lastSeenLabel}
+        />
       </p>
     </article>
   );
@@ -122,21 +128,7 @@ export function FleetEvents({ events }: { events: readonly FleetEvent[] }) {
       <CardContent>
         <ul className="divide-y divide-[var(--color-border)]">
           {events.map((event) => (
-            <li key={event.id} className="flex gap-3 py-4 first:pt-0 last:pb-0">
-              <FiMapPin
-                className="mt-1 size-5 shrink-0 text-[var(--color-primary)]"
-                aria-hidden="true"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="font-medium">{event.title}</p>
-                <p className="text-sm text-[var(--color-text-secondary)]">
-                  {event.vehicleName} · {event.timeLabel}
-                </p>
-              </div>
-              <Badge tone={event.tone}>
-                {event.tone === 'danger' ? 'Важно' : event.tone === 'warning' ? 'Внимание' : 'Инфо'}
-              </Badge>
-            </li>
+            <EventItem key={event.id} {...event} />
           ))}
         </ul>
       </CardContent>

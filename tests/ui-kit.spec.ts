@@ -202,3 +202,44 @@ test('витрина исполняет полный каталог утверж
   ])
     await expect(page.getByTestId(`showcase-${id}`)).toBeVisible();
 });
+
+test('витрина исполняет диалог подтверждения и боковую панель', async ({ page }) => {
+  await page.goto('/ui-kit');
+
+  const confirmationTrigger = page.getByRole('button', { name: 'Подтвердить удаление' });
+  await confirmationTrigger.click();
+  const confirmation = page.getByRole('dialog', { name: 'Удалить автомобиль?' });
+  await expect(confirmation).toBeVisible();
+  await expect(confirmation.getByRole('button', { name: 'Подтвердить' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(confirmation).toBeHidden();
+  await expect(confirmationTrigger).toBeFocused();
+
+  const drawerTrigger = page.getByRole('button', { name: 'Открыть боковую панель' });
+  await drawerTrigger.click();
+  const drawer = page.getByRole('dialog', { name: 'Параметры автомобиля' });
+  await expect(drawer).toBeVisible();
+  const drawerBox = await drawer.boundingBox();
+  expect(
+    Math.abs((drawerBox?.x ?? 0) + (drawerBox?.width ?? 0) - page.viewportSize()!.width),
+  ).toBeLessThanOrEqual(16);
+  await drawer.getByRole('button', { name: 'Закрыть панель' }).click();
+  await expect(drawer).toBeHidden();
+  await expect(drawerTrigger).toBeFocused();
+});
+
+test('витрина исполняет семантические компоненты автопарка', async ({ page }) => {
+  await page.goto('/ui-kit');
+
+  await expect(
+    page.getByRole('img', { name: 'Haval Jolion, А 123 МР 77, в движении' }),
+  ).toBeVisible();
+  await expect(page.getByText('Скорость 62 км/ч')).toHaveAttribute('data-state', 'moving');
+  await expect(page.getByText('На связи · сигнал получен сейчас')).toHaveAttribute(
+    'data-state',
+    'online',
+  );
+  const event = page.getByRole('listitem', { name: 'Въезд в геозону, Haval Jolion' });
+  await expect(event).toContainText('10:42');
+  await expect(event).toHaveAttribute('data-tone', 'info');
+});

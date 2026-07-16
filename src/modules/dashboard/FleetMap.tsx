@@ -5,17 +5,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import maplibregl from 'maplibre-gl';
 
 import { Button, EmptyState, ErrorState } from '@/shared/ui';
+import { VehicleMarker } from '@/shared/components/fleet';
 
-import type { Vehicle, VehicleStatus } from './types';
+import type { Vehicle } from './types';
 
 import 'maplibre-gl/dist/maplibre-gl.css';
-
-const statusColor: Record<VehicleStatus, string> = {
-  moving: 'var(--color-primary)',
-  idle: 'var(--color-warning)',
-  offline: 'var(--color-text-secondary)',
-  alarm: 'var(--color-danger)',
-};
 
 interface MarkerResource {
   marker: maplibregl.Marker;
@@ -24,13 +18,13 @@ interface MarkerResource {
 
 function MarkerContent({ vehicle, expanded }: { vehicle: Vehicle; expanded: boolean }) {
   return (
-    <div
-      className="grid min-h-11 min-w-11 cursor-pointer place-items-center rounded-full border-2 border-[var(--color-surface)] px-2 text-xs font-semibold text-[var(--color-text-inverse)] shadow-[var(--shadow-floating)]"
-      style={{ backgroundColor: statusColor[vehicle.status] }}
-      aria-label={`${vehicle.name}, ${vehicle.plate}`}
-    >
-      {expanded ? vehicle.plate : vehicle.speedKph}
-    </div>
+    <VehicleMarker
+      name={vehicle.name}
+      plate={vehicle.plate}
+      speedKph={vehicle.speedKph}
+      status={vehicle.status}
+      expanded={expanded}
+    />
   );
 }
 
