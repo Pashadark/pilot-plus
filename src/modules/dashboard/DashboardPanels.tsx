@@ -22,17 +22,19 @@ export function StatusIndicator({ status }: { status: VehicleStatus }) {
 
 export function FleetStatCard({ stat }: { stat: FleetStat }) {
   return (
-    <Card className="min-w-0">
+    <Card className="min-w-0" data-testid={`fleet-stat-${stat.id}`}>
       <CardContent className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm text-[var(--color-text-secondary)]">{stat.label}</p>
-          <p className="mt-2 text-3xl font-semibold tracking-tight">{stat.value}</p>
+          <p className="text-xs font-semibold tracking-wide text-[var(--color-text-secondary)] uppercase">
+            {stat.label}
+          </p>
+          <p className="mt-2 text-3xl font-bold tracking-tight">{stat.value}</p>
           <Badge tone={stat.tone} className="mt-3">
             {stat.detail}
           </Badge>
         </div>
         <span
-          className="grid size-11 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
+          className="grid size-10 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
           aria-hidden="true"
         >
           <FiActivity className="size-5" />
@@ -50,7 +52,7 @@ export function VehicleSummary({ vehicle }: { vehicle?: Vehicle }) {
   }
 
   return (
-    <article className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] p-4">
+    <article className="grid gap-3 rounded-[var(--radius-panel)] border border-[var(--color-border)] p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 gap-3">
           <FiTruck
@@ -92,7 +94,7 @@ export function VehicleSummary({ vehicle }: { vehicle?: Vehicle }) {
 
 export function FleetStatusPanel({ vehicles }: { vehicles: readonly Vehicle[] }) {
   return (
-    <Card>
+    <Card data-testid="fleet-status-panel">
       <CardHeader className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Состояние парка</h2>

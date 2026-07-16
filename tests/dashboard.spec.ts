@@ -66,13 +66,28 @@ test('настольная панель управления отдаёт при
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: 'Центр управления транспортом' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Панель управления' })).toBeVisible();
   await expect(page.getByTestId('fleet-map-workspace')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Состояние парка' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Последние события' })).toBeVisible();
   await expect(
     page.getByTestId('fleet-map-workspace').getByText('OpenStreetMap', { exact: false }),
   ).toBeVisible();
+});
+
+test('настольная панель использует плотную сетку Mosaic', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/');
+
+  await expect(page.getByRole('heading', { name: 'Панель управления' })).toHaveCSS(
+    'font-size',
+    '30px',
+  );
+  await expect(page.getByTestId('fleet-stat-total')).toHaveCSS('border-radius', '12px');
+
+  const map = await page.getByTestId('fleet-map-workspace').boundingBox();
+  const status = await page.getByTestId('fleet-status-panel').boundingBox();
+  expect((map?.width ?? 0) / (status?.width ?? 1)).toBeGreaterThan(1.7);
 });
 
 test('рабочая панель использует общие семантические компоненты автопарка', async ({ page }) => {

@@ -38,7 +38,7 @@ export function VehicleMarker({
       role="img"
       aria-label={`${name}, ${plate}, ${statusLabels[status]}`}
       data-state={status}
-      className="grid min-h-11 min-w-11 place-items-center rounded-full border-2 border-[var(--color-surface)] px-2 text-xs font-semibold text-[var(--color-text-inverse)] shadow-[var(--shadow-floating)]"
+      className="grid min-h-11 min-w-11 place-items-center rounded-[var(--radius-md)] border-2 border-[var(--color-surface)] px-2 text-xs font-semibold text-[var(--color-text-inverse)] shadow-[var(--shadow-card)]"
       style={{ backgroundColor: markerColors[status] }}
     >
       {expanded ? plate : speedKph}
@@ -93,7 +93,7 @@ export function EventItem({
     <li
       aria-label={`${title}, ${vehicleName}`}
       data-tone={tone}
-      className="flex min-h-11 gap-3 py-4 first:pt-0 last:pb-0"
+      className="flex min-h-11 gap-3 py-3 first:pt-0 last:pb-0"
     >
       <FiMapPin className="mt-1 size-5 shrink-0 text-[var(--color-primary)]" aria-hidden="true" />
       <div className="min-w-0 flex-1">
