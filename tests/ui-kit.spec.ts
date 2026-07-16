@@ -17,6 +17,13 @@ test('светлая тема использует визуальные токе
   await expect(card).toHaveCSS('border-radius', '12px');
 });
 
+test('каталог сохраняет плотность Mosaic на телефоне', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/ui-kit');
+  await expect(page.getByRole('heading', { name: 'Дизайн-система Pilot+' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+});
+
 test('дизайн-система показывает все утверждённые разделы', async ({ page }) => {
   await page.goto('/ui-kit');
   for (const [id, name] of [

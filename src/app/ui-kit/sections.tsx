@@ -71,7 +71,7 @@ function KitSection({
     <section
       id={id}
       data-testid={`ui-kit-${id}`}
-      className="scroll-mt-24 border-t border-[var(--color-border)] py-10"
+      className="scroll-mt-24 border-t border-[var(--color-border)] py-8"
     >
       <h2 className="text-2xl font-bold text-[var(--color-text)]">{title}</h2>
       <p className="mt-2 max-w-3xl text-[var(--color-text-secondary)]">{description}</p>
@@ -90,11 +90,11 @@ function ExampleCard({
   testId?: string;
 }) {
   return (
-    <Card className="min-w-0" data-testid={testId}>
-      <CardHeader>
+    <Card className="min-w-0 p-5" data-testid={testId}>
+      <CardHeader className="p-0 pb-4">
         <h3 className="font-semibold">{title}</h3>
       </CardHeader>
-      <CardContent>{children}</CardContent>
+      <CardContent className="p-0 pt-5">{children}</CardContent>
     </Card>
   );
 }

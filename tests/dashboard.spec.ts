@@ -182,6 +182,19 @@ test('мобильная оболочка не создаёт горизонта
   expect(overflow).toBe(false);
 });
 
+test('мобильная карта использует плавающие поверхности Mosaic', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/');
+
+  const search = page.getByRole('searchbox', { name: 'Поиск транспорта' });
+  await expect(search).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(search).toHaveCSS('border-radius', '8px');
+
+  const sheet = page.getByTestId('vehicle-bottom-sheet');
+  await expect(sheet).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(sheet).toHaveCSS('border-top-left-radius', '16px');
+});
+
 test('мобильная панель управления является полноэкранным рабочим пространством карты', async ({
   page,
 }) => {

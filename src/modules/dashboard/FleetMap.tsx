@@ -78,6 +78,8 @@ export function FleetMap({
     for (const vehicle of vehicles) {
       const element = document.createElement('button');
       element.type = 'button';
+      element.className =
+        'rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-floating)]';
       element.setAttribute('aria-label', `Выбрать ${vehicle.name}`);
       const root = createRoot(element);
       root.render(<MarkerContent vehicle={vehicle} expanded={false} />);

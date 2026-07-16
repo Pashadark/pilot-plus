@@ -74,7 +74,7 @@ export function MobileFleetWorkspace({ vehicles }: { vehicles: readonly Vehicle[
         placeholder="Найти автомобиль"
         value={query}
         onChange={(event) => setQuery(event.currentTarget.value)}
-        className="absolute top-4 right-4 left-4 z-20 bg-[var(--color-surface)] shadow-[var(--shadow-floating)]"
+        className="absolute top-4 right-4 left-4 z-20 rounded-[var(--radius-md)] border bg-[var(--color-surface)] shadow-[var(--shadow-card)]"
       />
       <div className="absolute top-16 right-4 left-4 z-20 flex gap-2 overflow-x-auto py-2">
         {filters.map((filter) => (
@@ -82,7 +82,7 @@ export function MobileFleetWorkspace({ vehicles }: { vehicles: readonly Vehicle[
             key={filter.value}
             selected={activeFilter === filter.value}
             onClick={() => setActiveFilter(filter.value)}
-            className="shrink-0 bg-[var(--color-surface)] shadow-[var(--shadow-card)]"
+            className="min-h-11 shrink-0 bg-[var(--color-surface)] shadow-[var(--shadow-card)]"
           >
             {filter.label}
           </FilterChip>
@@ -92,7 +92,7 @@ export function MobileFleetWorkspace({ vehicles }: { vehicles: readonly Vehicle[
         data-testid="vehicle-bottom-sheet"
         data-snap={snap}
         aria-label="Выбранный автомобиль"
-        className={`absolute right-0 bottom-0 left-0 z-20 flex max-h-[calc(100%-0.5rem)] flex-col overflow-hidden rounded-t-[var(--radius-panel)] border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-floating)] transition-[height] ${snap === 'collapsed' ? 'h-[28dvh]' : snap === 'intermediate' ? 'h-[60dvh]' : 'h-[90dvh]'}`}
+        className={`absolute right-0 bottom-0 left-0 z-20 flex max-h-[calc(100%-0.5rem)] flex-col overflow-hidden rounded-t-2xl border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-floating)] transition-[height] ${snap === 'collapsed' ? 'h-[28dvh]' : snap === 'intermediate' ? 'h-[60dvh]' : 'h-[90dvh]'}`}
       >
         <button
           type="button"
@@ -123,7 +123,7 @@ export function MobileFleetWorkspace({ vehicles }: { vehicles: readonly Vehicle[
                 }
                 aria-pressed={snap === value}
                 onClick={() => setSnap(value)}
-                className="min-h-11 min-w-11 rounded-[var(--radius-sm)] px-2 aria-pressed:bg-[var(--color-primary-soft)]"
+                className="min-h-11 min-w-11 rounded-[var(--radius-md)] px-2 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] aria-pressed:bg-[var(--color-primary-soft)] aria-pressed:text-[var(--color-primary)]"
               >
                 {value === 'collapsed' ? '−' : value === 'intermediate' ? '½' : '↑'}
               </button>
