@@ -84,18 +84,28 @@ test('тёмная тема применяется ко всем маршрут�
   }
 });
 
-for (const viewport of [
+const responsiveViewports = [
   { width: 375, height: 812 },
   { width: 768, height: 1024 },
   { width: 1024, height: 768 },
   { width: 1440, height: 1000 },
-]) {
-  test(`маршруты не создают горизонтальное переполнение при ширине ${viewport.width}px`, async ({
+] as const;
+
+for (const { viewport, theme } of responsiveViewports.flatMap((viewport) =>
+  (['light', 'dark'] as const).map((theme) => ({ viewport, theme })),
+)) {
+  test(`маршруты используют ${theme} тему без горизонтального переполнения при ширине ${viewport.width}px`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport);
+    await page.goto('/ui-kit');
+    if (theme === 'dark') await page.getByRole('button', { name: 'Включить тёмную тему' }).click();
     for (const route of ['/', '/ui-kit']) {
       await page.goto(route);
+      await expect(page.locator('body')).toHaveCSS(
+        'background-color',
+        theme === 'light' ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)',
+      );
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > window.innerWidth,
       );
