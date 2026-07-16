@@ -34,6 +34,24 @@ test('настольная навигация раскрывается и сох
   await expect(sidebar).toHaveCSS('width', '240px');
 });
 
+test('настольная навигация остаётся свёрнутой при запрещённом localStorage', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() {
+        throw new DOMException('Доступ запрещён', 'SecurityError');
+      },
+    });
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/');
+
+  const shell = page.getByTestId('app-shell');
+  await expect(shell).toHaveAttribute('data-sidebar-expanded', 'false');
+  await page.getByRole('button', { name: 'Развернуть навигацию' }).click();
+  await expect(shell).toHaveAttribute('data-sidebar-expanded', 'false');
+});
+
 test('раскрытие навигации не ломает карту', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
@@ -243,6 +261,10 @@ test('нижняя панель имеет три различимые высо�
 });
 
 test('фильтры и поиск меняют набор транспорта на карте', async ({ page }) => {
+  const sheet = page.getByTestId('vehicle-bottom-sheet');
+  await page.getByRole('button', { name: 'Выбрать Geely Atlas' }).click();
+  await expect(sheet.getByRole('heading', { name: 'Geely Atlas' })).toBeVisible();
+
   const movingFilter = page.getByRole('button', { name: 'В движении' });
   await movingFilter.click();
   await expect(movingFilter).toHaveAttribute('aria-pressed', 'true');
@@ -252,9 +274,16 @@ test('фильтры и поиск меняют набор транспорта 
   );
   await expect(page.getByRole('button', { name: 'Выбрать Haval Jolion' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Выбрать Geely Atlas' })).toHaveCount(0);
+  await expect(sheet.getByRole('heading', { name: 'Haval Jolion' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Все автомобили' }).click();
+  await page.getByRole('button', { name: 'Выбрать Geely Atlas' }).click();
+  await page.getByRole('searchbox', { name: 'Поиск транспорта' }).fill('Haval');
+  await expect(sheet.getByRole('heading', { name: 'Haval Jolion' })).toBeVisible();
 
   await page.getByRole('searchbox', { name: 'Поиск транспорта' }).fill('несуществующий');
   await expect(page.getByText('На карте пока нет транспорта')).toBeVisible();
+  await expect(sheet.getByText('Транспорт не найден')).toBeVisible();
 });
 
 test('карта сохраняет canvas и атрибуцию после изменения viewport', async ({ page }) => {

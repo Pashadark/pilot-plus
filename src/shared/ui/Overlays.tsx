@@ -30,6 +30,12 @@ const focusable =
 
 let scrollLockCount = 0;
 let savedBodyOverflow = '';
+type OverlayEntry = { id: symbol; panel: HTMLDivElement; previousFocus: HTMLElement | null };
+const overlayStack: OverlayEntry[] = [];
+
+function focusOverlay(panel: HTMLDivElement) {
+  (panel.querySelector<HTMLElement>(focusable) ?? panel).focus();
+}
 
 function lockBodyScroll() {
   if (scrollLockCount === 0) {
@@ -62,11 +68,16 @@ function DialogBoundary({
     if (!open) return;
     previousFocus.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const overlay = { id: Symbol('overlay'), panel, previousFocus: previousFocus.current };
+    overlayStack.push(overlay);
     const unlockBodyScroll = lockBodyScroll();
-    const timer = window.setTimeout(() =>
-      (panelRef.current?.querySelector<HTMLElement>(focusable) ?? panelRef.current)?.focus(),
-    );
+    const timer = window.setTimeout(() => {
+      if (overlayStack.at(-1)?.id === overlay.id) focusOverlay(panel);
+    });
     const keyboard = (event: globalThis.KeyboardEvent) => {
+      if (overlayStack.at(-1)?.id !== overlay.id) return;
       if (event.key === 'Escape') {
         requestOpenChange(false);
         return;
@@ -103,7 +114,11 @@ function DialogBoundary({
       window.clearTimeout(timer);
       document.removeEventListener('keydown', keyboard);
       unlockBodyScroll();
-      previousFocus.current?.focus();
+      const index = overlayStack.findIndex((entry) => entry.id === overlay.id);
+      if (index >= 0) overlayStack.splice(index, 1);
+      const remainingOverlay = overlayStack.at(-1);
+      if (remainingOverlay) focusOverlay(remainingOverlay.panel);
+      else overlay.previousFocus?.focus();
     };
   }, [open]);
   if (!open) return null;

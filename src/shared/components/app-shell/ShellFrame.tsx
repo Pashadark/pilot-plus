@@ -20,7 +20,11 @@ function subscribeToSidebarStorage(onStoreChange: () => void) {
 }
 
 function getSidebarSnapshot() {
-  return window.localStorage.getItem(storageKey) === 'true';
+  try {
+    return window.localStorage.getItem(storageKey) === 'true';
+  } catch {
+    return false;
+  }
 }
 
 function getSidebarServerSnapshot() {
@@ -41,8 +45,12 @@ export function ShellFrame({
   );
 
   function toggleSidebar() {
-    window.localStorage.setItem(storageKey, String(!expanded));
-    window.dispatchEvent(new Event(sidebarStorageEvent));
+    try {
+      window.localStorage.setItem(storageKey, String(!expanded));
+      window.dispatchEvent(new Event(sidebarStorageEvent));
+    } catch {
+      // При недоступном хранилище навигация остаётся безопасно свёрнутой.
+    }
   }
 
   const sidebarWidth = expanded

@@ -185,6 +185,28 @@ test('блокировка прокрутки сохраняется пока о
   await expect(page.locator('body')).toHaveCSS('overflow', 'hidden');
 });
 
+test('Escape и удержание фокуса принадлежат только верхнему всплывающему слою', async ({
+  page,
+}) => {
+  await page.goto('/ui-kit');
+  const opener = page.getByRole('button', { name: 'Открыть два окна' });
+  await opener.click();
+  const first = page.getByRole('dialog', { name: 'Первое окно' });
+  const second = page.getByRole('dialog', { name: 'Второе окно' });
+  await expect(second.getByRole('button', { name: 'Закрыть' })).toBeFocused();
+
+  await page.keyboard.press('Escape');
+  await expect(second).toBeHidden();
+  await expect(first).toBeVisible();
+  await expect(first.getByRole('button', { name: 'Закрыть' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(first.getByRole('button', { name: 'Закрыть' })).toBeFocused();
+
+  await page.keyboard.press('Escape');
+  await expect(first).toBeHidden();
+  await expect(opener).toBeFocused();
+});
+
 test('вкладки, подсказка и нижняя панель имеют полные клавиатурные контракты', async ({ page }) => {
   await page.goto('/ui-kit');
 

@@ -38,15 +38,6 @@ export function MobileFleetWorkspace({ vehicles }: { vehicles: readonly Vehicle[
     setSnap(order[Math.max(0, Math.min(2, current + (delta > 0 ? -steps : steps)))]);
   };
 
-  useEffect(() => {
-    const synchronization = window.setTimeout(() => {
-      setSelectedVehicle(
-        (current) => vehicles.find((vehicle) => vehicle.id === current?.id) ?? vehicles[0] ?? null,
-      );
-    });
-    return () => window.clearTimeout(synchronization);
-  }, [vehicles]);
-
   const filteredVehicles = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase('ru-RU');
     const filter = filters.find((item) => item.value === activeFilter);
@@ -57,6 +48,18 @@ export function MobileFleetWorkspace({ vehicles }: { vehicles: readonly Vehicle[
           `${vehicle.name} ${vehicle.plate}`.toLocaleLowerCase('ru-RU').includes(normalizedQuery)),
     );
   }, [activeFilter, query, vehicles]);
+
+  useEffect(() => {
+    const synchronization = window.setTimeout(() => {
+      setSelectedVehicle(
+        (current) =>
+          filteredVehicles.find((vehicle) => vehicle.id === current?.id) ??
+          filteredVehicles[0] ??
+          null,
+      );
+    });
+    return () => window.clearTimeout(synchronization);
+  }, [filteredVehicles]);
 
   return (
     <section
@@ -131,7 +134,7 @@ export function MobileFleetWorkspace({ vehicles }: { vehicles: readonly Vehicle[
           </div>
         </div>
         <div className="min-h-0 overflow-y-auto">
-          <VehicleSummary vehicle={selectedVehicle ?? vehicles[0]} />
+          <VehicleSummary vehicle={selectedVehicle ?? filteredVehicles[0]} />
         </div>
       </aside>
     </section>
