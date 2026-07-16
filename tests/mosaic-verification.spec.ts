@@ -73,10 +73,7 @@ test('повторная навигация очищает карту без с�
   page.on('console', (message) => collectConsoleMessages(consoleMessages, message));
 
   await page.goto('/');
-  const mapCanvas = page
-    .getByTestId('fleet-map-workspace')
-    .getByLabel('Карта автопарка')
-    .locator('canvas');
+  const mapCanvas = page.getByLabel('Карта автопарка').filter({ visible: true }).locator('canvas');
   await expect(mapCanvas).toBeVisible();
 
   for (let index = 0; index < 3; index += 1) {
