@@ -80,9 +80,17 @@ function KitSection({
   );
 }
 
-function ExampleCard({ title, children }: { title: string; children: ReactNode }) {
+function ExampleCard({
+  title,
+  children,
+  testId,
+}: {
+  title: string;
+  children: ReactNode;
+  testId?: string;
+}) {
   return (
-    <Card className="min-w-0">
+    <Card className="min-w-0" data-testid={testId}>
       <CardHeader>
         <h3 className="font-semibold">{title}</h3>
       </CardHeader>
@@ -157,7 +165,7 @@ export function UiKitSections() {
         title="Действия"
         description="Кнопки передают приоритет действия, состояние выполнения и доступную область касания."
       >
-        <ExampleCard title="Варианты и состояния">
+        <ExampleCard title="Варианты и состояния" testId="showcase-card">
           <div className="flex flex-wrap gap-3">
             <Button data-testid="button-primary">Основное</Button>
             <Button variant="secondary">Вторичное</Button>

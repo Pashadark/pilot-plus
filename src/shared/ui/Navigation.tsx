@@ -31,7 +31,7 @@ export function Breadcrumbs({
               {item.href && !current ? (
                 <Link
                   href={item.href}
-                  className="inline-flex min-h-11 items-center text-[var(--color-primary)] focus-visible:outline-2"
+                  className="inline-flex min-h-11 items-center text-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
                 >
                   {item.label}
                 </Link>
@@ -89,7 +89,7 @@ export function Tabs<T extends string>({
           tabIndex={item.value === value ? 0 : -1}
           onClick={() => select(index)}
           onKeyDown={(event) => onKeyDown(event, index)}
-          className="min-h-11 min-w-11 border-b-2 border-transparent px-3 aria-selected:border-[var(--color-primary)]"
+          className="min-h-11 min-w-11 border-b-2 border-transparent px-3 text-[var(--color-text-secondary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] aria-selected:border-[var(--color-primary)] aria-selected:bg-[var(--color-primary-soft)] aria-selected:text-[var(--color-primary)]"
         >
           {item.label}
           {item.badge !== undefined && (
@@ -116,7 +116,7 @@ export function Pagination({
     <nav aria-label="Постраничная навигация" className="flex items-center gap-2">
       <button
         type="button"
-        className="min-h-11 min-w-11"
+        className="min-h-11 min-w-11 rounded-[var(--radius-md)] px-3 text-[var(--color-text-secondary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] disabled:opacity-55"
         disabled={page <= 1}
         onClick={() => onChange(page - 1)}
       >
@@ -127,7 +127,7 @@ export function Pagination({
       </span>
       <button
         type="button"
-        className="min-h-11 min-w-11"
+        className="min-h-11 min-w-11 rounded-[var(--radius-md)] px-3 text-[var(--color-text-secondary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] disabled:opacity-55"
         disabled={page >= totalPages}
         onClick={() => onChange(page + 1)}
       >
@@ -150,7 +150,7 @@ export function FilterChip({
       {...props}
       type="button"
       aria-pressed={selected}
-      className={`min-h-11 rounded-full border px-4 aria-pressed:border-[var(--color-primary)] aria-pressed:bg-[var(--color-primary-soft)] ${className}`}
+      className={`min-h-11 rounded-full border px-4 text-[var(--color-text-secondary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] aria-pressed:border-[var(--color-primary)] aria-pressed:bg-[var(--color-primary-soft)] aria-pressed:text-[var(--color-primary)] ${className}`}
     />
   );
 }

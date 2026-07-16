@@ -1,5 +1,22 @@
 import { expect, test } from '@playwright/test';
 
+test('светлая тема использует визуальные токены Mosaic', async ({ page }) => {
+  await page.goto('/ui-kit');
+  await page.evaluate(() => localStorage.setItem('pilot-theme', 'light'));
+  await page.reload();
+
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(243, 244, 246)');
+  await expect(page.locator('body')).toHaveCSS('font-family', /Inter/);
+
+  const primary = page.getByTestId('button-primary');
+  await expect(primary).toHaveCSS('background-color', 'rgb(99, 102, 241)');
+  await expect(primary).toHaveCSS('border-radius', '8px');
+
+  const card = page.getByTestId('showcase-card');
+  await expect(card).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(card).toHaveCSS('border-radius', '12px');
+});
+
 test('дизайн-система показывает все утверждённые разделы', async ({ page }) => {
   await page.goto('/ui-kit');
   for (const [id, name] of [
@@ -55,8 +72,8 @@ test('тёмная тема применяется ко всем маршрут�
   for (const route of ['/', '/ui-kit']) {
     await page.goto(route);
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-    await expect(page.locator('body')).toHaveCSS('color', 'rgb(244, 247, 250)');
-    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(9, 18, 31)');
+    await expect(page.locator('body')).toHaveCSS('color', 'rgb(249, 250, 251)');
+    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(17, 24, 39)');
   }
 });
 

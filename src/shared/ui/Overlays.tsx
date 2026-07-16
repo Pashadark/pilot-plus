@@ -144,9 +144,7 @@ export function Modal(props: ModalProps) {
   return <DialogBoundary {...props} />;
 }
 export function Drawer({ className = '', ...props }: ModalProps) {
-  return (
-    <DialogBoundary {...props} className={`mr-0 h-full max-w-md rounded-r-none ${className}`} />
-  );
+  return <DialogBoundary {...props} className={`mr-0 h-full max-w-md ${className}`} />;
 }
 export interface BottomSheetProps extends ModalProps {
   snap: 'collapsed' | 'intermediate' | 'expanded';
@@ -158,7 +156,7 @@ export function BottomSheet({ snap, onSnapChange, className = '', ...props }: Bo
     <DialogBoundary
       {...props}
       data-snap={snap}
-      className={`mb-0 max-w-none rounded-b-none ${snap === 'collapsed' ? 'max-h-[25dvh]' : snap === 'intermediate' ? 'max-h-[60dvh]' : 'max-h-[90dvh]'} ${className}`}
+      className={`mb-0 max-w-none rounded-t-[16px] rounded-b-none sm:rounded-[var(--radius-panel)] ${snap === 'collapsed' ? 'max-h-[25dvh]' : snap === 'intermediate' ? 'max-h-[60dvh]' : 'max-h-[90dvh]'} ${className}`}
     >
       <div role="group" aria-label="Положение нижней панели" className="mb-3 flex flex-wrap gap-2">
         {snaps.map((value) => (
@@ -167,7 +165,7 @@ export function BottomSheet({ snap, onSnapChange, className = '', ...props }: Bo
             type="button"
             aria-pressed={snap === value}
             onClick={() => onSnapChange(value)}
-            className="min-h-11 min-w-11 rounded-[var(--radius-sm)] px-3 aria-pressed:bg-[var(--color-primary-soft)]"
+            className="min-h-11 min-w-11 rounded-[var(--radius-sm)] px-3 text-[var(--color-text-secondary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] aria-pressed:bg-[var(--color-primary-soft)] aria-pressed:text-[var(--color-primary)]"
           >
             {value === 'collapsed'
               ? 'Свернуть'
@@ -240,7 +238,7 @@ export function DropdownMenu({ label, children }: { label: string; children: Rea
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-40 min-w-48 rounded-[var(--radius-md)] border bg-[var(--color-surface)] p-1 shadow-[var(--shadow-floating)]"
+          className="absolute right-0 z-40 min-w-48 rounded-[var(--radius-panel)] border bg-[var(--color-surface)] p-1 shadow-[var(--shadow-floating)]"
         >
           {children}
         </div>
