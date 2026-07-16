@@ -8,6 +8,18 @@ test('настольная оболочка показывает постоян�
   await expect(page.getByRole('link', { name: 'Дизайн-система' })).toBeVisible();
 });
 
+test('настольная панель управления отдаёт приоритет карте автопарка', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/');
+
+  await expect(
+    page.getByRole('heading', { name: 'Центр управления транспортом' }),
+  ).toBeVisible();
+  await expect(page.getByTestId('fleet-map-workspace')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Состояние парка' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Последние события' })).toBeVisible();
+});
+
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/');
