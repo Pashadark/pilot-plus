@@ -24,10 +24,8 @@ function getThemeServerSnapshot(): Theme {
 
 function subscribeToTheme(onStoreChange: () => void) {
   const handleStorage = (event: StorageEvent) => {
-    if (event.key !== storageKey || (event.newValue !== 'light' && event.newValue !== 'dark')) {
-      return;
-    }
-    document.documentElement.dataset.theme = event.newValue;
+    if (event.key !== storageKey) return;
+    document.documentElement.dataset.theme = event.newValue === 'dark' ? 'dark' : 'light';
     onStoreChange();
   };
 
@@ -57,7 +55,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     () => ({
       theme,
       setTheme: persistTheme,
-      toggleTheme: () => persistTheme(theme === 'light' ? 'dark' : 'light'),
+      toggleTheme: () => persistTheme(getThemeSnapshot() === 'light' ? 'dark' : 'light'),
     }),
     [theme],
   );

@@ -21,6 +21,39 @@ test('сохранённая тёмная тема гидратируется б
   expect(consoleMessages.filter((message) => hydrationError.test(message))).toEqual([]);
 });
 
+test('два синхронных переключения темы возвращают исходную тему', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('pilot-theme', 'light'));
+  await page.goto('/ui-kit');
+
+  const toggle = page.getByRole('button', { name: 'Включить тёмную тему' });
+  await expect(toggle).toBeVisible();
+  await toggle.evaluate((button) => {
+    const themeButton = button as HTMLButtonElement;
+    themeButton.click();
+    themeButton.click();
+  });
+
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(page.getByRole('button', { name: 'Включить тёмную тему' })).toBeVisible();
+});
+
+test('удаление сохранённой темы в другой вкладке возвращает светлую тему', async ({
+  context,
+  page,
+}) => {
+  await page.goto('/ui-kit');
+  await page.getByRole('button', { name: 'Включить тёмную тему' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
+  const otherPage = await context.newPage();
+  await otherPage.goto('/ui-kit');
+  await otherPage.evaluate(() => localStorage.removeItem('pilot-theme'));
+
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(page.getByRole('button', { name: 'Включить тёмную тему' })).toBeVisible();
+  await otherPage.close();
+});
+
 test('повторная навигация очищает карту без синхронного unmount React root', async ({ page }) => {
   const consoleMessages: string[] = [];
   page.on('console', (message) => collectConsoleMessages(consoleMessages, message));
