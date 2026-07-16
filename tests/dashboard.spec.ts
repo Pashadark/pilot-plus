@@ -70,3 +70,18 @@ test('мобильная оболочка не создаёт горизонта
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
   expect(overflow).toBe(false);
 });
+
+test('мобильная панель управления является полноэкранным рабочим пространством карты', async ({
+  page,
+}) => {
+  const workspace = page.getByTestId('mobile-map-workspace');
+  await expect(workspace).toBeVisible();
+  await expect(page.getByRole('searchbox', { name: 'Поиск транспорта' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Все автомобили' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.getByTestId('vehicle-bottom-sheet')).toBeVisible();
+  const box = await workspace.boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThan(600);
+});
