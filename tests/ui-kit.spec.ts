@@ -1,5 +1,21 @@
 import { expect, test } from '@playwright/test';
 
+test('UI Kit presents all approved categories', async ({ page }) => {
+  await page.goto('/ui-kit');
+  for (const name of [
+    'Foundations',
+    'Actions',
+    'Forms',
+    'Data Display',
+    'Navigation',
+    'Feedback',
+    'Overlays',
+    'Fleet Components',
+  ]) {
+    await expect(page.getByRole('heading', { name, level: 2 })).toBeVisible();
+  }
+});
+
 test('UI Kit is reachable from the application', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('link', { name: 'Дизайн-система' }).click();
@@ -47,6 +63,7 @@ test('overlays and form controls are keyboard accessible', async ({ page }) => {
   await expect(page.locator('body')).toHaveCSS('overflow', 'hidden');
 
   const dialog = page.getByRole('dialog', { name: 'Пример окна' });
+  await expect(dialog).toHaveAttribute('data-testid');
   const firstAction = dialog.getByRole('button').first();
   const lastAction = dialog.getByRole('button').last();
   await expect(firstAction).toBeFocused();
@@ -69,7 +86,6 @@ test('overlays and form controls are keyboard accessible', async ({ page }) => {
   await expect(vehicleName).toHaveAttribute('aria-describedby', /hint.*error|error.*hint/);
   await expect(page.getByRole('switch', { name: 'Только онлайн' })).toBeVisible();
   await expect(page.getByRole('searchbox')).toBeVisible();
-  await expect(dialog).toHaveAttribute('data-testid');
 });
 
 test('scroll lock remains active while another overlay is open', async ({ page }) => {
