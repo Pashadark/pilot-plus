@@ -1,18 +1,26 @@
 import { expect, test } from '@playwright/test';
 
-test('UI Kit presents all approved categories', async ({ page }) => {
+test('дизайн-система показывает все утверждённые разделы', async ({ page }) => {
   await page.goto('/ui-kit');
-  for (const name of [
-    'Foundations',
-    'Actions',
-    'Forms',
-    'Data Display',
-    'Navigation',
-    'Feedback',
-    'Overlays',
-    'Fleet Components',
-  ]) {
-    await expect(page.getByRole('heading', { name, level: 2 })).toBeVisible();
+  for (const [id, name] of [
+    ['foundations', 'Основы'],
+    ['actions', 'Действия'],
+    ['forms', 'Формы'],
+    ['data-display', 'Отображение данных'],
+    ['navigation', 'Навигация'],
+    ['feedback', 'Обратная связь'],
+    ['overlays', 'Всплывающие слои'],
+    ['fleet-components', 'Компоненты автопарка'],
+  ] as const) {
+    const section = page.getByTestId(`ui-kit-${id}`);
+    await expect(section).toBeVisible();
+    await expect(section.getByRole('heading', { name, level: 2 })).toBeVisible();
+  }
+
+  for (const id of ['actions', 'navigation', 'feedback', 'overlays'] as const) {
+    const section = page.getByTestId(`ui-kit-${id}`);
+    await expect(section.getByText('Когда использовать:', { exact: false })).toBeVisible();
+    await expect(section.getByText('Не использовать:', { exact: false })).toBeVisible();
   }
 });
 
@@ -20,7 +28,7 @@ test('UI Kit is reachable from the application', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('link', { name: 'Дизайн-система' }).click();
   await expect(page).toHaveURL(/\/ui-kit$/);
-  await expect(page.getByRole('heading', { name: 'Pilot+ UI Kit', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Дизайн-система Pilot+', level: 1 })).toBeVisible();
 });
 
 test('theme and action primitives expose accessible states', async ({ page }) => {

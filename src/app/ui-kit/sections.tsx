@@ -44,7 +44,11 @@ function KitSection({
   children: ReactNode;
 }) {
   return (
-    <section id={id} className="scroll-mt-24 border-t border-[var(--color-border)] py-10">
+    <section
+      id={id}
+      data-testid={`ui-kit-${id}`}
+      className="scroll-mt-24 border-t border-[var(--color-border)] py-10"
+    >
       <h2 className="text-2xl font-bold text-[var(--color-text)]">{title}</h2>
       <p className="mt-2 max-w-3xl text-[var(--color-text-secondary)]">{description}</p>
       <div className="mt-6 grid gap-4 lg:grid-cols-2">{children}</div>
@@ -96,7 +100,7 @@ export function UiKitSections() {
     <div>
       <KitSection
         id="foundations"
-        title="Foundations"
+        title="Основы"
         description="Семантические токены задают цвет, поверхность, радиус и визуальную иерархию обеих тем."
       >
         <ExampleCard title="Токены интерфейса">
@@ -124,7 +128,7 @@ export function UiKitSections() {
 
       <KitSection
         id="actions"
-        title="Actions"
+        title="Действия"
         description="Кнопки передают приоритет действия, состояние выполнения и доступную область касания."
       >
         <ExampleCard title="Варианты и состояния">
@@ -164,11 +168,17 @@ export function UiKitSections() {
             ))}
           </div>
         </ExampleCard>
+        <div className="lg:col-span-2">
+          <Guidance
+            use="для явных действий с понятным приоритетом и доступным состоянием выполнения."
+            avoid="кнопки для перехода между страницами и несколько одинаково главных действий рядом."
+          />
+        </div>
       </KitSection>
 
       <KitSection
         id="forms"
-        title="Forms"
+        title="Формы"
         description="Поля всегда имеют видимую подпись, подсказку и локальное сообщение об ошибке."
       >
         <ExampleCard title="Поля">
@@ -214,7 +224,7 @@ export function UiKitSections() {
 
       <KitSection
         id="data-display"
-        title="Data Display"
+        title="Отображение данных"
         description="Карточки и метки группируют данные, сохраняя читаемую плотность диспетчерского интерфейса."
       >
         <ExampleCard title="Метки">
@@ -238,7 +248,7 @@ export function UiKitSections() {
 
       <KitSection
         id="navigation"
-        title="Navigation"
+        title="Навигация"
         description="Навигация отражает положение пользователя и поддерживает предсказуемую клавиатурную модель."
       >
         <ExampleCard title="Путь и вкладки">
@@ -267,11 +277,17 @@ export function UiKitSections() {
             <Pagination page={page} totalPages={4} onChange={setPage} />
           </div>
         </ExampleCard>
+        <div className="lg:col-span-2">
+          <Guidance
+            use="для переходов, смены раздела и отражения текущего положения пользователя."
+            avoid="навигационные элементы для запуска операций или сохранения данных."
+          />
+        </div>
       </KitSection>
 
       <KitSection
         id="feedback"
-        title="Feedback"
+        title="Обратная связь"
         description="Обратная связь сообщает о результате, ожидании и невозможности показать данные."
       >
         <ExampleCard title="Сообщения">
@@ -292,11 +308,17 @@ export function UiKitSections() {
             <ErrorState title="Данные недоступны" description="Повторите попытку позже." />
           </div>
         </ExampleCard>
+        <div className="lg:col-span-2">
+          <Guidance
+            use="для понятного результата операции, ожидания, пустого состояния или ошибки."
+            avoid="цвет как единственный способ сообщить статус и сообщения без следующего шага."
+          />
+        </div>
       </KitSection>
 
       <KitSection
         id="overlays"
-        title="Overlays"
+        title="Всплывающие слои"
         description="Временные слои удерживают фокус, блокируют фон и возвращают управление инициатору."
       >
         <ExampleCard title="Диалоги и панель">
@@ -328,6 +350,12 @@ export function UiKitSections() {
             </DropdownMenu>
           </div>
         </ExampleCard>
+        <div className="lg:col-span-2">
+          <Guidance
+            use="для короткой сфокусированной задачи или дополнительных действий поверх контекста."
+            avoid="длинные сценарии, обязательную навигацию и контент, который должен оставаться на странице."
+          />
+        </div>
 
         <Modal
           open={modalOpen}
@@ -377,7 +405,7 @@ export function UiKitSections() {
 
       <KitSection
         id="fleet-components"
-        title="Fleet Components"
+        title="Компоненты автопарка"
         description="Составные примеры показывают единый язык телематики без отдельной бизнес-логики."
       >
         <ExampleCard title="Автомобиль">
