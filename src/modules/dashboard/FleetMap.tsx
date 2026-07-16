@@ -111,7 +111,7 @@ export function FleetMap({
       map.off('zoom', updateMarkers);
       markerResources.forEach(({ marker, root }) => {
         marker.remove();
-        root.unmount();
+        queueMicrotask(() => root.unmount());
       });
       map.remove();
     };

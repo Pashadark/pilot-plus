@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useMemo, useSyncExternalStore } from 'react';
 
 export type Theme = 'light' | 'dark';
 
@@ -11,28 +11,53 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
+const storageKey = 'pilot-theme';
+const themeStorageEvent = 'pilot-theme-storage';
+
+function getThemeSnapshot(): Theme {
+  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+}
+
+function getThemeServerSnapshot(): Theme {
+  return 'light';
+}
+
+function subscribeToTheme(onStoreChange: () => void) {
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key !== storageKey || (event.newValue !== 'light' && event.newValue !== 'dark')) {
+      return;
+    }
+    document.documentElement.dataset.theme = event.newValue;
+    onStoreChange();
+  };
+
+  window.addEventListener('storage', handleStorage);
+  window.addEventListener(themeStorageEvent, onStoreChange);
+
+  return () => {
+    window.removeEventListener('storage', handleStorage);
+    window.removeEventListener(themeStorageEvent, onStoreChange);
+  };
+}
+
+function persistTheme(theme: Theme) {
+  document.documentElement.dataset.theme = theme;
+  try {
+    window.localStorage.setItem(storageKey, theme);
+  } catch {
+    // Тема продолжает работать, даже если браузер запретил постоянное хранилище.
+  }
+  window.dispatchEvent(new Event(themeStorageEvent));
+}
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() =>
-    typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark'
-      ? 'dark'
-      : 'light',
-  );
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    try {
-      window.localStorage.setItem('pilot-theme', theme);
-    } catch {
-      // Тема продолжает работать, даже если браузер запретил постоянное хранилище.
-    }
-  }, [theme]);
+  const theme = useSyncExternalStore(subscribeToTheme, getThemeSnapshot, getThemeServerSnapshot);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
       theme,
-      setTheme: setThemeState,
-      toggleTheme: () => setThemeState((current) => (current === 'light' ? 'dark' : 'light')),
+      setTheme: persistTheme,
+      toggleTheme: () => persistTheme(theme === 'light' ? 'dark' : 'light'),
     }),
     [theme],
   );
