@@ -17,7 +17,7 @@ export function Header({ breadcrumbs }: { breadcrumbs: readonly Breadcrumb[] }) 
 
   return (
     <>
-      <header className="fixed inset-x-0 top-0 z-40 flex h-[var(--header-height)] items-center border-b bg-[var(--color-surface)] px-4 md:pl-[var(--sidebar-width)]">
+      <header className="fixed inset-x-0 top-0 z-40 flex h-[var(--header-height)] items-center border-b bg-[var(--color-surface)] px-4 transition-[padding] duration-200 md:pl-[var(--sidebar-width)]">
         <div className="flex w-full items-center justify-between md:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <div className="md:hidden">
@@ -31,22 +31,19 @@ export function Header({ breadcrumbs }: { breadcrumbs: readonly Breadcrumb[] }) 
             </div>
           </div>
           <div className="flex items-center gap-1 md:gap-2">
-            <div className="relative hidden w-64 lg:block">
+            <div className="relative hidden h-11 w-64 items-center lg:flex">
               <FiSearch
                 aria-hidden="true"
-                className="pointer-events-none absolute top-3.5 left-3 z-10"
+                className="pointer-events-none absolute left-3 z-10 text-[var(--color-text-muted)]"
               />
               <SearchInput
                 aria-label="Глобальный поиск"
                 placeholder="Поиск в Pilot+"
-                className="pl-10"
+                className="h-10 pl-10"
               />
             </div>
             <IconButton label="Уведомления" variant="ghost">
               <FiBell aria-hidden="true" />
-            </IconButton>
-            <IconButton label="Профиль и компания" variant="ghost">
-              <FiUser aria-hidden="true" />
             </IconButton>
             <IconButton
               label={theme === 'light' ? 'Включить тёмную тему' : 'Включить светлую тему'}
@@ -59,6 +56,11 @@ export function Header({ breadcrumbs }: { breadcrumbs: readonly Breadcrumb[] }) 
                 <FiSun aria-hidden="true" className="size-5" />
               )}
             </IconButton>
+            <div className="ml-1 border-l pl-2">
+              <IconButton label="Профиль и компания" variant="ghost">
+                <FiUser aria-hidden="true" className="size-5" />
+              </IconButton>
+            </div>
           </div>
         </div>
       </header>

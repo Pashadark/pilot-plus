@@ -15,6 +15,39 @@ test('настольная оболочка показывает постоян�
   await expect(header.getByRole('button', { name: 'Профиль и компания' })).toBeVisible();
 });
 
+test('настольная навигация раскрывается и сохраняет состояние', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/');
+
+  const shell = page.getByTestId('app-shell');
+  const sidebar = page.getByTestId('desktop-sidebar');
+  const toggle = page.getByRole('button', { name: 'Развернуть навигацию' });
+
+  await expect(sidebar).toHaveCSS('width', '80px');
+  await toggle.click();
+  await expect(shell).toHaveAttribute('data-sidebar-expanded', 'true');
+  await expect(sidebar).toHaveCSS('width', '240px');
+  await expect(page.getByRole('button', { name: 'Свернуть навигацию' })).toBeVisible();
+
+  await page.reload();
+  await expect(shell).toHaveAttribute('data-sidebar-expanded', 'true');
+  await expect(sidebar).toHaveCSS('width', '240px');
+});
+
+test('раскрытие навигации не ломает карту', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/');
+  const map = page.getByTestId('fleet-map-workspace');
+  const before = await map.boundingBox();
+
+  await page.getByRole('button', { name: 'Развернуть навигацию' }).click();
+  await expect
+    .poll(async () => (await map.boundingBox())?.width ?? 0)
+    .toBeLessThan(before?.width ?? 0);
+  await expect(map.getByLabel('Карта автопарка').locator('canvas')).toBeVisible();
+  await expect(map.getByText('OpenStreetMap', { exact: false })).toBeVisible();
+});
+
 test('перетаскивание ручки меняет положение нижней панели', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/');
