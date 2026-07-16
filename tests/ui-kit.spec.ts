@@ -25,10 +25,13 @@ test('дизайн-система показывает все утверждён
 });
 
 test('UI Kit is reachable from the application', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto('/');
   await page.getByRole('link', { name: 'Дизайн-система' }).click();
   await expect(page).toHaveURL(/\/ui-kit$/);
-  await expect(page.getByRole('heading', { name: 'Дизайн-система Pilot+', level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Дизайн-система Pilot+', level: 1 }),
+  ).toBeVisible();
 });
 
 test('theme and action primitives expose accessible states', async ({ page }) => {
@@ -41,6 +44,49 @@ test('theme and action primitives expose accessible states', async ({ page }) =>
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+});
+
+test('тёмная тема применяется ко всем маршрутам и сохраняет читаемые поверхности', async ({
+  page,
+}) => {
+  await page.goto('/ui-kit');
+  await page.getByRole('button', { name: 'Включить тёмную тему' }).click();
+
+  for (const route of ['/', '/ui-kit']) {
+    await page.goto(route);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect(page.locator('body')).toHaveCSS('color', 'rgb(244, 247, 250)');
+    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(9, 18, 31)');
+  }
+});
+
+for (const viewport of [
+  { width: 375, height: 812 },
+  { width: 768, height: 1024 },
+  { width: 1024, height: 768 },
+  { width: 1440, height: 1000 },
+]) {
+  test(`маршруты не создают горизонтальное переполнение при ширине ${viewport.width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    for (const route of ['/', '/ui-kit']) {
+      await page.goto(route);
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth,
+      );
+      expect(overflow, `${route} при ширине ${viewport.width}px`).toBe(false);
+    }
+  });
+}
+
+test('режим уменьшенного движения отключает обычные переходы', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/ui-kit');
+  const duration = await page
+    .getByTestId('button-primary')
+    .evaluate((element) => getComputedStyle(element).transitionDuration);
+  expect(['0s', '0.00001s', '1e-05s']).toContain(duration);
 });
 
 test('все публичные размеры действий дают область касания не меньше 44 на 44 пикселя', async ({

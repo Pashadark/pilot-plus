@@ -12,12 +12,27 @@ test('настольная панель управления отдаёт при
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
 
-  await expect(
-    page.getByRole('heading', { name: 'Центр управления транспортом' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Центр управления транспортом' })).toBeVisible();
   await expect(page.getByTestId('fleet-map-workspace')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Состояние парка' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Последние события' })).toBeVisible();
+  await expect(
+    page.getByTestId('fleet-map-workspace').getByText('OpenStreetMap', { exact: false }),
+  ).toBeVisible();
+});
+
+test('настольная карта остаётся крупнейшей рабочей областью', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto('/');
+
+  const map = await page.getByTestId('fleet-map-workspace').boundingBox();
+  const status = await page
+    .getByRole('heading', { name: 'Состояние парка' })
+    .locator('..')
+    .boundingBox();
+  expect((map?.width ?? 0) * (map?.height ?? 0)).toBeGreaterThan(
+    (status?.width ?? 0) * (status?.height ?? 0),
+  );
 });
 
 test.beforeEach(async ({ page }) => {
@@ -32,6 +47,19 @@ test('кнопка мобильного меню имеет область не 
   const box = await menuButton.boundingBox();
   expect(box?.width).toBeGreaterThanOrEqual(44);
   expect(box?.height).toBeGreaterThanOrEqual(44);
+});
+
+test('мобильные плавающие элементы управления доступны с клавиатуры и в тёмной теме', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Включить тёмную тему' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
+  const search = page.getByRole('searchbox', { name: 'Поиск транспорта' });
+  await search.focus();
+  await expect(search).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Все автомобили' })).toBeFocused();
 });
 
 test('общий drawer удерживает фокус, блокирует прокрутку и возвращает фокус', async ({ page }) => {
@@ -90,13 +118,22 @@ test('нижняя панель имеет три различимые высо�
   page,
 }) => {
   const sheet = page.getByTestId('vehicle-bottom-sheet');
-  const snapButtons = page.getByRole('group', { name: 'Положение нижней панели' }).getByRole('button');
+  const snapButtons = page
+    .getByRole('group', { name: 'Положение нижней панели' })
+    .getByRole('button');
   const heights: number[] = [];
 
-  for (const name of ['Свернуть панель', 'Открыть панель наполовину', 'Развернуть панель']) {
+  for (const [name, minimumHeight] of [
+    ['Свернуть панель', 200],
+    ['Открыть панель наполовину', 450],
+    ['Развернуть панель', 700],
+  ] as const) {
     const button = page.getByRole('button', { name });
     await button.click();
     await expect(button).toHaveAttribute('aria-pressed', 'true');
+    await expect
+      .poll(async () => (await sheet.boundingBox())?.height ?? 0)
+      .toBeGreaterThan(minimumHeight);
     heights.push((await sheet.boundingBox())?.height ?? 0);
   }
 

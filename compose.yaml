@@ -12,7 +12,7 @@ services:
       POSTGRES_PASSWORD: pilot
 
     ports:
-      - "5433:5432"
+      - '5433:5432'
 
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
 
     ports:
-      - "6379:6379"
+      - '6379:6379'
 
     volumes:
       - redis-data:/data
@@ -40,8 +40,8 @@ services:
     restart: unless-stopped
 
     ports:
-      - "1883:1883"
-      - "9001:9001"
+      - '1883:1883'
+      - '9001:9001'
 
     volumes:
       - ./docker/mosquitto:/mosquitto/config

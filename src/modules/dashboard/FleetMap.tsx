@@ -124,7 +124,10 @@ export function FleetMap({
   if (vehicles.length === 0) {
     return (
       <div className="grid h-full place-items-center p-4">
-        <EmptyState title="На карте пока нет транспорта" description="Измените фильтры или повторите позже." />
+        <EmptyState
+          title="На карте пока нет транспорта"
+          description="Измените фильтры или повторите позже."
+        />
       </div>
     );
   }

@@ -25,8 +25,8 @@ export function MobileFleetWorkspace({ vehicles }: { vehicles: readonly Vehicle[
 
   useEffect(() => {
     const synchronization = window.setTimeout(() => {
-      setSelectedVehicle((current) =>
-        vehicles.find((vehicle) => vehicle.id === current?.id) ?? vehicles[0] ?? null,
+      setSelectedVehicle(
+        (current) => vehicles.find((vehicle) => vehicle.id === current?.id) ?? vehicles[0] ?? null,
       );
     });
     return () => window.clearTimeout(synchronization);
@@ -79,7 +79,10 @@ export function MobileFleetWorkspace({ vehicles }: { vehicles: readonly Vehicle[
         aria-label="Выбранный автомобиль"
         className={`absolute right-0 bottom-0 left-0 z-20 flex max-h-[calc(100%-0.5rem)] flex-col overflow-hidden rounded-t-[var(--radius-panel)] border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-floating)] transition-[height] ${snap === 'collapsed' ? 'h-[28dvh]' : snap === 'intermediate' ? 'h-[60dvh]' : 'h-[90dvh]'}`}
       >
-        <div className="mx-auto mb-2 h-1.5 w-12 rounded-full bg-[var(--color-border-strong)]" aria-hidden="true" />
+        <div
+          className="mx-auto mb-2 h-1.5 w-12 rounded-full bg-[var(--color-border-strong)]"
+          aria-hidden="true"
+        />
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="font-semibold">Выбранный автомобиль</h2>
           <div role="group" aria-label="Положение нижней панели" className="flex gap-1">

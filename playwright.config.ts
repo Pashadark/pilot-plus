@@ -11,7 +11,7 @@ export default defineConfig({
   },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile', use: { ...devices['iPhone 13'] } },
+    { name: 'mobile', use: { ...devices['Pixel 5'] } },
   ],
   webServer: {
     command: 'npm run dev -- --hostname 127.0.0.1 --port 3000',

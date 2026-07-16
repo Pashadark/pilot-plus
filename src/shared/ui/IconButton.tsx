@@ -9,20 +9,23 @@ const iconSizes: Record<ComponentSize, string> = {
   lg: 'size-12 !p-0',
 };
 
-export interface IconButtonProps
-  extends Omit<ButtonProps, 'aria-label' | 'children' | 'leadingIcon' | 'trailingIcon'> {
+export interface IconButtonProps extends Omit<
+  ButtonProps,
+  'aria-label' | 'children' | 'leadingIcon' | 'trailingIcon'
+> {
   label: string;
   children: ReactNode;
 }
 
-export function IconButton({ label, size = 'md', className = '', children, ...props }: IconButtonProps) {
+export function IconButton({
+  label,
+  size = 'md',
+  className = '',
+  children,
+  ...props
+}: IconButtonProps) {
   return (
-    <Button
-      size={size}
-      className={`${iconSizes[size]} ${className}`}
-      {...props}
-      aria-label={label}
-    >
+    <Button size={size} className={`${iconSizes[size]} ${className}`} {...props} aria-label={label}>
       {children}
     </Button>
   );

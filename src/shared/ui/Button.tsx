@@ -11,7 +11,8 @@ const variants: Record<ButtonVariant, string> = {
   soft: 'border-transparent bg-[var(--color-primary-soft)] text-[var(--color-primary)] hover:bg-[var(--color-elevated)]',
   outline:
     'border-[var(--color-primary)] bg-transparent text-[var(--color-primary)] hover:bg-[var(--color-primary-soft)]',
-  ghost: 'border-transparent bg-transparent text-[var(--color-text)] hover:bg-[var(--color-primary-soft)]',
+  ghost:
+    'border-transparent bg-transparent text-[var(--color-text)] hover:bg-[var(--color-primary-soft)]',
   danger:
     'border-transparent bg-[var(--color-danger)] text-[var(--color-text-inverse)] hover:opacity-90',
 };
