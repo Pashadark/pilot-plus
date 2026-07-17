@@ -221,7 +221,15 @@ export function Tooltip({
   );
 }
 
-export function DropdownMenu({ label, children }: { label: string; children: ReactNode }) {
+export function DropdownMenu({
+  label,
+  ariaLabel,
+  children,
+}: {
+  label: ReactNode;
+  ariaLabel?: string;
+  children: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -243,6 +251,7 @@ export function DropdownMenu({ label, children }: { label: string; children: Rea
     <div ref={rootRef} className="relative inline-block">
       <button
         type="button"
+        aria-label={ariaLabel}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}

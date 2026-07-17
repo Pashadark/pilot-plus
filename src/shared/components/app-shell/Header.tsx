@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { FiBell, FiMenu, FiMoon, FiSearch, FiSun, FiUser } from 'react-icons/fi';
+import { FiBell, FiLogOut, FiMenu, FiMoon, FiSearch, FiSun, FiUser } from 'react-icons/fi';
 
+import { logoutAction } from '@/modules/auth/actions';
 import { useTheme } from '@/shared/providers/ThemeProvider';
 import { IconButton } from '@/shared/ui/IconButton';
-import { Breadcrumbs, SearchInput } from '@/shared/ui';
+import { Breadcrumbs, DropdownMenu, SearchInput } from '@/shared/ui';
 import type { Breadcrumb } from './AppShell';
 
 import { MobileNavigation } from './MobileNavigation';
@@ -57,9 +58,29 @@ export function Header({ breadcrumbs }: { breadcrumbs: readonly Breadcrumb[] }) 
               )}
             </IconButton>
             <div className="ml-1 border-l pl-2">
-              <IconButton label="Профиль и компания" variant="ghost">
-                <FiUser aria-hidden="true" className="size-5" />
-              </IconButton>
+              <DropdownMenu
+                ariaLabel="Профиль и компания"
+                label={
+                  <span className="flex size-11 items-center justify-center rounded-[var(--radius-md)] transition-colors hover:bg-[var(--color-primary-soft)]">
+                    <FiUser aria-hidden="true" className="size-5" />
+                  </span>
+                }
+              >
+                <div className="border-b px-3 py-2">
+                  <p className="text-sm font-semibold">Администратор</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">Управление Pilot+</p>
+                </div>
+                <form action={logoutAction}>
+                  <button
+                    type="submit"
+                    role="menuitem"
+                    className="flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] px-3 text-left text-sm font-medium transition-colors hover:bg-[var(--color-primary-soft)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
+                  >
+                    <FiLogOut aria-hidden="true" />
+                    Выйти
+                  </button>
+                </form>
+              </DropdownMenu>
             </div>
           </div>
         </div>
