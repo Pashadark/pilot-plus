@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { hashPassword, verifyPassword } from '@/services/auth/password';
 
 describe('пароли', () => {
+  it('отклоняет пароль короче 12 символов', async () => {
+    await expect(hashPassword('короткий')).rejects.toThrow('не менее 12 символов');
+  });
+
   it('создаёт разные хеши для одного пароля', async () => {
     const password = 'Надёжный пароль 2026';
 
