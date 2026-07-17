@@ -52,25 +52,17 @@ Pilot+ — будущая коммерческая платформа управ
 - Миграция `20260717101500_add_auth_models` успешно применена локально через `prisma migrate deploy`.
 - Docker Desktop и контейнер `pilot-postgres` были запущены при последней проверке.
 
-## 4. Текущий незавершённый пункт
+## 4. Состояние локального администратора
 
-Первый администратор **не создан**, потому что локальный `.env` содержит `DATABASE_URL`, но не содержит:
+Первый локальный администратор создан 17 июля 2026 года командой `npm run db:seed`. Его email, имя и пароль хранятся только в локальном `.env`; пароль не записан в Git, документацию или Notion.
+
+Реальный браузерный сценарий подтверждён через Playwright CLI на чисто перезапущенном dev-server:
 
 ```text
-PILOT_ADMIN_EMAIL
-PILOT_ADMIN_PASSWORD
-PILOT_ADMIN_NAME
+/login → ввод корректных данных → / → профиль → Выйти → /login
 ```
 
-Следующий шаг должен быть выполнен владельцем или агентом после получения выбранных Павлом данных. Не придумывать слабый пароль и не записывать секреты в Git, Notion, документацию или логи.
-
-После безопасного заполнения локального `.env`:
-
-```powershell
-npm run db:seed
-```
-
-Затем вручную или Playwright проверить: `/login` → dashboard → профиль → `Выйти` → повторный запрет `/`.
+Dashboard открылся после входа, меню профиля показало действие выхода, выход отозвал серверную сессию и вернул публичную форму. Для другого компьютера, CI или новой БД нужно задать собственные `PILOT_ADMIN_EMAIL`, `PILOT_ADMIN_PASSWORD`, `PILOT_ADMIN_NAME` в локальном окружении и повторить seed.
 
 ## 5. Подтверждённые проверки
 
@@ -85,6 +77,8 @@ npm run build                             PASS с одним Prisma NFT warning
 npx prisma validate                       PASS
 npx prisma generate                       PASS
 npx prisma migrate deploy                 PASS, migration applied
+npm run db:seed                           PASS, local admin created
+Playwright CLI real login/logout          PASS
 ```
 
 Production build предупреждает, что импорт `src/database/generated/prisma/index.js` приводит к слишком широкому NFT trace. Это не ломает текущий build, но перед deployment нужно стабилизировать Prisma generation/import и убрать дублирующий generated-каталог.
@@ -128,10 +122,9 @@ tests/auth.spec.ts
 
 ### P0 — закончить текущую вертикаль
 
-1. Получить admin email/password/name и выполнить seed.
-2. Добавить безопасный Playwright global setup/test DB/auth storage state.
-3. Проверить настоящий успешный вход, cookie attributes, выход и пятиступенчатую блокировку в браузере.
-4. Выполнить весь `npm run test:e2e`, а не только `tests/auth.spec.ts`.
+1. Добавить безопасный Playwright global setup/test DB/auth storage state.
+2. Автоматизировать проверку успешного входа, cookie attributes, выхода и пятиступенчатой блокировки без хранения секретов в test source.
+3. Выполнить весь `npm run test:e2e`, а не только `tests/auth.spec.ts`.
 
 ### P1 — стабилизация основы
 
