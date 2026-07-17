@@ -52,10 +52,12 @@ Pilot+ задуман как единый центр управления тра
 | Карта              | MapLibre GL                            |
 | Иконки             | React Icons                            |
 | ORM                | Prisma 6.16                            |
+| Авторизация        | Server Actions, PostgreSQL sessions    |
+| Криптография       | Node.js scrypt, SHA-256, randomBytes   |
 | Основная БД        | PostgreSQL 17 + PostGIS 3.5            |
 | Оперативные данные | Redis 8                                |
 | Телеметрия         | Eclipse Mosquitto 2 / MQTT             |
-| Качество           | ESLint 9, Prettier 3                   |
+| Качество           | Vitest 3, Playwright, ESLint, Prettier |
 
 React Compiler включён в `next.config.ts`.
 
@@ -93,18 +95,29 @@ React Compiler включён в `next.config.ts`.
 - Playwright-проверки маршрутов, клавиатурной доступности, touch targets и основных responsive-сценариев;
 - локальная инфраструктура PostgreSQL/PostGIS, Redis и Mosquitto;
 - подключение Prisma к PostgreSQL.
+- публичная адаптивная форма `/login` в светлой и тёмной темах;
+- серверный вход и выход администратора через Next.js Server Actions;
+- пароли `scrypt`, непрозрачные 32-байтовые session tokens и хранение только SHA-256-хеша токена;
+- cookie `pilot-session` с HttpOnly, SameSite=Lax, Path=/, семидневным сроком и Secure в production;
+- защита `/` и `/ui-kit` серверным route-group layout;
+- блокировка email на 15 минут после пяти последовательных ошибок;
+- Prisma-модели `User`, `Session`, `LoginThrottle`, SQL-миграция и идемпотентный seed;
+- 30 unit-тестов auth/core и 8 browser-проверок публичной формы входа.
 
 ### Что является демонстрацией
 
 Все бизнес-данные на дашборде сейчас являются типизированными fixtures. Поиск и фильтры на мобильной карте работают только с этими демонстрационными данными. Навигация к будущим продуктовым разделам, уведомления, выбор компании, аккаунт и действия автомобиля ещё не выполняют прикладных операций. Тема и навигация к `/ui-kit` уже интерактивны.
 
-В БД пока нет доменных таблиц Pilot+. Есть только системная таблица PostGIS `spatial_ref_sys`. Redis и MQTT запущены, но приложение к ним ещё не подключено.
+В локальную PostgreSQL применена миграция таблиц авторизации. Доменные таблицы транспорта и телеметрии пока отсутствуют. Redis и MQTT определены в Compose, но приложение к ним ещё не подключено.
 
 ### Известный технический долг
 
 - существуют два каталога сгенерированного Prisma-клиента;
 - реальный путь generated-кода не совпадает с правилом `.gitignore`;
 - конфигурация Prisma в `package.json` устаревает перед Prisma 7;
+- production build предупреждает о чрезмерно широком NFT trace через сгенерированный `prisma-client-js`;
+- старый Playwright-набор дашборда не создаёт авторизованное storage state и должен быть переведён на общий auth fixture;
+- seed не может создать первого администратора, пока в локальном `.env` не заданы `PILOT_ADMIN_EMAIL`, `PILOT_ADMIN_PASSWORD`, `PILOT_ADMIN_NAME`;
 - CI пока не настроен, хотя локальные e2e-тесты уже добавлены;
 - production-провайдер тайлов карты ещё не выбран; текущая OpenStreetMap raster-конфигурация предназначена для прототипа;
 - error/retry MapLibre пока проверяется статически и через build, без детерминированного e2e test seam;
@@ -190,17 +203,18 @@ modules/vehicles/
 
 Текущее визуальное направление Pilot+ основано на плотной dashboard-композиции Mosaic: холодный серый canvas, белые поверхности, фиолетовый основной акцент, компактная раскрываемая навигационная рейка и сдержанные тени. Это визуальная адаптация, а не перенос бизнес-компонентов Mosaic. Карта, телематика и продуктовые сценарии остаются собственными Pilot+.
 
-Базовые цвета, уже присутствующие в проекте:
+Актуальные базовые цвета из `src/app/globals.css`:
 
-- primary: `#0092BE`;
-- light background: `#F8FAFC`;
+- primary light: `#6366F1`;
+- primary dark: `#818CF8`;
+- light canvas: `#F3F4F6`;
 - light surface/card: `#FFFFFF`;
-- light text: `#0F172A`;
-- secondary text: `#64748B`;
-- border: `#E2E8F0`;
-- dark background: `#0B1120`;
-- dark surface: `#111827`;
-- dark card: `#172033`.
+- light text: `#1F2937`;
+- secondary text: `#6B7280`;
+- light border: `#E5E7EB`;
+- dark canvas: `#111827`;
+- dark surface/card: `#1F2937`;
+- dark border: `#374151`.
 
 Цель — компоненты `Button`, `Input`, `Card`, `Modal`, `Table`, `Sidebar`, `Header`, `Tabs`, `Badge`, `Tooltip` и другие примитивы Pilot+. Компоненты должны использовать семантические CSS variables или общие варианты, а не повторять hex-цвета по всему коду.
 
@@ -271,9 +285,13 @@ npm run start
 
 # проверки
 npm run lint
+npm run test:unit
+npm run test:e2e:auth
 npx tsc --noEmit
 npx prettier --check "src/**/*.{ts,tsx,css}"
 npx prisma validate
+npx prisma migrate deploy
+npm run db:seed
 ```
 
 `npm run build` в Next.js 16 не заменяет ESLint. В CI эти проверки должны выполняться отдельными шагами.
@@ -310,9 +328,12 @@ npx prisma validate
 ### Этап 2 — данные и безопасность
 
 - согласовать multi-tenant модель;
-- создать Prisma schema и первую миграцию;
+- ✅ создать минимальную auth-схему и первую миграцию;
+- ✅ реализовать безопасный вход/выход одного администратора;
+- создать первого локального администратора после заполнения секретов `.env`;
+- перевести весь Playwright-набор на тестовую БД и auth storage state;
 - добавить seed демонстрационной компании;
-- реализовать authentication и RBAC;
+- расширить единственную роль `ADMIN` до согласованной RBAC-модели;
 - определить формат MQTT-сообщений.
 
 ### Этап 3 — первый вертикальный сценарий

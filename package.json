@@ -13,6 +13,7 @@
     "test:unit:watch": "vitest",
     "db:seed": "tsx src/database/prisma/seed.ts",
     "test:e2e": "playwright test",
+    "test:e2e:auth": "playwright test tests/auth.spec.ts --workers=1",
     "test:e2e:install": "playwright install chromium"
   },
   "prisma": {
