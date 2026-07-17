@@ -9,6 +9,9 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"*.{json,md,ts,mjs,yaml}\"",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "db:seed": "tsx src/database/prisma/seed.ts",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium"
   },
@@ -39,6 +42,8 @@
     "prettier-plugin-tailwindcss": "^0.8.0",
     "prisma": "6.16.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.20.6",
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }
