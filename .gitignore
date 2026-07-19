@@ -48,3 +48,6 @@ next-env.d.ts
 
 # local Superpowers visual brainstorming sessions
 /.superpowers/
+
+# isolated feature worktrees
+/.worktrees/
