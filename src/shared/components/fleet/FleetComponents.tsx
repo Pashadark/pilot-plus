@@ -1,6 +1,4 @@
-import { FiMapPin } from 'react-icons/fi';
-
-import { Badge } from '@/shared/ui';
+import { FiAlertCircle, FiMapPin, FiRadio } from 'react-icons/fi';
 
 export type FleetSemanticStatus = 'moving' | 'idle' | 'offline' | 'alarm';
 export type ConnectionState = 'online' | 'offline';
@@ -89,22 +87,44 @@ export function EventItem({
   timeLabel: string;
   tone: EventTone;
 }) {
+  const EventIcon = tone === 'danger' ? FiAlertCircle : tone === 'warning' ? FiRadio : FiMapPin;
+  const toneStyle = {
+    danger: {
+      color: 'var(--color-danger)',
+      backgroundColor: 'var(--color-danger-soft)',
+      label: 'Важно',
+    },
+    warning: {
+      color: 'var(--color-warning)',
+      backgroundColor: 'var(--color-warning-soft)',
+      label: 'Внимание',
+    },
+    info: {
+      color: 'var(--color-primary)',
+      backgroundColor: 'var(--color-primary-soft)',
+      label: 'Информация',
+    },
+  }[tone];
+
   return (
     <li
       aria-label={`${title}, ${vehicleName}`}
       data-tone={tone}
-      className="flex min-h-11 gap-3 py-3 first:pt-0 last:pb-0"
+      className="flex min-h-11 items-start gap-3 py-3.5"
     >
-      <FiMapPin className="mt-1 size-5 shrink-0 text-[var(--color-primary)]" aria-hidden="true" />
+      <span
+        className="grid size-9 shrink-0 place-items-center rounded-[var(--radius-md)]"
+        style={{ color: toneStyle.color, backgroundColor: toneStyle.backgroundColor }}
+      >
+        <EventIcon className="size-4" aria-hidden="true" />
+        <span className="sr-only">{toneStyle.label}</span>
+      </span>
       <div className="min-w-0 flex-1">
-        <p className="font-medium">{title}</p>
-        <p className="text-sm text-[var(--color-text-secondary)]">
+        <p className="text-xs leading-5 font-semibold">{title}</p>
+        <p className="truncate text-[11px] leading-4 text-[var(--color-text-secondary)]">
           {vehicleName} · {timeLabel}
         </p>
       </div>
-      <Badge tone={tone}>
-        {tone === 'danger' ? 'Важно' : tone === 'warning' ? 'Внимание' : 'Инфо'}
-      </Badge>
     </li>
   );
 }

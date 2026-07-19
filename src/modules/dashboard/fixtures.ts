@@ -1,42 +1,110 @@
-import type { FleetEvent, FleetStat, Vehicle } from './types';
+import type { FleetEvent, FleetStat, FuelSlice, MileagePoint, Vehicle } from './types';
 
 // Демонстрационные данные изолированы от будущего серверного потока телеметрии.
 export const fleetStats = [
-  { id: 'total', label: 'Всего автомобилей', value: '245', detail: '+12 сегодня', tone: 'primary' },
-  { id: 'online', label: 'На связи', value: '231', detail: '94% парка', tone: 'success' },
-  { id: 'offline', label: 'Нет связи', value: '5', detail: 'Требуют внимания', tone: 'danger' },
   {
-    id: 'maintenance',
-    label: 'Требуется ТО',
-    value: '9',
-    detail: 'Запланировано',
+    id: 'total',
+    label: 'Всего ТС',
+    value: '128',
+    detail: '+12,1% чем вчера',
+    tone: 'success',
+    icon: 'vehicle',
+  },
+  {
+    id: 'moving',
+    label: 'На ходу',
+    value: '87',
+    detail: '68% автопарка',
+    tone: 'success',
+    icon: 'activity',
+  },
+  {
+    id: 'idle',
+    label: 'Остановки',
+    value: '21',
+    detail: '16% автопарка',
     tone: 'warning',
+    icon: 'pause',
+  },
+  {
+    id: 'offline',
+    label: 'Нет на связи',
+    value: '8',
+    detail: '6% автопарка',
+    tone: 'danger',
+    icon: 'signal',
+  },
+  {
+    id: 'mileage',
+    label: 'Пробег сегодня',
+    value: '3 742 км',
+    detail: '+11,2% за день',
+    tone: 'success',
+    icon: 'mileage',
+  },
+  {
+    id: 'fuel',
+    label: 'Расход топлива',
+    value: '128 л',
+    detail: '+8,4% за день',
+    tone: 'success',
+    icon: 'fuel',
   },
 ] satisfies readonly FleetStat[];
 
 export const fleetEvents = [
   {
-    id: 'geofence',
-    title: 'Автомобиль покинул геозону',
+    id: 'speed',
+    title: 'Превышение скорости',
     vehicleName: 'Haval Jolion',
-    timeLabel: '2 минуты назад',
+    timeLabel: '12:46',
     tone: 'danger',
   },
   {
-    id: 'connection',
-    title: 'Нет связи с устройством',
+    id: 'geofence-enter',
+    title: 'Въезд в геозону',
     vehicleName: 'Geely Atlas',
-    timeLabel: '18 минут назад',
+    timeLabel: '11:32',
     tone: 'warning',
   },
   {
-    id: 'maintenance',
-    title: 'Приближается обслуживание',
+    id: 'connection',
+    title: 'Потеря связи',
     vehicleName: 'Kia K5',
-    timeLabel: '1 час назад',
+    timeLabel: '10:21',
+    tone: 'danger',
+  },
+  {
+    id: 'battery',
+    title: 'Низкий заряд АКБ',
+    vehicleName: 'Lada Vesta',
+    timeLabel: '09:15',
+    tone: 'warning',
+  },
+  {
+    id: 'geofence-office',
+    title: 'Вход в геозону',
+    vehicleName: 'Changan Uni-T',
+    timeLabel: '08:45',
     tone: 'info',
   },
 ] satisfies readonly FleetEvent[];
+
+export const mileageByDay = [
+  { label: '13 июл', value: 720 },
+  { label: '14 июл', value: 1380 },
+  { label: '15 июл', value: 2180 },
+  { label: '16 июл', value: 1760 },
+  { label: '17 июл', value: 2360 },
+  { label: '18 июл', value: 2980 },
+  { label: '19 июл', value: 3742 },
+] satisfies readonly MileagePoint[];
+
+export const fuelBreakdown = [
+  { label: 'По датчикам', value: 98, percent: 76, tone: 'primary' },
+  { label: 'По норме', value: 20, percent: 16, tone: 'success' },
+  { label: 'Слития', value: 10, percent: 8, tone: 'danger' },
+] satisfies readonly FuelSlice[];
 
 export const vehicles = [
   {

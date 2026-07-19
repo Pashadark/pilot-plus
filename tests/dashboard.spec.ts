@@ -1,4 +1,28 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+async function openAuthenticatedDashboard(page: Page) {
+  await page.goto('/');
+
+  if (new URL(page.url()).pathname !== '/login') return;
+
+  const email = process.env.PILOT_ADMIN_EMAIL;
+  const password = process.env.PILOT_ADMIN_PASSWORD;
+  if (!email || !password) {
+    throw new Error(
+      'Для проверки защищённого дашборда нужны PILOT_ADMIN_EMAIL и PILOT_ADMIN_PASSWORD',
+    );
+  }
+
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Пароль').fill(password);
+  await page.getByRole('button', { name: 'Войти' }).click();
+  await expect(page).toHaveURL('/');
+}
+
+test.beforeEach(async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await openAuthenticatedDashboard(page);
+});
 
 test('настольная оболочка показывает постоянную навигацию', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -6,13 +30,10 @@ test('настольная оболочка показывает постоян�
 
   await expect(page.getByRole('navigation', { name: 'Основная навигация' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Дизайн-система' })).toBeVisible();
-  const header = page.getByRole('banner');
-  await expect(header.getByRole('navigation', { name: 'Хлебные крошки' })).toBeVisible();
-  await expect(header.getByRole('link', { name: 'Pilot+' })).toBeVisible();
-  await expect(header.getByText('Панель управления')).toHaveAttribute('aria-current', 'page');
-  await expect(header.getByRole('searchbox', { name: 'Глобальный поиск' })).toBeVisible();
-  await expect(header.getByRole('button', { name: 'Уведомления' })).toBeVisible();
-  await expect(header.getByRole('button', { name: 'Профиль и компания' })).toBeVisible();
+  await expect(page.getByRole('banner')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Сегодня, 19 июл' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Фильтры' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Настроить вид' })).toBeVisible();
 });
 
 test('настольная навигация раскрывается и сохраняет состояние', async ({ page }) => {
@@ -21,20 +42,20 @@ test('настольная навигация раскрывается и сох
 
   const shell = page.getByTestId('app-shell');
   const sidebar = page.getByTestId('desktop-sidebar');
-  const toggle = page.getByRole('button', { name: 'Развернуть навигацию' });
+  const toggle = page.getByRole('button', { name: 'Свернуть навигацию' });
 
-  await expect(sidebar).toHaveCSS('width', '80px');
+  await expect(sidebar).toHaveCSS('width', '228px');
   await toggle.click();
-  await expect(shell).toHaveAttribute('data-sidebar-expanded', 'true');
-  await expect(sidebar).toHaveCSS('width', '240px');
-  await expect(page.getByRole('button', { name: 'Свернуть навигацию' })).toBeVisible();
+  await expect(shell).toHaveAttribute('data-sidebar-expanded', 'false');
+  await expect(sidebar).toHaveCSS('width', '72px');
+  await expect(page.getByRole('button', { name: 'Развернуть навигацию' })).toBeVisible();
 
   await page.reload();
-  await expect(shell).toHaveAttribute('data-sidebar-expanded', 'true');
-  await expect(sidebar).toHaveCSS('width', '240px');
+  await expect(shell).toHaveAttribute('data-sidebar-expanded', 'false');
+  await expect(sidebar).toHaveCSS('width', '72px');
 });
 
-test('настольная навигация остаётся свёрнутой при запрещённом localStorage', async ({ page }) => {
+test('настольная навигация остаётся раскрытой при запрещённом localStorage', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(window, 'localStorage', {
       configurable: true,
@@ -47,9 +68,9 @@ test('настольная навигация остаётся свёрнуто�
   await page.goto('/');
 
   const shell = page.getByTestId('app-shell');
-  await expect(shell).toHaveAttribute('data-sidebar-expanded', 'false');
-  await page.getByRole('button', { name: 'Развернуть навигацию' }).click();
-  await expect(shell).toHaveAttribute('data-sidebar-expanded', 'false');
+  await expect(shell).toHaveAttribute('data-sidebar-expanded', 'true');
+  await page.getByRole('button', { name: 'Свернуть навигацию' }).click();
+  await expect(shell).toHaveAttribute('data-sidebar-expanded', 'true');
 });
 
 test('раскрытие навигации не ломает карту', async ({ page }) => {
@@ -58,10 +79,10 @@ test('раскрытие навигации не ломает карту', async
   const map = page.getByTestId('fleet-map-workspace');
   const before = await map.boundingBox();
 
-  await page.getByRole('button', { name: 'Развернуть навигацию' }).click();
+  await page.getByRole('button', { name: 'Свернуть навигацию' }).click();
   await expect
     .poll(async () => (await map.boundingBox())?.width ?? 0)
-    .toBeLessThan(before?.width ?? 0);
+    .toBeGreaterThan(before?.width ?? 0);
   await expect(map.getByLabel('Карта автопарка').locator('canvas')).toBeVisible();
   await expect(map.getByText('OpenStreetMap', { exact: false })).toBeVisible();
 });
@@ -86,8 +107,8 @@ test('настольная панель управления отдаёт при
 
   await expect(page.getByRole('heading', { name: 'Панель управления' })).toBeVisible();
   await expect(page.getByTestId('fleet-map-workspace')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Состояние парка' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Последние события' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Пробег по дням' })).toBeVisible();
   await expect(
     page.getByTestId('fleet-map-workspace').getByText('OpenStreetMap', { exact: false }),
   ).toBeVisible();
@@ -99,12 +120,12 @@ test('настольная панель использует плотную се
 
   await expect(page.getByRole('heading', { name: 'Панель управления' })).toHaveCSS(
     'font-size',
-    '30px',
+    '24px',
   );
   await expect(page.getByTestId('fleet-stat-total')).toHaveCSS('border-radius', '12px');
 
   const map = await page.getByTestId('fleet-map-workspace').boundingBox();
-  const status = await page.getByTestId('fleet-status-panel').boundingBox();
+  const status = await page.getByTestId('dashboard-events').boundingBox();
   expect((map?.width ?? 0) / (status?.width ?? 1)).toBeGreaterThan(1.7);
 });
 
@@ -112,13 +133,8 @@ test('рабочая панель использует общие семанти
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
 
-  await expect(page.getByText('Скорость 65 км/ч').first()).toHaveAttribute('data-state', 'moving');
-  await expect(page.getByText('На связи · только что').first()).toHaveAttribute(
-    'data-state',
-    'online',
-  );
   await expect(
-    page.getByRole('listitem', { name: 'Автомобиль покинул геозону, Haval Jolion' }),
+    page.getByRole('listitem', { name: 'Превышение скорости, Haval Jolion' }),
   ).toHaveAttribute('data-tone', 'danger');
 });
 
@@ -127,18 +143,29 @@ test('настольная карта остаётся крупнейшей ра
   await page.goto('/');
 
   const map = await page.getByTestId('fleet-map-workspace').boundingBox();
-  const status = await page
-    .getByRole('heading', { name: 'Состояние парка' })
-    .locator('..')
-    .boundingBox();
+  const status = await page.getByTestId('dashboard-events').boundingBox();
   expect((map?.width ?? 0) * (map?.height ?? 0)).toBeGreaterThan(
     (status?.width ?? 0) * (status?.height ?? 0),
   );
 });
 
-test.beforeEach(async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto('/');
+test('настольный дашборд соответствует утверждённой аналитической композиции', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await openAuthenticatedDashboard(page);
+
+  const dashboard = page.getByTestId('dashboard-desktop');
+  await expect(dashboard).toBeVisible();
+  await expect(dashboard.getByTestId(/^fleet-stat-/)).toHaveCount(6);
+  await expect(dashboard.getByRole('heading', { name: 'Карта транспорта' })).toBeVisible();
+  await expect(dashboard.getByRole('heading', { name: 'Последние события' })).toBeVisible();
+  await expect(dashboard.getByRole('heading', { name: 'Пробег по дням' })).toBeVisible();
+  await expect(dashboard.getByRole('heading', { name: 'Расход топлива' })).toBeVisible();
+
+  const map = await dashboard.getByTestId('fleet-map-workspace').boundingBox();
+  const analytics = await dashboard.getByTestId('dashboard-analytics').boundingBox();
+  expect((map?.width ?? 0) * (map?.height ?? 0)).toBeGreaterThan(
+    (analytics?.width ?? 0) * (analytics?.height ?? 0),
+  );
 });
 
 test('кнопка мобильного меню имеет область не меньше 44 пикселей', async ({ page }) => {

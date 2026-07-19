@@ -10,9 +10,9 @@
   --color-text: #1f2937;
   --color-text-secondary: #6b7280;
   --color-text-inverse: #ffffff;
-  --color-primary: #6366f1;
-  --color-primary-hover: #4f46e5;
-  --color-primary-soft: #eef2ff;
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-soft: #eff6ff;
   --color-success: #16a34a;
   --color-success-soft: #dcfce7;
   --color-warning: #d97706;
@@ -29,8 +29,8 @@
   --radius-panel: 12px;
   --motion-fast: 150ms;
   --motion-normal: 220ms;
-  --sidebar-width-collapsed: 80px;
-  --sidebar-width-expanded: 240px;
+  --sidebar-width-collapsed: 72px;
+  --sidebar-width-expanded: 228px;
   --sidebar-width: var(--sidebar-width-collapsed);
   --header-height: 64px;
 }
@@ -74,6 +74,14 @@ body {
 *::before,
 *::after {
   border-color: var(--color-border);
+}
+
+.scrollbar-hidden {
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

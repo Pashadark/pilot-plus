@@ -18,7 +18,7 @@ export function Header({ breadcrumbs }: { breadcrumbs: readonly Breadcrumb[] }) 
 
   return (
     <>
-      <header className="fixed inset-x-0 top-0 z-40 flex h-[var(--header-height)] items-center border-b bg-[var(--color-surface)] px-4 transition-[padding] duration-200 md:pl-[var(--sidebar-width)]">
+      <header className="fixed inset-x-0 top-0 z-40 flex h-[var(--header-height)] items-center border-b bg-[var(--color-surface)] px-4 md:hidden">
         <div className="flex w-full items-center justify-between md:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <div className="md:hidden">

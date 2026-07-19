@@ -21,14 +21,14 @@ function subscribeToSidebarStorage(onStoreChange: () => void) {
 
 function getSidebarSnapshot() {
   try {
-    return window.localStorage.getItem(storageKey) === 'true';
+    return window.localStorage.getItem(storageKey) !== 'false';
   } catch {
-    return false;
+    return true;
   }
 }
 
 function getSidebarServerSnapshot() {
-  return false;
+  return true;
 }
 
 export function ShellFrame({
@@ -71,8 +71,8 @@ export function ShellFrame({
       >
         <Sidebar expanded={expanded} onToggle={toggleSidebar} />
       </aside>
-      <main className="min-h-screen pt-[var(--header-height)] transition-[padding] duration-200 md:pl-[var(--sidebar-width)]">
-        <div className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">{children}</div>
+      <main className="min-h-screen pt-[var(--header-height)] transition-[padding] duration-200 md:pt-0 md:pl-[var(--sidebar-width)]">
+        <div className="mx-auto max-w-[1680px] p-4 lg:p-5">{children}</div>
       </main>
     </div>
   );

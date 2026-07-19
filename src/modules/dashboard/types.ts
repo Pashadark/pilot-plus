@@ -19,6 +19,7 @@ export interface FleetStat {
   value: string;
   detail: string;
   tone: 'primary' | 'success' | 'warning' | 'danger';
+  icon: 'vehicle' | 'activity' | 'pause' | 'signal' | 'mileage' | 'fuel';
 }
 
 export interface FleetEvent {
@@ -27,4 +28,16 @@ export interface FleetEvent {
   vehicleName: string;
   timeLabel: string;
   tone: 'info' | 'warning' | 'danger';
+}
+
+export interface MileagePoint {
+  label: string;
+  value: number;
+}
+
+export interface FuelSlice {
+  label: string;
+  value: number;
+  percent: number;
+  tone: 'primary' | 'success' | 'danger';
 }

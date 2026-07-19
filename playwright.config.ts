@@ -1,4 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
+import { loadEnvFile } from 'node:process';
+
+try {
+  loadEnvFile();
+} catch {
+  // В CI переменные авторизации передаются окружением без локального .env.
+}
 
 export default defineConfig({
   testDir: './tests',

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { FiChevronsUp, FiMinus, FiMove } from 'react-icons/fi';
 
 import { FilterChip, SearchInput } from '@/shared/ui';
 
@@ -79,7 +80,7 @@ export function MobileFleetWorkspace({ vehicles }: { vehicles: readonly Vehicle[
         onChange={(event) => setQuery(event.currentTarget.value)}
         className="absolute top-4 right-4 left-4 z-20 rounded-[var(--radius-md)] border bg-[var(--color-surface)] shadow-[var(--shadow-card)]"
       />
-      <div className="absolute top-16 right-4 left-4 z-20 flex gap-2 overflow-x-auto py-2">
+      <div className="scrollbar-hidden absolute top-16 right-4 left-4 z-20 flex gap-2 overflow-x-auto py-2">
         {filters.map((filter) => (
           <FilterChip
             key={filter.value}
@@ -126,9 +127,15 @@ export function MobileFleetWorkspace({ vehicles }: { vehicles: readonly Vehicle[
                 }
                 aria-pressed={snap === value}
                 onClick={() => setSnap(value)}
-                className="min-h-11 min-w-11 rounded-[var(--radius-md)] px-2 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-muted)] aria-pressed:bg-[var(--color-primary-soft)] aria-pressed:text-[var(--color-primary)]"
+                className="grid min-h-11 min-w-11 place-items-center rounded-[var(--radius-md)] px-2 text-[var(--color-text-secondary)] hover:bg-[var(--color-elevated)] aria-pressed:bg-[var(--color-primary-soft)] aria-pressed:text-[var(--color-primary)]"
               >
-                {value === 'collapsed' ? '−' : value === 'intermediate' ? '½' : '↑'}
+                {value === 'collapsed' ? (
+                  <FiMinus aria-hidden="true" />
+                ) : value === 'intermediate' ? (
+                  <FiMove aria-hidden="true" />
+                ) : (
+                  <FiChevronsUp aria-hidden="true" />
+                )}
               </button>
             ))}
           </div>

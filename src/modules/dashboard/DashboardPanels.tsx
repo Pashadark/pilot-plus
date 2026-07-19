@@ -1,4 +1,12 @@
-import { FiActivity, FiBell, FiChevronRight, FiTruck } from 'react-icons/fi';
+import {
+  FiActivity,
+  FiChevronRight,
+  FiDroplet,
+  FiPause,
+  FiRadio,
+  FiTrendingUp,
+  FiTruck,
+} from 'react-icons/fi';
 
 import { Badge, Card, CardContent, CardHeader, EmptyState, IconButton } from '@/shared/ui';
 import { ConnectionStatus, EventItem, SpeedIndicator } from '@/shared/components/fleet';
@@ -21,23 +29,39 @@ export function StatusIndicator({ status }: { status: VehicleStatus }) {
 }
 
 export function FleetStatCard({ stat }: { stat: FleetStat }) {
+  const StatIcon = {
+    vehicle: FiTruck,
+    activity: FiActivity,
+    pause: FiPause,
+    signal: FiRadio,
+    mileage: FiTrendingUp,
+    fuel: FiDroplet,
+  }[stat.icon];
+
+  const toneColor = {
+    primary: 'var(--color-primary)',
+    success: 'var(--color-success)',
+    warning: 'var(--color-warning)',
+    danger: 'var(--color-danger)',
+  }[stat.tone];
+
   return (
     <Card className="min-w-0" data-testid={`fleet-stat-${stat.id}`}>
-      <CardContent className="flex items-start justify-between gap-3">
+      <CardContent className="flex min-h-32 items-start justify-between gap-3 p-4">
         <div className="min-w-0">
-          <p className="text-xs font-semibold tracking-wide text-[var(--color-text-secondary)] uppercase">
-            {stat.label}
-          </p>
-          <p className="mt-2 text-3xl font-bold tracking-tight">{stat.value}</p>
-          <Badge tone={stat.tone} className="mt-3">
+          <p className="text-xs font-medium text-[var(--color-text-secondary)]">{stat.label}</p>
+          <p className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</p>
+          <p className="mt-2 flex items-center gap-1.5 text-[11px]" style={{ color: toneColor }}>
+            <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
             {stat.detail}
-          </Badge>
+          </p>
         </div>
         <span
-          className="grid size-10 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
+          className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--color-primary-soft)]"
+          style={{ color: toneColor }}
           aria-hidden="true"
         >
-          <FiActivity className="size-5" />
+          <StatIcon className="size-5" />
         </span>
       </CardContent>
     </Card>
@@ -117,17 +141,14 @@ export function FleetStatusPanel({ vehicles }: { vehicles: readonly Vehicle[] })
 
 export function FleetEvents({ events }: { events: readonly FleetEvent[] }) {
   return (
-    <Card>
-      <CardHeader className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Последние события</h2>
-          <p className="text-sm text-[var(--color-text-secondary)]">Демонстрационная лента</p>
-        </div>
-        <IconButton label="Открыть все события" variant="ghost">
-          <FiBell aria-hidden="true" />
-        </IconButton>
+    <Card className="h-full overflow-hidden" data-testid="dashboard-events">
+      <CardHeader className="flex items-center justify-between gap-3 px-4 py-3">
+        <h2 className="text-sm font-semibold">Последние события</h2>
+        <button className="text-xs font-medium text-[var(--color-primary)] hover:underline">
+          Смотреть все
+        </button>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 py-1">
         <ul className="divide-y divide-[var(--color-border)]">
           {events.map((event) => (
             <EventItem key={event.id} {...event} />
