@@ -46,11 +46,7 @@ function createFleetDatabase() {
         },
       },
       vehicle: {
-        async upsert(args: {
-          where: { sourceKey: string };
-          create: object;
-          update: object;
-        }) {
+        async upsert(args: { where: { sourceKey: string }; create: object; update: object }) {
           vehicles.set(args.where.sourceKey, { ...args.create, ...args.update });
           return { id: args.where.sourceKey };
         },

@@ -114,10 +114,7 @@ function citySlug(city: string) {
   return slug;
 }
 
-export function parseVehicleImageCandidates(
-  html: string,
-  city: string,
-): VehicleImageCandidate[] {
+export function parseVehicleImageCandidates(html: string, city: string): VehicleImageCandidate[] {
   const candidates: VehicleImageCandidate[] = [];
   const seen = new Set<string>();
 
@@ -181,8 +178,7 @@ export function matchVehicleImages(
 
   return fleetRows.flatMap((row) => {
     const key = `${normalize(row.city)}\u0000${normalizeModel(row.model)}`;
-    const candidate =
-      queues.get(key)?.shift() ?? modelFallbacks.get(normalizeModel(row.model));
+    const candidate = queues.get(key)?.shift() ?? modelFallbacks.get(normalizeModel(row.model));
     if (!candidate) return [];
 
     if (!/^fleet-\d{3}$/.test(row.sourceKey)) {

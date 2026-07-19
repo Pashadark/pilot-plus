@@ -60,7 +60,10 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
 
   return (
     <Card className="group min-w-0 overflow-hidden transition-[border-color,box-shadow,transform] duration-[var(--motion-fast)] hover:-translate-y-0.5 hover:border-[var(--color-primary)] hover:shadow-[var(--shadow-floating)]">
-      <article className="grid h-full grid-rows-[auto_auto_auto_1fr_auto]" data-testid="vehicle-card">
+      <article
+        className="grid h-full grid-rows-[auto_auto_auto_1fr_auto]"
+        data-testid="vehicle-card"
+      >
         <VehiclePhoto
           image={vehicle.primaryImage}
           model={vehicle.model}
@@ -92,18 +95,61 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
         </header>
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-b border-[var(--color-border)] px-4 py-3 text-sm sm:grid-cols-4">
-          <span><strong className="block text-xs text-[var(--color-text-tertiary)]">Коробка</strong>{vehicle.transmission}</span>
-          <span><strong className="block text-xs text-[var(--color-text-tertiary)]">Двигатель</strong>{vehicle.engineLiters ? `${vehicle.engineLiters} л` : 'Нет данных'}</span>
-          <span><strong className="block text-xs text-[var(--color-text-tertiary)]">Топливо</strong>{fuelLabels[vehicle.fuelType]}</span>
-          <span><strong className="block text-xs text-[var(--color-text-tertiary)]">Мест</strong><span className="inline-flex items-center gap-1"><FiUsers aria-hidden="true" />{vehicle.seats}</span></span>
+          <span>
+            <strong className="block text-xs text-[var(--color-text-tertiary)]">Коробка</strong>
+            {vehicle.transmission}
+          </span>
+          <span>
+            <strong className="block text-xs text-[var(--color-text-tertiary)]">Двигатель</strong>
+            {vehicle.engineLiters ? `${vehicle.engineLiters} л` : 'Нет данных'}
+          </span>
+          <span>
+            <strong className="block text-xs text-[var(--color-text-tertiary)]">Топливо</strong>
+            {fuelLabels[vehicle.fuelType]}
+          </span>
+          <span>
+            <strong className="block text-xs text-[var(--color-text-tertiary)]">Мест</strong>
+            <span className="inline-flex items-center gap-1">
+              <FiUsers aria-hidden="true" />
+              {vehicle.seats}
+            </span>
+          </span>
         </div>
 
         <div className="grid content-start gap-3 p-4">
           <div className="grid grid-cols-2 gap-2 rounded-[var(--radius-lg)] bg-[var(--color-elevated)] p-3 text-sm">
-            <span className="flex gap-2"><FiActivity aria-hidden="true" className="mt-0.5 text-[var(--color-primary)]" /><span><strong className="block text-xs text-[var(--color-text-tertiary)]">Пробег</strong>{formatOptionalMetric(vehicle.telemetry.odometerKm, 'км')}</span></span>
-            <span className="flex gap-2"><FiDroplet aria-hidden="true" className="mt-0.5 text-[var(--color-primary)]" /><span><strong className="block text-xs text-[var(--color-text-tertiary)]">Топливо</strong>{formatOptionalMetric(vehicle.telemetry.fuelLevelPercent, '%')}</span></span>
-            <span className="flex gap-2"><FiClock aria-hidden="true" className="mt-0.5 text-[var(--color-primary)]" /><span><strong className="block text-xs text-[var(--color-text-tertiary)]">Последняя связь</strong>{dateOrEmpty(vehicle.telemetry.lastSeenAt)}</span></span>
-            <span className="flex gap-2"><FiCalendar aria-hidden="true" className="mt-0.5 text-[var(--color-primary)]" /><span><strong className="block text-xs text-[var(--color-text-tertiary)]">Последняя поездка</strong>{dateOrEmpty(vehicle.telemetry.lastTripAt)}</span></span>
+            <span className="flex gap-2">
+              <FiActivity aria-hidden="true" className="mt-0.5 text-[var(--color-primary)]" />
+              <span>
+                <strong className="block text-xs text-[var(--color-text-tertiary)]">Пробег</strong>
+                {formatOptionalMetric(vehicle.telemetry.odometerKm, 'км')}
+              </span>
+            </span>
+            <span className="flex gap-2">
+              <FiDroplet aria-hidden="true" className="mt-0.5 text-[var(--color-primary)]" />
+              <span>
+                <strong className="block text-xs text-[var(--color-text-tertiary)]">Топливо</strong>
+                {formatOptionalMetric(vehicle.telemetry.fuelLevelPercent, '%')}
+              </span>
+            </span>
+            <span className="flex gap-2">
+              <FiClock aria-hidden="true" className="mt-0.5 text-[var(--color-primary)]" />
+              <span>
+                <strong className="block text-xs text-[var(--color-text-tertiary)]">
+                  Последняя связь
+                </strong>
+                {dateOrEmpty(vehicle.telemetry.lastSeenAt)}
+              </span>
+            </span>
+            <span className="flex gap-2">
+              <FiCalendar aria-hidden="true" className="mt-0.5 text-[var(--color-primary)]" />
+              <span>
+                <strong className="block text-xs text-[var(--color-text-tertiary)]">
+                  Последняя поездка
+                </strong>
+                {dateOrEmpty(vehicle.telemetry.lastTripAt)}
+              </span>
+            </span>
           </div>
           {vehicle.features.length ? (
             <div className="flex flex-wrap gap-1.5">
@@ -133,7 +179,9 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
               variant="secondary"
               size="sm"
               aria-label={
-                vehicle.telemetry.hasPosition ? 'Показать на карте' : 'Почему автомобиль не на карте'
+                vehicle.telemetry.hasPosition
+                  ? 'Показать на карте'
+                  : 'Почему автомобиль не на карте'
               }
               leadingIcon={<FiMap aria-hidden="true" />}
               onClick={explainMissingPosition}

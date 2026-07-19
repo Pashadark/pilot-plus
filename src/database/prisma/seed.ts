@@ -3,10 +3,7 @@ import { pathToFileURL } from 'node:url';
 
 import { prisma } from './client';
 import { parseFleetSource, type FleetImportRow } from './fleet-import';
-import {
-  parseVehicleImageManifest,
-  type VehicleImageManifestRow,
-} from './vehicle-images';
+import { parseVehicleImageManifest, type VehicleImageManifestRow } from './vehicle-images';
 import { hashPassword } from '@/services/auth/password';
 
 interface SeedEnvironment {

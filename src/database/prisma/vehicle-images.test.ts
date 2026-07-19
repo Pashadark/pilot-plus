@@ -109,13 +109,16 @@ describe('фотографии исходного автопарка', () => {
 
   it('сопоставляет официальный префикс GWM для модели WEY 80', () => {
     const row = { ...fleetRow('fleet-130', 'WEY 80'), city: 'Геленджик' };
-    const result = matchVehicleImages([row], [
-      {
-        city: 'Геленджик',
-        model: 'GWM WEY 80',
-        sourceUrl: 'https://autopilotrent.ru/photos/stock/wey-80.webp',
-      },
-    ]);
+    const result = matchVehicleImages(
+      [row],
+      [
+        {
+          city: 'Геленджик',
+          model: 'GWM WEY 80',
+          sourceUrl: 'https://autopilotrent.ru/photos/stock/wey-80.webp',
+        },
+      ],
+    );
 
     expect(result).toHaveLength(1);
     expect(result[0]?.sourceKey).toBe('fleet-130');
@@ -123,17 +126,18 @@ describe('фотографии исходного автопарка', () => {
 
   it('использует штатное фото точной модели из другого филиала, если у машины фото отсутствует', () => {
     const row = { ...fleetRow('fleet-130', 'WEY 80'), city: 'Геленджик' };
-    const result = matchVehicleImages([row], [
-      {
-        city: 'Сочи',
-        model: 'GWM WEY 80',
-        sourceUrl: 'https://autopilotrent.ru/images/stock/wey-80.webp',
-      },
-    ]);
-
-    expect(result[0]?.sourceUrl).toBe(
-      'https://autopilotrent.ru/images/stock/wey-80.webp',
+    const result = matchVehicleImages(
+      [row],
+      [
+        {
+          city: 'Сочи',
+          model: 'GWM WEY 80',
+          sourceUrl: 'https://autopilotrent.ru/images/stock/wey-80.webp',
+        },
+      ],
     );
+
+    expect(result[0]?.sourceUrl).toBe('https://autopilotrent.ru/images/stock/wey-80.webp');
     expect(result[0]?.city).toBe('Геленджик');
   });
 
