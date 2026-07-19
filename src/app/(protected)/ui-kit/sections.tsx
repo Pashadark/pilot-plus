@@ -391,7 +391,11 @@ export function UiKitSections() {
               <Progress value={68} label="Загрузка маршрута" />
             </div>
             <div data-testid="showcase-toast">
-              <Toast title="Маршрут сохранён" />
+              <Toast
+                toast={{ id: 'showcase-toast', tone: 'success', title: 'Маршрут сохранён' }}
+                onDismiss={() => undefined}
+                onPauseChange={() => undefined}
+              />
             </div>
           </div>
         </ExampleCard>

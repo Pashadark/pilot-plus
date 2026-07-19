@@ -90,14 +90,3 @@ export function Progress({ value, label }: { value: number; label: string }) {
     </div>
   );
 }
-export function Toast({ title, description }: FeedbackProps) {
-  return (
-    <div
-      role="status"
-      className="rounded-[var(--radius-md)] border bg-[var(--color-elevated)] p-4 shadow-[var(--shadow-floating)]"
-    >
-      <strong>{title}</strong>
-      {description && <p>{description}</p>}
-    </div>
-  );
-}
