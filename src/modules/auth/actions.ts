@@ -49,10 +49,10 @@ export async function loginAction(
     return failedLoginState;
   }
 
-  redirect('/');
+  redirect('/?welcome=1');
 }
 
 export async function logoutAction(): Promise<never> {
   await deleteSession();
-  redirect('/login');
+  redirect('/login?loggedOut=1');
 }

@@ -88,15 +88,15 @@ describe('действия авторизации', () => {
 
     await expect(
       loginAction(idle, form('admin@example.com', 'Надёжный пароль 2026')),
-    ).rejects.toThrow('REDIRECT:/');
+    ).rejects.toThrow('REDIRECT:/?welcome=1');
     expect(authMocks.clearLoginFailures).toHaveBeenCalledWith('admin@example.com');
     expect(authMocks.createSession).toHaveBeenCalledWith('u1');
-    expect(redirectMock).toHaveBeenCalledWith('/');
+    expect(redirectMock).toHaveBeenCalledWith('/?welcome=1');
   });
 
   it('отзывает сессию перед выходом', async () => {
-    await expect(logoutAction()).rejects.toThrow('REDIRECT:/login');
+    await expect(logoutAction()).rejects.toThrow('REDIRECT:/login?loggedOut=1');
     expect(authMocks.deleteSession).toHaveBeenCalledOnce();
-    expect(redirectMock).toHaveBeenCalledWith('/login');
+    expect(redirectMock).toHaveBeenCalledWith('/login?loggedOut=1');
   });
 });

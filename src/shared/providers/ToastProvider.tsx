@@ -55,11 +55,7 @@ function TimedToast({
       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 24, scale: 0.98 }}
       transition={{ duration: reduceMotion ? 0 : 0.2, ease: 'easeOut' }}
     >
-      <Toast
-        toast={toast}
-        onDismiss={() => dismiss(toast.id)}
-        onPauseChange={setPaused}
-      />
+      <Toast toast={toast} onDismiss={() => dismiss(toast.id)} onPauseChange={setPaused} />
     </motion.li>
   );
 }
@@ -114,3 +110,4 @@ export function useToast() {
 }
 
 export type { ToastInput, ToastTone } from './toast-state';
+export { FlashToast, type FlashToastKind } from './FlashToast';
