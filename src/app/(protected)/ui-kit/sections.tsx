@@ -36,7 +36,6 @@ import {
   TableHeader,
   TableRow,
   Textarea,
-  Toast,
   VehiclePlate,
   Pagination,
   SearchInput,
@@ -55,6 +54,7 @@ import {
   SpeedIndicator,
   VehicleMarker,
 } from '@/shared/components/fleet';
+import { useToast } from '@/shared/providers/ToastProvider';
 
 function KitSection({
   id,
@@ -115,6 +115,7 @@ function Guidance({ use, avoid }: { use: string; avoid: string }) {
 const sizes: readonly ComponentSize[] = ['xs', 'sm', 'md', 'lg'];
 
 export function UiKitSections() {
+  const { showToast } = useToast();
   const [segment, setSegment] = useState<'all' | 'online'>('all');
   const [tab, setTab] = useState<'overview' | 'events' | 'service'>('overview');
   const [page, setPage] = useState(1);
@@ -390,8 +391,19 @@ export function UiKitSections() {
             <div data-testid="showcase-progress">
               <Progress value={68} label="Загрузка маршрута" />
             </div>
-            <div data-testid="showcase-toast">
-              <Toast title="Маршрут сохранён" />
+            <div data-testid="showcase-toast" className="grid grid-cols-2 gap-2">
+              <Button variant="soft" onClick={() => showToast({ tone: 'success', title: 'Операция выполнена', description: 'Изменения успешно сохранены.' })}>
+                Показать успех
+              </Button>
+              <Button variant="soft" onClick={() => showToast({ tone: 'warning', title: 'Требуется внимание', description: 'Проверьте состояние автомобиля.' })}>
+                Показать предупреждение
+              </Button>
+              <Button variant="soft" onClick={() => showToast({ tone: 'danger', title: 'Произошла ошибка', description: 'Не удалось выполнить действие.' })}>
+                Показать ошибку
+              </Button>
+              <Button variant="soft" onClick={() => showToast({ tone: 'info', title: 'Новая информация', description: 'Получены свежие данные.' })}>
+                Показать информацию
+              </Button>
             </div>
           </div>
         </ExampleCard>

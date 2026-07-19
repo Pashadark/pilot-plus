@@ -39,7 +39,7 @@ describe('seedAdmin', () => {
 
     const result = await seedAdmin(validEnvironment, { user: fake.repository });
 
-    expect(result).toEqual({ email: 'admin@example.com', created: true });
+    expect(result).toEqual({ email: 'admin@example.com', created: true, userId: 'admin-user' });
     expect(fake.calls[0]?.where).toEqual({ email: 'admin@example.com' });
   });
 

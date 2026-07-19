@@ -1,0 +1,1302 @@
+[
+  {
+    "city": "Красноярск",
+    "model": "GWM WEY",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/GWM_WAY80_1777637010318.webp",
+    "sourceKey": "fleet-001",
+    "localPath": "/vehicles/krasnoyarsk/fleet-001/primary.webp",
+    "alt": "GWM WEY — Красноярск",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Казань",
+    "model": "Chery Tiggo 4 Pro",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/chery_tiggo_4_pro.webp",
+    "sourceKey": "fleet-002",
+    "localPath": "/vehicles/kazan/fleet-002/primary.webp",
+    "alt": "Chery Tiggo 4 Pro — Казань",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "EXEED RX",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/exeed_rx.webp",
+    "sourceKey": "fleet-003",
+    "localPath": "/vehicles/sochi/fleet-003/primary.webp",
+    "alt": "EXEED RX — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "GWM TANK 700",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/gwm_tank_700.webp",
+    "sourceKey": "fleet-004",
+    "localPath": "/vehicles/sochi/fleet-004/primary.webp",
+    "alt": "GWM TANK 700 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Toyota Yaris sport",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/toyota_yaris_sport.webp",
+    "sourceKey": "fleet-005",
+    "localPath": "/vehicles/phuket/fleet-005/primary.webp",
+    "alt": "Toyota Yaris sport — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Jetour Dashing",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/Jetour_Dashing__1__1780327423157.webp",
+    "sourceKey": "fleet-006",
+    "localPath": "/vehicles/sochi/fleet-006/primary.webp",
+    "alt": "Jetour Dashing — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Москва",
+    "model": "Moskvich 3",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/moskvich_3.webp",
+    "sourceKey": "fleet-007",
+    "localPath": "/vehicles/moscow/fleet-007/primary.webp",
+    "alt": "Moskvich 3 — Москва",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Москва",
+    "model": "Haval F7",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/haval_f7.webp",
+    "sourceKey": "fleet-008",
+    "localPath": "/vehicles/moscow/fleet-008/primary.webp",
+    "alt": "Haval F7 — Москва",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Geely Monjaro",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/geely_monjaro.webp",
+    "sourceKey": "fleet-009",
+    "localPath": "/vehicles/sochi/fleet-009/primary.webp",
+    "alt": "Geely Monjaro — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Калининград",
+    "model": "CHERY TIGGO 4 Promo",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/chery_tiggo_4_promo.webp",
+    "sourceKey": "fleet-010",
+    "localPath": "/vehicles/kaliningrad/fleet-010/primary.webp",
+    "alt": "CHERY TIGGO 4 Promo — Калининград",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Toyota Yaris cross",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/Toyota_Yaris_Cross.webp",
+    "sourceKey": "fleet-011",
+    "localPath": "/vehicles/phuket/fleet-011/primary.webp",
+    "alt": "Toyota Yaris cross — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Toyota Corolla cross",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/Toyota_Corolla_Cross.webp",
+    "sourceKey": "fleet-012",
+    "localPath": "/vehicles/phuket/fleet-012/primary.webp",
+    "alt": "Toyota Corolla cross — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "GAC GS3",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/gac_gs3.webp",
+    "sourceKey": "fleet-013",
+    "localPath": "/vehicles/sochi/fleet-013/primary.webp",
+    "alt": "GAC GS3 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Владивосток",
+    "model": "Chery Tiggo7 Pro Max",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/chery_tiggo7_pro_max.webp",
+    "sourceKey": "fleet-014",
+    "localPath": "/vehicles/vladivostok/fleet-014/primary.webp",
+    "alt": "Chery Tiggo7 Pro Max — Владивосток",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Владивосток",
+    "model": "GWM TANK 500",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/gwm_tank_500.webp",
+    "sourceKey": "fleet-015",
+    "localPath": "/vehicles/vladivostok/fleet-015/primary.webp",
+    "alt": "GWM TANK 500 — Владивосток",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Chery TIGGO 4 NEW",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/chery_tiggo_4_new.webp",
+    "sourceKey": "fleet-016",
+    "localPath": "/vehicles/sochi/fleet-016/primary.webp",
+    "alt": "Chery TIGGO 4 NEW — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "GAC M6",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/gac_m6.webp",
+    "sourceKey": "fleet-017",
+    "localPath": "/vehicles/sochi/fleet-017/primary.webp",
+    "alt": "GAC M6 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Геленджик",
+    "model": "HAVAL JOLION",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/haval_jolion.webp",
+    "sourceKey": "fleet-018",
+    "localPath": "/vehicles/gelendzhik/fleet-018/primary.webp",
+    "alt": "HAVAL JOLION — Геленджик",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Москва",
+    "model": "CHERY ARRIZO 8",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/chery_arrizo_8.webp",
+    "sourceKey": "fleet-019",
+    "localPath": "/vehicles/moscow/fleet-019/primary.webp",
+    "alt": "CHERY ARRIZO 8 — Москва",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Mitsubishi X-Force Ultimate X",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/mitsubishi_x-force_ultimate_x.webp",
+    "sourceKey": "fleet-020",
+    "localPath": "/vehicles/phuket/fleet-020/primary.webp",
+    "alt": "Mitsubishi X-Force Ultimate X — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "BMW Z4 sDrive20i",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/bmw_z4_sdrive20i.webp",
+    "sourceKey": "fleet-021",
+    "localPath": "/vehicles/sochi/fleet-021/primary.webp",
+    "alt": "BMW Z4 sDrive20i — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "CHANGAN UNI-V",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/changan_uni-v.webp",
+    "sourceKey": "fleet-022",
+    "localPath": "/vehicles/sochi/fleet-022/primary.webp",
+    "alt": "CHANGAN UNI-V — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Haval H3",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/haval_h3.webp",
+    "sourceKey": "fleet-023",
+    "localPath": "/vehicles/sochi/fleet-023/primary.webp",
+    "alt": "Haval H3 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Москва",
+    "model": "Solaris KRX Comfort",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/solaris_krx_comfort.webp",
+    "sourceKey": "fleet-024",
+    "localPath": "/vehicles/moscow/fleet-024/primary.webp",
+    "alt": "Solaris KRX Comfort — Москва",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Казань",
+    "model": "Haval JOLION NEW",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/haval_jolion_new.webp",
+    "sourceKey": "fleet-025",
+    "localPath": "/vehicles/kazan/fleet-025/primary.webp",
+    "alt": "Haval JOLION NEW — Казань",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Toyota Innova Zenix HEV",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/Toyota_Innova_Zenix_NEW_HEV_1777637160452.webp",
+    "sourceKey": "fleet-026",
+    "localPath": "/vehicles/phuket/fleet-026/primary.webp",
+    "alt": "Toyota Innova Zenix HEV — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Toyota Camry NEW",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/Toyota_camry_NEW_1777688804364.jpg",
+    "sourceKey": "fleet-027",
+    "localPath": "/vehicles/sochi/fleet-027/primary.webp",
+    "alt": "Toyota Camry NEW — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Москва",
+    "model": "Geely Cityray",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/geely_cityray.webp",
+    "sourceKey": "fleet-028",
+    "localPath": "/vehicles/moscow/fleet-028/primary.webp",
+    "alt": "Geely Cityray — Москва",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Москва",
+    "model": "HAVAL H3",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/haval_h3.webp",
+    "sourceKey": "fleet-029",
+    "localPath": "/vehicles/moscow/fleet-029/primary.webp",
+    "alt": "HAVAL H3 — Москва",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "MG 3 Hybrid",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/mg_3_hybrid_yellow.webp",
+    "sourceKey": "fleet-030",
+    "localPath": "/vehicles/phuket/fleet-030/primary.webp",
+    "alt": "MG 3 Hybrid — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Москва",
+    "model": "HAVAL JOLION NEW",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/haval_jolion_new.webp",
+    "sourceKey": "fleet-031",
+    "localPath": "/vehicles/moscow/fleet-031/primary.webp",
+    "alt": "HAVAL JOLION NEW — Москва",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Belgee S50",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/Belgee_S50__1__1780327404805.webp",
+    "sourceKey": "fleet-032",
+    "localPath": "/vehicles/sochi/fleet-032/primary.webp",
+    "alt": "Belgee S50 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Toyota Land Cruiser Prado",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/Toyota%20Land%20Cruiser%20Prado.webp",
+    "sourceKey": "fleet-033",
+    "localPath": "/vehicles/sochi/fleet-033/primary.webp",
+    "alt": "Toyota Land Cruiser Prado — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Hyundai Staria",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/hyundai_staria.webp",
+    "sourceKey": "fleet-034",
+    "localPath": "/vehicles/sochi/fleet-034/primary.webp",
+    "alt": "Hyundai Staria — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Toyota Fortuner Leader",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/Toyota_Fortuner_Leader.webp",
+    "sourceKey": "fleet-035",
+    "localPath": "/vehicles/phuket/fleet-035/primary.webp",
+    "alt": "Toyota Fortuner Leader — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Toyota Corolla cross",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/Toyota_Corolla_Cross.webp",
+    "sourceKey": "fleet-036",
+    "localPath": "/vehicles/phuket/fleet-036/primary.webp",
+    "alt": "Toyota Corolla cross — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Владивосток",
+    "model": "Toyota Camry",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/Toyota_Camry_70_1783430853891.webp",
+    "sourceKey": "fleet-037",
+    "localPath": "/vehicles/vladivostok/fleet-037/primary.webp",
+    "alt": "Toyota Camry — Владивосток",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "MINI Cooper Cabrio",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/mini_cooper_cabrio.webp",
+    "sourceKey": "fleet-038",
+    "localPath": "/vehicles/sochi/fleet-038/primary.webp",
+    "alt": "MINI Cooper Cabrio — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Hyundai Staria",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/hyundai_staria.webp",
+    "sourceKey": "fleet-039",
+    "localPath": "/vehicles/sochi/fleet-039/primary.webp",
+    "alt": "Hyundai Staria — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "OMODA C5",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/omoda_c5.webp",
+    "sourceKey": "fleet-040",
+    "localPath": "/vehicles/sochi/fleet-040/primary.webp",
+    "alt": "OMODA C5 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Mitsubishi Xpander Cross",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/mitsubishi_xpander_cross.webp",
+    "sourceKey": "fleet-041",
+    "localPath": "/vehicles/phuket/fleet-041/primary.webp",
+    "alt": "Mitsubishi Xpander Cross — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Крым",
+    "model": "Chery Tiggo4 new",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/chery_tiggo4_new.webp",
+    "sourceKey": "fleet-042",
+    "localPath": "/vehicles/crimea/fleet-042/primary.webp",
+    "alt": "Chery Tiggo4 new — Крым",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Hyundai Tucson new",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/Hyundai%20Tucson%20new.webp",
+    "sourceKey": "fleet-043",
+    "localPath": "/vehicles/sochi/fleet-043/primary.webp",
+    "alt": "Hyundai Tucson new — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Toyota Yaris Ativ",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/toyota_yaris_ativ.webp",
+    "sourceKey": "fleet-044",
+    "localPath": "/vehicles/phuket/fleet-044/primary.webp",
+    "alt": "Toyota Yaris Ativ — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "OMODA S5",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/omoda_s5.webp",
+    "sourceKey": "fleet-045",
+    "localPath": "/vehicles/sochi/fleet-045/primary.webp",
+    "alt": "OMODA S5 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Калининград",
+    "model": "CHERY TIGGO 8 PRO MAX",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/chery_tiggo_8_pro_max.webp",
+    "sourceKey": "fleet-046",
+    "localPath": "/vehicles/kaliningrad/fleet-046/primary.webp",
+    "alt": "CHERY TIGGO 8 PRO MAX — Калининград",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "OMODA S5",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/omoda_s5.webp",
+    "sourceKey": "fleet-047",
+    "localPath": "/vehicles/sochi/fleet-047/primary.webp",
+    "alt": "OMODA S5 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "MINI Cooper Cabrio",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/mini_cooper_cabrio.webp",
+    "sourceKey": "fleet-048",
+    "localPath": "/vehicles/sochi/fleet-048/primary.webp",
+    "alt": "MINI Cooper Cabrio — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Moskvich 6",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/moskvich_6.webp",
+    "sourceKey": "fleet-049",
+    "localPath": "/vehicles/sochi/fleet-049/primary.webp",
+    "alt": "Moskvich 6 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Geely Cityray",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/geely_cityray.webp",
+    "sourceKey": "fleet-050",
+    "localPath": "/vehicles/sochi/fleet-050/primary.webp",
+    "alt": "Geely Cityray — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Алтай",
+    "model": "GWM TANK 300",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/gwm_tank_300.webp",
+    "sourceKey": "fleet-051",
+    "localPath": "/vehicles/altai/fleet-051/primary.webp",
+    "alt": "GWM TANK 300 — Алтай",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Moskvich 3 Promo",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/moskvich_3_promo.webp",
+    "sourceKey": "fleet-052",
+    "localPath": "/vehicles/sochi/fleet-052/primary.webp",
+    "alt": "Moskvich 3 Promo — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "HAVAL DARGO",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/haval_dargo.webp",
+    "sourceKey": "fleet-053",
+    "localPath": "/vehicles/sochi/fleet-053/primary.webp",
+    "alt": "HAVAL DARGO — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "GWM TANK 300",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/gwm_tank_300.webp",
+    "sourceKey": "fleet-054",
+    "localPath": "/vehicles/sochi/fleet-054/primary.webp",
+    "alt": "GWM TANK 300 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Toyota Veloz",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/Toyota_Veloz.webp",
+    "sourceKey": "fleet-055",
+    "localPath": "/vehicles/phuket/fleet-055/primary.webp",
+    "alt": "Toyota Veloz — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Москва",
+    "model": "SOLARIS HS",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/solaris_hs.webp",
+    "sourceKey": "fleet-056",
+    "localPath": "/vehicles/moscow/fleet-056/primary.webp",
+    "alt": "SOLARIS HS — Москва",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Moskvich 3",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/moskvich_3.webp",
+    "sourceKey": "fleet-057",
+    "localPath": "/vehicles/sochi/fleet-057/primary.webp",
+    "alt": "Moskvich 3 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "MG 5",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/mg_5.webp",
+    "sourceKey": "fleet-058",
+    "localPath": "/vehicles/phuket/fleet-058/primary.webp",
+    "alt": "MG 5 — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "HAVAL JOLION",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/haval_jolion.webp",
+    "sourceKey": "fleet-059",
+    "localPath": "/vehicles/sochi/fleet-059/primary.webp",
+    "alt": "HAVAL JOLION — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Belgee X50",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/Belgee_x50__1__1780327385620.webp",
+    "sourceKey": "fleet-060",
+    "localPath": "/vehicles/sochi/fleet-060/primary.webp",
+    "alt": "Belgee X50 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Geely Monjaro",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/geely_monjaro.webp",
+    "sourceKey": "fleet-061",
+    "localPath": "/vehicles/sochi/fleet-061/primary.webp",
+    "alt": "Geely Monjaro — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Geely ATLAS NEW",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/geely__atlas_new.webp",
+    "sourceKey": "fleet-062",
+    "localPath": "/vehicles/sochi/fleet-062/primary.webp",
+    "alt": "Geely ATLAS NEW — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Владивосток",
+    "model": "JAC J7",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/jac_j7.webp",
+    "sourceKey": "fleet-063",
+    "localPath": "/vehicles/vladivostok/fleet-063/primary.webp",
+    "alt": "JAC J7 — Владивосток",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Toyota Yaris sport",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/toyota_yaris_sport.webp",
+    "sourceKey": "fleet-064",
+    "localPath": "/vehicles/phuket/fleet-064/primary.webp",
+    "alt": "Toyota Yaris sport — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Алтай",
+    "model": "GWM TANK 700",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/gwm_tank_700.webp",
+    "sourceKey": "fleet-065",
+    "localPath": "/vehicles/altai/fleet-065/primary.webp",
+    "alt": "GWM TANK 700 — Алтай",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Алтай",
+    "model": "GWM WEY 80",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/gwm_wey_80.webp",
+    "sourceKey": "fleet-066",
+    "localPath": "/vehicles/altai/fleet-066/primary.webp",
+    "alt": "GWM WEY 80 — Алтай",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "MG 5 Pro",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/mg_5_pro.webp",
+    "sourceKey": "fleet-067",
+    "localPath": "/vehicles/phuket/fleet-067/primary.webp",
+    "alt": "MG 5 Pro — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Geely Preface",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/Geely_Preface_1782131033190.webp",
+    "sourceKey": "fleet-068",
+    "localPath": "/vehicles/sochi/fleet-068/primary.webp",
+    "alt": "Geely Preface — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Челябинск",
+    "model": "Moskvich 3",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/moskvich_3.webp",
+    "sourceKey": "fleet-069",
+    "localPath": "/vehicles/chelyabinsk/fleet-069/primary.webp",
+    "alt": "Moskvich 3 — Челябинск",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "JAECOO J8",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/jaecoo_j8.webp",
+    "sourceKey": "fleet-070",
+    "localPath": "/vehicles/sochi/fleet-070/primary.webp",
+    "alt": "JAECOO J8 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Toyota Fortuner Leader",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/Toyota_Fortuner_Leader.webp",
+    "sourceKey": "fleet-071",
+    "localPath": "/vehicles/phuket/fleet-071/primary.webp",
+    "alt": "Toyota Fortuner Leader — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Solaris HS Promo",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/solaris_hs_promo.webp",
+    "sourceKey": "fleet-072",
+    "localPath": "/vehicles/sochi/fleet-072/primary.webp",
+    "alt": "Solaris HS Promo — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Екатеринбург",
+    "model": "Moskvich 3",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/moskvich_3.webp",
+    "sourceKey": "fleet-073",
+    "localPath": "/vehicles/ekaterinburg/fleet-073/primary.webp",
+    "alt": "Moskvich 3 — Екатеринбург",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Калининград",
+    "model": "CHERY TIGGO 4 NEW",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/chery_tiggo_4_new.webp",
+    "sourceKey": "fleet-074",
+    "localPath": "/vehicles/kaliningrad/fleet-074/primary.webp",
+    "alt": "CHERY TIGGO 4 NEW — Калининград",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Haval H7",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/HAVAL_H7_n_1782364852425.webp",
+    "sourceKey": "fleet-075",
+    "localPath": "/vehicles/sochi/fleet-075/primary.webp",
+    "alt": "Haval H7 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Москва",
+    "model": "Toyota Rav4 NEW",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/toyota_rav4_new.webp",
+    "sourceKey": "fleet-076",
+    "localPath": "/vehicles/moscow/fleet-076/primary.webp",
+    "alt": "Toyota Rav4 NEW — Москва",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Geely COOLRAY NEW",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/geely_coolray_new.webp",
+    "sourceKey": "fleet-077",
+    "localPath": "/vehicles/sochi/fleet-077/primary.webp",
+    "alt": "Geely COOLRAY NEW — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Voyah Free Sport Plus",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/Voyah_Free_Sport_Plus_1781528405731.webp",
+    "sourceKey": "fleet-078",
+    "localPath": "/vehicles/sochi/fleet-078/primary.webp",
+    "alt": "Voyah Free Sport Plus — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Toyota Yaris cross",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/Toyota_Yaris_Cross.webp",
+    "sourceKey": "fleet-079",
+    "localPath": "/vehicles/phuket/fleet-079/primary.webp",
+    "alt": "Toyota Yaris cross — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Haval F7",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/haval_f7.webp",
+    "sourceKey": "fleet-080",
+    "localPath": "/vehicles/sochi/fleet-080/primary.webp",
+    "alt": "Haval F7 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Владивосток",
+    "model": "Hyundai Palisade",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/hyundai_palisade.webp",
+    "sourceKey": "fleet-081",
+    "localPath": "/vehicles/vladivostok/fleet-081/primary.webp",
+    "alt": "Hyundai Palisade — Владивосток",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "CHANGAN UNI-T",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/changan_uni-t.webp",
+    "sourceKey": "fleet-082",
+    "localPath": "/vehicles/sochi/fleet-082/primary.webp",
+    "alt": "CHANGAN UNI-T — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Владивосток",
+    "model": "Hyundai Creta",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/hyundai_creta.webp",
+    "sourceKey": "fleet-083",
+    "localPath": "/vehicles/vladivostok/fleet-083/primary.webp",
+    "alt": "Hyundai Creta — Владивосток",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "GWM WEY 80",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/gwm_wey_80.webp",
+    "sourceKey": "fleet-084",
+    "localPath": "/vehicles/sochi/fleet-084/primary.webp",
+    "alt": "GWM WEY 80 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Toyota Yaris Smart",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/toyota_yaris_smart__1__1777637128603.webp",
+    "sourceKey": "fleet-085",
+    "localPath": "/vehicles/phuket/fleet-085/primary.webp",
+    "alt": "Toyota Yaris Smart — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Крым",
+    "model": "Moskvich 3",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/moskvich_3.webp",
+    "sourceKey": "fleet-086",
+    "localPath": "/vehicles/crimea/fleet-086/primary.webp",
+    "alt": "Moskvich 3 — Крым",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "MG 3 Hybrid",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/mg_3_hybrid_blue.webp",
+    "sourceKey": "fleet-087",
+    "localPath": "/vehicles/phuket/fleet-087/primary.webp",
+    "alt": "MG 3 Hybrid — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Voyah Passion",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/Voyah_PASSION_1781528391535.webp",
+    "sourceKey": "fleet-088",
+    "localPath": "/vehicles/sochi/fleet-088/primary.webp",
+    "alt": "Voyah Passion — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Jaecoo J6",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/Jaecoo_J6_1777623082715.webp",
+    "sourceKey": "fleet-089",
+    "localPath": "/vehicles/sochi/fleet-089/primary.webp",
+    "alt": "Jaecoo J6 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Владивосток",
+    "model": "Renault Sandero Stepway",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/Renault%20Sandero%20Stepway.webp",
+    "sourceKey": "fleet-090",
+    "localPath": "/vehicles/vladivostok/fleet-090/primary.webp",
+    "alt": "Renault Sandero Stepway — Владивосток",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Казань",
+    "model": "GEELY COOLRAY NEW",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/geely_coolray_new.webp",
+    "sourceKey": "fleet-091",
+    "localPath": "/vehicles/kazan/fleet-091/primary.webp",
+    "alt": "GEELY COOLRAY NEW — Казань",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Казань",
+    "model": "Jaecoo J7",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/jaecoo_j7.webp",
+    "sourceKey": "fleet-092",
+    "localPath": "/vehicles/kazan/fleet-092/primary.webp",
+    "alt": "Jaecoo J7 — Казань",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Алтай",
+    "model": "GWM TANK 400",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/GWM_TANK_400_1777637090010.webp",
+    "sourceKey": "fleet-093",
+    "localPath": "/vehicles/altai/fleet-093/primary.webp",
+    "alt": "GWM TANK 400 — Алтай",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "MINI Cooper",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/mini_cooper.webp",
+    "sourceKey": "fleet-094",
+    "localPath": "/vehicles/sochi/fleet-094/primary.webp",
+    "alt": "MINI Cooper — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Solaris KRS Comfort",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/solaris_krs_comfort.webp",
+    "sourceKey": "fleet-095",
+    "localPath": "/vehicles/sochi/fleet-095/primary.webp",
+    "alt": "Solaris KRS Comfort — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Владивосток",
+    "model": "Chery TIGGO4",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/chery_tiggo4.webp",
+    "sourceKey": "fleet-096",
+    "localPath": "/vehicles/vladivostok/fleet-096/primary.webp",
+    "alt": "Chery TIGGO4 — Владивосток",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Geely Monjaro",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/geely_monjaro.webp",
+    "sourceKey": "fleet-097",
+    "localPath": "/vehicles/sochi/fleet-097/primary.webp",
+    "alt": "Geely Monjaro — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "OMODA S5 Promo",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/omoda_s5_promo.webp",
+    "sourceKey": "fleet-098",
+    "localPath": "/vehicles/sochi/fleet-098/primary.webp",
+    "alt": "OMODA S5 Promo — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Екатеринбург",
+    "model": "Solaris KRS",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/solaris_krs_1777637183583.webp",
+    "sourceKey": "fleet-099",
+    "localPath": "/vehicles/ekaterinburg/fleet-099/primary.webp",
+    "alt": "Solaris KRS — Екатеринбург",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Toyota Yaris Ativ",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/toyota_yaris_ativ.webp",
+    "sourceKey": "fleet-100",
+    "localPath": "/vehicles/phuket/fleet-100/primary.webp",
+    "alt": "Toyota Yaris Ativ — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "GAC M8",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/gac_m8.webp",
+    "sourceKey": "fleet-101",
+    "localPath": "/vehicles/sochi/fleet-101/primary.webp",
+    "alt": "GAC M8 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Санкт-Петербург",
+    "model": "Moskvich 3 Promo",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/moskvich_3_promo.webp",
+    "sourceKey": "fleet-102",
+    "localPath": "/vehicles/spb/fleet-102/primary.webp",
+    "alt": "Moskvich 3 Promo — Санкт-Петербург",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "BMW 420i Convertible",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/bmw_420i_convertible.webp",
+    "sourceKey": "fleet-103",
+    "localPath": "/vehicles/sochi/fleet-103/primary.webp",
+    "alt": "BMW 420i Convertible — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Владивосток",
+    "model": "Hyundai Staria",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/hyundai_staria.webp",
+    "sourceKey": "fleet-104",
+    "localPath": "/vehicles/vladivostok/fleet-104/primary.webp",
+    "alt": "Hyundai Staria — Владивосток",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Геленджик",
+    "model": "Cherry TIGGO 4 NEW",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/cherry_tiggo_4_new.webp",
+    "sourceKey": "fleet-105",
+    "localPath": "/vehicles/gelendzhik/fleet-105/primary.webp",
+    "alt": "Cherry TIGGO 4 NEW — Геленджик",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Москва",
+    "model": "GWM TANK 300",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/gwm_tank_300.webp",
+    "sourceKey": "fleet-106",
+    "localPath": "/vehicles/moscow/fleet-106/primary.webp",
+    "alt": "GWM TANK 300 — Москва",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Moskvich 3 Promo",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/moskvich_3_promo.webp",
+    "sourceKey": "fleet-107",
+    "localPath": "/vehicles/sochi/fleet-107/primary.webp",
+    "alt": "Moskvich 3 Promo — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Алтай",
+    "model": "Chery Arrizo 8",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/chery_arrizo_8.webp",
+    "sourceKey": "fleet-108",
+    "localPath": "/vehicles/altai/fleet-108/primary.webp",
+    "alt": "Chery Arrizo 8 — Алтай",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "EXEED LX",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/exeed_lx.webp",
+    "sourceKey": "fleet-109",
+    "localPath": "/vehicles/sochi/fleet-109/primary.webp",
+    "alt": "EXEED LX — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "OMODA C5 NEW",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/omoda_c5_new_1779622368656.webp",
+    "sourceKey": "fleet-110",
+    "localPath": "/vehicles/sochi/fleet-110/primary.webp",
+    "alt": "OMODA C5 NEW — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Калининград",
+    "model": "Jaecoo J7",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/jaecoo_j7.webp",
+    "sourceKey": "fleet-111",
+    "localPath": "/vehicles/kaliningrad/fleet-111/primary.webp",
+    "alt": "Jaecoo J7 — Калининград",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Toyota Veloz",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/Toyota_Veloz.webp",
+    "sourceKey": "fleet-112",
+    "localPath": "/vehicles/phuket/fleet-112/primary.webp",
+    "alt": "Toyota Veloz — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Владивосток",
+    "model": "Hyundai Creta",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/hyundai_creta.webp",
+    "sourceKey": "fleet-113",
+    "localPath": "/vehicles/vladivostok/fleet-113/primary.webp",
+    "alt": "Hyundai Creta — Владивосток",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "MG 5 Pro",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/mg_5_pro.webp",
+    "sourceKey": "fleet-114",
+    "localPath": "/vehicles/phuket/fleet-114/primary.webp",
+    "alt": "MG 5 Pro — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Changan CS55 PLUS",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/changan_cs55_plus.webp",
+    "sourceKey": "fleet-115",
+    "localPath": "/vehicles/sochi/fleet-115/primary.webp",
+    "alt": "Changan CS55 PLUS — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Владивосток",
+    "model": "Hyundai Elantra",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/hyundai_elantra.webp",
+    "sourceKey": "fleet-116",
+    "localPath": "/vehicles/vladivostok/fleet-116/primary.webp",
+    "alt": "Hyundai Elantra — Владивосток",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "BMW 420i Convertible",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/bmw_420i_convertible.webp",
+    "sourceKey": "fleet-117",
+    "localPath": "/vehicles/sochi/fleet-117/primary.webp",
+    "alt": "BMW 420i Convertible — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "Haval JOLION NEW",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/haval_jolion_new.webp",
+    "sourceKey": "fleet-118",
+    "localPath": "/vehicles/sochi/fleet-118/primary.webp",
+    "alt": "Haval JOLION NEW — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Казань",
+    "model": "GWM WEY",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/GWM_WAY80_1777637010318.webp",
+    "sourceKey": "fleet-119",
+    "localPath": "/vehicles/kazan/fleet-119/primary.webp",
+    "alt": "GWM WEY — Казань",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Toyota Yaris Ativ",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/toyota_yaris_ativ.webp",
+    "sourceKey": "fleet-120",
+    "localPath": "/vehicles/phuket/fleet-120/primary.webp",
+    "alt": "Toyota Yaris Ativ — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Екатеринбург",
+    "model": "HAVAL F7 NEW",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/haval_f7x_new.webp",
+    "sourceKey": "fleet-121",
+    "localPath": "/vehicles/ekaterinburg/fleet-121/primary.webp",
+    "alt": "HAVAL F7 NEW — Екатеринбург",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Toyota Veloz",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/Toyota_Veloz.webp",
+    "sourceKey": "fleet-122",
+    "localPath": "/vehicles/phuket/fleet-122/primary.webp",
+    "alt": "Toyota Veloz — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Алтай",
+    "model": "Chery Tiggo 7 Pro Max",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/chery_tiggo_7_pro_max.webp",
+    "sourceKey": "fleet-123",
+    "localPath": "/vehicles/altai/fleet-123/primary.webp",
+    "alt": "Chery Tiggo 7 Pro Max — Алтай",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "GWM TANK 500",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/gwm_tank_500.webp",
+    "sourceKey": "fleet-124",
+    "localPath": "/vehicles/sochi/fleet-124/primary.webp",
+    "alt": "GWM TANK 500 — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Санкт-Петербург",
+    "model": "GWM TANK 300",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/gwm_tank_300.webp",
+    "sourceKey": "fleet-125",
+    "localPath": "/vehicles/spb/fleet-125/primary.webp",
+    "alt": "GWM TANK 300 — Санкт-Петербург",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Сочи",
+    "model": "EXEED LX",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/exeed_lx.webp",
+    "sourceKey": "fleet-126",
+    "localPath": "/vehicles/sochi/fleet-126/primary.webp",
+    "alt": "EXEED LX — Сочи",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Калининград",
+    "model": "CHERY TIGGO 7 PRO MAX",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/chery_tiggo_7_pro_max.webp",
+    "sourceKey": "fleet-127",
+    "localPath": "/vehicles/kaliningrad/fleet-127/primary.webp",
+    "alt": "CHERY TIGGO 7 PRO MAX — Калининград",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Пхукет",
+    "model": "Mitsubishi Pajero Sport Elite",
+    "sourceUrl": "https://autopilotrent.ru/images/stock/MITSUBISHI_PAJERO_SPORT_ELITE_1777637220916.webp",
+    "sourceKey": "fleet-128",
+    "localPath": "/vehicles/phuket/fleet-128/primary.webp",
+    "alt": "Mitsubishi Pajero Sport Elite — Пхукет",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Алтай",
+    "model": "GWM TANK 500",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/gwm_tank_500.webp",
+    "sourceKey": "fleet-129",
+    "localPath": "/vehicles/altai/fleet-129/primary.webp",
+    "alt": "GWM TANK 500 — Алтай",
+    "position": 0,
+    "isPrimary": true
+  },
+  {
+    "city": "Геленджик",
+    "model": "WEY 80",
+    "sourceUrl": "https://autopilotrent.ru/photos/stock/gwm_wey_80.webp",
+    "sourceKey": "fleet-130",
+    "localPath": "/vehicles/gelendzhik/fleet-130/primary.webp",
+    "alt": "WEY 80 — Геленджик",
+    "position": 0,
+    "isPrimary": true
+  }
+]
