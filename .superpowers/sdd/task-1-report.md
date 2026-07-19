@@ -36,3 +36,9 @@ Status: DONE_WITH_CONCERNS
 - RED: добавлено падающее утверждение, что контейнер действий задаёт прямым детям `min-h-11` и `min-w-11`. Команда `npx vitest run src/shared/ui/SystemState.test.ts` завершилась ожидаемо с ошибкой: классы отсутствовали.
 - GREEN: контейнер действий получил Tailwind direct-child variants `[&>*]:min-h-11 [&>*]:min-w-11`, поэтому ссылки и кнопки имеют минимальную область нажатия 44×44 px.
 - Проверки: `npx vitest run src/shared/ui/SystemState.test.ts` — 3/3; `npm run test:unit` — 17 files, 63/63.
+
+## Fix report 2
+
+- RED: тест дополнен утверждениями для `[&>*]:inline-flex`, `[&>*]:items-center` и `[&>*]:justify-center`. `npx vitest run src/shared/ui/SystemState.test.ts` ожидаемо завершился с 1 failed, потому что inline-ссылка не получала display-контракт.
+- GREEN: прямые action children теперь получают `inline-flex`, центрирование и уже существующие `min-h-11`/`min-w-11`, поэтому минимальная область 44×44 px применяется и к `<a>`.
+- Проверки: `npx vitest run src/shared/ui/SystemState.test.ts` — 3/3; `npm run test:unit` — 17 files, 63/63.

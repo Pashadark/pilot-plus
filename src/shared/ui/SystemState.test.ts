@@ -22,6 +22,9 @@ describe('SystemState', () => {
     expect(markup).toContain('Проверьте адрес или вернитесь к работе с автопарком.');
     expect(markup).toContain('На главную');
     expect(markup).toContain('Назад');
+    expect(markup).toContain('[&amp;&gt;*]:inline-flex');
+    expect(markup).toContain('[&amp;&gt;*]:items-center');
+    expect(markup).toContain('[&amp;&gt;*]:justify-center');
     expect(markup).toContain('[&amp;&gt;*]:min-h-11');
     expect(markup).toContain('[&amp;&gt;*]:min-w-11');
     expect(markup).not.toContain('role="alert"');

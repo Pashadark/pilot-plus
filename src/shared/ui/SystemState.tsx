@@ -95,7 +95,7 @@ export function SystemState({
           <p className="text-sm text-[var(--color-text-secondary)]">Код обращения: {reference}</p>
         ) : null}
         {primaryAction || secondaryAction ? (
-          <div className="flex flex-wrap justify-center gap-3 [&>*]:min-h-11 [&>*]:min-w-11">
+          <div className="flex flex-wrap justify-center gap-3 [&>*]:inline-flex [&>*]:min-h-11 [&>*]:min-w-11 [&>*]:items-center [&>*]:justify-center">
             {primaryAction}
             {secondaryAction}
           </div>
