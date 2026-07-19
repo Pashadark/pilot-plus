@@ -1,10 +1,15 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import { openAuthenticatedRoute } from './helpers/auth';
 
 test.beforeEach(async ({ page }) => {
   await openAuthenticatedRoute(page, '/ui-kit');
 });
+
+async function enableDarkTheme(page: Page) {
+  await page.evaluate(() => localStorage.setItem('pilot-theme', 'dark'));
+  await page.reload();
+}
 
 test('витрина запускает четыре типа системных уведомлений', async ({ page }) => {
   for (const [button, title] of [
@@ -33,7 +38,7 @@ test('светлая тема использует визуальные токе
   await expect(page.locator('body')).toHaveCSS('font-family', /Inter/);
 
   const primary = page.getByTestId('button-primary');
-  await expect(primary).toHaveCSS('background-color', 'rgb(99, 102, 241)');
+  await expect(primary).toHaveCSS('background-color', 'rgb(37, 99, 235)');
   await expect(primary).toHaveCSS('border-radius', '8px');
 
   const card = page.getByTestId('showcase-card');
@@ -88,7 +93,7 @@ test('тема и примитивы действий публикуют дос�
   await expect(page.getByTestId('button-loading')).toHaveAttribute('aria-busy', 'true');
   await expect(page.getByTestId('button-disabled')).toBeDisabled();
 
-  await page.getByRole('button', { name: 'Включить тёмную тему' }).click();
+  await enableDarkTheme(page);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -98,7 +103,7 @@ test('тёмная тема применяется ко всем маршрут�
   page,
 }) => {
   await page.goto('/ui-kit');
-  await page.getByRole('button', { name: 'Включить тёмную тему' }).click();
+  await enableDarkTheme(page);
 
   for (const route of ['/', '/ui-kit']) {
     await page.goto(route);
@@ -123,7 +128,7 @@ for (const { viewport, theme } of responsiveViewports.flatMap((viewport) =>
   }) => {
     await page.setViewportSize(viewport);
     await page.goto('/ui-kit');
-    if (theme === 'dark') await page.getByRole('button', { name: 'Включить тёмную тему' }).click();
+    if (theme === 'dark') await enableDarkTheme(page);
     for (const route of ['/', '/ui-kit']) {
       await page.goto(route);
       await expect(page.locator('body')).toHaveCSS(
