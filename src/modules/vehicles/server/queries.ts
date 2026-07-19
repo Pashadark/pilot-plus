@@ -63,6 +63,10 @@ interface RawVehicle {
     type: string;
     expiresAt: Date | null;
   }[];
+  images: {
+    localPath: string;
+    alt: string;
+  }[];
 }
 
 const vehicleSelect = {
@@ -125,6 +129,12 @@ const vehicleSelect = {
     orderBy: { createdAt: 'desc' as const },
     take: 50,
   },
+  images: {
+    where: { isPrimary: true },
+    select: { localPath: true, alt: true },
+    orderBy: { position: 'asc' as const },
+    take: 1,
+  },
 } satisfies Prisma.VehicleSelect;
 
 function optionalNumber(value: unknown | null | undefined) {
@@ -150,6 +160,7 @@ function mapCard(vehicle: RawVehicle): VehicleCardDto {
     originalPrice: vehicle.originalPrice,
     features: vehicle.features,
     status: vehicle.status,
+    primaryImage: vehicle.images[0] ?? null,
     telemetry: {
       odometerKm: optionalNumber(position?.odometerKm),
       fuelLevelPercent: optionalNumber(position?.fuelLevelPercent),

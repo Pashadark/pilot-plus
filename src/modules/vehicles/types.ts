@@ -9,6 +9,11 @@ export interface VehicleTelemetrySummary {
   hasPosition: boolean;
 }
 
+export interface VehicleImageDto {
+  localPath: string;
+  alt: string;
+}
+
 export interface VehicleCardDto {
   id: string;
   internalNumber: string;
@@ -25,6 +30,7 @@ export interface VehicleCardDto {
   originalPrice: string;
   features: string[];
   status: VehicleStatus;
+  primaryImage: VehicleImageDto | null;
   telemetry: VehicleTelemetrySummary;
 }
 

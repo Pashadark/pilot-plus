@@ -20,6 +20,7 @@ function vehicle(overrides: Partial<VehicleCardDto>): VehicleCardDto {
     originalPrice: '8 800 ₽',
     features: [],
     status: 'UNKNOWN',
+    primaryImage: null,
     telemetry: {
       odometerKm: null,
       fuelLevelPercent: null,

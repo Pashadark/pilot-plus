@@ -26,6 +26,12 @@ const rawVehicle = {
   events: [],
   maintenanceRecords: [],
   documents: [],
+  images: [
+    {
+      localPath: '/vehicles/krasnoyarsk/fleet-001/primary.webp',
+      alt: 'GWM WEY — Красноярск',
+    },
+  ],
 };
 
 function createRepository() {
@@ -66,8 +72,22 @@ describe('запросы автопарка', () => {
         lastTripAt: null,
         hasPosition: false,
       },
+      primaryImage: {
+        localPath: '/vehicles/krasnoyarsk/fleet-001/primary.webp',
+        alt: 'GWM WEY — Красноярск',
+      },
+    });
+    expect(fake.calls.list).toMatchObject({
+      select: {
+        images: {
+          where: { isPrimary: true },
+          orderBy: { position: 'asc' },
+          take: 1,
+        },
+      },
     });
     expect(vehicles[0]).not.toHaveProperty('companyId');
+    expect(vehicles[0]?.primaryImage).not.toHaveProperty('sourceUrl');
   });
 
   it('ищет подробности только внутри компании пользователя', async () => {
@@ -97,5 +117,21 @@ describe('запросы автопарка', () => {
     const queries = createVehicleQueries(repository);
 
     await expect(queries.getVehicleForUser('user-1', 'foreign')).resolves.toBeNull();
+  });
+
+  it('возвращает null вместо главного фото, если запись отсутствует', async () => {
+    const repository = {
+      async findMany() {
+        return [{ ...rawVehicle, images: [] }];
+      },
+      async findFirst() {
+        return null;
+      },
+    };
+    const queries = createVehicleQueries(repository);
+
+    const vehicles = await queries.listVehiclesForUser('user-1');
+
+    expect(vehicles[0]?.primaryImage).toBeNull();
   });
 });
