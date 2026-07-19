@@ -228,17 +228,17 @@ git commit -m "feat: add secure administrator profile"
 - Modify: `src/modules/auth/LoginPage.tsx`
 - Create: `src/shared/providers/FlashToast.tsx`
 - Modify: `src/shared/providers/ToastProvider.tsx`
-- Modify: `src/app/layout.tsx`
+- Modify: `src/app/(protected)/page.tsx`
 - Modify: `tests/auth.spec.ts`
 
 **Interfaces:**
 
-- Produces a short-lived HttpOnly `pilot-flash` cookie with enum value `login-success | logout-success`.
-- `FlashToast` receives a server-decoded safe enum, shows exactly one toast, then does not repeat on navigation.
+- Produces a redirect query-marker with allowlisted value `welcome=1 | loggedOut=1`.
+- `FlashToast` receives a server-decoded safe enum, shows exactly one toast and removes the marker from the visible URL through `history.replaceState`.
 
 - [ ] **Step 1: Write failing unit/browser tests**
 
-Проверить установку enum-cookie, отсутствие произвольного текста и toast «Вы вошли в Pilot+» / «Вы вышли из системы».
+Проверить allowlisted query-marker, игнорирование произвольного текста и toast «Вы вошли в Pilot+» / «Вы вышли из системы».
 
 - [ ] **Step 2: Verify RED**
 
@@ -247,7 +247,7 @@ Expected: toast assertions FAIL.
 
 - [ ] **Step 3: Implement flash flow**
 
-Cookie: HttpOnly, SameSite=Lax, Secure in production, maxAge 60 seconds. Декодировать её на сервере в root layout и удалить до передачи enum в client component.
+После входа перенаправлять на `/?welcome=1`, после выхода — на `/login?loggedOut=1`. На сервере преобразовать marker только в безопасный enum, показать его через client component и удалить marker из URL без повторного toast.
 
 - [ ] **Step 4: Verify GREEN**
 
@@ -257,7 +257,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add src/modules/auth src/shared/providers src/app/layout.tsx tests/auth.spec.ts
+git add src/modules/auth src/shared/providers src/app tests/auth.spec.ts
 git commit -m "feat: add authentication flash toasts"
 ```
 
@@ -292,7 +292,7 @@ Expected: FAIL because module is missing.
 
 - [ ] **Step 3: Implement server-only health module**
 
-PostgreSQL проверять `prisma.$queryRawUnsafe('SELECT 1')` без пользовательского ввода. TCP-сокеты всегда уничтожать в `finally`. Публичный объект не содержит host/port/error stack.
+PostgreSQL проверять типизированным `` prisma.$queryRaw`SELECT 1` ``. TCP-сокеты всегда уничтожать в `finally`. Публичный объект не содержит host/port/error stack.
 
 - [ ] **Step 4: Verify unit GREEN**
 
