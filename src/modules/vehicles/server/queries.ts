@@ -1,0 +1,222 @@
+import type { Prisma } from '@/database/generated/prisma';
+import { prisma } from '@/database/prisma/client';
+
+import type { VehicleCardDto, VehicleDetailDto } from '../types';
+
+interface VehicleRepository {
+  findMany(args: unknown): Promise<unknown[]>;
+  findFirst(args: unknown): Promise<unknown | null>;
+}
+
+interface RawVehicle {
+  id: string;
+  internalNumber: string;
+  model: string;
+  city: string;
+  office: string | null;
+  registrationNumber: string | null;
+  vin: string | null;
+  transmission: string;
+  engineLiters: unknown | null;
+  fuelType: VehicleCardDto['fuelType'];
+  seats: number;
+  dailyPriceMinor: number;
+  currency: string;
+  originalPrice: string;
+  features: string[];
+  status: VehicleCardDto['status'];
+  createdAt: Date;
+  positions: {
+    odometerKm: unknown | null;
+    fuelLevelPercent: unknown | null;
+    recordedAt: Date;
+  }[];
+  trips: {
+    id?: string;
+    startedAt: Date;
+    endedAt?: Date | null;
+    distanceKm?: unknown | null;
+    durationSeconds?: number | null;
+  }[];
+  fuelRecords: {
+    id?: string;
+    recordedAt: Date;
+    volumeLiters?: unknown | null;
+  }[];
+  events: {
+    id: string;
+    title: string;
+    severity: 'INFO' | 'WARNING' | 'DANGER';
+    description: string | null;
+    recordedAt: Date;
+  }[];
+  maintenanceRecords: {
+    id: string;
+    title: string;
+    status: string;
+    scheduledAt: Date | null;
+    completedAt: Date | null;
+  }[];
+  documents: {
+    id: string;
+    title: string;
+    type: string;
+    expiresAt: Date | null;
+  }[];
+}
+
+const vehicleSelect = {
+  id: true,
+  internalNumber: true,
+  model: true,
+  city: true,
+  office: true,
+  registrationNumber: true,
+  vin: true,
+  transmission: true,
+  engineLiters: true,
+  fuelType: true,
+  seats: true,
+  dailyPriceMinor: true,
+  currency: true,
+  originalPrice: true,
+  features: true,
+  status: true,
+  createdAt: true,
+  positions: {
+    select: { odometerKm: true, fuelLevelPercent: true, recordedAt: true },
+    orderBy: { recordedAt: 'desc' as const },
+    take: 1,
+  },
+  trips: {
+    select: {
+      id: true,
+      startedAt: true,
+      endedAt: true,
+      distanceKm: true,
+      durationSeconds: true,
+    },
+    orderBy: { startedAt: 'desc' as const },
+    take: 50,
+  },
+  fuelRecords: {
+    select: { id: true, recordedAt: true, volumeLiters: true },
+    orderBy: { recordedAt: 'desc' as const },
+    take: 50,
+  },
+  events: {
+    select: { id: true, title: true, severity: true, description: true, recordedAt: true },
+    orderBy: { recordedAt: 'desc' as const },
+    take: 50,
+  },
+  maintenanceRecords: {
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      scheduledAt: true,
+      completedAt: true,
+    },
+    orderBy: { createdAt: 'desc' as const },
+    take: 50,
+  },
+  documents: {
+    select: { id: true, title: true, type: true, expiresAt: true },
+    orderBy: { createdAt: 'desc' as const },
+    take: 50,
+  },
+} satisfies Prisma.VehicleSelect;
+
+function optionalNumber(value: unknown | null | undefined) {
+  return value === null || value === undefined ? null : Number(value);
+}
+
+function mapCard(vehicle: RawVehicle): VehicleCardDto {
+  const position = vehicle.positions[0];
+  const trip = vehicle.trips[0];
+  return {
+    id: vehicle.id,
+    internalNumber: vehicle.internalNumber,
+    model: vehicle.model,
+    city: vehicle.city,
+    office: vehicle.office,
+    registrationNumber: vehicle.registrationNumber,
+    transmission: vehicle.transmission,
+    engineLiters: optionalNumber(vehicle.engineLiters),
+    fuelType: vehicle.fuelType,
+    seats: vehicle.seats,
+    dailyPriceMinor: vehicle.dailyPriceMinor,
+    currency: vehicle.currency.trim(),
+    originalPrice: vehicle.originalPrice,
+    features: vehicle.features,
+    status: vehicle.status,
+    telemetry: {
+      odometerKm: optionalNumber(position?.odometerKm),
+      fuelLevelPercent: optionalNumber(position?.fuelLevelPercent),
+      lastSeenAt: position?.recordedAt.toISOString() ?? null,
+      lastTripAt: trip?.startedAt.toISOString() ?? null,
+      hasPosition: Boolean(position),
+    },
+  };
+}
+
+function mapDetail(vehicle: RawVehicle): VehicleDetailDto {
+  return {
+    ...mapCard(vehicle),
+    vin: vehicle.vin,
+    createdAt: vehicle.createdAt.toISOString(),
+    trips: vehicle.trips.map((trip) => ({
+      id: trip.id ?? `${vehicle.id}-${trip.startedAt.toISOString()}`,
+      startedAt: trip.startedAt.toISOString(),
+      endedAt: trip.endedAt?.toISOString() ?? null,
+      distanceKm: optionalNumber(trip.distanceKm),
+      durationSeconds: trip.durationSeconds ?? null,
+    })),
+    events: vehicle.events.map((event) => ({
+      ...event,
+      recordedAt: event.recordedAt.toISOString(),
+    })),
+    fuelRecords: vehicle.fuelRecords.map((record) => ({
+      id: record.id ?? `${vehicle.id}-${record.recordedAt.toISOString()}`,
+      recordedAt: record.recordedAt.toISOString(),
+      volumeLiters: optionalNumber(record.volumeLiters),
+    })),
+    maintenanceRecords: vehicle.maintenanceRecords.map((record) => ({
+      ...record,
+      scheduledAt: record.scheduledAt?.toISOString() ?? null,
+      completedAt: record.completedAt?.toISOString() ?? null,
+    })),
+    documents: vehicle.documents.map((document) => ({
+      ...document,
+      expiresAt: document.expiresAt?.toISOString() ?? null,
+    })),
+  };
+}
+
+export function createVehicleQueries(repository: VehicleRepository) {
+  return {
+    async listVehiclesForUser(userId: string) {
+      const vehicles = await repository.findMany({
+        where: { company: { members: { some: { userId } } } },
+        select: vehicleSelect,
+        orderBy: [{ city: 'asc' }, { model: 'asc' }, { internalNumber: 'asc' }],
+      });
+      return (vehicles as RawVehicle[]).map(mapCard);
+    },
+    async getVehicleForUser(userId: string, vehicleId: string) {
+      const vehicle = await repository.findFirst({
+        where: { id: vehicleId, company: { members: { some: { userId } } } },
+        select: vehicleSelect,
+      });
+      return vehicle ? mapDetail(vehicle as RawVehicle) : null;
+    },
+  };
+}
+
+const queries = createVehicleQueries({
+  findMany: (args) => prisma.vehicle.findMany(args as Prisma.VehicleFindManyArgs),
+  findFirst: (args) => prisma.vehicle.findFirst(args as Prisma.VehicleFindFirstArgs),
+});
+
+export const listVehiclesForUser = queries.listVehiclesForUser;
+export const getVehicleForUser = queries.getVehicleForUser;
