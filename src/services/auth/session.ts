@@ -5,6 +5,11 @@ import type { SafeUser } from '@/modules/auth/types';
 
 import { createSessionToken, hashSessionToken } from './session-token';
 
+export interface AuthenticatedSession {
+  user: SafeUser;
+  currentSessionId: string;
+}
+
 export const SESSION_COOKIE_NAME = 'pilot-session';
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -32,7 +37,7 @@ export async function createSession(userId: string): Promise<void> {
   cookieStore.set(SESSION_COOKIE_NAME, token, { ...cookieOptions, expires: expiresAt });
 }
 
-export async function readSession(): Promise<SafeUser | null> {
+export async function getAuthenticatedSession(): Promise<AuthenticatedSession | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
@@ -57,14 +62,28 @@ export async function readSession(): Promise<SafeUser | null> {
     }
 
     return {
-      id: session.user.id,
-      email: session.user.email,
-      name: session.user.name,
-      role: 'ADMIN',
+      user: {
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        role: 'ADMIN',
+      },
+      currentSessionId: session.id,
     };
   } catch {
     return null;
   }
+}
+
+export async function readSession(): Promise<SafeUser | null> {
+  const session = await getAuthenticatedSession();
+  return session?.user ?? null;
+}
+
+export async function deleteOtherSessions(userId: string, currentSessionId: string): Promise<void> {
+  await prisma.session.deleteMany({
+    where: { userId, id: { not: currentSessionId } },
+  });
 }
 
 export async function deleteSession(): Promise<void> {

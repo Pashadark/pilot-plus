@@ -22,7 +22,9 @@ vi.mock('@/database/prisma/client', () => ({ prisma: { session: sessionRepositor
 
 import {
   createSession,
+  deleteOtherSessions,
   deleteSession,
+  getAuthenticatedSession,
   readSession,
   SESSION_COOKIE_NAME,
   SESSION_TTL_MS,
@@ -73,6 +75,45 @@ describe('серверная сессия', () => {
       email: 'admin@example.com',
       name: 'Администратор',
       role: 'ADMIN',
+    });
+  });
+
+  it('возвращает идентификатор текущей сессии отдельно от безопасного пользователя', async () => {
+    cookieMock.value = 'session-token';
+    sessionRepository.findUnique.mockResolvedValue({
+      id: 'session-1',
+      tokenHash: 'secret-token-hash',
+      expiresAt: new Date(Date.now() + 60_000),
+      user: {
+        id: 'user-1',
+        email: 'admin@example.com',
+        name: 'Администратор',
+        role: 'ADMIN',
+        isActive: true,
+        passwordHash: 'secret-password-hash',
+      },
+    });
+
+    const result = await getAuthenticatedSession();
+
+    expect(result).toEqual({
+      user: {
+        id: 'user-1',
+        email: 'admin@example.com',
+        name: 'Администратор',
+        role: 'ADMIN',
+      },
+      currentSessionId: 'session-1',
+    });
+    expect(JSON.stringify(result)).not.toContain('secret-token-hash');
+    expect(JSON.stringify(result)).not.toContain('secret-password-hash');
+  });
+
+  it('удаляет все сессии пользователя, кроме текущей', async () => {
+    await deleteOtherSessions('user-1', 'session-1');
+
+    expect(sessionRepository.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1', id: { not: 'session-1' } },
     });
   });
 
