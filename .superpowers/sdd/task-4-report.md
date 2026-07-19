@@ -1,56 +1,36 @@
-# Отчёт по Task 4: адаптивная оболочка приложения
+# Отчёт по Task 4: Server Actions и профиль администратора
 
-## Статус
+Дата: 20 июля 2026 года
+Статус: реализовано и проверено
 
-Реализована адаптивная оболочка Pilot+: серверный `AppShell`, постоянная настольная навигация, мобильный drawer, единая модель ссылок и совместимый alias `AppLayout`.
+## Результат
 
-## Доказательства TDD и проверок
+- Добавлены защищённые `updateProfileAction` и `changePasswordAction` с повторной проверкой server-side session и текущего пароля.
+- Обновление имени/email и очистка `LoginThrottle` для старого и нового email выполняются одной Prisma-транзакцией.
+- Prisma `P2002` преобразуется в безопасное сообщение «Этот email уже используется»; остальные исключения не раскрывают детали БД.
+- После смены пароля удаляются остальные сессии через `deleteOtherSessions`, текущая сессия сохраняется.
+- Добавлен защищённый `/profile` с независимыми карточками основных данных и безопасности на существующих `Input`, `Button`, `Card`, `useActionState` и `useToast`.
+- Protected layout один раз передаёт сериализуемый `SafeUser` через client context в `AppShell`, затем через props в `ShellFrame`, desktop sidebar и mobile drawer.
+- Sidebar показывает реальные имя/email и содержит доступную ссылку `/profile` вместо статического пользователя.
+- Task 5 flash-toast не изменялся.
 
-- RED: `npm run test:e2e -- --project=desktop tests/dashboard.spec.ts` — 2 ожидаемых падения: не найдены навигация «Основная навигация» и кнопка «Открыть меню».
-- GREEN (частично): desktop Chromium подтвердил видимость постоянной навигации и ссылки «Дизайн-система»; 1 тест пройден.
-- `npm run typecheck` — PASS.
-- `npm run lint` — PASS.
-- Полный e2e-прогон заблокирован окружением: существующий Next dev server отдавал устаревший bundle без рабочего HMR, новый процесс зависал на lifecycle; проект `mobile` требует отсутствующий WebKit (`webkit-2311`).
+## TDD
 
-## Самопроверка
+- RED actions: `npx vitest run src/modules/profile/actions.test.ts` — ожидаемо не собрался из-за отсутствующего `./actions`.
+- GREEN actions: 7/7 profile action tests.
+- RED browser: `/profile` отсутствовал; data/form сценарии падали на route-level контракте.
+- GREEN browser: `npx playwright test tests/profile.spec.ts --workers=1` с auth env — 7 passed, 1 intentional skip. Изменяющий БД сценарий имени выполняется только в desktop project и возвращает исходное значение; все остальные сценарии проходят на desktop и mobile.
 
-- `AppShell` не содержит `use client`; интерактивность изолирована в `Header`, `MobileNavigation` и pathname-aware `Sidebar`.
-- Desktop и mobile используют один readonly-массив `navigation`.
-- Навигация реализована через `next/link`, активная ссылка получает `aria-current="page"`.
-- Размеры оболочки используют `--sidebar-width` и `--header-height`.
-- Кнопки меню, темы и закрытия имеют область действия не меньше 44 px.
-- Drawer открывается с клавиатуры, закрывается по Escape, клику по overlay и выбору ссылки.
-- Использованы только семантические цветовые токены и Feather icons; `any` и raw hex не добавлены.
-- `breadcrumbs` опциональны и по умолчанию равны пустому массиву.
+## Финальные проверки
 
-## Риски и замечания
+- `npm run test:unit` — 19 suites, 81 tests passed.
+- `npm run lint` — exit 0.
+- `npm run typecheck` — exit 0.
+- `npm run build` — exit 0; динамический route `/profile` собран.
+- Targeted Prettier Task 4 files — passed.
+- `git diff --check` — passed.
 
-- После установки WebKit и остановки постороннего dev server следует повторить обе команды e2e из brief.
-- Маршрут `/ui-kit` может отсутствовать на этом этапе; оболочка корректно публикует реальную ссылку на него.
+## Известные замечания вне Task 4
 
-## Коммит
-
-Итоговый хеш зафиксирован в выводе `git log -1 --oneline` и передан координатору вместе с этим отчётом.
-
-## Fix report по замечаниям review
-
-### Статус
-
-`MobileNavigation` переведён с самописного overlay на публичный `Drawer` из `shared/ui`. Общая граница диалога теперь обеспечивает начальный фокус, циклический focus trap, блокировку прокрутки `body`, закрытие по Escape и overlay, а также возврат фокуса к кнопке «Открыть меню». Выбор навигационной ссылки закрывает drawer.
-
-### TDD и проверки
-
-- RED: `npm run test:e2e -- --project=desktop tests/dashboard.spec.ts` — 4 теста прошли, accessibility-тест упал; процесс завершён по timeout через 120 секунд из-за lifecycle dev-server.
-- GREEN: `npm run test:e2e -- --project=desktop tests/dashboard.spec.ts` — все 5 Chromium-тестов прошли за 1,3–1,6 секунды; процесс завершён по timeout через 60 секунд уже после результатов из-за lifecycle dev-server.
-- `npm run lint` — PASS, exit code 0.
-- `npm run typecheck` — PASS, exit code 0.
-- `git diff --check` — PASS, exit code 0.
-- WebKit не запускался: доступная проверка выполнена в Chromium согласно ограничению окружения.
-
-### Коммит исправления
-
-`78806b46552c9538c29ca84dafc522ece5efa808` — `fix: use shared drawer for mobile navigation`.
-
-### Оставшиеся замечания
-
-Во время Chromium-прогона существующая dashboard-страница выводит hydration warning из-за различий форматирования `className` и содержит исторические raw hex вне scope Task 4. Все пять целевых тестов при этом завершились успешно; lifecycle команды остаётся проблемой окружения.
+- Полный `npm run format:check` остаётся красным на 12 ранее существовавших файлах вне Task 4; эти пользовательские файлы не переформатировались.
+- Build сохраняет уже известные предупреждения linked worktree о нескольких lockfile/Turbopack root и широком NFT trace Prisma client.

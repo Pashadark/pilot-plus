@@ -1,4 +1,8 @@
-import type { ReactNode } from 'react';
+'use client';
+
+import { createContext, useContext, type ReactNode } from 'react';
+
+import type { SafeUser } from '@/modules/auth/types';
 
 import { ShellFrame } from './ShellFrame';
 
@@ -12,6 +16,19 @@ interface AppShellProps {
   breadcrumbs?: readonly Breadcrumb[];
 }
 
+const AppShellUserContext = createContext<SafeUser | null>(null);
+
+export function AppShellUserProvider({ children, user }: { children: ReactNode; user: SafeUser }) {
+  return <AppShellUserContext.Provider value={user}>{children}</AppShellUserContext.Provider>;
+}
+
 export function AppShell({ children, breadcrumbs = [] }: AppShellProps) {
-  return <ShellFrame breadcrumbs={breadcrumbs}>{children}</ShellFrame>;
+  const user = useContext(AppShellUserContext);
+  if (!user) throw new Error('AppShell должен использоваться внутри AppShellUserProvider.');
+
+  return (
+    <ShellFrame breadcrumbs={breadcrumbs} user={user}>
+      {children}
+    </ShellFrame>
+  );
 }

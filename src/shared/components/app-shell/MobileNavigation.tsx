@@ -2,6 +2,7 @@
 
 import { FiX } from 'react-icons/fi';
 
+import type { SafeUser } from '@/modules/auth/types';
 import { IconButton } from '@/shared/ui/IconButton';
 import { Drawer } from '@/shared/ui/Overlays';
 
@@ -10,9 +11,10 @@ import { Sidebar } from './Sidebar';
 interface MobileNavigationProps {
   open: boolean;
   onClose: () => void;
+  user: SafeUser;
 }
 
-export function MobileNavigation({ open, onClose }: MobileNavigationProps) {
+export function MobileNavigation({ open, onClose, user }: MobileNavigationProps) {
   return (
     <div className="md:hidden">
       <Drawer
@@ -28,7 +30,7 @@ export function MobileNavigation({ open, onClose }: MobileNavigationProps) {
             <FiX aria-hidden="true" className="size-5" />
           </IconButton>
         </div>
-        <Sidebar onNavigate={onClose} />
+        <Sidebar onNavigate={onClose} user={user} />
       </Drawer>
     </div>
   );

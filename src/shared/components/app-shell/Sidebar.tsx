@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { FiChevronLeft, FiChevronRight, FiUser } from 'react-icons/fi';
 
+import type { SafeUser } from '@/modules/auth/types';
 import { IconButton } from '@/shared/ui/IconButton';
 
 import { navigation } from './navigation';
@@ -12,9 +13,10 @@ interface SidebarProps {
   expanded?: boolean;
   onNavigate?: () => void;
   onToggle?: () => void;
+  user: SafeUser;
 }
 
-export function Sidebar({ expanded = true, onNavigate, onToggle }: SidebarProps) {
+export function Sidebar({ expanded = true, onNavigate, onToggle, user }: SidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -67,17 +69,23 @@ export function Sidebar({ expanded = true, onNavigate, onToggle }: SidebarProps)
         })}
       </nav>
       <div className="border-t p-3">
-        <div className="flex min-h-12 items-center gap-3 overflow-hidden rounded-[var(--radius-md)] px-2">
+        <Link
+          href="/profile"
+          aria-current={pathname === '/profile' ? 'page' : undefined}
+          aria-label="Открыть профиль"
+          onClick={onNavigate}
+          className="flex min-h-12 items-center gap-3 overflow-hidden rounded-[var(--radius-md)] px-2 transition-colors hover:bg-[var(--color-elevated)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+        >
           <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--color-primary-soft)] text-[var(--color-primary)]">
             <FiUser aria-hidden="true" />
           </span>
           <div
             className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap transition-all ${expanded ? 'w-28 opacity-100' : 'w-0 opacity-0'}`}
           >
-            <p className="truncate text-xs font-semibold">Павел Седов</p>
-            <p className="truncate text-[10px] text-[var(--color-text-secondary)]">Администратор</p>
+            <p className="truncate text-xs font-semibold">{user.name}</p>
+            <p className="truncate text-[10px] text-[var(--color-text-secondary)]">{user.email}</p>
           </div>
-        </div>
+        </Link>
         {onToggle ? (
           <div className="mt-1 flex justify-center">
             <IconButton

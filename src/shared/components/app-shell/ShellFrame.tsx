@@ -2,6 +2,8 @@
 
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 
+import type { SafeUser } from '@/modules/auth/types';
+
 import type { Breadcrumb } from './AppShell';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
@@ -34,9 +36,11 @@ function getSidebarServerSnapshot() {
 export function ShellFrame({
   children,
   breadcrumbs,
+  user,
 }: {
   children: ReactNode;
   breadcrumbs: readonly Breadcrumb[];
+  user: SafeUser;
 }) {
   const expanded = useSyncExternalStore(
     subscribeToSidebarStorage,
@@ -64,12 +68,12 @@ export function ShellFrame({
       style={{ '--sidebar-width': sidebarWidth } as CSSProperties}
       className="min-h-screen overflow-x-hidden bg-[var(--color-canvas)] text-[var(--color-text)]"
     >
-      <Header breadcrumbs={breadcrumbs} />
+      <Header breadcrumbs={breadcrumbs} user={user} />
       <aside
         data-testid="desktop-sidebar"
         className="fixed inset-y-0 left-0 z-50 hidden w-[var(--sidebar-width)] border-r bg-[var(--color-navigation)] transition-[width] duration-200 md:flex md:flex-col"
       >
-        <Sidebar expanded={expanded} onToggle={toggleSidebar} />
+        <Sidebar expanded={expanded} onToggle={toggleSidebar} user={user} />
       </aside>
       <main className="min-h-screen pt-[var(--header-height)] transition-[padding] duration-200 md:pt-0 md:pl-[var(--sidebar-width)]">
         <div className="mx-auto max-w-[1680px] p-4 lg:p-5">{children}</div>

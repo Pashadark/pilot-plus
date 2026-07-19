@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { FiBell, FiLogOut, FiMenu, FiMoon, FiSearch, FiSun, FiUser } from 'react-icons/fi';
 
 import { logoutAction } from '@/modules/auth/actions';
+import type { SafeUser } from '@/modules/auth/types';
 import { useTheme } from '@/shared/providers/ThemeProvider';
 import { IconButton } from '@/shared/ui/IconButton';
 import { Breadcrumbs, DropdownMenu, SearchInput } from '@/shared/ui';
@@ -11,7 +12,13 @@ import type { Breadcrumb } from './AppShell';
 
 import { MobileNavigation } from './MobileNavigation';
 
-export function Header({ breadcrumbs }: { breadcrumbs: readonly Breadcrumb[] }) {
+export function Header({
+  breadcrumbs,
+  user,
+}: {
+  breadcrumbs: readonly Breadcrumb[];
+  user: SafeUser;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const closeMenu = useCallback(() => setMenuOpen(false), []);
@@ -85,7 +92,7 @@ export function Header({ breadcrumbs }: { breadcrumbs: readonly Breadcrumb[] }) 
           </div>
         </div>
       </header>
-      <MobileNavigation open={menuOpen} onClose={closeMenu} />
+      <MobileNavigation open={menuOpen} onClose={closeMenu} user={user} />
     </>
   );
 }
