@@ -16,6 +16,8 @@ test('автопарк показывает 130 записей и фильтру
   await expect(page.getByTestId('vehicle-count')).toContainText('Показано 1 из 130');
   await expect(page.getByTestId('vehicle-card')).toHaveCount(1);
   await expect(page.getByTestId('vehicle-card')).toContainText('Нет данных');
+  await expect(page.getByTestId('vehicle-photo')).toBeVisible();
+  await expect(page.getByRole('img', { name: 'GWM WEY — Красноярск' })).toBeVisible();
 });
 
 test('карточка открывает обзор и вкладку поездок', async ({ page }) => {
@@ -25,9 +27,17 @@ test('карточка открывает обзор и вкладку поез�
 
   await expect(page.getByTestId('vehicle-detail-page')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'GWM WEY', level: 1 })).toBeVisible();
+  await expect(page.getByTestId('vehicle-detail-photo')).toBeVisible();
   await page.getByRole('link', { name: 'Поездки' }).click();
   await expect(page).toHaveURL(/tab=trips/);
   await expect(page.getByText('Поездки ещё не поступали')).toBeVisible();
+});
+
+test('ошибка изображения заменяется фирменной заглушкой', async ({ page }) => {
+  await page.route('**/_next/image**', (route) => route.abort());
+  await page.reload();
+
+  await expect(page.getByTestId('vehicle-photo-placeholder').first()).toBeVisible();
 });
 
 test('отсутствующая позиция объясняется информационным тостом', async ({ page }) => {
@@ -46,6 +56,7 @@ test('мобильный автопарк не переполняет экран
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 
   const card = page.getByTestId('vehicle-card').first();
+  await expect(card.getByTestId('vehicle-photo')).toBeVisible();
   for (const action of await card.getByRole('link').all()) {
     const box = await action.boundingBox();
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);

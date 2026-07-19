@@ -5,6 +5,7 @@ import type { VehicleDetailDto, VehicleStatus } from '../types';
 import { formatDailyPrice, formatOptionalMetric } from '../utils';
 import { VehicleEmptySection } from './VehicleEmptySection';
 import { VehicleOverview } from './VehicleOverview';
+import { VehiclePhoto } from './VehiclePhoto';
 import { VehicleTabs } from './VehicleTabs';
 import type { VehicleTab } from './vehicle-tabs';
 import { Badge, Card, CardContent } from '@/shared/ui';
@@ -37,12 +38,22 @@ export function VehicleDetailPage({ vehicle, activeTab }: { vehicle: VehicleDeta
     <main className="grid min-w-0 gap-5 p-4 sm:p-6" data-testid="vehicle-detail-page">
       <Link href="/vehicles" className="inline-flex min-h-11 w-fit items-center gap-2 text-sm font-semibold text-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"><FiArrowLeft aria-hidden="true" />К автопарку</Link>
       <Card className="overflow-hidden">
-        <header className="flex flex-wrap items-start justify-between gap-4 p-5">
-          <div className="flex min-w-0 gap-3">
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]"><FiTruck aria-hidden="true" className="size-6" /></span>
-            <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{vehicle.model}</h1><Badge tone={status.tone}>{status.label}</Badge></div><p className="mt-1 text-sm text-[var(--color-text-secondary)]">{vehicle.internalNumber}{vehicle.registrationNumber ? ` · ${vehicle.registrationNumber}` : ''}</p><p className="mt-2 flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)]"><FiMapPin aria-hidden="true" />{[vehicle.city, vehicle.office].filter(Boolean).join(' · ')}</p></div>
+        <header className="grid items-stretch md:grid-cols-[minmax(260px,38%)_1fr]">
+          <VehiclePhoto
+            image={vehicle.primaryImage}
+            model={vehicle.model}
+            city={vehicle.city}
+            sizes="(max-width: 768px) 100vw, 38vw"
+            testId="vehicle-detail-photo"
+            className="md:aspect-auto md:min-h-56"
+          />
+          <div className="flex flex-wrap items-start justify-between gap-4 p-5">
+            <div className="flex min-w-0 gap-3">
+              <span className="flex size-12 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]"><FiTruck aria-hidden="true" className="size-6" /></span>
+              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{vehicle.model}</h1><Badge tone={status.tone}>{status.label}</Badge></div><p className="mt-1 text-sm text-[var(--color-text-secondary)]">{vehicle.internalNumber}{vehicle.registrationNumber ? ` · ${vehicle.registrationNumber}` : ''}</p><p className="mt-2 flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)]"><FiMapPin aria-hidden="true" />{[vehicle.city, vehicle.office].filter(Boolean).join(' · ')}</p></div>
+            </div>
+            <div className="text-right"><span className="block text-xs text-[var(--color-text-tertiary)]">Стоимость аренды</span><strong className="text-lg">{formatDailyPrice(vehicle.dailyPriceMinor, vehicle.currency)}</strong></div>
           </div>
-          <div className="text-right"><span className="block text-xs text-[var(--color-text-tertiary)]">Стоимость аренды</span><strong className="text-lg">{formatDailyPrice(vehicle.dailyPriceMinor, vehicle.currency)}</strong></div>
         </header>
         <VehicleTabs vehicleId={vehicle.id} activeTab={activeTab} />
       </Card>

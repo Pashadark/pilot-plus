@@ -15,6 +15,7 @@ import {
 
 import type { VehicleCardDto, VehicleStatus } from '../types';
 import { formatDailyPrice, formatOptionalMetric } from '../utils';
+import { VehiclePhoto } from './VehiclePhoto';
 import { useToast } from '@/shared/providers/ToastProvider';
 import { Badge, Button, Card } from '@/shared/ui';
 
@@ -59,7 +60,13 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
 
   return (
     <Card className="group min-w-0 overflow-hidden transition-[border-color,box-shadow,transform] duration-[var(--motion-fast)] hover:-translate-y-0.5 hover:border-[var(--color-primary)] hover:shadow-[var(--shadow-floating)]">
-      <article className="grid h-full grid-rows-[auto_auto_1fr_auto]" data-testid="vehicle-card">
+      <article className="grid h-full grid-rows-[auto_auto_auto_1fr_auto]" data-testid="vehicle-card">
+        <VehiclePhoto
+          image={vehicle.primaryImage}
+          model={vehicle.model}
+          city={vehicle.city}
+          sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
+        />
         <header className="flex items-start gap-3 border-b border-[var(--color-border)] p-4">
           <span className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]">
             <FiTruck aria-hidden="true" className="size-5" />
