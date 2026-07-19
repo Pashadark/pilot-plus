@@ -48,6 +48,34 @@ export interface VehicleImageManifestRow extends VehicleImageCandidate {
   isPrimary: boolean;
 }
 
+function isVehicleImageManifestRow(value: unknown): value is VehicleImageManifestRow {
+  if (!value || typeof value !== 'object') return false;
+  const row = value as Record<string, unknown>;
+  return (
+    typeof row.sourceKey === 'string' &&
+    typeof row.model === 'string' &&
+    typeof row.city === 'string' &&
+    typeof row.sourceUrl === 'string' &&
+    typeof row.localPath === 'string' &&
+    typeof row.alt === 'string' &&
+    Number.isInteger(row.position) &&
+    typeof row.isPrimary === 'boolean'
+  );
+}
+
+export function parseVehicleImageManifest(source: string): VehicleImageManifestRow[] {
+  const value: unknown = JSON.parse(source);
+  if (!Array.isArray(value)) throw new Error('Манифест фотографий должен быть массивом.');
+
+  for (const [index, row] of value.entries()) {
+    if (!isVehicleImageManifestRow(row)) {
+      throw new Error(`Манифест фотографий содержит неверную запись ${index + 1}.`);
+    }
+  }
+
+  return value;
+}
+
 function decodeHtmlAttribute(value: string) {
   return value
     .replaceAll('&amp;', '&')

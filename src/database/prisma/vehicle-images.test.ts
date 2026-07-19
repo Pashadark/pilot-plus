@@ -4,6 +4,7 @@ import type { FleetImportRow } from './fleet-import';
 import {
   getVehicleSourcePage,
   matchVehicleImages,
+  parseVehicleImageManifest,
   parseVehicleFleetPayload,
   parseVehicleImageCandidates,
 } from './vehicle-images';
@@ -134,5 +135,11 @@ describe('фотографии исходного автопарка', () => {
       'https://autopilotrent.ru/images/stock/wey-80.webp',
     );
     expect(result[0]?.city).toBe('Геленджик');
+  });
+
+  it('отклоняет повреждённый локальный манифест', () => {
+    expect(() => parseVehicleImageManifest('[{"sourceKey":"fleet-001"}]')).toThrow(
+      'неверную запись',
+    );
   });
 });

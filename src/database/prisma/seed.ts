@@ -3,6 +3,10 @@ import { pathToFileURL } from 'node:url';
 
 import { prisma } from './client';
 import { parseFleetSource, type FleetImportRow } from './fleet-import';
+import {
+  parseVehicleImageManifest,
+  type VehicleImageManifestRow,
+} from './vehicle-images';
 import { hashPassword } from '@/services/auth/password';
 
 interface SeedEnvironment {
@@ -56,8 +60,24 @@ interface FleetSeedDatabase {
       where: { sourceKey: string };
       create: VehicleSeedData;
       update: Omit<VehicleSeedData, 'sourceKey'>;
+    }): Promise<{ id: string }>;
+  };
+  vehicleImage: {
+    upsert(args: {
+      where: { vehicleId_position: { vehicleId: string; position: number } };
+      create: VehicleImageSeedData;
+      update: Omit<VehicleImageSeedData, 'vehicleId'>;
     }): Promise<unknown>;
   };
+}
+
+interface VehicleImageSeedData {
+  vehicleId: string;
+  localPath: string;
+  sourceUrl: string;
+  alt: string;
+  position: number;
+  isPrimary: boolean;
 }
 
 interface VehicleSeedData extends FleetImportRow {
@@ -105,7 +125,8 @@ export async function seedFleet(
   database: FleetSeedDatabase,
   adminUserId: string,
   rows: readonly FleetImportRow[],
-): Promise<{ companyId: string; vehicles: number }> {
+  imageRows: readonly VehicleImageManifestRow[] = [],
+): Promise<{ companyId: string; vehicles: number; images: number }> {
   const company = await database.company.upsert({
     where: { slug: 'pilot-demo' },
     create: { name: 'Pilot+ Demo', slug: 'pilot-demo' },
@@ -118,6 +139,14 @@ export async function seedFleet(
     update: { role: 'ADMIN' },
   });
 
+  const imagesBySourceKey = new Map<string, VehicleImageManifestRow[]>();
+  for (const image of imageRows) {
+    const images = imagesBySourceKey.get(image.sourceKey) ?? [];
+    images.push(image);
+    imagesBySourceKey.set(image.sourceKey, images);
+  }
+
+  let imageCount = 0;
   for (const [index, row] of rows.entries()) {
     const data: VehicleSeedData = {
       ...row,
@@ -144,14 +173,40 @@ export async function seedFleet(
       isDemoImport: data.isDemoImport,
     };
 
-    await database.vehicle.upsert({
+    const vehicle = await database.vehicle.upsert({
       where: { sourceKey: row.sourceKey },
       create: data,
       update,
     });
+
+    for (const image of imagesBySourceKey.get(row.sourceKey) ?? []) {
+      const imageData: VehicleImageSeedData = {
+        vehicleId: vehicle.id,
+        localPath: image.localPath,
+        sourceUrl: image.sourceUrl,
+        alt: image.alt,
+        position: image.position,
+        isPrimary: image.isPrimary,
+      };
+
+      await database.vehicleImage.upsert({
+        where: {
+          vehicleId_position: { vehicleId: vehicle.id, position: image.position },
+        },
+        create: imageData,
+        update: {
+          localPath: image.localPath,
+          sourceUrl: image.sourceUrl,
+          alt: image.alt,
+          position: image.position,
+          isPrimary: image.isPrimary,
+        },
+      });
+      imageCount += 1;
+    }
   }
 
-  return { companyId: company.id, vehicles: rows.length };
+  return { companyId: company.id, vehicles: rows.length, images: imageCount };
 }
 
 async function main() {
@@ -161,8 +216,19 @@ async function main() {
     console.info(`Администратор ${admin.email} ${action}.`);
 
     const source = readFileSync(new URL('./data/fleet-source.txt', import.meta.url), 'utf8');
-    const fleet = await seedFleet(prisma, admin.userId, parseFleetSource(source));
-    console.info(`Импортировано автомобилей: ${fleet.vehicles}. Компания: ${fleet.companyId}.`);
+    const imageSource = readFileSync(
+      new URL('./data/vehicle-images.json', import.meta.url),
+      'utf8',
+    );
+    const fleet = await seedFleet(
+      prisma,
+      admin.userId,
+      parseFleetSource(source),
+      parseVehicleImageManifest(imageSource),
+    );
+    console.info(
+      `Импортировано автомобилей: ${fleet.vehicles}; фотографий: ${fleet.images}. Компания: ${fleet.companyId}.`,
+    );
   } finally {
     await prisma.$disconnect();
   }
