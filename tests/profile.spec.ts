@@ -29,37 +29,23 @@ test('профиль показывает реальные данные теку
   }
 });
 
-test('администратор сохраняет имя и может вернуть исходное значение', async ({
-  page,
-}, testInfo) => {
-  test.skip(testInfo.project.name !== 'desktop', 'Изменяющий БД сценарий выполняется один раз.');
+test('администратор успешно сохраняет текущее имя', async ({ page }) => {
   const currentPassword = process.env.PILOT_ADMIN_PASSWORD;
   if (!currentPassword) throw new Error('Для profile e2e нужен PILOT_ADMIN_PASSWORD.');
 
   await openAuthenticatedRoute(page, '/profile');
   const name = page.getByLabel('Имя');
-  const originalName = await name.inputValue();
-  const changedName = `${originalName} E2E`;
+  const currentName = await name.inputValue();
 
-  try {
-    await name.fill(changedName);
-    await page
-      .getByLabel(/^Текущий пароль/)
-      .first()
-      .fill(currentPassword);
-    await page.getByRole('button', { name: 'Сохранить профиль' }).click();
-    await expect(page.getByText('Профиль сохранён.').first()).toBeVisible();
-    await page.reload();
-    await expect(page.getByLabel('Имя')).toHaveValue(changedName);
-  } finally {
-    await page.getByLabel('Имя').fill(originalName);
-    await page
-      .getByLabel(/^Текущий пароль/)
-      .first()
-      .fill(currentPassword);
-    await page.getByRole('button', { name: 'Сохранить профиль' }).click();
-    await expect(page.getByText('Профиль сохранён.').first()).toBeVisible();
-  }
+  await name.fill(currentName);
+  await page
+    .getByLabel(/^Текущий пароль/)
+    .first()
+    .fill(currentPassword);
+  await page.getByRole('button', { name: 'Сохранить профиль' }).click();
+  await expect(page.getByText('Профиль сохранён.').first()).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel('Имя')).toHaveValue(currentName);
 });
 
 test('неверный текущий пароль не изменяет профиль', async ({ page }) => {

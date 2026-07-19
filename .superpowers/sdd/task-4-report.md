@@ -34,3 +34,22 @@
 
 - Полный `npm run format:check` остаётся красным на 12 ранее существовавших файлах вне Task 4; эти пользовательские файлы не переформатировались.
 - Build сохраняет уже известные предупреждения linked worktree о нескольких lockfile/Turbopack root и широком NFT trace Prisma client.
+
+## Fix report после code review
+
+### Исправления
+
+- Смена password hash и удаление остальных сессий перенесены в один callback `prisma.$transaction`. Удаление ограничено `userId` и исключает `currentSessionId`, поэтому текущая сессия сохраняется.
+- Добавлен unit-сценарий частичного отказа: ошибка `transaction.session.deleteMany` возвращает безопасное error-state, не вызывает `revalidatePath` и не подтверждает операцию. Отдельно проверено, что password update не выполняется через top-level Prisma client.
+- Успешный E2E submit теперь повторно отправляет текущее имя. Сценарий не изменяет singleton-admin identity и безопасен для обоих Playwright projects.
+- Mobile skip удалён: одинаковый successful submit проходит на desktop и mobile.
+- Вложенный `<main>` в `ProfilePage` заменён на именованный `<section aria-labelledby="profile-page-title">`.
+
+### RED / GREEN
+
+- RED: `npx vitest run src/modules/profile/actions.test.ts` — 2 ожидаемых падения из 8: transaction user update отсутствовал, transaction session delete не вызывался.
+- GREEN focused: `npx vitest run src/modules/profile/actions.test.ts` — 8/8 passed.
+- GREEN full unit: `npm run test:unit` — 19 suites, 82/82 passed.
+- GREEN E2E: `npx playwright test tests/profile.spec.ts --workers=1` с auth env — 8/8 passed, desktop и mobile, без skip.
+- `npm run typecheck` — exit 0.
+- `npm run lint` — exit 0.

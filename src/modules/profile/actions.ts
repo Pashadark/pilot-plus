@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { prisma } from '@/database/prisma/client';
 import { hashPassword, verifyPassword } from '@/services/auth/password';
-import { deleteOtherSessions, getAuthenticatedSession } from '@/services/auth/session';
+import { getAuthenticatedSession } from '@/services/auth/session';
 
 import type { ProfileActionState } from './types';
 import { parsePasswordInput, parseProfileInput } from './validation';
@@ -92,14 +92,18 @@ export async function changePasswordAction(
     if (!passwordMatches) return PASSWORD_CONFIRMATION_ERROR;
 
     const passwordHash = await hashPassword(input.newPassword);
-    await prisma.user.update({
-      where: { id: authenticated.session.user.id },
-      data: { passwordHash },
+    await prisma.$transaction(async (transaction) => {
+      await transaction.user.update({
+        where: { id: authenticated.session.user.id },
+        data: { passwordHash },
+      });
+      await transaction.session.deleteMany({
+        where: {
+          userId: authenticated.session.user.id,
+          id: { not: authenticated.session.currentSessionId },
+        },
+      });
     });
-    await deleteOtherSessions(
-      authenticated.session.user.id,
-      authenticated.session.currentSessionId,
-    );
 
     revalidatePath('/profile');
     return { status: 'success', message: 'Пароль изменён.' };

@@ -4,14 +4,15 @@ const revalidatePathMock = vi.hoisted(() => vi.fn());
 const prismaMocks = vi.hoisted(() => ({
   userFindUnique: vi.fn(),
   userUpdate: vi.fn(),
-  throttleDeleteMany: vi.fn(),
+  transactionUserUpdate: vi.fn(),
+  transactionThrottleDeleteMany: vi.fn(),
+  transactionSessionDeleteMany: vi.fn(),
   transaction: vi.fn(),
 }));
 const authMocks = vi.hoisted(() => ({
   verifyPassword: vi.fn(),
   hashPassword: vi.fn(),
   getAuthenticatedSession: vi.fn(),
-  deleteOtherSessions: vi.fn(),
 }));
 
 vi.mock('next/cache', () => ({ revalidatePath: revalidatePathMock }));
@@ -21,7 +22,6 @@ vi.mock('@/database/prisma/client', () => ({
       findUnique: prismaMocks.userFindUnique,
       update: prismaMocks.userUpdate,
     },
-    loginThrottle: { deleteMany: prismaMocks.throttleDeleteMany },
     $transaction: prismaMocks.transaction,
   },
 }));
@@ -31,7 +31,6 @@ vi.mock('@/services/auth/password', () => ({
 }));
 vi.mock('@/services/auth/session', () => ({
   getAuthenticatedSession: authMocks.getAuthenticatedSession,
-  deleteOtherSessions: authMocks.deleteOtherSessions,
 }));
 
 import { changePasswordAction, updateProfileAction } from './actions';
@@ -71,8 +70,9 @@ describe('действия профиля', () => {
     prismaMocks.transaction.mockImplementation(
       async (callback: (transaction: unknown) => Promise<unknown>) =>
         callback({
-          user: { update: prismaMocks.userUpdate },
-          loginThrottle: { deleteMany: prismaMocks.throttleDeleteMany },
+          user: { update: prismaMocks.transactionUserUpdate },
+          loginThrottle: { deleteMany: prismaMocks.transactionThrottleDeleteMany },
+          session: { deleteMany: prismaMocks.transactionSessionDeleteMany },
         }),
     );
   });
@@ -105,7 +105,7 @@ describe('действия профиля', () => {
     });
     expect(prismaMocks.transaction).not.toHaveBeenCalled();
     expect(prismaMocks.userUpdate).not.toHaveBeenCalled();
-    expect(authMocks.deleteOtherSessions).not.toHaveBeenCalled();
+    expect(prismaMocks.transactionSessionDeleteMany).not.toHaveBeenCalled();
   });
 
   it('безопасно сообщает о занятом email', async () => {
@@ -119,11 +119,11 @@ describe('действия профиля', () => {
   it('обновляет профиль и очищает throttle старого и нового email в транзакции', async () => {
     const result = await updateProfileAction(idle, profileForm());
 
-    expect(prismaMocks.userUpdate).toHaveBeenCalledWith({
+    expect(prismaMocks.transactionUserUpdate).toHaveBeenCalledWith({
       where: { id: 'u1' },
       data: { name: 'Новое имя', email: 'new@example.com' },
     });
-    expect(prismaMocks.throttleDeleteMany).toHaveBeenCalledWith({
+    expect(prismaMocks.transactionThrottleDeleteMany).toHaveBeenCalledWith({
       where: { email: { in: ['old@example.com', 'new@example.com'] } },
     });
     expect(revalidatePathMock).toHaveBeenCalledWith('/profile');
@@ -134,13 +134,32 @@ describe('действия профиля', () => {
     const result = await changePasswordAction(idle, passwordForm());
 
     expect(authMocks.hashPassword).toHaveBeenCalledWith('Новый пароль 2026');
-    expect(prismaMocks.userUpdate).toHaveBeenCalledWith({
+    expect(prismaMocks.transactionUserUpdate).toHaveBeenCalledWith({
       where: { id: 'u1' },
       data: { passwordHash: 'new-hash' },
     });
-    expect(authMocks.deleteOtherSessions).toHaveBeenCalledWith('u1', 'session-current');
+    expect(prismaMocks.transactionSessionDeleteMany).toHaveBeenCalledWith({
+      where: { userId: 'u1', id: { not: 'session-current' } },
+    });
+    expect(prismaMocks.userUpdate).not.toHaveBeenCalled();
     expect(revalidatePathMock).toHaveBeenCalledWith('/profile');
     expect(result).toEqual({ status: 'success', message: 'Пароль изменён.' });
+  });
+
+  it('не подтверждает смену пароля при отказе удаления других сессий в транзакции', async () => {
+    prismaMocks.transactionSessionDeleteMany.mockRejectedValue(new Error('session delete failed'));
+
+    const result = await changePasswordAction(idle, passwordForm());
+
+    expect(prismaMocks.transaction).toHaveBeenCalledOnce();
+    expect(prismaMocks.transactionUserUpdate).toHaveBeenCalledOnce();
+    expect(prismaMocks.transactionSessionDeleteMany).toHaveBeenCalledOnce();
+    expect(prismaMocks.userUpdate).not.toHaveBeenCalled();
+    expect(revalidatePathMock).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      status: 'error',
+      message: 'Не удалось изменить пароль. Попробуйте снова.',
+    });
   });
 
   it('не возвращает пароли в состоянии ошибки', async () => {
