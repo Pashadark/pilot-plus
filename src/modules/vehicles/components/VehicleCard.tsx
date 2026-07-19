@@ -125,10 +125,11 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
             <Button
               variant="secondary"
               size="sm"
-              aria-disabled={!vehicle.telemetry.hasPosition}
+              aria-label={
+                vehicle.telemetry.hasPosition ? 'Показать на карте' : 'Почему автомобиль не на карте'
+              }
               leadingIcon={<FiMap aria-hidden="true" />}
               onClick={explainMissingPosition}
-              className={!vehicle.telemetry.hasPosition ? 'opacity-60' : ''}
             >
               На карте
             </Button>

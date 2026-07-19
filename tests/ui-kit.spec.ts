@@ -1,5 +1,29 @@
 import { expect, test } from '@playwright/test';
 
+import { openAuthenticatedRoute } from './helpers/auth';
+
+test.beforeEach(async ({ page }) => {
+  await openAuthenticatedRoute(page, '/ui-kit');
+});
+
+test('витрина запускает четыре типа системных уведомлений', async ({ page }) => {
+  for (const [button, title] of [
+    ['Показать успех', 'Операция выполнена'],
+    ['Показать предупреждение', 'Требуется внимание'],
+    ['Показать ошибку', 'Произошла ошибка'],
+    ['Показать информацию', 'Новая информация'],
+  ] as const) {
+    await page.getByRole('button', { name: button }).click();
+    await expect(page.getByText(title)).toBeVisible();
+  }
+
+  const danger = page.locator('[data-toast-tone="danger"]');
+  const close = danger.getByRole('button', { name: 'Закрыть уведомление' });
+  await close.focus();
+  await page.keyboard.press('Enter');
+  await expect(danger).toBeHidden();
+});
+
 test('светлая тема использует визуальные токены Mosaic', async ({ page }) => {
   await page.goto('/ui-kit');
   await page.evaluate(() => localStorage.setItem('pilot-theme', 'light'));
