@@ -121,12 +121,29 @@ model Vehicle {
   fuelRecords        FuelRecord[]
   maintenanceRecords MaintenanceRecord[]
   documents          VehicleDocument[]
+  images             VehicleImage[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
   @@unique([companyId, internalNumber])
   @@index([companyId, status])
   @@index([companyId, city])
+}
+
+model VehicleImage {
+  id        String   @id @default(cuid())
+  vehicleId String
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  localPath String
+  sourceUrl String
+  alt       String
+  position  Int      @default(0)
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([vehicleId, position])
+  @@index([vehicleId, isPrimary])
 }
 
 model VehiclePosition {

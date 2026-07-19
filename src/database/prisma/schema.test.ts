@@ -25,4 +25,13 @@ describe('доменная схема автопарка', () => {
     expect(schema).toContain('model VehicleDocument {');
     expect(schema).toContain('@@index([vehicleId, recordedAt])');
   });
+
+  it('хранит локальные и исходные адреса фотографий автомобиля', () => {
+    expect(schema).toContain('model VehicleImage {');
+    expect(schema).toMatch(/images\s+VehicleImage\[\]/);
+    expect(schema).toMatch(/localPath\s+String/);
+    expect(schema).toMatch(/sourceUrl\s+String/);
+    expect(schema).toContain('@@unique([vehicleId, position])');
+    expect(schema).toContain('@@index([vehicleId, isPrimary])');
+  });
 });
