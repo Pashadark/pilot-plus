@@ -1,11 +1,15 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 
 export interface GlobalShortcutCallbacks {
-  focusSearch?: () => void;
+  focusSearch?: () => boolean;
   closeOverlay?: () => void;
   toggleTheme?: () => void;
+}
+
+interface GlobalShortcutCallbacksRef {
+  current: GlobalShortcutCallbacks;
 }
 
 interface GlobalShortcutEvent {
@@ -51,9 +55,8 @@ export function createGlobalShortcutHandler(callbacks: GlobalShortcutCallbacks) 
         callbacks.focusSearch?.();
         break;
       case '/':
-        if (callbacks.focusSearch) {
+        if (callbacks.focusSearch?.()) {
           event.preventDefault();
-          callbacks.focusSearch();
         }
         break;
       case 'escape':
@@ -63,19 +66,19 @@ export function createGlobalShortcutHandler(callbacks: GlobalShortcutCallbacks) 
   };
 }
 
-export function createGlobalShortcutListener(getCallbacks: () => GlobalShortcutCallbacks) {
-  return (event: GlobalShortcutEvent) => createGlobalShortcutHandler(getCallbacks())(event);
+export function createGlobalShortcutListener(callbacksRef: GlobalShortcutCallbacksRef) {
+  return (event: GlobalShortcutEvent) => createGlobalShortcutHandler(callbacksRef.current)(event);
 }
 
 export function useGlobalShortcuts(callbacks: GlobalShortcutCallbacks) {
   const callbacksRef = useRef(callbacks);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     callbacksRef.current = callbacks;
   });
 
   useEffect(() => {
-    const handleKeyDown = createGlobalShortcutListener(() => callbacksRef.current);
+    const handleKeyDown = createGlobalShortcutListener(callbacksRef);
     window.addEventListener('keydown', handleKeyDown);
 
     return () => window.removeEventListener('keydown', handleKeyDown);

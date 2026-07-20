@@ -63,8 +63,22 @@ export function ShellFrame({
   const focusSearch = useCallback(() => {
     const search = Array.from(
       document.querySelectorAll<HTMLInputElement>('input[type="search"]'),
-    ).find((input) => !input.disabled && input.getClientRects().length > 0);
-    search?.focus();
+    ).find((input) => {
+      const style = window.getComputedStyle(input);
+      return (
+        !input.disabled &&
+        !input.readOnly &&
+        input.getAttribute('aria-disabled') !== 'true' &&
+        input.getAttribute('aria-hidden') !== 'true' &&
+        input.getClientRects().length > 0 &&
+        style.display !== 'none' &&
+        style.visibility !== 'hidden'
+      );
+    });
+    if (!search) return false;
+
+    search.focus();
+    return document.activeElement === search;
   }, []);
 
   useGlobalShortcuts({

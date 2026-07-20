@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createGlobalShortcutHandler, createGlobalShortcutListener } from './useGlobalShortcuts';
+import {
+  createGlobalShortcutHandler,
+  createGlobalShortcutListener,
+  type GlobalShortcutCallbacks,
+} from './useGlobalShortcuts';
 
 function createKeyboardEvent(
   key: string,
@@ -34,7 +38,7 @@ describe('createGlobalShortcutHandler', () => {
   });
 
   it.each(['F', 'f', '/'])('переводит фокус в поиск по %s', (key) => {
-    const focusSearch = vi.fn();
+    const focusSearch = vi.fn(() => true);
     const handler = createGlobalShortcutHandler({ focusSearch });
 
     handler(createKeyboardEvent(key));
@@ -93,24 +97,39 @@ describe('createGlobalShortcutHandler', () => {
 
   it('предотвращает ввод слэша только когда доступен поиск', () => {
     const withSearch = createKeyboardEvent('/');
-    createGlobalShortcutHandler({ focusSearch: vi.fn() })(withSearch);
+    createGlobalShortcutHandler({ focusSearch: vi.fn(() => true) })(withSearch);
     expect(withSearch.preventDefault).toHaveBeenCalledOnce();
+
+    const withoutVisibleSearch = createKeyboardEvent('/');
+    createGlobalShortcutHandler({ focusSearch: vi.fn(() => false) })(withoutVisibleSearch);
+    expect(withoutVisibleSearch.preventDefault).not.toHaveBeenCalled();
 
     const withoutSearch = createKeyboardEvent('/');
     createGlobalShortcutHandler({})(withoutSearch);
     expect(withoutSearch.preventDefault).not.toHaveBeenCalled();
   });
 
-  it('проверяет актуальное наличие поиска в момент события', () => {
-    let callbacks = { focusSearch: vi.fn() };
-    const listener = createGlobalShortcutListener(() => callbacks);
+  it('читает актуальные callbacks из того же ref, который использует hook', () => {
+    const firstToggle = vi.fn();
+    const nextToggle = vi.fn();
+    const callbacksRef: { current: GlobalShortcutCallbacks } = {
+      current: { focusSearch: vi.fn(() => true), toggleTheme: firstToggle },
+    };
+    const listener = createGlobalShortcutListener(callbacksRef);
     const withSearch = createKeyboardEvent('/');
     listener(withSearch);
     expect(withSearch.preventDefault).toHaveBeenCalledOnce();
 
-    callbacks = {} as typeof callbacks;
+    listener(createKeyboardEvent('t'));
+    expect(firstToggle).toHaveBeenCalledOnce();
+
+    callbacksRef.current = { focusSearch: vi.fn(() => false), toggleTheme: nextToggle };
     const withoutSearch = createKeyboardEvent('/');
     listener(withoutSearch);
     expect(withoutSearch.preventDefault).not.toHaveBeenCalled();
+
+    listener(createKeyboardEvent('t'));
+    expect(firstToggle).toHaveBeenCalledOnce();
+    expect(nextToggle).toHaveBeenCalledOnce();
   });
 });

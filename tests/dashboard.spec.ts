@@ -192,9 +192,7 @@ test('мобильная оболочка показывает прокручи�
   await expect.poll(() => breadcrumbs.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
 });
 
-test('глобальная клавиша T переключает тему, но не срабатывает во время ввода', async ({
-  page,
-}) => {
+test('глобальные клавиши учитывают тему, ввод и наличие видимого поиска', async ({ page }) => {
   await page.keyboard.press('t');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
@@ -203,6 +201,24 @@ test('глобальная клавиша T переключает тему, н�
   await page.keyboard.press('t');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(search).toHaveValue('t');
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/');
+  const initialTheme = await page.locator('html').getAttribute('data-theme');
+  await page.keyboard.press('t');
+  await expect(page.locator('html')).not.toHaveAttribute('data-theme', initialTheme ?? 'light');
+
+  const defaultPrevented = await page.evaluate(() => {
+    const event = new KeyboardEvent('keydown', {
+      key: '/',
+      bubbles: true,
+      cancelable: true,
+    });
+    document.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+
+  expect(defaultPrevented).toBe(false);
 });
 
 test('мобильные плавающие элементы управления доступны с клавиатуры и в тёмной теме', async ({

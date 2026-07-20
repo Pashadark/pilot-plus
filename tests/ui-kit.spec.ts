@@ -239,7 +239,28 @@ test('всплывающие слои и поля доступны с клави
   await expect(vehicleName).toHaveAttribute('aria-invalid', 'true');
   await expect(vehicleName).toHaveAttribute('aria-describedby', /hint.*error|error.*hint/);
   await expect(page.getByRole('switch', { name: 'Только онлайн' })).toBeVisible();
-  await expect(page.getByRole('searchbox', { name: 'Поиск компонентов' })).toBeVisible();
+  const search = page.getByRole('searchbox', { name: 'Поиск компонентов' });
+  await expect(search).toBeVisible();
+
+  const initialTheme = await page.locator('html').getAttribute('data-theme');
+  await page.keyboard.press('t');
+  await expect(page.locator('html')).not.toHaveAttribute('data-theme', initialTheme ?? 'light');
+
+  const slashWasPrevented = await page.evaluate(() => {
+    const event = new KeyboardEvent('keydown', {
+      key: '/',
+      bubbles: true,
+      cancelable: true,
+    });
+    document.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  expect(slashWasPrevented).toBe(true);
+  await expect(search).toBeFocused();
+
+  await search.evaluate((element) => element.blur());
+  await page.keyboard.press('f');
+  await expect(search).toBeFocused();
 });
 
 test('блокировка прокрутки сохраняется пока открыт другой слой', async ({ page }) => {

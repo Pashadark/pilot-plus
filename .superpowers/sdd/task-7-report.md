@@ -27,10 +27,27 @@ DONE
 - `npm run typecheck` — PASS, exit 0.
 - `npm run test:unit` — PASS, 22 файла и 107/107 тестов.
 - `npm run build` — PASS, Next.js 16.2.10 production build.
-- `npx playwright test tests/dashboard.spec.ts tests/ui-kit.spec.ts --workers=1` — 95/96 PASS; единственный существующий desktop toast-тест флейкнул один раз, его mobile-вариант прошёл.
-- Изолированный повтор desktop toast-теста — PASS, 1/1.
+- `npx playwright test tests/dashboard.spec.ts tests/ui-kit.spec.ts --workers=1` — PASS, единый чистый прогон 96/96 в desktop и mobile.
 - Drawer focus-wrap после актуализации последнего focusable — PASS в desktop и mobile.
 - `git diff --check` и scoped Prettier check — выполняются перед commit.
+
+## Post-review fix
+
+### Исправления
+
+- Контракт `focusSearch` изменён на `() => boolean`: `/` вызывает callback первым и отменяет событие только при фактически успешной фокусировке.
+- `ShellFrame` исключает disabled, readonly, `aria-disabled`, `aria-hidden`, `display: none`, `visibility: hidden` и не имеющие client rect поля; `true` возвращается только когда найденное поле стало `document.activeElement`.
+- Listener теперь получает тот же ref-object, что использует hook, и читает `ref.current` на каждом событии.
+- Ref синхронизируется в `useLayoutEffect`, поэтому актуальные callbacks устанавливаются до paint и следующего пользовательского события.
+- E2E различает видимый поиск компонентов и настольный dashboard, где responsive search-поля скрыты. `/` и `F` фокусируют правильное поле; cancelable `/` без видимого поиска остаётся неотменённым.
+
+### RED / GREEN
+
+- Unit RED: 2 ожидаемых падения — callback с `false` всё ещё вызывал `preventDefault`, listener ожидал getter вместо ref-object.
+- Browser RED: desktop dashboard получил `defaultPrevented: true`, ожидалось `false`.
+- Unit GREEN: `useGlobalShortcuts.test.ts` — 16/16 PASS.
+- Focused E2E GREEN: shortcut/search assertions — 4/4 PASS в desktop и mobile.
+- Full GREEN: `npm run test:unit` — 107/107; lint и typecheck — exit 0; полный Playwright — единый чистый 96/96 PASS.
 
 ## Известные предупреждения
 
