@@ -112,13 +112,18 @@ React Compiler включён в `next.config.ts`.
 - главное фото в карточке и профиле автомобиля, русский `alt` и фирменная заглушка при ошибке файла;
 - честные пустые состояния пробега, топлива, GPS, поездок, маршрутов, событий, обслуживания и документов;
 - глобальные тост-уведомления `success`, `warning`, `danger`, `info` справа сверху и на всю доступную ширину телефона;
-- 60 unit-тестов auth/core/database/vehicles/toasts и browser-проверки автопарка, фотографий и UI-kit.
+- защищённый маршрут `/profile`: изменение имени и email с подтверждением текущим паролем, смена пароля и завершение остальных сессий;
+- защищённый маршрут `/system`: параллельная безопасная проверка PostgreSQL, Redis и MQTT со статусом, задержкой и временем проверки;
+- фирменные 404-страницы, а также global, protected и vehicle error boundaries с безопасным кодом обращения и повтором через `unstable_retry` Next.js 16.2;
+- unit- и browser-проверки auth, profile, system states, system health, автопарка, фотографий и UI-kit.
 
 ### Что является демонстрацией
 
 Бизнес-данные дашборда и карты сейчас являются типизированными fixtures. Поиск и фильтры на мобильной карте работают только с этими демонстрационными данными. Раздел автомобилей уже читает PostgreSQL и локальные фотографии, но импортированный каталог содержит характеристики и цену без госномеров, VIN, координат и телеметрии. Поэтому отсутствующие показатели не заменяются случайными значениями. Выбор компании, аккаунт, редактирование автомобиля и бронирование ещё не выполняют прикладных операций.
 
-В локальную PostgreSQL применены миграции авторизации, tenant-модели, транспорта и будущей истории. Телематические таблицы созданы, но остаются пустыми до подключения реального ingestion-потока. Redis и MQTT определены в Compose, но приложение к ним ещё не подключено.
+В локальную PostgreSQL применены миграции авторизации, tenant-модели, транспорта и будущей истории. Телематические таблицы созданы, но остаются пустыми до подключения реального ingestion-потока. Redis и MQTT определены в Compose и проверяются страницей `/system` через TCP, но приложение пока не получает и не публикует через них телеметрию.
+
+`/system` — диагностический экран, а не production-мониторинг: он не заменяет сбор метрик, централизованные логи, алерты, внешний uptime-monitoring и runbook. Экран не передаёт в браузер адреса сервисов или значения переменных окружения.
 
 ### Известный технический долг
 
@@ -241,6 +246,8 @@ modules/vehicles/
 | Mosquitto           | приём MQTT-телеметрии                | 1883           |
 | Mosquitto WebSocket | MQTT для совместимых web-клиентов    | 9001           |
 
+Проверка `/system` использует `DATABASE_URL` для PostgreSQL, а Redis и MQTT настраивает переменными `REDIS_HOST`, `REDIS_PORT`, `MQTT_HOST`, `MQTT_PORT`. В development при отсутствии Redis/MQTT-переменных применяются только локальные адреса `127.0.0.1:6379` и `127.0.0.1:1883`; в production адрес и порт каждого из этих сервисов должны задаваться явно. Значения переменных остаются только на сервере и не выводятся в логи или интерфейс.
+
 Целевой путь телеметрии:
 
 ```text
@@ -301,11 +308,11 @@ npm run start
 
 # проверки
 npm run lint
+npm run typecheck
 npm run test:unit
-npm run test:e2e:auth
-npx playwright test tests/vehicles.spec.ts --workers=1
-npx tsc --noEmit
-npx prettier --check "src/**/*.{ts,tsx,css}"
+npx playwright test tests/auth.spec.ts tests/system-states.spec.ts tests/profile.spec.ts tests/system-health.spec.ts tests/dashboard.spec.ts tests/ui-kit.spec.ts tests/vehicles.spec.ts --workers=1
+npx prettier --check README.md docs/PROJECT_GUIDE.md
+npm run format:check
 npx prisma validate
 npx prisma migrate deploy
 npm run db:seed
@@ -314,7 +321,7 @@ npm run db:seed
 npm run vehicles:sync-images
 ```
 
-`npm run build` в Next.js 16 не заменяет ESLint. В CI эти проверки должны выполняться отдельными шагами.
+`npm run build` в Next.js 16 не заменяет ESLint. Для полной локальной регрессии после изменений выполняются `npm run lint`, `npm run typecheck`, `npm run test:unit`, указанный последовательный Playwright-набор и `npm run build`; credentialed-проверка `tests/auth.spec.ts` входит в этот набор и не должна пропускаться. `npm run format:check` проверяет исходники, тесты и корневые файлы; вложенные Markdown-документы проверяются явной командой выше. В CI эти проверки должны выполняться отдельными шагами.
 
 Перед изменением Next.js-кода необходимо читать релевантный локальный гайд из `node_modules/next/dist/docs/`: установленная версия содержит отличия от старых Next.js API и соглашений.
 
@@ -382,7 +389,8 @@ npm run vehicles:sync-images
 
 - unit, integration и e2e tests;
 - CI/CD;
-- health checks и observability;
+- production health checks, observability, алерты и runbook (текущий `/system` — только диагностический экран);
+- PWA: offline-стратегия, installability и согласованные сценарии без сети;
 - резервное копирование;
 - rate limits и security review;
 - production tile provider;
