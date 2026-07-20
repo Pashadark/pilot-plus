@@ -27,12 +27,18 @@ const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
 
 export function SystemHealthPage({ services }: { services: ServiceHealth[] }) {
   return (
-    <main className="grid min-w-0 gap-5 p-4 sm:p-6" data-testid="system-health-page">
+    <section
+      aria-labelledby="system-health-title"
+      className="grid min-w-0 gap-5 p-4 sm:p-6"
+      data-testid="system-health-page"
+    >
       <div className="min-w-0">
         <p className="text-xs font-semibold tracking-[0.14em] text-[var(--color-primary)] uppercase">
           Инфраструктура
         </p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Состояние системы</h1>
+        <h1 id="system-health-title" className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+          Состояние системы
+        </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-text-secondary)]">
           Текущая доступность основных сервисов Pilot+. Результаты одной проверки не скрывают
           состояние остальных сервисов.
@@ -86,6 +92,6 @@ export function SystemHealthPage({ services }: { services: ServiceHealth[] }) {
           );
         })}
       </section>
-    </main>
+    </section>
   );
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { checkTcpService } from './check-service';
 import { createSystemHealthChecker } from './get-system-health';
 
 function deferred<T>() {
@@ -101,5 +102,32 @@ describe('getSystemHealth', () => {
       port: 1883,
       timeoutMs: 1_000,
     });
+  });
+
+  it('в production без Redis/MQTT env передаёт пустую конфигурацию в реальную TCP-проверку', async () => {
+    const checkTcp = vi.fn(checkTcpService);
+    const productionHealth = createSystemHealthChecker({
+      checkDatabase: vi.fn().mockResolvedValue(healthy),
+      checkTcp,
+      environment: { NODE_ENV: 'production' },
+    });
+
+    const services = await productionHealth();
+
+    expect(checkTcp).toHaveBeenNthCalledWith(1, {
+      host: undefined,
+      port: undefined,
+      timeoutMs: 1_000,
+    });
+    expect(checkTcp).toHaveBeenNthCalledWith(2, {
+      host: undefined,
+      port: undefined,
+      timeoutMs: 1_000,
+    });
+    expect(services.map(({ key, status, latencyMs }) => ({ key, status, latencyMs }))).toEqual([
+      { key: 'postgresql', status: 'healthy', latencyMs: 4 },
+      { key: 'redis', status: 'unconfigured', latencyMs: 0 },
+      { key: 'mqtt', status: 'unconfigured', latencyMs: 0 },
+    ]);
   });
 });

@@ -26,6 +26,7 @@ async function close(server: ReturnType<typeof createServer>) {
 
 afterEach(async () => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   await Promise.all([...openServers].map(close));
 });
 
@@ -56,6 +57,8 @@ describe('checkTcpService', () => {
     { host: undefined, port: 6379 },
     { host: '127.0.0.1', port: undefined },
   ])('возвращает unconfigured при неполной конфигурации', async (config) => {
+    vi.spyOn(Date, 'now').mockReturnValueOnce(100).mockReturnValueOnce(125);
+
     await expect(checkTcpService({ ...config, timeoutMs: 250 })).resolves.toMatchObject({
       status: 'unconfigured',
       latencyMs: 0,

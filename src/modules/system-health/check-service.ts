@@ -30,7 +30,13 @@ export async function checkTcpService(
   connectTcp: ConnectTcp = createConnection,
 ): Promise<ServiceHealthStatus> {
   const startedAt = Date.now();
-  if (!host || !port) return result('unconfigured', startedAt);
+  if (!host || !port) {
+    return {
+      status: 'unconfigured',
+      latencyMs: 0,
+      checkedAt: new Date().toISOString(),
+    };
+  }
 
   const socket = connectTcp({ host, port });
 
