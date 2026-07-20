@@ -23,7 +23,7 @@ test('автопарк показывает 130 записей и фильтру
 test('карточка открывает обзор и вкладку поездок', async ({ page }) => {
   await page.getByRole('searchbox', { name: 'Поиск автомобилей' }).fill('GWM WEY');
   await page.getByLabel('Город').selectOption({ label: 'Красноярск' });
-  await page.getByRole('link', { name: 'Открыть' }).click();
+  await page.getByRole('link', { name: 'Открыть', exact: true }).click();
 
   await expect(page.getByTestId('vehicle-detail-page')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'GWM WEY', level: 1 })).toBeVisible();
