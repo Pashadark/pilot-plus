@@ -1,6 +1,5 @@
 'use client';
 
-import { useCallback, useState } from 'react';
 import { FiBell, FiLogOut, FiMenu, FiMoon, FiSearch, FiSun, FiUser } from 'react-icons/fi';
 
 import { logoutAction } from '@/modules/auth/actions';
@@ -15,26 +14,32 @@ import { MobileNavigation } from './MobileNavigation';
 export function Header({
   breadcrumbs,
   user,
+  mobileNavigationOpen,
+  onOpenMobileNavigation,
+  onCloseMobileNavigation,
 }: {
   breadcrumbs: readonly Breadcrumb[];
   user: SafeUser;
+  mobileNavigationOpen: boolean;
+  onOpenMobileNavigation: () => void;
+  onCloseMobileNavigation: () => void;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
-  const closeMenu = useCallback(() => setMenuOpen(false), []);
 
   return (
     <>
       <header className="fixed inset-x-0 top-0 z-40 flex h-[var(--header-height)] items-center border-b bg-[var(--color-surface)] px-4 md:hidden">
         <div className="flex w-full items-center justify-between md:px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="md:hidden">
-              <IconButton label="Открыть меню" variant="ghost" onClick={() => setMenuOpen(true)}>
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <div className="shrink-0 md:hidden">
+              <IconButton label="Открыть меню" variant="ghost" onClick={onOpenMobileNavigation}>
                 <FiMenu aria-hidden="true" className="size-5" />
               </IconButton>
             </div>
-            <span className="font-semibold text-[var(--color-text)] md:hidden">Pilot+</span>
-            <div className="hidden md:block">
+            <div
+              data-testid="mobile-breadcrumbs"
+              className="scrollbar-hidden min-w-0 flex-1 overflow-x-auto overscroll-x-contain [&_li]:shrink-0 [&_ol]:w-max [&_ol]:flex-nowrap"
+            >
               <Breadcrumbs items={breadcrumbs} />
             </div>
           </div>
@@ -92,7 +97,13 @@ export function Header({
           </div>
         </div>
       </header>
-      <MobileNavigation open={menuOpen} onClose={closeMenu} user={user} />
+      <MobileNavigation
+        open={mobileNavigationOpen}
+        onOpenChange={(open) => {
+          if (!open) onCloseMobileNavigation();
+        }}
+        user={user}
+      />
     </>
   );
 }

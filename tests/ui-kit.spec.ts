@@ -53,6 +53,43 @@ test('каталог сохраняет плотность Mosaic на теле�
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });
 
+test('кнопка возврата наверх появляется после 400 пикселей прокрутки', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/ui-kit');
+  const scrollToTop = page.getByRole('button', { name: 'Наверх' });
+
+  await expect(scrollToTop).toBeHidden();
+  await page.evaluate(() => window.scrollTo(0, 500));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(400);
+  await expect(scrollToTop).toBeVisible();
+
+  await scrollToTop.click();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+});
+
+test('кнопка возврата наверх учитывает уменьшенное движение', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/ui-kit');
+  await page.evaluate(() => window.scrollTo(0, 500));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(400);
+  await page.evaluate(() => {
+    const originalScrollTo = window.scrollTo.bind(window);
+    window.scrollTo = ((optionsOrX: ScrollToOptions | number, y?: number) => {
+      if (typeof optionsOrX === 'object') {
+        document.documentElement.dataset.lastScrollBehavior = optionsOrX.behavior ?? 'auto';
+        originalScrollTo(optionsOrX);
+      } else {
+        originalScrollTo(optionsOrX, y ?? 0);
+      }
+    }) as typeof window.scrollTo;
+  });
+
+  await page.getByRole('button', { name: 'Наверх' }).click();
+
+  await expect(page.locator('html')).toHaveAttribute('data-last-scroll-behavior', 'auto');
+});
+
 test('дизайн-система показывает все утверждённые разделы', async ({ page }) => {
   await page.goto('/ui-kit');
   for (const [id, name] of [

@@ -177,6 +177,34 @@ test('кнопка мобильного меню имеет область не 
   expect(box?.height).toBeGreaterThanOrEqual(44);
 });
 
+test('мобильная оболочка показывает прокручиваемые хлебные крошки', async ({ page }) => {
+  const breadcrumbs = page.getByTestId('mobile-breadcrumbs');
+
+  await expect(breadcrumbs).toBeVisible();
+  await expect(breadcrumbs.getByRole('navigation', { name: 'Хлебные крошки' })).toContainText(
+    'Панель управления',
+  );
+  await expect(breadcrumbs).toHaveCSS('overflow-x', 'auto');
+  expect(await breadcrumbs.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(
+    true,
+  );
+  await breadcrumbs.evaluate((element) => element.scrollTo({ left: element.scrollWidth }));
+  await expect.poll(() => breadcrumbs.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+});
+
+test('глобальная клавиша T переключает тему, но не срабатывает во время ввода', async ({
+  page,
+}) => {
+  await page.keyboard.press('t');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
+  const search = page.getByRole('searchbox', { name: 'Поиск транспорта' });
+  await search.focus();
+  await page.keyboard.press('t');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(search).toHaveValue('t');
+});
+
 test('мобильные плавающие элементы управления доступны с клавиатуры и в тёмной теме', async ({
   page,
 }) => {
@@ -195,7 +223,7 @@ test('общий drawer удерживает фокус, блокирует пр
   await menuButton.press('Enter');
   const dialog = page.getByRole('dialog', { name: 'Мобильная навигация' });
   const closeButton = dialog.getByRole('button', { name: 'Закрыть меню' });
-  const lastLink = dialog.getByRole('link', { name: 'Дизайн-система' });
+  const lastLink = dialog.getByRole('link', { name: 'Открыть профиль' });
 
   await expect(dialog).toBeVisible();
   await expect(closeButton).toBeFocused();

@@ -10,27 +10,27 @@ import { Sidebar } from './Sidebar';
 
 interface MobileNavigationProps {
   open: boolean;
-  onClose: () => void;
+  onOpenChange: (open: boolean) => void;
   user: SafeUser;
 }
 
-export function MobileNavigation({ open, onClose, user }: MobileNavigationProps) {
+export function MobileNavigation({ open, onOpenChange, user }: MobileNavigationProps) {
+  const close = () => onOpenChange(false);
+
   return (
     <div className="md:hidden">
       <Drawer
         open={open}
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen) onClose();
-        }}
+        onOpenChange={onOpenChange}
         title="Мобильная навигация"
         className="mr-auto ml-0 max-w-[20rem] rounded-l-none rounded-r-[var(--radius-panel)] bg-[var(--color-navigation)] text-[var(--color-text-inverse)]"
       >
         <div className="mb-5 flex justify-end">
-          <IconButton label="Закрыть меню" variant="ghost" onClick={onClose}>
+          <IconButton label="Закрыть меню" variant="ghost" onClick={close}>
             <FiX aria-hidden="true" className="size-5" />
           </IconButton>
         </div>
-        <Sidebar onNavigate={onClose} user={user} />
+        <Sidebar onNavigate={close} user={user} />
       </Drawer>
     </div>
   );
