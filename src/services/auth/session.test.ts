@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { hashSessionToken } from './session-token';
+
 const cookieMock = vi.hoisted(() => ({
   value: undefined as string | undefined,
   set: vi.fn(),
@@ -21,10 +23,12 @@ vi.mock('next/headers', () => ({
 vi.mock('@/database/prisma/client', () => ({ prisma: { session: sessionRepository } }));
 
 import {
+  commitSessionRotationCookie,
   createSession,
   deleteOtherSessions,
   deleteSession,
   getAuthenticatedSession,
+  prepareSessionRotation,
   readSession,
   SESSION_COOKIE_NAME,
   SESSION_TTL_MS,
@@ -78,12 +82,13 @@ describe('серверная сессия', () => {
     });
   });
 
-  it('возвращает идентификатор текущей сессии отдельно от безопасного пользователя', async () => {
+  it('возвращает server-only precondition текущей сессии без bearer token', async () => {
     cookieMock.value = 'session-token';
+    const expiresAt = new Date(Date.now() + 60_000);
     sessionRepository.findUnique.mockResolvedValue({
       id: 'session-1',
       tokenHash: 'secret-token-hash',
-      expiresAt: new Date(Date.now() + 60_000),
+      expiresAt,
       user: {
         id: 'user-1',
         email: 'admin@example.com',
@@ -104,9 +109,37 @@ describe('серверная сессия', () => {
         role: 'ADMIN',
       },
       currentSessionId: 'session-1',
+      currentSessionTokenHash: 'secret-token-hash',
+      currentSessionExpiresAt: expiresAt,
     });
-    expect(JSON.stringify(result)).not.toContain('secret-token-hash');
+    expect(JSON.stringify(result)).not.toContain('session-token');
     expect(JSON.stringify(result)).not.toContain('secret-password-hash');
+  });
+
+  it('готовит новый bearer и выставляет cookie только отдельным commit-шагом', async () => {
+    const expiresAt = new Date('2026-07-27T12:00:00.000Z');
+
+    const rotation = prepareSessionRotation(expiresAt);
+
+    expect(rotation.tokenHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(rotation.expiresAt).toBe(expiresAt);
+    expect(cookieMock.set).not.toHaveBeenCalled();
+
+    await commitSessionRotationCookie(rotation);
+
+    const token = cookieMock.set.mock.calls[0]?.[1];
+    expect(typeof token).toBe('string');
+    expect(hashSessionToken(token)).toBe(rotation.tokenHash);
+    expect(cookieMock.set).toHaveBeenCalledWith(
+      SESSION_COOKIE_NAME,
+      token,
+      expect.objectContaining({
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        expires: expiresAt,
+      }),
+    );
   });
 
   it('удаляет все сессии пользователя, кроме текущей', async () => {

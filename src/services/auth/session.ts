@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { cookies } from 'next/headers';
 
 import { prisma } from '@/database/prisma/client';
@@ -8,6 +10,14 @@ import { createSessionToken, hashSessionToken } from './session-token';
 export interface AuthenticatedSession {
   user: SafeUser;
   currentSessionId: string;
+  currentSessionTokenHash: string;
+  currentSessionExpiresAt: Date;
+}
+
+export interface PreparedSessionRotation {
+  readonly token: string;
+  readonly tokenHash: string;
+  readonly expiresAt: Date;
 }
 
 export const SESSION_COOKIE_NAME = 'pilot-session';
@@ -28,13 +38,29 @@ function clearSessionCookie(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   }
 }
 
-export async function createSession(userId: string): Promise<void> {
+export function prepareSessionRotation(expiresAt: Date): PreparedSessionRotation {
   const { token, tokenHash } = createSessionToken();
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  return { token, tokenHash, expiresAt };
+}
 
-  await prisma.session.create({ data: { userId, tokenHash, expiresAt } });
+export async function commitSessionRotationCookie(
+  rotation: PreparedSessionRotation,
+): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, token, { ...cookieOptions, expires: expiresAt });
+  cookieStore.set(SESSION_COOKIE_NAME, rotation.token, {
+    ...cookieOptions,
+    expires: rotation.expiresAt,
+  });
+}
+
+export async function createSession(userId: string): Promise<void> {
+  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  const rotation = prepareSessionRotation(expiresAt);
+
+  await prisma.session.create({
+    data: { userId, tokenHash: rotation.tokenHash, expiresAt: rotation.expiresAt },
+  });
+  await commitSessionRotationCookie(rotation);
 }
 
 export async function getAuthenticatedSession(): Promise<AuthenticatedSession | null> {
@@ -69,6 +95,8 @@ export async function getAuthenticatedSession(): Promise<AuthenticatedSession | 
         role: 'ADMIN',
       },
       currentSessionId: session.id,
+      currentSessionTokenHash: session.tokenHash,
+      currentSessionExpiresAt: session.expiresAt,
     };
   } catch {
     return null;
