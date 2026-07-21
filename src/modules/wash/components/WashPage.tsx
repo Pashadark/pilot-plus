@@ -1,6 +1,6 @@
 import { FiDroplet } from 'react-icons/fi';
 
-import type { WashRecordDto } from '../server/queries';
+import type { LatestCompletedWashDto, WashRecordDto } from '../server/queries';
 import type { VehicleOptionDto } from '@/modules/vehicles/types';
 
 import { WashWorkspace } from './WashWorkspace';
@@ -8,9 +8,11 @@ import { WashWorkspace } from './WashWorkspace';
 export function WashPage({
   records,
   vehicles,
+  latestCompletedWashes,
 }: {
   records: readonly WashRecordDto[];
   vehicles: readonly VehicleOptionDto[];
+  latestCompletedWashes: readonly LatestCompletedWashDto[];
 }) {
   return (
     <main className="grid min-w-0 gap-5 p-4 sm:p-6" data-testid="wash-page">
@@ -27,7 +29,11 @@ export function WashPage({
           </p>
         </div>
       </header>
-      <WashWorkspace records={records} vehicles={vehicles} />
+      <WashWorkspace
+        records={records}
+        vehicles={vehicles}
+        latestCompletedWashes={latestCompletedWashes}
+      />
     </main>
   );
 }

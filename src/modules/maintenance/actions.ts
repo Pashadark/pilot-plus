@@ -78,13 +78,24 @@ export async function createMaintenanceAction(
   try {
     const vehicle = await prisma.vehicle.findFirst({
       where: vehicleMembershipWhere(input.data.vehicleId, session.user.id),
-      select: { id: true },
+      select: {
+        id: true,
+        positions: {
+          orderBy: { recordedAt: 'desc' },
+          take: 1,
+          select: { odometerKm: true },
+        },
+      },
     });
     if (!vehicle) return VEHICLE_UNAVAILABLE_ERROR;
 
     await prisma.maintenanceRecord.create({
       data: {
         ...input.data,
+        odometerKm:
+          vehicle.positions[0]?.odometerKm === null || !vehicle.positions[0]
+            ? null
+            : Number(vehicle.positions[0].odometerKm.toString()),
         status: 'PLANNED',
       },
     });
@@ -112,10 +123,17 @@ export async function transitionMaintenanceAction(
   }
 
   try {
+    const statusWhere =
+      fromStatus === 'OVERDUE'
+        ? {
+            status: 'PLANNED' as const,
+            scheduledAt: { lt: new Date() },
+          }
+        : { status: fromStatus };
     const updated = await prisma.maintenanceRecord.updateMany({
       where: {
         id: recordId,
-        status: fromStatus,
+        ...statusWhere,
         vehicle: { company: { members: { some: { userId: session.user.id } } } },
       },
       data: transitionData(toStatus),

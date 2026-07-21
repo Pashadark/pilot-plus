@@ -43,7 +43,7 @@ describe('parseWashInput', () => {
       data: {
         vehicleId: 'vehicle-1',
         kind: 'COMPLEX',
-        scheduledAt: new Date('2026-07-22T10:00'),
+        scheduledAt: new Date('2026-07-22T07:00:00.000Z'),
         provider: 'Чистый город',
         costMinor: 250049,
         notes: 'Комплексная мойка',

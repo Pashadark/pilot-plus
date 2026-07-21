@@ -4,6 +4,7 @@ import type {
   MaintenanceKind,
   OperationActionState,
 } from './types';
+import { parsePilotDateTimeLocal } from '@/shared/business-time';
 
 const MAINTENANCE_KINDS: readonly MaintenanceKind[] = [
   'OIL',
@@ -15,32 +16,11 @@ const MAINTENANCE_KINDS: readonly MaintenanceKind[] = [
   'OTHER',
 ];
 const MAX_TEXT_LENGTH = 500;
+const MAX_ODOMETER_KM = 99_999_999_999.9;
 
 function stringValue(formData: FormData, name: string): string {
   const value = formData.get(name);
   return typeof value === 'string' ? value.trim() : '';
-}
-
-function parseScheduledAt(value: string): Date | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
-
-  if (!match) return null;
-
-  const [, year, month, day, hour, minute] = match;
-  const scheduledAt = new Date(value);
-
-  if (
-    Number.isNaN(scheduledAt.getTime()) ||
-    scheduledAt.getFullYear() !== Number(year) ||
-    scheduledAt.getMonth() + 1 !== Number(month) ||
-    scheduledAt.getDate() !== Number(day) ||
-    scheduledAt.getHours() !== Number(hour) ||
-    scheduledAt.getMinutes() !== Number(minute)
-  ) {
-    return null;
-  }
-
-  return scheduledAt;
 }
 
 function parseOptionalText(value: string, field: string, fieldErrors: Record<string, string>) {
@@ -56,8 +36,14 @@ function parseTargetOdometerKm(value: string, fieldErrors: Record<string, string
 
   const odometerKm = Number(value);
 
-  if (!Number.isFinite(odometerKm) || odometerKm < 0) {
-    fieldErrors.targetOdometerKm = 'Укажите пробег не меньше 0 км.';
+  if (
+    !Number.isFinite(odometerKm) ||
+    odometerKm < 0 ||
+    odometerKm > MAX_ODOMETER_KM ||
+    Math.round(odometerKm * 10) !== odometerKm * 10
+  ) {
+    fieldErrors.targetOdometerKm =
+      'Укажите пробег от 0 до 99 999 999 999,9 км с точностью до 0,1 км.';
     return null;
   }
 
@@ -95,7 +81,7 @@ export function parseMaintenanceInput(formData: FormData): MaintenanceInputResul
   const kind = MAINTENANCE_KINDS.find((candidate) => candidate === kindValue);
   if (!kind) fieldErrors.kind = 'Выберите корректный вид ТО.';
 
-  const scheduledAt = parseScheduledAt(scheduledAtValue);
+  const scheduledAt = parsePilotDateTimeLocal(scheduledAtValue);
   if (!scheduledAt) fieldErrors.scheduledAt = 'Укажите корректную плановую дату.';
 
   const targetOdometerKm = parseTargetOdometerKm(

@@ -36,6 +36,7 @@ describe('запросы моек', () => {
 
     expect(receivedArgs).toMatchObject({
       where: { vehicle: { company: { members: { some: { userId: 'user-1' } } } } },
+      take: 200,
     });
     expect(records).toEqual([
       expect.objectContaining({
@@ -51,6 +52,38 @@ describe('запросы моек', () => {
         },
       }),
     ]);
+  });
+
+  it('читает последнюю завершённую мойку каждого автомобиля отдельным запросом', async () => {
+    let receivedArgs: unknown;
+    const queries = createWashQueries({
+      async findMany(args: unknown) {
+        receivedArgs = args;
+        return [
+          {
+            vehicleId: 'vehicle-1',
+            status: 'COMPLETED',
+            completedAt: new Date('2026-07-21T10:00:00.000Z'),
+          },
+        ];
+      },
+    });
+
+    await expect(queries.listLatestCompletedWashesForUser('user-1')).resolves.toEqual([
+      {
+        vehicleId: 'vehicle-1',
+        status: 'COMPLETED',
+        completedAt: '2026-07-21T10:00:00.000Z',
+      },
+    ]);
+    expect(receivedArgs).toMatchObject({
+      where: {
+        status: 'COMPLETED',
+        completedAt: { not: null },
+        vehicle: { company: { members: { some: { userId: 'user-1' } } } },
+      },
+      distinct: ['vehicleId'],
+    });
   });
 
   it('возвращает пустой список, когда доступных записей нет', async () => {

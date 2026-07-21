@@ -3,6 +3,17 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const schema = readFileSync(new URL('./schema.prisma', import.meta.url), 'utf8');
+const maintenanceBackfill = readFileSync(
+  new URL(
+    './migrations/20260722023000_backfill_maintenance_legacy_notes/migration.sql',
+    import.meta.url,
+  ),
+  'utf8',
+);
+const maintenanceStatusPreflight = readFileSync(
+  new URL('./preflight/maintenance_legacy_statuses.sql', import.meta.url),
+  'utf8',
+);
 
 describe('доменная схема автопарка', () => {
   it('связывает автомобили с компанией и защищает ключ импорта', () => {
@@ -47,5 +58,18 @@ describe('доменная схема автопарка', () => {
     expect(schema).toMatch(/washRecords\s+WashRecord\[\]/);
     expect(schema).toMatch(/status\s+WashStatus\s+@default\(PLANNED\)/);
     expect(schema).toContain('@@index([status, scheduledAt])');
+  });
+
+  it('сохраняет legacy-описания ТО и останавливает миграцию при неизвестных статусах', () => {
+    expect(maintenanceBackfill).toMatch(/SET "notes" = COALESCE\("notes", "description"\)/);
+    expect(maintenanceBackfill).toMatch(
+      /SET "status" = 'PLANNED'[\s\S]*WHERE "status" = 'OVERDUE'/,
+    );
+    expect(maintenanceBackfill).toContain(
+      "'PLANNED', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE', 'CANCELLED'",
+    );
+    expect(maintenanceStatusPreflight).toContain('RAISE EXCEPTION');
+    expect(maintenanceStatusPreflight).toContain('Map them explicitly before migration.');
+    expect(maintenanceStatusPreflight).toContain('GROUP BY "status"::text');
   });
 });

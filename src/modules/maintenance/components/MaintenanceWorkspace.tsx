@@ -4,6 +4,7 @@ import { useActionState, useCallback, useEffect, useMemo, useState } from 'react
 import { FiAlertTriangle, FiCheckCircle, FiClock, FiPlus, FiSearch, FiTool } from 'react-icons/fi';
 
 import { transitionMaintenanceAction } from '../actions';
+import { calculateMaintenanceSummary } from '../effective-status';
 import type { MaintenanceRecordDto } from '../server/queries';
 import type { MaintenanceKind, MaintenanceStatus, OperationActionState } from '../types';
 import type { VehicleOptionDto } from '@/modules/vehicles/types';
@@ -17,6 +18,8 @@ import {
   maintenanceKindLabels,
   MaintenanceRecordActions,
   MaintenanceRecordCard,
+  MaintenanceOdometerView,
+  MaintenanceStatusBadge,
   maintenanceStatusView,
 } from './MaintenanceRecordCard';
 
@@ -47,9 +50,19 @@ function matchesFilters(record: MaintenanceRecordDto, filters: Filters) {
   );
 }
 
-function StatCard({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
+function StatCard({
+  label,
+  value,
+  icon,
+  testId,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  testId: string;
+}) {
   return (
-    <Card className="min-w-0 p-4">
+    <Card className="min-w-0 p-4" data-testid={testId}>
       <div className="flex min-w-0 items-center gap-3">
         <span className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]">
           {icon}
@@ -82,12 +95,11 @@ export function MaintenanceWorkspace({
     () => records.filter((record) => matchesFilters(record, filters)),
     [filters, records],
   );
-  const attentionRecords = records.filter((record) => {
-    if (record.status === 'OVERDUE') return true;
-    if (record.status !== 'PLANNED' || !record.scheduledAt) return false;
-    const remaining = new Date(record.scheduledAt).getTime() - referenceTime;
-    return remaining <= 7 * 24 * 60 * 60 * 1000;
-  });
+  const summary = useMemo(
+    () => calculateMaintenanceSummary(records, new Date(referenceTime)),
+    [records, referenceTime],
+  );
+  const attentionCount = summary.dueSoon + summary.overdue;
   const closeAfterSuccess = useCallback(() => setFormOpen(false), []);
 
   useEffect(() => {
@@ -105,28 +117,32 @@ export function MaintenanceWorkspace({
         className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
       >
         <StatCard
-          label="Всего записей"
-          value={records.length}
-          icon={<FiTool aria-hidden="true" />}
-        />
-        <StatCard
           label="Запланировано"
-          value={records.filter((record) => record.status === 'PLANNED').length}
+          value={summary.planned}
+          icon={<FiTool aria-hidden="true" />}
+          testId="maintenance-planned-stat"
+        />
+        <StatCard
+          label="Скоро"
+          value={summary.dueSoon}
           icon={<FiClock aria-hidden="true" />}
+          testId="maintenance-due-soon-stat"
         />
         <StatCard
-          label="В работе"
-          value={records.filter((record) => record.status === 'IN_PROGRESS').length}
+          label="Просрочено"
+          value={summary.overdue}
           icon={<FiAlertTriangle aria-hidden="true" />}
+          testId="maintenance-overdue-stat"
         />
         <StatCard
-          label="Завершено"
-          value={records.filter((record) => record.status === 'COMPLETED').length}
+          label="Завершено за месяц"
+          value={summary.completedThisMonth}
           icon={<FiCheckCircle aria-hidden="true" />}
+          testId="maintenance-completed-month-stat"
         />
       </section>
 
-      {attentionRecords.length ? (
+      {attentionCount ? (
         <section
           role="status"
           className="flex min-w-0 flex-wrap items-start gap-3 rounded-[var(--radius-panel)] border border-[var(--color-warning)] bg-[var(--color-warning-soft)] p-4"
@@ -138,7 +154,7 @@ export function MaintenanceWorkspace({
           <div className="min-w-0 flex-1">
             <h2 className="font-semibold text-[var(--color-text)]">Требуют внимания</h2>
             <p className="text-sm break-words text-[var(--color-text-secondary)]">
-              {attentionRecords.length} работ просрочены или запланированы на ближайшие 7 дней.
+              {attentionCount} работ просрочены или запланированы на ближайшие 7 дней.
             </p>
           </div>
         </section>
@@ -240,6 +256,9 @@ export function MaintenanceWorkspace({
                   Стоимость
                 </th>
                 <th scope="col" className="px-4 py-3 font-semibold">
+                  Пробег
+                </th>
+                <th scope="col" className="px-4 py-3 font-semibold">
                   Статус
                 </th>
                 <th scope="col" className="px-4 py-3 font-semibold">
@@ -249,7 +268,6 @@ export function MaintenanceWorkspace({
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {visibleRecords.map((record) => {
-                const status = maintenanceStatusView[record.status];
                 return (
                   <tr key={record.id} data-testid="maintenance-record" className="align-top">
                     <th scope="row" className="max-w-64 px-4 py-4 font-semibold">
@@ -266,7 +284,10 @@ export function MaintenanceWorkspace({
                       {formatMaintenanceCost(record.costMinor)}
                     </td>
                     <td className="px-4 py-4">
-                      <Badge tone={status.tone}>{status.label}</Badge>
+                      <MaintenanceOdometerView record={record} />
+                    </td>
+                    <td className="px-4 py-4">
+                      <MaintenanceStatusBadge status={record.status} />
                     </td>
                     <td className="px-4 py-4">
                       <MaintenanceRecordActions

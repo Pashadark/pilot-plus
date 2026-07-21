@@ -27,6 +27,12 @@ export type WashRecordDto = {
   };
 };
 
+export type LatestCompletedWashDto = {
+  vehicleId: string;
+  status: 'COMPLETED';
+  completedAt: string;
+};
+
 type RawWashRecord = Omit<
   WashRecordDto,
   'scheduledAt' | 'startedAt' | 'completedAt' | 'createdAt'
@@ -75,10 +81,27 @@ export function createWashQueries(repository: WashRepository) {
       const records = await repository.findMany({
         where: { vehicle: { company: { members: { some: { userId } } } } },
         select: washRecordSelect,
-        orderBy: [{ scheduledAt: 'asc' }, { createdAt: 'desc' }],
+        orderBy: [{ createdAt: 'desc' }],
+        take: 200,
       });
 
       return (records as RawWashRecord[]).map(mapWashRecord);
+    },
+    async listLatestCompletedWashesForUser(userId: string): Promise<LatestCompletedWashDto[]> {
+      const records = await repository.findMany({
+        where: {
+          status: 'COMPLETED',
+          completedAt: { not: null },
+          vehicle: { company: { members: { some: { userId } } } },
+        },
+        select: { vehicleId: true, status: true, completedAt: true },
+        distinct: ['vehicleId'],
+        orderBy: [{ vehicleId: 'asc' }, { completedAt: 'desc' }],
+      });
+
+      return (records as { vehicleId: string; status: 'COMPLETED'; completedAt: Date }[]).map(
+        (record) => ({ ...record, completedAt: record.completedAt.toISOString() }),
+      );
     },
   };
 }
@@ -88,3 +111,4 @@ const queries = createWashQueries({
 });
 
 export const listWashRecordsForUser = queries.listWashRecordsForUser;
+export const listLatestCompletedWashesForUser = queries.listLatestCompletedWashesForUser;

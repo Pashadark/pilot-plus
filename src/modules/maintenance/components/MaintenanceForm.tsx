@@ -105,6 +105,7 @@ export function MaintenanceForm({
           name="targetOdometerKm"
           type="number"
           min="0"
+          max="99999999999.9"
           step="0.1"
           inputMode="decimal"
           error={state.fieldErrors?.targetOdometerKm}

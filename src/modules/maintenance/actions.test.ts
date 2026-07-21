@@ -48,7 +48,10 @@ describe('действия технического обслуживания', (
   beforeEach(() => {
     vi.clearAllMocks();
     authMocks.getAuthenticatedSession.mockResolvedValue(session);
-    repository.vehicle.findFirst.mockResolvedValue({ id: 'vehicle-1' });
+    repository.vehicle.findFirst.mockResolvedValue({
+      id: 'vehicle-1',
+      positions: [{ odometerKm: { toString: () => '12345.6' } }],
+    });
     repository.maintenanceRecord.create.mockResolvedValue({ id: 'maintenance-1' });
     repository.maintenanceRecord.updateMany.mockResolvedValue({ count: 1 });
   });
@@ -74,7 +77,14 @@ describe('действия технического обслуживания', (
         id: 'vehicle-1',
         company: { members: { some: { userId: 'user-1' } } },
       },
-      select: { id: true },
+      select: {
+        id: true,
+        positions: {
+          orderBy: { recordedAt: 'desc' },
+          take: 1,
+          select: { odometerKm: true },
+        },
+      },
     });
     expect(repository.maintenanceRecord.create).not.toHaveBeenCalled();
   });
@@ -91,10 +101,29 @@ describe('действия технического обслуживания', (
         kind: 'OIL',
         status: 'PLANNED',
         targetOdometerKm: 15000,
+        odometerKm: 12345.6,
         costMinor: 420000,
       }),
     });
     expect(revalidatePathMock).toHaveBeenCalledWith('/maintenance');
+  });
+
+  it('атомарно переводит эффективную просрочку только из PLANNED с прошедшей датой', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-24T12:00:00.000Z'));
+
+    await transitionMaintenanceAction(initialState, transitionFormData('OVERDUE', 'IN_PROGRESS'));
+
+    expect(repository.maintenanceRecord.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'maintenance-1',
+        status: 'PLANNED',
+        scheduledAt: { lt: new Date('2026-07-24T12:00:00.000Z') },
+        vehicle: { company: { members: { some: { userId: 'user-1' } } } },
+      },
+      data: { status: 'IN_PROGRESS' },
+    });
+    vi.useRealTimers();
   });
 
   it('отклоняет недопустимый переход до записи в базу', async () => {

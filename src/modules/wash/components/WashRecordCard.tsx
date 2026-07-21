@@ -17,6 +17,7 @@ import {
 import type { VehicleCleanlinessStatus } from '../cleanliness';
 import type { WashRecordDto } from '../server/queries';
 import type { WashKind, WashStatus } from '../types';
+import { PILOT_BUSINESS_TIME_ZONE } from '@/shared/business-time';
 import { Badge, Button, Card, ConfirmationDialog } from '@/shared/ui';
 
 export const washStatusView: Record<
@@ -71,6 +72,7 @@ export function formatWashDate(value: string) {
   return new Intl.DateTimeFormat('ru-RU', {
     dateStyle: 'medium',
     timeStyle: 'short',
+    timeZone: PILOT_BUSINESS_TIME_ZONE,
   }).format(new Date(value));
 }
 

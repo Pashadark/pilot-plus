@@ -141,3 +141,38 @@ lockfile и inferred workspace root. Build также выводит уже до
 trace через generated Prisma client. В browser-прогоне встречается существующее LCP-предупреждение
 для первого изображения автомобиля. Эти предупреждения не вызваны Task 6 и не расширялись в
 рамках интеграционной задачи.
+
+## Финальный root review — корректность времени, legacy-данных и operational UI
+
+- Бизнес-часовой пояс явно зафиксирован как `Europe/Moscow`; обе формы преобразуют
+  `datetime-local` в один и тот же UTC instant независимо от TZ процесса.
+- Запланированная прошедшая работа выдаётся как эффективная `OVERDUE`; фильтр, badge, доступные
+  действия и четыре KPI используют этот статус. Переход из просрочки атомарно принимает только
+  лежащую в БД `PLANNED` запись с прошедшей датой; follow-up нормализует исторический stored
+  `OVERDUE` обратно в `PLANNED` для единой модели.
+- При создании ТО сервер сам читает последнюю tenant-scoped позицию автомобиля и сохраняет
+  стартовый `odometerKm`; клиент не передаёт текущий пробег. DTO отдельно отдаёт старт, последнюю
+  позицию и цель, UI показывает остаток и shared `Progress` при достаточных данных.
+- Отмена ТО требует `ConfirmationDialog`; скрытая submit-кнопка вызывается только после
+  подтверждения, а toast остаётся на уровне workspace.
+- Журналы ТО и мойки ограничены последними 200 записями. Чистота автопарка считается отдельным
+  tenant-scoped запросом последней завершённой мойки каждого автомобиля и не зависит от среза
+  журнала.
+- Applied migration `20260721230000_add_maintenance_and_wash` не изменялась. Follow-up переносит
+  `description` в `notes` через `COALESCE`; preflight перечисляет неизвестные legacy-статусы и
+  останавливается до enum-конверсии. Ограничение исходного fallback задокументировано: неизвестное
+  значение, уже преобразованное в `PLANNED`, восстанавливается только из backup.
+
+Проверки финального review:
+
+- focused Vitest — 13 файлов, 52/52 PASS;
+- `npm run test:unit` — 43 файла, 186/186 PASS;
+- `npm run lint`, `npm run typecheck`, targeted Prettier и `git diff --check` — PASS;
+- `npx prisma format`, `generate`, `validate`, `migrate deploy`, `migrate status` — PASS; follow-up
+  применён, схема локальной БД актуальна;
+- targeted Playwright `maintenance + wash + vehicles` — 9/10 PASS с одним test-only strict
+  locator на двух сохранённых toast; после точечного исправления `maintenance.spec.ts` — 2/2 PASS,
+  после фиксации Moscow-format helper `wash.spec.ts` — 2/2 PASS; исходно прошедшие vehicle-тесты
+  не перезапускались без необходимости;
+- `npm run build` — PASS, все три маршрута присутствуют. Остались известные предупреждения о
+  нескольких lockfile/workspace root и широком Prisma NFT trace.

@@ -55,11 +55,33 @@ describe('parseMaintenanceInput', () => {
         vehicleId: 'vehicle-1',
         title: 'Замена масла',
         kind: 'OIL',
-        scheduledAt: new Date('2026-07-22T10:00'),
+        scheduledAt: new Date('2026-07-22T07:00:00.000Z'),
         targetOdometerKm: 120000.5,
         provider: 'Сервис Плюс',
         costMinor: 125050,
         notes: 'Заменить масло',
+      },
+    });
+  });
+
+  it('ограничивает целевой пробег точностью Decimal(12,1)', () => {
+    const result = parseMaintenanceInput(
+      maintenanceData({
+        vehicleId: 'vehicle-1',
+        title: 'Замена масла',
+        kind: 'OIL',
+        scheduledAt: '2026-07-22T10:00',
+        targetOdometerKm: '100000000000',
+      }),
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      state: {
+        status: 'error',
+        fieldErrors: {
+          targetOdometerKm: 'Укажите пробег от 0 до 99 999 999 999,9 км с точностью до 0,1 км.',
+        },
       },
     });
   });

@@ -3,24 +3,27 @@ import { expect, test } from '@playwright/test';
 import { openAuthenticatedRoute } from './helpers/auth';
 import { cleanupE2EWashRecords, E2E_WASH_PROVIDER_PREFIX } from './helpers/wash';
 
-function formatLocalDateTime(value: Date) {
-  const pad = (part: number) => String(part).padStart(2, '0');
-  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
+function formatMoscowDate(value: Date) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Moscow',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .formatToParts(value)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function localDateTimeToday() {
-  const value = new Date();
-  value.setSeconds(0, 0);
-  if (value.getHours() === 23) value.setHours(22, 30);
-  else value.setMinutes(value.getMinutes() + 5);
-  return formatLocalDateTime(value);
+  return `${formatMoscowDate(new Date())}T12:00`;
 }
 
 function localDateTimeTomorrow() {
-  const value = new Date();
-  value.setDate(value.getDate() + 1);
-  value.setHours(12, 0, 0, 0);
-  return formatLocalDateTime(value);
+  return `${formatMoscowDate(new Date(Date.now() + 24 * 60 * 60 * 1000))}T12:00`;
 }
 
 test.afterAll(async () => {

@@ -1,4 +1,5 @@
 import type { OperationActionState, WashInput, WashInputResult, WashKind } from './types';
+import { parsePilotDateTimeLocal } from '@/shared/business-time';
 
 const WASH_KINDS: readonly WashKind[] = ['BODY', 'COMPLEX', 'INTERIOR', 'MATS', 'ENGINE', 'OTHER'];
 const MAX_TEXT_LENGTH = 500;
@@ -6,28 +7,6 @@ const MAX_TEXT_LENGTH = 500;
 function stringValue(formData: FormData, name: string): string {
   const value = formData.get(name);
   return typeof value === 'string' ? value.trim() : '';
-}
-
-function parseScheduledAt(value: string): Date | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
-
-  if (!match) return null;
-
-  const [, year, month, day, hour, minute] = match;
-  const scheduledAt = new Date(value);
-
-  if (
-    Number.isNaN(scheduledAt.getTime()) ||
-    scheduledAt.getFullYear() !== Number(year) ||
-    scheduledAt.getMonth() + 1 !== Number(month) ||
-    scheduledAt.getDate() !== Number(day) ||
-    scheduledAt.getHours() !== Number(hour) ||
-    scheduledAt.getMinutes() !== Number(minute)
-  ) {
-    return null;
-  }
-
-  return scheduledAt;
 }
 
 function parseOptionalText(value: string, field: string, fieldErrors: Record<string, string>) {
@@ -63,7 +42,7 @@ export function parseWashInput(formData: FormData): WashInputResult {
   const kind = WASH_KINDS.find((candidate) => candidate === kindValue);
   if (!kind) fieldErrors.kind = 'Выберите корректный вид мойки.';
 
-  const scheduledAt = parseScheduledAt(scheduledAtValue);
+  const scheduledAt = parsePilotDateTimeLocal(scheduledAtValue);
   if (!scheduledAt) fieldErrors.scheduledAt = 'Укажите корректную плановую дату.';
 
   const provider = parseOptionalText(providerValue, 'provider', fieldErrors);

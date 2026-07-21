@@ -12,9 +12,10 @@ import {
 
 import { transitionWashAction } from '../actions';
 import { calculateFleetCleanliness } from '../cleanliness';
-import type { WashRecordDto } from '../server/queries';
+import type { LatestCompletedWashDto, WashRecordDto } from '../server/queries';
 import type { OperationActionState, WashKind, WashStatus } from '../types';
 import type { VehicleOptionDto } from '@/modules/vehicles/types';
+import { getPilotBusinessDateParts } from '@/shared/business-time';
 import { useToast } from '@/shared/providers/ToastProvider';
 import { Badge, Button, Card, EmptyState, Modal, SearchInput, Select } from '@/shared/ui';
 
@@ -60,15 +61,19 @@ function matchesFilters(record: WashRecordDto, filters: Filters) {
 }
 
 function sameDate(left: Date, right: Date) {
+  const leftParts = getPilotBusinessDateParts(left);
+  const rightParts = getPilotBusinessDateParts(right);
   return (
-    left.getFullYear() === right.getFullYear() &&
-    left.getMonth() === right.getMonth() &&
-    left.getDate() === right.getDate()
+    leftParts.year === rightParts.year &&
+    leftParts.month === rightParts.month &&
+    leftParts.day === rightParts.day
   );
 }
 
 function sameMonth(left: Date, right: Date) {
-  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
+  const leftParts = getPilotBusinessDateParts(left);
+  const rightParts = getPilotBusinessDateParts(right);
+  return leftParts.year === rightParts.year && leftParts.month === rightParts.month;
 }
 
 function StatCard({
@@ -100,9 +105,11 @@ function StatCard({
 export function WashWorkspace({
   records,
   vehicles,
+  latestCompletedWashes,
 }: {
   records: readonly WashRecordDto[];
   vehicles: readonly VehicleOptionDto[];
+  latestCompletedWashes: readonly LatestCompletedWashDto[];
 }) {
   const [filters, setFilters] = useState(initialFilters);
   const [formOpen, setFormOpen] = useState(false);
@@ -122,8 +129,8 @@ export function WashWorkspace({
   );
   const referenceDate = new Date(referenceTime);
   const fleetCleanliness = useMemo(
-    () => calculateFleetCleanliness(vehicles, records, new Date(referenceTime)),
-    [records, referenceTime, vehicles],
+    () => calculateFleetCleanliness(vehicles, latestCompletedWashes, new Date(referenceTime)),
+    [latestCompletedWashes, referenceTime, vehicles],
   );
   const cleanlinessByVehicleId = useMemo(
     () =>

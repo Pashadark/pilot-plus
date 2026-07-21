@@ -10,6 +10,8 @@ const record = {
   status: 'PLANNED',
   scheduledAt: new Date('2026-07-23T10:00:00.000Z'),
   completedAt: null,
+  description: 'Описание из старой схемы',
+  odometerKm: { toString: () => '10000.0' },
   targetOdometerKm: { toString: () => '15000.5' },
   provider: 'Сервис Pilot',
   costMinor: 420000,
@@ -20,6 +22,7 @@ const record = {
     internalNumber: 'PLT-001',
     model: 'GWM WEY',
     registrationNumber: 'А001АА',
+    positions: [{ odometerKm: { toString: () => '12000.0' } }],
   },
 };
 
@@ -33,15 +36,23 @@ describe('запросы технического обслуживания', () 
       },
     });
 
-    const records = await queries.listMaintenanceForUser('user-1');
+    const records = await queries.listMaintenanceForUser(
+      'user-1',
+      new Date('2026-07-24T10:00:00.000Z'),
+    );
 
     expect(receivedArgs).toMatchObject({
       where: { vehicle: { company: { members: { some: { userId: 'user-1' } } } } },
+      take: 200,
     });
     expect(records).toEqual([
       expect.objectContaining({
         id: 'maintenance-1',
         targetOdometerKm: 15000.5,
+        odometerKm: 10000,
+        currentOdometerKm: 12000,
+        status: 'OVERDUE',
+        notes: 'Описание из старой схемы',
         scheduledAt: '2026-07-23T10:00:00.000Z',
         vehicle: {
           id: 'vehicle-1',
