@@ -1,55 +1,34 @@
-# Отчёт по Task 4: Server Actions и профиль администратора
+# Task 4 — защищённые запросы и переходы статусов мойки
 
-Дата: 20 июля 2026 года
-Статус: реализовано и проверено
+## Статус
 
-## Результат
+Реализованы серверные запросы и действия модуля мойки. `createWashAction` самостоятельно проверяет сессию и принадлежность автомобиля компании пользователя перед созданием записи. `transitionWashAction` самостоятельно проверяет сессию и выполняет единственный защищённый `updateMany` с идентификатором записи, ожидаемым исходным статусом и tenant-фильтром через `vehicle.company.members.some.userId`.
 
-- Добавлены защищённые `updateProfileAction` и `changePasswordAction` с повторной проверкой server-side session и текущего пароля.
-- Обновление имени/email и очистка `LoginThrottle` для старого и нового email выполняются одной Prisma-транзакцией.
-- Prisma `P2002` преобразуется в безопасное сообщение «Этот email уже используется»; остальные исключения не раскрывают детали БД.
-- После смены пароля удаляются остальные сессии через `deleteOtherSessions`, текущая сессия сохраняется.
-- Добавлен защищённый `/profile` с независимыми карточками основных данных и безопасности на существующих `Input`, `Button`, `Card`, `useActionState` и `useToast`.
-- Protected layout один раз передаёт сериализуемый `SafeUser` через client context в `AppShell`, затем через props в `ShellFrame`, desktop sidebar и mobile drawer.
-- Sidebar показывает реальные имя/email и содержит доступную ссылку `/profile` вместо статического пользователя.
-- Task 5 flash-toast не изменялся.
+Автомат переходов разрешает только `PLANNED → IN_PROGRESS|CANCELLED` и `IN_PROGRESS → COMPLETED|CANCELLED`. При начале сохраняется `startedAt`, при завершении — `completedAt`. Кэш `/wash` инвалидируется только после успешной записи.
 
 ## TDD
 
-- RED actions: `npx vitest run src/modules/profile/actions.test.ts` — ожидаемо не собрался из-за отсутствующего `./actions`.
-- GREEN actions: 7/7 profile action tests.
-- RED browser: `/profile` отсутствовал; data/form сценарии падали на route-level контракте.
-- GREEN browser: `npx playwright test tests/profile.spec.ts --workers=1` с auth env — 7 passed, 1 intentional skip. Изменяющий БД сценарий имени выполняется только в desktop project и возвращает исходное значение; все остальные сценарии проходят на desktop и mobile.
+1. Добавлены тесты для ещё отсутствующих `status`, `server/queries` и `actions`.
+2. RED подтверждён командой focused Vitest: все три набора завершились ожидаемой ошибкой `Cannot find module` для отсутствующих production-модулей.
+3. Реализованы минимальные production-модули; GREEN: 14 тестов в трёх наборах прошли.
 
-## Финальные проверки
+## Self-review
 
-- `npm run test:unit` — 19 suites, 81 tests passed.
-- `npm run lint` — exit 0.
-- `npm run typecheck` — exit 0.
-- `npm run build` — exit 0; динамический route `/profile` собран.
-- Targeted Prettier Task 4 files — passed.
-- `git diff --check` — passed.
+- Проверено, что каждая Server Action выполняет собственную проверку сессии.
+- Проверено, что создание сначала ограничивает автомобиль tenant-фильтром, а переход включает tenant-фильтр в единственную атомарную `updateMany`.
+- Проверено, что ни ошибки валидации, доступа, гонки статуса, ни сбой репозитория не вызывают `revalidatePath('/wash')`.
+- Проверено, что наружу возвращаются только русские безопасные сообщения без деталей ошибки базы данных.
 
-## Известные замечания вне Task 4
+## Проверки
 
-- Полный `npm run format:check` остаётся красным на 12 ранее существовавших файлах вне Task 4; эти пользовательские файлы не переформатировались.
-- Build сохраняет уже известные предупреждения linked worktree о нескольких lockfile/Turbopack root и широком NFT trace Prisma client.
+- `npx vitest run src/modules/wash/status.test.ts src/modules/wash/server/queries.test.ts src/modules/wash/actions.test.ts` — 14/14 PASS.
+- `npm run typecheck` — PASS.
+- `npx eslint` для шести изменённых TypeScript-файлов — PASS.
+- `npx prettier --check` для шести изменённых TypeScript-файлов — PASS.
+- `git diff --check` — PASS.
 
-## Fix report после code review
+Один объединённый shell-вызов ESLint, Prettier и Vitest дал ошибку доступа esbuild к `vitest.config.ts`; изолированный немедленный повтор того же Vitest-набора прошёл. Изменения кода для этого инфраструктурного сбоя не потребовались.
 
-### Исправления
+## Commit
 
-- Смена password hash и удаление остальных сессий перенесены в один callback `prisma.$transaction`. Удаление ограничено `userId` и исключает `currentSessionId`, поэтому текущая сессия сохраняется.
-- Добавлен unit-сценарий частичного отказа: ошибка `transaction.session.deleteMany` возвращает безопасное error-state, не вызывает `revalidatePath` и не подтверждает операцию. Отдельно проверено, что password update не выполняется через top-level Prisma client.
-- Успешный E2E submit теперь повторно отправляет текущее имя. Сценарий не изменяет singleton-admin identity и безопасен для обоих Playwright projects.
-- Mobile skip удалён: одинаковый successful submit проходит на desktop и mobile.
-- Вложенный `<main>` в `ProfilePage` заменён на именованный `<section aria-labelledby="profile-page-title">`.
-
-### RED / GREEN
-
-- RED: `npx vitest run src/modules/profile/actions.test.ts` — 2 ожидаемых падения из 8: transaction user update отсутствовал, transaction session delete не вызывался.
-- GREEN focused: `npx vitest run src/modules/profile/actions.test.ts` — 8/8 passed.
-- GREEN full unit: `npm run test:unit` — 19 suites, 82/82 passed.
-- GREEN E2E: `npx playwright test tests/profile.spec.ts --workers=1` с auth env — 8/8 passed, desktop и mobile, без skip.
-- `npm run typecheck` — exit 0.
-- `npm run lint` — exit 0.
+- `8d2f0f0 feat: add protected wash workflows`
