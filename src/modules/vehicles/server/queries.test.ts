@@ -134,4 +134,37 @@ describe('запросы автопарка', () => {
 
     expect(vehicles[0]?.primaryImage).toBeNull();
   });
+
+  it('возвращает компактные tenant-scoped опции автомобилей для форм', async () => {
+    const fake = createRepository();
+    const queries = createVehicleQueries(fake.repository);
+
+    const options = await queries.listVehicleOptionsForUser('user-1');
+
+    expect(fake.calls.list).toMatchObject({
+      where: { company: { members: { some: { userId: 'user-1' } } } },
+      select: {
+        id: true,
+        internalNumber: true,
+        model: true,
+        registrationNumber: true,
+        images: {
+          where: { isPrimary: true },
+          select: { localPath: true, alt: true },
+          orderBy: { position: 'asc' },
+          take: 1,
+        },
+      },
+    });
+    expect(options).toEqual([
+      {
+        id: 'vehicle-1',
+        label: 'PLT-001 · GWM WEY',
+        image: {
+          localPath: '/vehicles/krasnoyarsk/fleet-001/primary.webp',
+          alt: 'GWM WEY — Красноярск',
+        },
+      },
+    ]);
+  });
 });

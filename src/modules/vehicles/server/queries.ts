@@ -1,7 +1,7 @@
 import type { Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 
-import type { VehicleCardDto, VehicleDetailDto } from '../types';
+import type { VehicleCardDto, VehicleDetailDto, VehicleOptionDto } from '../types';
 
 interface VehicleRepository {
   findMany(args: unknown): Promise<unknown[]>;
@@ -137,6 +137,27 @@ const vehicleSelect = {
   },
 } satisfies Prisma.VehicleSelect;
 
+const vehicleOptionSelect = {
+  id: true,
+  internalNumber: true,
+  model: true,
+  registrationNumber: true,
+  images: {
+    where: { isPrimary: true },
+    select: { localPath: true, alt: true },
+    orderBy: { position: 'asc' as const },
+    take: 1,
+  },
+} satisfies Prisma.VehicleSelect;
+
+type RawVehicleOption = {
+  id: string;
+  internalNumber: string;
+  model: string;
+  registrationNumber: string | null;
+  images: VehicleOptionDto['image'][];
+};
+
 function optionalNumber(value: unknown | null | undefined) {
   return value === null || value === undefined ? null : Number(value);
 }
@@ -214,6 +235,21 @@ export function createVehicleQueries(repository: VehicleRepository) {
       });
       return (vehicles as RawVehicle[]).map(mapCard);
     },
+    async listVehicleOptionsForUser(userId: string): Promise<VehicleOptionDto[]> {
+      const vehicles = await repository.findMany({
+        where: { company: { members: { some: { userId } } } },
+        select: vehicleOptionSelect,
+        orderBy: [{ model: 'asc' }, { internalNumber: 'asc' }],
+      });
+
+      return (vehicles as RawVehicleOption[]).map((vehicle) => ({
+        id: vehicle.id,
+        label: [vehicle.internalNumber, vehicle.model, vehicle.registrationNumber]
+          .filter(Boolean)
+          .join(' · '),
+        image: vehicle.images[0] ?? null,
+      }));
+    },
     async getVehicleForUser(userId: string, vehicleId: string) {
       const vehicle = await repository.findFirst({
         where: { id: vehicleId, company: { members: { some: { userId } } } },
@@ -230,4 +266,5 @@ const queries = createVehicleQueries({
 });
 
 export const listVehiclesForUser = queries.listVehiclesForUser;
+export const listVehicleOptionsForUser = queries.listVehicleOptionsForUser;
 export const getVehicleForUser = queries.getVehicleForUser;

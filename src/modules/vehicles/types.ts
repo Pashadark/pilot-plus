@@ -14,6 +14,12 @@ export interface VehicleImageDto {
   alt: string;
 }
 
+export interface VehicleOptionDto {
+  id: string;
+  label: string;
+  image: VehicleImageDto | null;
+}
+
 export interface VehicleCardDto {
   id: string;
   internalNumber: string;
