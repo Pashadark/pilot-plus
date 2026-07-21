@@ -129,7 +129,7 @@ export function ShellFrame({
           systemHealthSummary={systemHealthSummary}
         />
       </aside>
-      <main className="min-h-screen pt-[var(--header-height)] transition-[padding] duration-200 md:pt-0 md:pl-[var(--sidebar-width)]">
+      <main className="min-h-screen pt-[var(--header-height)] transition-[padding] duration-200 md:pl-[var(--sidebar-width)]">
         <div className="mx-auto max-w-[1680px] p-4 lg:p-5">{children}</div>
       </main>
       <ScrollToTopButton />

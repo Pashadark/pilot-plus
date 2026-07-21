@@ -1,5 +1,12 @@
 import type { HTMLAttributes, ReactNode, TableHTMLAttributes } from 'react';
-export function Avatar({ name }: { name: string }) {
+const avatarSizes = {
+  xs: 'size-7 text-xs',
+  sm: 'size-9 text-sm',
+  md: 'size-11',
+  lg: 'size-14 text-lg',
+};
+
+export function Avatar({ name, size = 'md' }: { name: string; size?: keyof typeof avatarSizes }) {
   const initials = name
     .split(/\s+/)
     .map((part) => part[0])
@@ -10,7 +17,7 @@ export function Avatar({ name }: { name: string }) {
     <span
       role="img"
       aria-label={name}
-      className="grid size-11 place-items-center rounded-full bg-[var(--color-primary-soft)] font-semibold text-[var(--color-primary)]"
+      className={`grid place-items-center rounded-full bg-[var(--color-primary-soft)] font-semibold text-[var(--color-primary)] ${avatarSizes[size]}`}
     >
       {initials}
     </span>
@@ -71,14 +78,14 @@ export function StatusIndicator({
   label,
   tone = 'neutral',
 }: {
-  label: string;
-  tone?: 'neutral' | 'success' | 'warning' | 'danger';
+  label?: string;
+  tone?: 'neutral' | 'primary' | 'success' | 'warning' | 'danger';
 }) {
   return (
     <span className="inline-flex items-center gap-2">
       <span
         aria-hidden="true"
-        className={`size-2 rounded-full ${tone === 'success' ? 'bg-[var(--color-success)]' : tone === 'warning' ? 'bg-[var(--color-warning)]' : tone === 'danger' ? 'bg-[var(--color-danger)]' : 'bg-[var(--color-text-secondary)]'}`}
+        className={`size-2 rounded-full ${tone === 'primary' ? 'bg-[var(--color-primary)]' : tone === 'success' ? 'bg-[var(--color-success)]' : tone === 'warning' ? 'bg-[var(--color-warning)]' : tone === 'danger' ? 'bg-[var(--color-danger)]' : 'bg-[var(--color-text-secondary)]'}`}
       />
       {label}
     </span>

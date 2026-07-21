@@ -30,7 +30,8 @@ test('настольная оболочка показывает постоян�
 
   await expect(page.getByRole('navigation', { name: 'Основная навигация' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Дизайн-система' })).toBeVisible();
-  await expect(page.getByRole('banner')).toBeHidden();
+  await expect(page.getByTestId('app-header')).toBeVisible();
+  await expect(page.getByRole('searchbox', { name: 'Глобальный поиск' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Сегодня, 19 июл' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Фильтры' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Настроить вид' })).toBeVisible();

@@ -11,7 +11,7 @@ import {
 export const navigation = [
   { label: 'Панель управления', href: '/', icon: FiHome },
   { label: 'Онлайн-карта', href: '/map', icon: FiMap },
-  { label: 'Автомобили', href: '/vehicles', icon: FiTruck },
+  { label: 'Автопарк', href: '/vehicles', icon: FiTruck },
   { label: 'Устройства', href: '/devices', icon: FiCpu },
   { label: 'События', href: '/events', icon: FiAlertTriangle },
   { label: 'Состояние системы', href: '/system', icon: FiActivity },

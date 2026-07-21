@@ -7,6 +7,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('автопарк показывает 130 записей и фильтрует карточки', async ({ page }) => {
+  await expect(page.getByTestId('app-header')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Автомобили', level: 1 })).toBeVisible();
   await expect(page.getByTestId('vehicle-count')).toContainText('Показано 130 из 130');
 

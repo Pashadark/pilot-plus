@@ -13,12 +13,19 @@ const tones: Record<BadgeTone, string> = {
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   tone?: BadgeTone;
+  size?: 'sm' | 'md' | 'lg';
 }
 
-export function Badge({ tone = 'neutral', className = '', ...props }: BadgeProps) {
+const sizes = {
+  sm: 'min-h-6 px-2 py-0.5 text-xs',
+  md: 'min-h-7 px-2.5 py-1 text-xs',
+  lg: 'min-h-9 px-3 py-1.5 text-sm',
+};
+
+export function Badge({ tone = 'neutral', size = 'sm', className = '', ...props }: BadgeProps) {
   return (
     <span
-      className={`inline-flex min-h-6 items-center rounded-full px-2 py-0.5 text-xs font-medium ${tones[tone]} ${className}`}
+      className={`inline-flex items-center rounded-full font-medium ${sizes[size]} ${tones[tone]} ${className}`}
       {...props}
     />
   );

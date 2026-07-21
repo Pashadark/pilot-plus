@@ -31,7 +31,10 @@ export function Header({
 
   return (
     <>
-      <header className="fixed inset-x-0 top-0 z-40 flex h-[var(--header-height)] items-center border-b bg-[var(--color-surface)] px-4 md:hidden">
+      <header
+        data-testid="app-header"
+        className="fixed inset-x-0 top-0 z-40 flex h-[var(--header-height)] items-center border-b bg-[var(--color-surface)] px-4 transition-[left] duration-200 md:left-[var(--sidebar-width)] md:px-5"
+      >
         <div className="flex w-full items-center justify-between md:px-6">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <div className="shrink-0 md:hidden">

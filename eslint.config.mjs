@@ -14,6 +14,7 @@ const eslintConfig = defineConfig([
     'next-env.d.ts',
     'src/database/generated/**',
     'src/database/src/generated/**',
+    '.worktrees/**',
   ]),
 ]);
 
