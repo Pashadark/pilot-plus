@@ -93,10 +93,46 @@ Canonical `docs/PROJECT_GUIDE.md` обновлён текущими маршру
 - Существующие action authorization и transition rules не изменялись и не ослаблялись.
 - Prisma schema, migration, роли и unrelated modules не менялись.
 
+## Root review follow-up — полная подпись ТО
+
+Root task review обнаружил, что доступное имя ссылки было полным, но видимый expanded label
+«Техническое обслуживание» мог обрезаться внутри фиксированного `w-40` с
+`overflow-hidden whitespace-nowrap`.
+
+Исправление:
+
+- expanded label занимает остаток строки через `min-w-0 flex-1`, переносится через
+  `whitespace-normal` и использует компактный `leading-snug`;
+- нулевая ширина, `overflow-hidden` и `whitespace-nowrap` остались только в collapsed-ветке;
+- ширина sidebar, icon-only collapsed state и `min-h-11` ссылки не изменялись;
+- desktop и mobile E2E проверяют точный текст видимого label container, условие
+  `scrollWidth <= clientWidth` и высоту ссылки не меньше 44 px;
+- mobile E2E дополнительно подтверждает отсутствие document-level horizontal overflow;
+- `VehicleDetailPage.test.ts` симметрично покрывает wash-only, maintenance-only и обе пустые
+  истории: при одной истории рендерятся обе subsection с локальным empty state, при двух пустых —
+  только общий empty state вкладки.
+
+TDD и проверки follow-up:
+
+- RED: focused Vitest — 1 ожидаемое падение из 8 тестов на отсутствии нового navigation label
+  DOM-контракта; существующие и новые vehicle empty-state тесты прошли.
+- GREEN: `npx vitest run src/shared/components/app-shell/Sidebar.test.ts src/modules/vehicles/components/VehicleDetailPage.test.ts`
+  — 2 файла, 8/8 PASS.
+- `npx playwright test tests/dashboard.spec.ts --project=desktop --workers=1 -g "настольная оболочка показывает постоянную навигацию|мобильный drawer закрывается после выбора ссылки|мобильная оболочка не создаёт горизонтальное переполнение"`
+  с root `.env` — 3/3 PASS.
+- `npm run typecheck` — PASS.
+- `npm run lint` — PASS.
+- `npx prettier --check` для четырёх изменённых файлов — PASS.
+- `git diff --check` и staged diff check — PASS.
+
+Один финальный sandbox-запуск focused Vitest снова встретил известный `esbuild Access is denied`;
+разрешённый повтор вне sandbox прошёл 8/8.
+
 ## Коммиты
 
 - `dab1ea1 feat: integrate maintenance and wash navigation`
 - `7643d0e fix: address maintenance wash integration review`
+- `3d6e982 fix: preserve full maintenance navigation label`
 
 ## Известные предупреждения
 
