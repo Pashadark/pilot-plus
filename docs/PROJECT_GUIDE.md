@@ -142,12 +142,20 @@ ingestion-потока. Redis и MQTT определены в Compose и про�
 `datetime-local` в формах ТО и мойки всегда интерпретируется как бизнес-время Pilot+
 `Europe/Moscow`, независимо от часового пояса сервера. Перед первым применением миграции
 `20260721230000_add_maintenance_and_wash` к уже заполненной legacy-базе оператор обязан выполнить
+`npm run db:preflight:maintenance` и только после успешного результата — `npx prisma migrate deploy`.
+Команда выполняет только чтение. Она останавливает развёртывание при неизвестном статусе, а также
+при `OVERDUE` без `scheduledAt` или с датой, которая ещё не наступила: такие строки нельзя безопасно
+нормализовать в вычисляемую просрочку, их нужно вручную сопоставить и сверить с резервной копией.
+SQL-эквивалент аудита хранится в
 `src/database/prisma/preflight/maintenance_legacy_statuses.sql`. Без ручного сопоставления
 поддерживаются только точные значения `PLANNED`, `IN_PROGRESS`, `COMPLETED`, `OVERDUE` и
-`CANCELLED`. Уже применённая исходная миграция переводила остальные строки в `PLANNED`; восстановить
-исходное значение после такого преобразования можно только из резервной копии. Follow-up миграция
-не меняет checksum исходной и переносит видимое legacy-описание через
-`notes = COALESCE(notes, description)`.
+`CANCELLED`; нормализовать разрешено только `OVERDUE` с доказуемо прошедшей плановой датой.
+Уже применённая исходная миграция переводила остальные строки в `PLANNED`; исходные значения после
+такого преобразования уже утрачены и не восстанавливаются без внешней резервной копии. Follow-up
+миграция не меняет checksum исходной и переносит видимое legacy-описание через
+`notes = COALESCE(notes, description)`. Английские комментарии уже применённого follow-up нельзя
+перевести без checksum drift; их русская checksum-safe расшифровка лежит в
+`src/database/prisma/migration-notes/20260722023000_backfill_maintenance_legacy_notes.comments.ru.sql`.
 
 `/system` — диагностический экран, а не production-мониторинг: он не заменяет сбор метрик, централизованные логи, алерты, внешний uptime-monitoring и runbook. Экран не передаёт в браузер адреса сервисов или значения переменных окружения.
 
@@ -356,6 +364,7 @@ npx playwright test tests/auth.spec.ts tests/system-states.spec.ts tests/profile
 npx prettier --check README.md docs/PROJECT_GUIDE.md
 npm run format:check
 npx prisma validate
+npm run db:preflight:maintenance
 npx prisma migrate deploy
 npm run db:seed
 

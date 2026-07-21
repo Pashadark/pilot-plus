@@ -77,6 +77,22 @@ describe('VehicleDetailPage', () => {
     expect(markup).toContain('В работе');
   });
 
+  it('показывает даты обслуживания в Europe/Moscow независимо от TZ сервера', () => {
+    const originalTimeZone = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+
+    try {
+      const markup = renderToStaticMarkup(
+        createElement(VehicleDetailPage, { vehicle, activeTab: 'maintenance' }),
+      );
+
+      expect(markup).toContain('20 июл. 2026 г., 13:00');
+      expect(markup).toContain('21 июл. 2026 г., 13:00');
+    } finally {
+      process.env.TZ = originalTimeZone;
+    }
+  });
+
   it('объясняет отсутствие мойки, не скрывая историю ТО', () => {
     const markup = renderToStaticMarkup(
       createElement(VehicleDetailPage, {

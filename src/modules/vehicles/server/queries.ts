@@ -2,6 +2,7 @@ import type { Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 
 import type { VehicleCardDto, VehicleDetailDto, VehicleOptionDto } from '../types';
+import { getEffectiveMaintenanceStatus } from '@/modules/maintenance/effective-status';
 
 interface VehicleRepository {
   findMany(args: unknown): Promise<unknown[]>;
@@ -280,7 +281,7 @@ function mapCard(vehicle: RawVehicleCard): VehicleCardDto {
   };
 }
 
-function mapDetail(vehicle: RawVehicle): VehicleDetailDto {
+function mapDetail(vehicle: RawVehicle, referenceTime: Date): VehicleDetailDto {
   return {
     ...mapCard(vehicle),
     vin: vehicle.vin,
@@ -303,6 +304,7 @@ function mapDetail(vehicle: RawVehicle): VehicleDetailDto {
     })),
     maintenanceRecords: vehicle.maintenanceRecords.map((record) => ({
       ...record,
+      status: getEffectiveMaintenanceStatus(record.status, record.scheduledAt, referenceTime),
       scheduledAt: record.scheduledAt?.toISOString() ?? null,
       completedAt: record.completedAt?.toISOString() ?? null,
       targetOdometerKm: optionalNumber(record.targetOdometerKm),
@@ -345,12 +347,12 @@ export function createVehicleQueries(repository: VehicleRepository) {
         image: vehicle.images[0] ?? null,
       }));
     },
-    async getVehicleForUser(userId: string, vehicleId: string) {
+    async getVehicleForUser(userId: string, vehicleId: string, referenceTime = new Date()) {
       const vehicle = await repository.findFirst({
         where: { id: vehicleId, company: { members: { some: { userId } } } },
         select: vehicleDetailSelect,
       });
-      return vehicle ? mapDetail(vehicle as RawVehicle) : null;
+      return vehicle ? mapDetail(vehicle as RawVehicle, referenceTime) : null;
     },
   };
 }

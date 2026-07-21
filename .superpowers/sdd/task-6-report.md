@@ -176,3 +176,31 @@ trace через generated Prisma client. В browser-прогоне встреч
   не перезапускались без необходимости;
 - `npm run build` — PASS, все три маршрута присутствуют. Остались известные предупреждения о
   нескольких lockfile/workspace root и широком Prisma NFT trace.
+
+## Повторный root review — vehicle detail и обязательный legacy preflight
+
+- `VehicleDetailPage` использует общий `PILOT_BUSINESS_TIME_ZONE`; unit-тест меняет TZ процесса на
+  `America/New_York` и фиксирует московский вывод известных UTC-дат ТО и мойки.
+- Vehicle detail query применяет `getEffectiveMaintenanceStatus` ко всем maintenance summaries с
+  одним `referenceTime` на весь `mapDetail`; прошедший stored `PLANNED` согласованно выдаётся как
+  `OVERDUE`.
+- `npm run db:preflight:maintenance` выполняет только `SELECT`: на чистой БД разрешает отсутствие
+  legacy-таблицы, а на существующей запрещает неизвестные статусы и `OVERDUE`, для которых
+  `scheduledAt` отсутствует либо ещё не наступил. В документации команда стоит непосредственно
+  перед `prisma migrate deploy`.
+- Обе применённые migration.sql оставлены байт-в-байт неизменными. Mutable preflight SQL полностью
+  переведён на русский. Перевод комментариев уже применённого follow-up вынесен в checksum-safe
+  русский SQL-sidecar; изменение самого файла создало бы запрещённый checksum drift.
+- Уже потерянные старой миграцией неизвестные значения статусов не объявляются восстановимыми:
+  восстановление возможно только из внешней резервной копии.
+
+Проверки повторного review:
+
+- focused Vitest — 4 файла, 20/20 PASS после зафиксированного RED по всем трём контрактам;
+- `npm run db:preflight:maintenance` на текущей PostgreSQL — PASS;
+- `npx prisma migrate status` — PASS, 5 миграций, схема актуальна;
+- `npm run typecheck`, `npm run lint`, Prettier для поддерживаемых форматов и `git diff --check` —
+  PASS; SQL проверен тестами и вручную, потому что настроенного Prettier SQL parser в проекте нет;
+- `tests/vehicles.spec.ts --project=desktop --workers=1` — 6/6 PASS;
+- `npm run build` — PASS с прежними предупреждениями workspace root и Prisma NFT trace;
+- `git diff 7bd3df0` для обеих применённых `migration.sql` пуст: checksum-файлы не изменены.

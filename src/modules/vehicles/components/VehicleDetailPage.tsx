@@ -15,6 +15,7 @@ import { VehicleOverview } from './VehicleOverview';
 import { VehiclePhoto } from './VehiclePhoto';
 import { VehicleTabs } from './VehicleTabs';
 import type { VehicleTab } from './vehicle-tabs';
+import { PILOT_BUSINESS_TIME_ZONE } from '@/shared/business-time';
 import { Badge, Card, CardContent, CardHeader } from '@/shared/ui';
 
 const statuses: Record<
@@ -70,9 +71,11 @@ const washKinds: Record<VehicleWashKind, string> = {
 
 function formatDate(value: string | null) {
   return value
-    ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(
-        new Date(value),
-      )
+    ? new Intl.DateTimeFormat('ru-RU', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: PILOT_BUSINESS_TIME_ZONE,
+      }).format(new Date(value))
     : 'Нет данных';
 }
 

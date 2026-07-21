@@ -69,7 +69,14 @@ describe('доменная схема автопарка', () => {
       "'PLANNED', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE', 'CANCELLED'",
     );
     expect(maintenanceStatusPreflight).toContain('RAISE EXCEPTION');
-    expect(maintenanceStatusPreflight).toContain('Map them explicitly before migration.');
+    expect(maintenanceStatusPreflight).toContain('Сопоставьте их вручную до миграции.');
     expect(maintenanceStatusPreflight).toContain('GROUP BY "status"::text');
+  });
+
+  it('preflight останавливает нормализацию недоказуемого legacy OVERDUE', () => {
+    expect(maintenanceStatusPreflight).toContain(`"status"::text = 'OVERDUE'`);
+    expect(maintenanceStatusPreflight).toContain('"scheduledAt" IS NULL');
+    expect(maintenanceStatusPreflight).toContain('"scheduledAt" >= CURRENT_TIMESTAMP');
+    expect(maintenanceStatusPreflight).toContain('требуют ручного сопоставления');
   });
 });

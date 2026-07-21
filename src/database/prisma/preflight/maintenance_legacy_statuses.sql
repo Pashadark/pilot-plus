@@ -1,8 +1,9 @@
--- Run this read/audit block BEFORE `prisma migrate deploy` when upgrading a populated database
--- that still has MaintenanceRecord.status as text.
+-- Выполните этот блок чтения и аудита ДО `prisma migrate deploy` при обновлении заполненной базы,
+-- в которой MaintenanceRecord.status ещё хранится как текст.
 DO $$
 DECLARE
   unsupported_statuses text;
+  non_derivable_overdue_count integer;
 BEGIN
   SELECT string_agg(format('%s (%s)', "status", row_count), ', ' ORDER BY "status")
   INTO unsupported_statuses
@@ -15,7 +16,19 @@ BEGIN
 
   IF unsupported_statuses IS NOT NULL THEN
     RAISE EXCEPTION
-      'Unsupported MaintenanceRecord statuses: %. Map them explicitly before migration.',
+      'Неподдерживаемые статусы MaintenanceRecord: %. Сопоставьте их вручную до миграции.',
       unsupported_statuses;
+  END IF;
+
+  SELECT COUNT(*)::integer
+  INTO non_derivable_overdue_count
+  FROM "public"."MaintenanceRecord"
+  WHERE "status"::text = 'OVERDUE'
+    AND ("scheduledAt" IS NULL OR "scheduledAt" >= CURRENT_TIMESTAMP);
+
+  IF non_derivable_overdue_count > 0 THEN
+    RAISE EXCEPTION
+      'Строки OVERDUE без прошедшей плановой даты (% шт.) требуют ручного сопоставления и проверки резервной копии до миграции.',
+      non_derivable_overdue_count;
   END IF;
 END $$;

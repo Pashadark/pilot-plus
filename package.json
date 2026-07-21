@@ -12,6 +12,7 @@
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "db:seed": "tsx src/database/prisma/seed.ts",
+    "db:preflight:maintenance": "tsx scripts/maintenance-migration-preflight.ts",
     "vehicles:sync-images": "tsx scripts/sync-vehicle-images.ts",
     "test:e2e": "playwright test",
     "test:e2e:auth": "playwright test tests/auth.spec.ts --workers=1",

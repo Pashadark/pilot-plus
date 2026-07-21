@@ -187,6 +187,42 @@ describe('запросы автопарка', () => {
     });
   });
 
+  it('выдаёт прошедшее PLANNED обслуживание как эффективное OVERDUE одним reference time', async () => {
+    const referenceTime = new Date('2026-07-22T12:00:00.000Z');
+    const repository = {
+      async findMany() {
+        return [];
+      },
+      async findFirst() {
+        return {
+          ...rawVehicle,
+          maintenanceRecords: [
+            {
+              ...rawVehicle.maintenanceRecords[0],
+              id: 'maintenance-overdue',
+              status: 'PLANNED',
+              scheduledAt: new Date('2026-07-22T11:59:59.000Z'),
+            },
+            {
+              ...rawVehicle.maintenanceRecords[0],
+              id: 'maintenance-future',
+              status: 'PLANNED',
+              scheduledAt: new Date('2026-07-22T12:00:00.000Z'),
+            },
+          ],
+        };
+      },
+    };
+    const queries = createVehicleQueries(repository);
+
+    const vehicle = await queries.getVehicleForUser('user-1', 'vehicle-1', referenceTime);
+
+    expect(vehicle?.maintenanceRecords.map((record) => record.status)).toEqual([
+      'OVERDUE',
+      'PLANNED',
+    ]);
+  });
+
   it('возвращает null для недоступного автомобиля', async () => {
     const repository = {
       async findMany() {
