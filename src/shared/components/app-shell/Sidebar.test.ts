@@ -22,9 +22,17 @@ const summary = {
 
 describe('Sidebar health summary', () => {
   it('показывает ТО и мойку в единой навигации с доменными иконками', () => {
-    expect(navigation.map(({ href }) => href)).toEqual(
-      expect.arrayContaining(['/maintenance', '/wash']),
-    );
+    expect(navigation.map(({ href }) => href)).toEqual([
+      '/',
+      '/map',
+      '/vehicles',
+      '/maintenance',
+      '/wash',
+      '/devices',
+      '/events',
+      '/system',
+      '/ui-kit',
+    ]);
     expect(navigation).toEqual(
       expect.arrayContaining([
         { label: 'Техническое обслуживание', href: '/maintenance', icon: FiTool },

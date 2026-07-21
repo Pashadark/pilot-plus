@@ -76,4 +76,17 @@ describe('VehicleDetailPage', () => {
     expect(markup).toContain('Комплексная');
     expect(markup).toContain('В работе');
   });
+
+  it('объясняет отсутствие одного вида истории, не скрывая другой', () => {
+    const markup = renderToStaticMarkup(
+      createElement(VehicleDetailPage, {
+        vehicle: { ...vehicle, washRecords: [] },
+        activeTab: 'maintenance',
+      }),
+    );
+
+    expect(markup).toContain('История технического обслуживания');
+    expect(markup).toContain('История моек');
+    expect(markup).toContain('Записей о мойке пока нет');
+  });
 });

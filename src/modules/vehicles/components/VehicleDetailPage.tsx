@@ -144,13 +144,13 @@ function TabContent({ vehicle, tab }: { vehicle: VehicleDetailDto; tab: VehicleT
   if (tab === 'maintenance' && (vehicle.maintenanceRecords.length || vehicle.washRecords.length))
     return (
       <div className="grid gap-4 xl:grid-cols-2">
-        {vehicle.maintenanceRecords.length ? (
-          <Card data-testid="vehicle-maintenance-history">
-            <CardHeader>
-              <h2 className="font-bold">История технического обслуживания</h2>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              {vehicle.maintenanceRecords.map((record) => {
+        <Card data-testid="vehicle-maintenance-history">
+          <CardHeader>
+            <h2 className="font-bold">История технического обслуживания</h2>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {vehicle.maintenanceRecords.length ? (
+              vehicle.maintenanceRecords.map((record) => {
                 const status = maintenanceStatuses[record.status];
                 return (
                   <article
@@ -174,17 +174,19 @@ function TabContent({ vehicle, tab }: { vehicle: VehicleDetailDto; tab: VehicleT
                     </p>
                   </article>
                 );
-              })}
-            </CardContent>
-          </Card>
-        ) : null}
-        {vehicle.washRecords.length ? (
-          <Card data-testid="vehicle-wash-history">
-            <CardHeader>
-              <h2 className="font-bold">История моек</h2>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              {vehicle.washRecords.map((record) => {
+              })
+            ) : (
+              <p className="text-sm text-[var(--color-text-secondary)]">Записей о ТО пока нет.</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card data-testid="vehicle-wash-history">
+          <CardHeader>
+            <h2 className="font-bold">История моек</h2>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {vehicle.washRecords.length ? (
+              vehicle.washRecords.map((record) => {
                 const status = washStatuses[record.status];
                 return (
                   <article
@@ -202,10 +204,14 @@ function TabContent({ vehicle, tab }: { vehicle: VehicleDetailDto; tab: VehicleT
                     </p>
                   </article>
                 );
-              })}
-            </CardContent>
-          </Card>
-        ) : null}
+              })
+            ) : (
+              <p className="text-sm text-[var(--color-text-secondary)]">
+                Записей о мойке пока нет.
+              </p>
+            )}
+          </CardContent>
+        </Card>
       </div>
     );
   if (tab === 'documents' && vehicle.documents.length)

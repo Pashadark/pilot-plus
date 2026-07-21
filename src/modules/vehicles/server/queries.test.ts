@@ -110,6 +110,12 @@ describe('запросы автопарка', () => {
         },
       },
     });
+    expect(fake.calls.list).not.toMatchObject({
+      select: {
+        maintenanceRecords: expect.anything(),
+        washRecords: expect.anything(),
+      },
+    });
     expect(vehicles[0]).not.toHaveProperty('companyId');
     expect(vehicles[0]?.primaryImage).not.toHaveProperty('sourceUrl');
   });
@@ -174,6 +180,7 @@ describe('запросы автопарка', () => {
             provider: true,
             costMinor: true,
           },
+          orderBy: { scheduledAt: 'desc' },
           take: 50,
         },
       },

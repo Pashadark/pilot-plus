@@ -14,15 +14,19 @@ async function createVehicleHistory() {
   });
   if (!vehicle) throw new Error('Автомобиль администратора для E2E истории не найден.');
 
-  const [maintenance, wash] = await Promise.all([
+  const marker = `[Pilot+ E2E vehicle history:${process.pid}]`;
+  const maintenanceTitle = `${marker} Замена масла`;
+  const washProvider = `${marker} Мойка Pilot`;
+  const scheduledAt = new Date();
+  const [maintenance, wash] = await prisma.$transaction([
     prisma.maintenanceRecord.create({
       data: {
         vehicleId: vehicle.id,
-        title: `[Pilot+ E2E vehicle history:${process.pid}] Замена масла`,
+        title: maintenanceTitle,
         kind: 'OIL',
         status: 'COMPLETED',
-        scheduledAt: new Date('2026-07-20T10:00:00.000Z'),
-        completedAt: new Date('2026-07-20T12:00:00.000Z'),
+        scheduledAt,
+        completedAt: scheduledAt,
         targetOdometerKm: 15000.5,
         provider: 'Сервис Pilot E2E',
         costMinor: 420000,
@@ -34,15 +38,21 @@ async function createVehicleHistory() {
         vehicleId: vehicle.id,
         kind: 'COMPLEX',
         status: 'IN_PROGRESS',
-        scheduledAt: new Date('2026-07-21T10:00:00.000Z'),
-        startedAt: new Date('2026-07-21T10:05:00.000Z'),
-        provider: `[Pilot+ E2E vehicle history:${process.pid}] Мойка Pilot`,
+        scheduledAt,
+        startedAt: scheduledAt,
+        provider: washProvider,
         costMinor: 190000,
       },
       select: { id: true },
     }),
   ]);
-  return { vehicle, maintenanceId: maintenance.id, washId: wash.id };
+  return {
+    vehicle,
+    maintenanceId: maintenance.id,
+    washId: wash.id,
+    maintenanceTitle,
+    washProvider,
+  };
 }
 
 test.beforeEach(async ({ page }) => {
@@ -86,7 +96,7 @@ test('подробности автомобиля показывают реал�
 
     const maintenance = page.getByTestId('vehicle-maintenance-history');
     await expect(maintenance).toContainText('История технического обслуживания');
-    await expect(maintenance).toContainText('Замена масла');
+    await expect(maintenance).toContainText(history.maintenanceTitle);
     await expect(maintenance).toContainText('Масло');
     await expect(maintenance).toContainText('Завершено');
 
@@ -94,6 +104,7 @@ test('подробности автомобиля показывают реал�
     await expect(wash).toContainText('История моек');
     await expect(wash).toContainText('Комплексная');
     await expect(wash).toContainText('В работе');
+    await expect(wash).toContainText(history.washProvider);
   } finally {
     await Promise.all([
       prisma.maintenanceRecord.deleteMany({ where: { id: history.maintenanceId } }),

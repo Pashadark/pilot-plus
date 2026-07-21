@@ -83,7 +83,63 @@ interface RawVehicle {
   }[];
 }
 
-const vehicleSelect = {
+type RawVehicleCard = Pick<
+  RawVehicle,
+  | 'id'
+  | 'internalNumber'
+  | 'model'
+  | 'city'
+  | 'office'
+  | 'registrationNumber'
+  | 'transmission'
+  | 'engineLiters'
+  | 'fuelType'
+  | 'seats'
+  | 'dailyPriceMinor'
+  | 'currency'
+  | 'originalPrice'
+  | 'features'
+  | 'status'
+  | 'positions'
+  | 'trips'
+  | 'images'
+>;
+
+const vehicleCardSelect = {
+  id: true,
+  internalNumber: true,
+  model: true,
+  city: true,
+  office: true,
+  registrationNumber: true,
+  transmission: true,
+  engineLiters: true,
+  fuelType: true,
+  seats: true,
+  dailyPriceMinor: true,
+  currency: true,
+  originalPrice: true,
+  features: true,
+  status: true,
+  positions: {
+    select: { odometerKm: true, fuelLevelPercent: true, recordedAt: true },
+    orderBy: { recordedAt: 'desc' as const },
+    take: 1,
+  },
+  trips: {
+    select: { startedAt: true },
+    orderBy: { startedAt: 'desc' as const },
+    take: 1,
+  },
+  images: {
+    where: { isPrimary: true },
+    select: { localPath: true, alt: true },
+    orderBy: { position: 'asc' as const },
+    take: 1,
+  },
+} satisfies Prisma.VehicleSelect;
+
+const vehicleDetailSelect = {
   id: true,
   internalNumber: true,
   model: true,
@@ -194,7 +250,7 @@ function optionalNumber(value: unknown | null | undefined) {
   return value === null || value === undefined ? null : Number(value);
 }
 
-function mapCard(vehicle: RawVehicle): VehicleCardDto {
+function mapCard(vehicle: RawVehicleCard): VehicleCardDto {
   const position = vehicle.positions[0];
   const trip = vehicle.trips[0];
   return {
@@ -269,10 +325,10 @@ export function createVehicleQueries(repository: VehicleRepository) {
     async listVehiclesForUser(userId: string) {
       const vehicles = await repository.findMany({
         where: { company: { members: { some: { userId } } } },
-        select: vehicleSelect,
+        select: vehicleCardSelect,
         orderBy: [{ city: 'asc' }, { model: 'asc' }, { internalNumber: 'asc' }],
       });
-      return (vehicles as RawVehicle[]).map(mapCard);
+      return (vehicles as RawVehicleCard[]).map(mapCard);
     },
     async listVehicleOptionsForUser(userId: string): Promise<VehicleOptionDto[]> {
       const vehicles = await repository.findMany({
@@ -292,7 +348,7 @@ export function createVehicleQueries(repository: VehicleRepository) {
     async getVehicleForUser(userId: string, vehicleId: string) {
       const vehicle = await repository.findFirst({
         where: { id: vehicleId, company: { members: { some: { userId } } } },
-        select: vehicleSelect,
+        select: vehicleDetailSelect,
       });
       return vehicle ? mapDetail(vehicle as RawVehicle) : null;
     },
