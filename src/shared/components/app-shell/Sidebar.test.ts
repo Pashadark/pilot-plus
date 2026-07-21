@@ -41,6 +41,17 @@ describe('Sidebar health summary', () => {
     );
   });
 
+  it('даёт раскрытым подписям доступную ширину и перенос строк', () => {
+    const markup = renderToStaticMarkup(
+      createElement(Sidebar, { expanded: true, user, systemHealthSummary: summary }),
+    );
+
+    expect(markup).toContain('data-navigation-label="true"');
+    expect(markup).toContain('min-w-0 flex-1');
+    expect(markup).toContain('leading-snug whitespace-normal');
+    expect(markup).not.toContain('w-40 opacity-100');
+  });
+
   it.each([
     ['desktop', true],
     ['mobile', undefined],

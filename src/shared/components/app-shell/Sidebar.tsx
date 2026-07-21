@@ -72,8 +72,11 @@ export function Sidebar({
             >
               <Icon aria-hidden="true" className="size-5 shrink-0" />
               <span
-                className={`overflow-hidden whitespace-nowrap transition-[width,opacity] duration-200 ${
-                  expanded ? 'w-40 opacity-100' : 'w-0 opacity-0'
+                data-navigation-label="true"
+                className={`transition-[width,opacity] duration-200 ${
+                  expanded
+                    ? 'min-w-0 flex-1 py-2 leading-snug whitespace-normal opacity-100'
+                    : 'w-0 overflow-hidden whitespace-nowrap opacity-0'
                 }`}
               >
                 {item.label}

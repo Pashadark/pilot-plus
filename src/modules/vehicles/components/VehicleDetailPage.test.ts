@@ -77,7 +77,7 @@ describe('VehicleDetailPage', () => {
     expect(markup).toContain('В работе');
   });
 
-  it('объясняет отсутствие одного вида истории, не скрывая другой', () => {
+  it('объясняет отсутствие мойки, не скрывая историю ТО', () => {
     const markup = renderToStaticMarkup(
       createElement(VehicleDetailPage, {
         vehicle: { ...vehicle, washRecords: [] },
@@ -88,5 +88,34 @@ describe('VehicleDetailPage', () => {
     expect(markup).toContain('История технического обслуживания');
     expect(markup).toContain('История моек');
     expect(markup).toContain('Записей о мойке пока нет');
+  });
+
+  it('объясняет отсутствие ТО, не скрывая историю мойки', () => {
+    const markup = renderToStaticMarkup(
+      createElement(VehicleDetailPage, {
+        vehicle: { ...vehicle, maintenanceRecords: [] },
+        activeTab: 'maintenance',
+      }),
+    );
+
+    expect(markup).toContain('История технического обслуживания');
+    expect(markup).toContain('Записей о ТО пока нет');
+    expect(markup).toContain('История моек');
+    expect(markup).toContain('Комплексная');
+    expect(markup).not.toContain('Записей о мойке пока нет');
+  });
+
+  it('показывает общий empty state, когда обе истории отсутствуют', () => {
+    const markup = renderToStaticMarkup(
+      createElement(VehicleDetailPage, {
+        vehicle: { ...vehicle, maintenanceRecords: [], washRecords: [] },
+        activeTab: 'maintenance',
+      }),
+    );
+
+    expect(markup).toContain('Обслуживание ещё не запланировано');
+    expect(markup).toContain('Здесь будут регламенты, выполненные работы, даты и пробег.');
+    expect(markup).not.toContain('История технического обслуживания');
+    expect(markup).not.toContain('История моек');
   });
 });

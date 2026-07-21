@@ -1,4 +1,14 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+
+async function expectNavigationLabelFits(link: Locator, label: string) {
+  const container = link.locator('[data-navigation-label="true"]');
+  await expect(container).toBeVisible();
+  await expect(container).toHaveText(label);
+  await expect
+    .poll(() => container.evaluate((element) => element.scrollWidth <= element.clientWidth))
+    .toBe(true);
+  expect((await link.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+}
 
 async function openAuthenticatedDashboard(page: Page) {
   await page.goto('/');
@@ -29,8 +39,10 @@ test('настольная оболочка показывает постоян�
   await page.goto('/');
 
   await expect(page.getByRole('navigation', { name: 'Основная навигация' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Техническое обслуживание' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Мойка' })).toBeVisible();
+  const maintenanceLink = page.getByRole('link', { name: 'Техническое обслуживание' });
+  const washLink = page.getByRole('link', { name: 'Мойка' });
+  await expectNavigationLabelFits(maintenanceLink, 'Техническое обслуживание');
+  await expectNavigationLabelFits(washLink, 'Мойка');
   await expect(page.getByRole('link', { name: 'Дизайн-система' })).toBeVisible();
   await expect(page.getByTestId('app-header')).toBeVisible();
   await expect(page.getByRole('searchbox', { name: 'Глобальный поиск' })).toBeVisible();
@@ -264,8 +276,11 @@ test('мобильный drawer закрывается после выбора �
   await page.getByRole('button', { name: 'Открыть меню' }).click();
   const dialog = page.getByRole('dialog', { name: 'Мобильная навигация' });
 
-  await expect(dialog.getByRole('link', { name: 'Техническое обслуживание' })).toBeVisible();
-  await expect(dialog.getByRole('link', { name: 'Мойка' })).toBeVisible();
+  await expectNavigationLabelFits(
+    dialog.getByRole('link', { name: 'Техническое обслуживание' }),
+    'Техническое обслуживание',
+  );
+  await expectNavigationLabelFits(dialog.getByRole('link', { name: 'Мойка' }), 'Мойка');
 
   await dialog.getByRole('link', { name: 'Панель управления' }).click();
   await expect(dialog).toBeHidden();
