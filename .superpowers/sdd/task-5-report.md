@@ -71,3 +71,23 @@
 ## Коммит review fixes
 
 - `e0e6e50 fix: address wash workspace review`
+
+## Final review — стабилизация E2E
+
+- Абсолютные `scheduledAt` удалены. Тест формирует локальный `YYYY-MM-DDTHH:mm` во время запуска: обычно текущее время + 5 минут, а в 23-м часу — 22:30 того же локального дня, чтобы не пересечь полночь. Завтрашние записи также вычисляются от runtime-даты.
+- Абсолютное ожидание 130 удалено. E2E читает исходный numeric KPI «Требуют мойки», проверяет `NEEDS_WASH` выбранного автомобиля и после `COMPLETED` ожидает ровно `baseline - 1`.
+- Собственный overflow planning dialog проверяется условием `scrollWidth <= clientWidth` до выбора автомобиля и после появления локального WebP. Отдельно сохраняется проверка document-level overflow.
+- Pending coverage стала детерминированной: тест заранее создаёт вторую запись, задерживает один POST `/wash`, видит «Обновляем…» только у выбранного действия, а у другой строки подтверждает отсутствие loading-копирайта. Другое действие выбранной строки и действия второй строки на время Server Action отключены.
+
+### Финальные проверки test-only fix
+
+- `npx playwright test tests/wash.spec.ts --project=desktop --workers=1` с переменными из корневого `.env` — 2/2 PASS.
+- `npx vitest run src/modules/wash/cleanliness.test.ts` — 4/4 PASS.
+- `npm run typecheck` — PASS.
+- `npx eslint tests/wash.spec.ts` — PASS.
+- `npx prettier --check tests/wash.spec.ts` — PASS.
+- `git diff --cached --check` — PASS.
+
+## Коммит test-only fix
+
+- `ffe49f0 test: stabilize wash workspace coverage`
