@@ -1,11 +1,13 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useActionState, useCallback, useEffect, useMemo, useState } from 'react';
 import { FiAlertTriangle, FiCheckCircle, FiClock, FiPlus, FiSearch, FiTool } from 'react-icons/fi';
 
+import { transitionMaintenanceAction } from '../actions';
 import type { MaintenanceRecordDto } from '../server/queries';
-import type { MaintenanceKind, MaintenanceStatus } from '../types';
+import type { MaintenanceKind, MaintenanceStatus, OperationActionState } from '../types';
 import type { VehicleOptionDto } from '@/modules/vehicles/types';
+import { useToast } from '@/shared/providers/ToastProvider';
 import { Badge, Button, Card, EmptyState, Modal, SearchInput, Select } from '@/shared/ui';
 
 import { MaintenanceForm } from './MaintenanceForm';
@@ -21,6 +23,7 @@ import {
 type Filters = { query: string; status: '' | MaintenanceStatus; kind: '' | MaintenanceKind };
 
 const initialFilters: Filters = { query: '', status: '', kind: '' };
+const initialTransitionState: OperationActionState = { status: 'idle' };
 
 function normalize(value: string) {
   return value.toLocaleLowerCase('ru-RU').trim();
@@ -70,6 +73,11 @@ export function MaintenanceWorkspace({
   const [filters, setFilters] = useState(initialFilters);
   const [formOpen, setFormOpen] = useState(false);
   const [referenceTime] = useState(() => Date.now());
+  const [transitionState, transitionFormAction, transitionPending] = useActionState(
+    transitionMaintenanceAction,
+    initialTransitionState,
+  );
+  const { showToast } = useToast();
   const visibleRecords = useMemo(
     () => records.filter((record) => matchesFilters(record, filters)),
     [filters, records],
@@ -81,6 +89,14 @@ export function MaintenanceWorkspace({
     return remaining <= 7 * 24 * 60 * 60 * 1000;
   });
   const closeAfterSuccess = useCallback(() => setFormOpen(false), []);
+
+  useEffect(() => {
+    if (!transitionState.message || transitionState.status === 'idle') return;
+    showToast({
+      tone: transitionState.status === 'success' ? 'success' : 'danger',
+      title: transitionState.message,
+    });
+  }, [showToast, transitionState]);
 
   return (
     <>
@@ -253,7 +269,11 @@ export function MaintenanceWorkspace({
                       <Badge tone={status.tone}>{status.label}</Badge>
                     </td>
                     <td className="px-4 py-4">
-                      <MaintenanceRecordActions record={record} />
+                      <MaintenanceRecordActions
+                        record={record}
+                        formAction={transitionFormAction}
+                        pending={transitionPending}
+                      />
                     </td>
                   </tr>
                 );
@@ -277,6 +297,8 @@ export function MaintenanceWorkspace({
             <MaintenanceRecordCard
               key={record.id}
               record={record}
+              formAction={transitionFormAction}
+              pending={transitionPending}
               testId="maintenance-mobile-record"
             />
           ))

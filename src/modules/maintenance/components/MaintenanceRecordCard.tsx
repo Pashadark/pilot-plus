@@ -1,12 +1,9 @@
 'use client';
 
-import { useActionState, useEffect } from 'react';
 import { FiCalendar, FiCheckCircle, FiClock, FiMapPin, FiPlay, FiX } from 'react-icons/fi';
 
-import { transitionMaintenanceAction } from '../actions';
-import type { MaintenanceKind, MaintenanceStatus, OperationActionState } from '../types';
+import type { MaintenanceKind, MaintenanceStatus } from '../types';
 import type { MaintenanceRecordDto } from '../server/queries';
-import { useToast } from '@/shared/providers/ToastProvider';
 import { Badge, Button, Card } from '@/shared/ui';
 
 export const maintenanceStatusView: Record<
@@ -30,7 +27,12 @@ export const maintenanceKindLabels: Record<MaintenanceKind, string> = {
   OTHER: 'Другое',
 };
 
-const initialState: OperationActionState = { status: 'idle' };
+type TransitionFormAction = (formData: FormData) => void;
+
+export type MaintenanceTransitionControls = {
+  formAction: TransitionFormAction;
+  pending: boolean;
+};
 
 export function formatMaintenanceDate(value: string | null) {
   if (!value) return 'Дата не указана';
@@ -49,20 +51,14 @@ export function formatMaintenanceCost(value: number | null) {
   }).format(value / 100);
 }
 
-export function MaintenanceRecordActions({ record }: { record: MaintenanceRecordDto }) {
-  const [state, formAction, pending] = useActionState(transitionMaintenanceAction, initialState);
-  const { showToast } = useToast();
+export function MaintenanceRecordActions({
+  record,
+  formAction,
+  pending,
+}: { record: MaintenanceRecordDto } & MaintenanceTransitionControls) {
   const canStart = record.status === 'PLANNED' || record.status === 'OVERDUE';
   const canComplete = record.status === 'IN_PROGRESS';
   const canCancel = canStart || canComplete;
-
-  useEffect(() => {
-    if (!state.message || state.status === 'idle') return;
-    showToast({
-      tone: state.status === 'success' ? 'success' : 'danger',
-      title: state.message,
-    });
-  }, [showToast, state]);
 
   if (!canStart && !canComplete && !canCancel) return null;
 
@@ -107,19 +103,16 @@ export function MaintenanceRecordActions({ record }: { record: MaintenanceRecord
           Отменить
         </Button>
       ) : null}
-      {state.status === 'error' && state.message ? (
-        <p role="alert" className="w-full text-sm text-[var(--color-danger)]">
-          {state.message}
-        </p>
-      ) : null}
     </form>
   );
 }
 
 export function MaintenanceRecordCard({
   record,
+  formAction,
+  pending,
   testId = 'maintenance-record',
-}: {
+}: MaintenanceTransitionControls & {
   record: MaintenanceRecordDto;
   testId?: string;
 }) {
@@ -180,7 +173,7 @@ export function MaintenanceRecordCard({
             {[record.provider, record.notes].filter(Boolean).join(' · ')}
           </p>
         ) : null}
-        <MaintenanceRecordActions record={record} />
+        <MaintenanceRecordActions record={record} formAction={formAction} pending={pending} />
       </article>
     </Card>
   );
