@@ -4,6 +4,7 @@ import { FiBell, FiLogOut, FiMenu, FiMoon, FiSearch, FiSun, FiUser } from 'react
 
 import { logoutAction } from '@/modules/auth/actions';
 import type { SafeUser } from '@/modules/auth/types';
+import type { SystemHealthSummary } from '@/modules/system-health/types';
 import { useTheme } from '@/shared/providers/ThemeProvider';
 import { IconButton } from '@/shared/ui/IconButton';
 import { Breadcrumbs, DropdownMenu, SearchInput } from '@/shared/ui';
@@ -17,12 +18,14 @@ export function Header({
   mobileNavigationOpen,
   onOpenMobileNavigation,
   onCloseMobileNavigation,
+  systemHealthSummary,
 }: {
   breadcrumbs: readonly Breadcrumb[];
   user: SafeUser;
   mobileNavigationOpen: boolean;
   onOpenMobileNavigation: () => void;
   onCloseMobileNavigation: () => void;
+  systemHealthSummary: SystemHealthSummary;
 }) {
   const { theme, toggleTheme } = useTheme();
 
@@ -103,6 +106,7 @@ export function Header({
           if (!open) onCloseMobileNavigation();
         }}
         user={user}
+        systemHealthSummary={systemHealthSummary}
       />
     </>
   );

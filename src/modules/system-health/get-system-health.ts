@@ -65,6 +65,17 @@ function present(
   };
 }
 
+function fallbackStatus(
+  status: ServiceHealthStatus['status'],
+  startedAt: number,
+): ServiceHealthStatus {
+  return {
+    status,
+    latencyMs: status === 'unconfigured' ? 0 : Math.min(SERVICE_TIMEOUT_MS, Date.now() - startedAt),
+    checkedAt: new Date().toISOString(),
+  };
+}
+
 async function checkPostgresql(): Promise<ServiceHealthStatus> {
   const startedAt = Date.now();
   if (!process.env.DATABASE_URL) {
@@ -97,17 +108,52 @@ export function createSystemHealthChecker({
   environment,
 }: SystemHealthDependencies) {
   return async function getSystemHealth(): Promise<ServiceHealth[]> {
-    const [postgresql, redis, mqtt] = await Promise.all([
-      checkDatabase(),
-      checkTcp(serviceConfig(environment, 'redis')),
-      checkTcp(serviceConfig(environment, 'mqtt')),
-    ]);
+    const startedAt = Date.now();
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<void>((resolve) => {
+      deadlineTimer = setTimeout(resolve, SERVICE_TIMEOUT_MS);
+    });
+    const redisConfig = serviceConfig(environment, 'redis');
+    const mqttConfig = serviceConfig(environment, 'mqtt');
 
-    return [
-      present('postgresql', 'PostgreSQL', postgresql),
-      present('redis', 'Redis', redis),
-      present('mqtt', 'MQTT', mqtt),
-    ];
+    const settleProbe = (
+      probe: () => Promise<ServiceHealthStatus>,
+      timeoutStatus: ServiceHealthStatus['status'],
+    ) => {
+      let probePromise: Promise<ServiceHealthStatus>;
+      try {
+        probePromise = probe();
+      } catch {
+        probePromise = Promise.resolve(fallbackStatus(timeoutStatus, startedAt));
+      }
+
+      return Promise.race([
+        probePromise.catch(() => fallbackStatus(timeoutStatus, startedAt)),
+        deadline.then(() => fallbackStatus(timeoutStatus, startedAt)),
+      ]);
+    };
+
+    try {
+      const [postgresql, redis, mqtt] = await Promise.all([
+        settleProbe(checkDatabase, environment.DATABASE_URL ? 'unavailable' : 'unconfigured'),
+        settleProbe(
+          () => checkTcp(redisConfig),
+          redisConfig.host && redisConfig.port ? 'unavailable' : 'unconfigured',
+        ),
+        settleProbe(
+          () => checkTcp(mqttConfig),
+          mqttConfig.host && mqttConfig.port ? 'unavailable' : 'unconfigured',
+        ),
+      ]);
+
+      return [
+        present('postgresql', 'PostgreSQL', postgresql),
+        present('redis', 'Redis', redis),
+        present('mqtt', 'MQTT', mqtt),
+      ];
+    } finally {
+      clearTimeout(deadlineTimer);
+    }
   };
 }
 

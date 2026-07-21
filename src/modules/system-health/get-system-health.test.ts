@@ -18,6 +18,43 @@ const healthy = {
 };
 
 describe('getSystemHealth', () => {
+  it('завершает все probes по общему дедлайну и возвращает только безопасные результаты', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-20T12:00:00.000Z'));
+    const never = new Promise<typeof healthy>(() => undefined);
+    const getSystemHealth = createSystemHealthChecker({
+      checkDatabase: vi.fn(() => never),
+      checkTcp: vi.fn(() => never),
+      environment: {
+        NODE_ENV: 'production',
+        DATABASE_URL: 'postgresql://secret-host:5432/pilot',
+        REDIS_HOST: 'redis.secret.internal',
+        REDIS_PORT: '6379',
+      },
+    });
+
+    const resultPromise = getSystemHealth();
+    let settled = false;
+    void resultPromise.finally(() => {
+      settled = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(999);
+    expect(settled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    const services = await resultPromise;
+
+    expect(services.map(({ key, status }) => ({ key, status }))).toEqual([
+      { key: 'postgresql', status: 'unavailable' },
+      { key: 'redis', status: 'unavailable' },
+      { key: 'mqtt', status: 'unconfigured' },
+    ]);
+    expect(services.every((service) => service.latencyMs <= 1_000)).toBe(true);
+    expect(JSON.stringify(services)).not.toMatch(/secret|host|port|error/i);
+    vi.useRealTimers();
+  });
+
   it('запускает PostgreSQL, Redis и MQTT параллельно', async () => {
     const database = deferred<typeof healthy>();
     const redis = deferred<typeof healthy>();

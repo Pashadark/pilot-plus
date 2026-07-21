@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -29,17 +30,20 @@ test('фирменная 404 помещается в экран шириной 3
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });
 
-test('error boundaries используют retry Next.js 16.2 и не раскрывают message', () => {
-  for (const relativePath of [
-    'src/app/(protected)/error.tsx',
-    'src/app/(protected)/vehicles/error.tsx',
-    'src/app/global-error.tsx',
-  ]) {
-    const source = readFileSync(resolve(relativePath), 'utf8');
+test('protected boundary падает в runtime и восстанавливается через unstable_retry', async ({
+  page,
+}) => {
+  test.skip(
+    process.env.PILOT_E2E_ERROR_SEAM !== '1',
+    'Тестовая error seam включается только явно.',
+  );
+  const id = randomUUID();
 
-    expect(source).toContain('unstable_retry');
-    expect(source).not.toContain('error.message');
-  }
+  await openAuthenticatedRoute(page, `/e2e/error-boundary?id=${id}`);
+
+  await expect(page.getByRole('heading', { name: 'Не удалось загрузить раздел' })).toBeVisible();
+  await page.getByRole('button', { name: 'Повторить' }).click();
+  await expect(page.getByRole('heading', { name: 'Раздел восстановлен' })).toBeVisible();
 });
 
 test('global error владеет документом, стилями и безопасным заголовком', () => {

@@ -9,6 +9,7 @@ import {
 } from 'react';
 
 import type { SafeUser } from '@/modules/auth/types';
+import type { SystemHealthSummary } from '@/modules/system-health/types';
 import { useGlobalShortcuts } from '@/shared/hooks/useGlobalShortcuts';
 import { useTheme } from '@/shared/providers/ThemeProvider';
 
@@ -45,10 +46,12 @@ function getSidebarServerSnapshot() {
 export function ShellFrame({
   children,
   breadcrumbs,
+  systemHealthSummary,
   user,
 }: {
   children: ReactNode;
   breadcrumbs: readonly Breadcrumb[];
+  systemHealthSummary: SystemHealthSummary;
   user: SafeUser;
 }) {
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
@@ -113,12 +116,18 @@ export function ShellFrame({
         mobileNavigationOpen={mobileNavigationOpen}
         onOpenMobileNavigation={openMobileNavigation}
         onCloseMobileNavigation={closeMobileNavigation}
+        systemHealthSummary={systemHealthSummary}
       />
       <aside
         data-testid="desktop-sidebar"
         className="fixed inset-y-0 left-0 z-50 hidden w-[var(--sidebar-width)] border-r bg-[var(--color-navigation)] transition-[width] duration-200 md:flex md:flex-col"
       >
-        <Sidebar expanded={expanded} onToggle={toggleSidebar} user={user} />
+        <Sidebar
+          expanded={expanded}
+          onToggle={toggleSidebar}
+          user={user}
+          systemHealthSummary={systemHealthSummary}
+        />
       </aside>
       <main className="min-h-screen pt-[var(--header-height)] transition-[padding] duration-200 md:pt-0 md:pl-[var(--sidebar-width)]">
         <div className="mx-auto max-w-[1680px] p-4 lg:p-5">{children}</div>

@@ -3,6 +3,7 @@
 import { FiX } from 'react-icons/fi';
 
 import type { SafeUser } from '@/modules/auth/types';
+import type { SystemHealthSummary } from '@/modules/system-health/types';
 import { IconButton } from '@/shared/ui/IconButton';
 import { Drawer } from '@/shared/ui/Overlays';
 
@@ -12,9 +13,15 @@ interface MobileNavigationProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   user: SafeUser;
+  systemHealthSummary: SystemHealthSummary;
 }
 
-export function MobileNavigation({ open, onOpenChange, user }: MobileNavigationProps) {
+export function MobileNavigation({
+  open,
+  onOpenChange,
+  user,
+  systemHealthSummary,
+}: MobileNavigationProps) {
   const close = () => onOpenChange(false);
 
   return (
@@ -30,7 +37,7 @@ export function MobileNavigation({ open, onOpenChange, user }: MobileNavigationP
             <FiX aria-hidden="true" className="size-5" />
           </IconButton>
         </div>
-        <Sidebar onNavigate={close} user={user} />
+        <Sidebar onNavigate={close} user={user} systemHealthSummary={systemHealthSummary} />
       </Drawer>
     </div>
   );

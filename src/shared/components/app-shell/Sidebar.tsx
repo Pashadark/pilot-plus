@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FiChevronLeft, FiChevronRight, FiUser } from 'react-icons/fi';
+import { FiActivity, FiChevronLeft, FiChevronRight, FiUser } from 'react-icons/fi';
 
 import type { SafeUser } from '@/modules/auth/types';
+import type { SystemHealthSummary } from '@/modules/system-health/types';
 import { IconButton } from '@/shared/ui/IconButton';
 
 import { navigation } from './navigation';
@@ -13,10 +14,23 @@ interface SidebarProps {
   expanded?: boolean;
   onNavigate?: () => void;
   onToggle?: () => void;
+  systemHealthSummary: SystemHealthSummary;
   user: SafeUser;
 }
 
-export function Sidebar({ expanded = true, onNavigate, onToggle, user }: SidebarProps) {
+const healthPresentation: Record<SystemHealthSummary['state'], { label: string; color: string }> = {
+  healthy: { label: 'Все сервисы работают', color: 'bg-[var(--color-success)]' },
+  degraded: { label: 'Требуется внимание', color: 'bg-[var(--color-warning)]' },
+  unavailable: { label: 'Сервисы недоступны', color: 'bg-[var(--color-danger)]' },
+};
+
+export function Sidebar({
+  expanded = true,
+  onNavigate,
+  onToggle,
+  systemHealthSummary,
+  user,
+}: SidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -69,6 +83,29 @@ export function Sidebar({ expanded = true, onNavigate, onToggle, user }: Sidebar
         })}
       </nav>
       <div className="border-t p-3">
+        <Link
+          href="/system"
+          aria-current={pathname === '/system' ? 'page' : undefined}
+          aria-label={`Состояние системы: ${healthPresentation[systemHealthSummary.state].label}, ${systemHealthSummary.count} из 3`}
+          onClick={onNavigate}
+          className="mb-1 flex min-h-12 items-center gap-3 overflow-hidden rounded-[var(--radius-md)] px-2 transition-colors hover:bg-[var(--color-elevated)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+        >
+          <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-[var(--color-elevated)] text-[var(--color-navigation-muted)]">
+            <FiActivity aria-hidden="true" />
+            <span
+              aria-hidden="true"
+              className={`absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-[var(--color-navigation)] ${healthPresentation[systemHealthSummary.state].color}`}
+            />
+          </span>
+          <div
+            className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap transition-all ${expanded ? 'w-28 opacity-100' : 'w-0 opacity-0'}`}
+          >
+            <p className="truncate text-xs font-semibold">Состояние системы</p>
+            <p className="truncate text-[10px] text-[var(--color-text-secondary)]">
+              {healthPresentation[systemHealthSummary.state].label} · {systemHealthSummary.count}/3
+            </p>
+          </div>
+        </Link>
         <Link
           href="/profile"
           aria-current={pathname === '/profile' ? 'page' : undefined}

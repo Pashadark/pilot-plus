@@ -3,6 +3,7 @@
 import { createContext, useContext, type ReactNode } from 'react';
 
 import type { SafeUser } from '@/modules/auth/types';
+import type { SystemHealthSummary } from '@/modules/system-health/types';
 
 import { ShellFrame } from './ShellFrame';
 
@@ -16,18 +17,39 @@ interface AppShellProps {
   breadcrumbs?: readonly Breadcrumb[];
 }
 
-const AppShellUserContext = createContext<SafeUser | null>(null);
+interface AppShellContextValue {
+  user: SafeUser;
+  systemHealthSummary: SystemHealthSummary;
+}
 
-export function AppShellUserProvider({ children, user }: { children: ReactNode; user: SafeUser }) {
-  return <AppShellUserContext.Provider value={user}>{children}</AppShellUserContext.Provider>;
+const AppShellContext = createContext<AppShellContextValue | null>(null);
+
+export function AppShellUserProvider({
+  children,
+  user,
+  systemHealthSummary,
+}: {
+  children: ReactNode;
+  user: SafeUser;
+  systemHealthSummary: SystemHealthSummary;
+}) {
+  return (
+    <AppShellContext.Provider value={{ user, systemHealthSummary }}>
+      {children}
+    </AppShellContext.Provider>
+  );
 }
 
 export function AppShell({ children, breadcrumbs = [] }: AppShellProps) {
-  const user = useContext(AppShellUserContext);
-  if (!user) throw new Error('AppShell должен использоваться внутри AppShellUserProvider.');
+  const context = useContext(AppShellContext);
+  if (!context) throw new Error('AppShell должен использоваться внутри AppShellUserProvider.');
 
   return (
-    <ShellFrame breadcrumbs={breadcrumbs} user={user}>
+    <ShellFrame
+      breadcrumbs={breadcrumbs}
+      user={context.user}
+      systemHealthSummary={context.systemHealthSummary}
+    >
       {children}
     </ShellFrame>
   );
