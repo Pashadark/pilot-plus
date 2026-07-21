@@ -53,9 +53,23 @@ interface RawVehicle {
   maintenanceRecords: {
     id: string;
     title: string;
-    status: string;
+    kind: VehicleDetailDto['maintenanceRecords'][number]['kind'];
+    status: VehicleDetailDto['maintenanceRecords'][number]['status'];
     scheduledAt: Date | null;
     completedAt: Date | null;
+    targetOdometerKm: unknown | null;
+    provider: string | null;
+    costMinor: number | null;
+  }[];
+  washRecords: {
+    id: string;
+    kind: VehicleDetailDto['washRecords'][number]['kind'];
+    status: VehicleDetailDto['washRecords'][number]['status'];
+    scheduledAt: Date;
+    startedAt: Date | null;
+    completedAt: Date | null;
+    provider: string | null;
+    costMinor: number | null;
   }[];
   documents: {
     id: string;
@@ -117,11 +131,29 @@ const vehicleSelect = {
     select: {
       id: true,
       title: true,
+      kind: true,
       status: true,
       scheduledAt: true,
       completedAt: true,
+      targetOdometerKm: true,
+      provider: true,
+      costMinor: true,
     },
     orderBy: { createdAt: 'desc' as const },
+    take: 50,
+  },
+  washRecords: {
+    select: {
+      id: true,
+      kind: true,
+      status: true,
+      scheduledAt: true,
+      startedAt: true,
+      completedAt: true,
+      provider: true,
+      costMinor: true,
+    },
+    orderBy: { scheduledAt: 'desc' as const },
     take: 50,
   },
   documents: {
@@ -216,6 +248,13 @@ function mapDetail(vehicle: RawVehicle): VehicleDetailDto {
     maintenanceRecords: vehicle.maintenanceRecords.map((record) => ({
       ...record,
       scheduledAt: record.scheduledAt?.toISOString() ?? null,
+      completedAt: record.completedAt?.toISOString() ?? null,
+      targetOdometerKm: optionalNumber(record.targetOdometerKm),
+    })),
+    washRecords: vehicle.washRecords.map((record) => ({
+      ...record,
+      scheduledAt: record.scheduledAt.toISOString(),
+      startedAt: record.startedAt?.toISOString() ?? null,
       completedAt: record.completedAt?.toISOString() ?? null,
     })),
     documents: vehicle.documents.map((document) => ({

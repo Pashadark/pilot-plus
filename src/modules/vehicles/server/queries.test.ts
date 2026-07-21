@@ -24,7 +24,31 @@ const rawVehicle = {
   trips: [],
   fuelRecords: [],
   events: [],
-  maintenanceRecords: [],
+  maintenanceRecords: [
+    {
+      id: 'maintenance-1',
+      title: 'Замена масла',
+      kind: 'OIL',
+      status: 'COMPLETED',
+      scheduledAt: new Date('2026-07-20T10:00:00.000Z'),
+      completedAt: new Date('2026-07-20T12:00:00.000Z'),
+      targetOdometerKm: { toString: () => '15000.5' },
+      provider: 'Сервис Pilot',
+      costMinor: 420000,
+    },
+  ],
+  washRecords: [
+    {
+      id: 'wash-1',
+      kind: 'COMPLEX',
+      status: 'IN_PROGRESS',
+      scheduledAt: new Date('2026-07-21T10:00:00.000Z'),
+      startedAt: new Date('2026-07-21T10:05:00.000Z'),
+      completedAt: null,
+      provider: 'Мойка Pilot',
+      costMinor: 190000,
+    },
+  ],
   documents: [],
   images: [
     {
@@ -103,6 +127,57 @@ describe('запросы автопарка', () => {
       },
     });
     expect(vehicle?.createdAt).toBe('2026-07-19T12:00:00.000Z');
+    expect(vehicle?.maintenanceRecords).toEqual([
+      {
+        id: 'maintenance-1',
+        title: 'Замена масла',
+        kind: 'OIL',
+        status: 'COMPLETED',
+        scheduledAt: '2026-07-20T10:00:00.000Z',
+        completedAt: '2026-07-20T12:00:00.000Z',
+        targetOdometerKm: 15000.5,
+        provider: 'Сервис Pilot',
+        costMinor: 420000,
+      },
+    ]);
+    expect(vehicle?.washRecords).toEqual([
+      {
+        id: 'wash-1',
+        kind: 'COMPLEX',
+        status: 'IN_PROGRESS',
+        scheduledAt: '2026-07-21T10:00:00.000Z',
+        startedAt: '2026-07-21T10:05:00.000Z',
+        completedAt: null,
+        provider: 'Мойка Pilot',
+        costMinor: 190000,
+      },
+    ]);
+    expect(fake.calls.detail).toMatchObject({
+      select: {
+        maintenanceRecords: {
+          select: {
+            kind: true,
+            targetOdometerKm: true,
+            provider: true,
+            costMinor: true,
+          },
+          take: 50,
+        },
+        washRecords: {
+          select: {
+            id: true,
+            kind: true,
+            status: true,
+            scheduledAt: true,
+            startedAt: true,
+            completedAt: true,
+            provider: true,
+            costMinor: true,
+          },
+          take: 50,
+        },
+      },
+    });
   });
 
   it('возвращает null для недоступного автомобиля', async () => {

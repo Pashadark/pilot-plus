@@ -56,18 +56,45 @@ export interface VehicleEventDto {
   recordedAt: string;
 }
 
+export type VehicleMaintenanceKind =
+  'OIL' | 'FILTERS' | 'BRAKES' | 'TIRES' | 'TIMING' | 'INSPECTION' | 'OTHER';
+
+export type VehicleMaintenanceStatus =
+  'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE' | 'CANCELLED';
+
+export interface VehicleMaintenanceHistorySummary {
+  id: string;
+  title: string;
+  kind: VehicleMaintenanceKind;
+  status: VehicleMaintenanceStatus;
+  scheduledAt: string | null;
+  completedAt: string | null;
+  targetOdometerKm: number | null;
+  provider: string | null;
+  costMinor: number | null;
+}
+
+export type VehicleWashKind = 'BODY' | 'COMPLEX' | 'INTERIOR' | 'MATS' | 'ENGINE' | 'OTHER';
+export type VehicleWashStatus = 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+
+export interface VehicleWashHistorySummary {
+  id: string;
+  kind: VehicleWashKind;
+  status: VehicleWashStatus;
+  scheduledAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  provider: string | null;
+  costMinor: number | null;
+}
+
 export interface VehicleDetailDto extends VehicleCardDto {
   vin: string | null;
   createdAt: string;
   trips: VehicleTripDto[];
   events: VehicleEventDto[];
   fuelRecords: { id: string; recordedAt: string; volumeLiters: number | null }[];
-  maintenanceRecords: {
-    id: string;
-    title: string;
-    status: string;
-    scheduledAt: string | null;
-    completedAt: string | null;
-  }[];
+  maintenanceRecords: VehicleMaintenanceHistorySummary[];
+  washRecords: VehicleWashHistorySummary[];
   documents: { id: string; title: string; type: string; expiresAt: string | null }[];
 }

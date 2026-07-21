@@ -1,9 +1,53 @@
 import { expect, test } from '@playwright/test';
 
+import { prisma } from '../src/database/prisma/client';
 import { openAuthenticatedRoute } from './helpers/auth';
+
+async function createVehicleHistory() {
+  const email = process.env.PILOT_ADMIN_EMAIL?.trim().toLowerCase();
+  if (!email) throw new Error('Для E2E истории автомобиля нужен PILOT_ADMIN_EMAIL.');
+
+  const vehicle = await prisma.vehicle.findFirst({
+    where: { company: { members: { some: { user: { email } } } } },
+    select: { id: true, internalNumber: true, model: true },
+    orderBy: { internalNumber: 'asc' },
+  });
+  if (!vehicle) throw new Error('Автомобиль администратора для E2E истории не найден.');
+
+  const [maintenance, wash] = await Promise.all([
+    prisma.maintenanceRecord.create({
+      data: {
+        vehicleId: vehicle.id,
+        title: `[Pilot+ E2E vehicle history:${process.pid}] Замена масла`,
+        kind: 'OIL',
+        status: 'COMPLETED',
+        scheduledAt: new Date('2026-07-20T10:00:00.000Z'),
+        completedAt: new Date('2026-07-20T12:00:00.000Z'),
+        targetOdometerKm: 15000.5,
+        provider: 'Сервис Pilot E2E',
+        costMinor: 420000,
+      },
+      select: { id: true },
+    }),
+    prisma.washRecord.create({
+      data: {
+        vehicleId: vehicle.id,
+        kind: 'COMPLEX',
+        status: 'IN_PROGRESS',
+        scheduledAt: new Date('2026-07-21T10:00:00.000Z'),
+        startedAt: new Date('2026-07-21T10:05:00.000Z'),
+        provider: `[Pilot+ E2E vehicle history:${process.pid}] Мойка Pilot`,
+        costMinor: 190000,
+      },
+      select: { id: true },
+    }),
+  ]);
+  return { vehicle, maintenanceId: maintenance.id, washId: wash.id };
+}
 
 test.beforeEach(async ({ page }) => {
   await openAuthenticatedRoute(page, '/vehicles');
+  await expect(page.getByTestId('vehicle-list-page')).toBeVisible();
 });
 
 test('автопарк показывает 130 записей и фильтрует карточки', async ({ page }) => {
@@ -32,6 +76,31 @@ test('карточка открывает обзор и вкладку поез�
   await page.getByRole('link', { name: 'Поездки' }).click();
   await expect(page).toHaveURL(/tab=trips/);
   await expect(page.getByText('Поездки ещё не поступали')).toBeVisible();
+});
+
+test('подробности автомобиля показывают реальные истории ТО и мойки', async ({ page }) => {
+  const history = await createVehicleHistory();
+  try {
+    await page.goto(`/vehicles/${history.vehicle.id}?tab=maintenance`);
+    await expect(page.getByTestId('vehicle-detail-page')).toBeVisible();
+
+    const maintenance = page.getByTestId('vehicle-maintenance-history');
+    await expect(maintenance).toContainText('История технического обслуживания');
+    await expect(maintenance).toContainText('Замена масла');
+    await expect(maintenance).toContainText('Масло');
+    await expect(maintenance).toContainText('Завершено');
+
+    const wash = page.getByTestId('vehicle-wash-history');
+    await expect(wash).toContainText('История моек');
+    await expect(wash).toContainText('Комплексная');
+    await expect(wash).toContainText('В работе');
+  } finally {
+    await Promise.all([
+      prisma.maintenanceRecord.deleteMany({ where: { id: history.maintenanceId } }),
+      prisma.washRecord.deleteMany({ where: { id: history.washId } }),
+    ]);
+    await prisma.$disconnect();
+  }
 });
 
 test('ошибка изображения заменяется фирменной заглушкой', async ({ page }) => {

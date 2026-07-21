@@ -1,14 +1,21 @@
 import Link from 'next/link';
 import { FiArrowLeft, FiMapPin, FiTruck } from 'react-icons/fi';
 
-import type { VehicleDetailDto, VehicleStatus } from '../types';
+import type {
+  VehicleDetailDto,
+  VehicleMaintenanceKind,
+  VehicleMaintenanceStatus,
+  VehicleStatus,
+  VehicleWashKind,
+  VehicleWashStatus,
+} from '../types';
 import { formatDailyPrice, formatOptionalMetric } from '../utils';
 import { VehicleEmptySection } from './VehicleEmptySection';
 import { VehicleOverview } from './VehicleOverview';
 import { VehiclePhoto } from './VehiclePhoto';
 import { VehicleTabs } from './VehicleTabs';
 import type { VehicleTab } from './vehicle-tabs';
-import { Badge, Card, CardContent } from '@/shared/ui';
+import { Badge, Card, CardContent, CardHeader } from '@/shared/ui';
 
 const statuses: Record<
   VehicleStatus,
@@ -21,12 +28,61 @@ const statuses: Record<
   UNKNOWN: { label: 'Нет телеметрии', tone: 'neutral' },
 };
 
+const maintenanceStatuses: Record<
+  VehicleMaintenanceStatus,
+  { label: string; tone: 'neutral' | 'primary' | 'success' | 'warning' | 'danger' }
+> = {
+  PLANNED: { label: 'Запланировано', tone: 'primary' },
+  IN_PROGRESS: { label: 'В работе', tone: 'warning' },
+  COMPLETED: { label: 'Завершено', tone: 'success' },
+  OVERDUE: { label: 'Просрочено', tone: 'danger' },
+  CANCELLED: { label: 'Отменено', tone: 'neutral' },
+};
+
+const maintenanceKinds: Record<VehicleMaintenanceKind, string> = {
+  OIL: 'Масло',
+  FILTERS: 'Фильтры',
+  BRAKES: 'Тормоза',
+  TIRES: 'Шины',
+  TIMING: 'ГРМ',
+  INSPECTION: 'Диагностика',
+  OTHER: 'Другое',
+};
+
+const washStatuses: Record<
+  VehicleWashStatus,
+  { label: string; tone: 'neutral' | 'primary' | 'success' | 'warning' }
+> = {
+  PLANNED: { label: 'Запланировано', tone: 'primary' },
+  IN_PROGRESS: { label: 'В работе', tone: 'warning' },
+  COMPLETED: { label: 'Завершено', tone: 'success' },
+  CANCELLED: { label: 'Отменено', tone: 'neutral' },
+};
+
+const washKinds: Record<VehicleWashKind, string> = {
+  BODY: 'Кузов',
+  COMPLEX: 'Комплексная',
+  INTERIOR: 'Салон',
+  MATS: 'Коврики',
+  ENGINE: 'Двигатель',
+  OTHER: 'Другое',
+};
+
 function formatDate(value: string | null) {
   return value
     ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(
         new Date(value),
       )
     : 'Нет данных';
+}
+
+function formatCost(value: number | null) {
+  if (value === null) return 'Не указана';
+  return new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency: 'RUB',
+    maximumFractionDigits: 2,
+  }).format(value / 100);
 }
 
 function TabContent({ vehicle, tab }: { vehicle: VehicleDetailDto; tab: VehicleTab }) {
@@ -85,23 +141,72 @@ function TabContent({ vehicle, tab }: { vehicle: VehicleDetailDto; tab: VehicleT
         </CardContent>
       </Card>
     );
-  if (tab === 'maintenance' && vehicle.maintenanceRecords.length)
+  if (tab === 'maintenance' && (vehicle.maintenanceRecords.length || vehicle.washRecords.length))
     return (
-      <Card>
-        <CardContent className="grid gap-3">
-          {vehicle.maintenanceRecords.map((record) => (
-            <article
-              key={record.id}
-              className="border-b border-[var(--color-border)] pb-3 last:border-0"
-            >
-              <strong>{record.title}</strong>
-              <p className="text-sm text-[var(--color-text-secondary)]">
-                Статус: {record.status} · План: {formatDate(record.scheduledAt)}
-              </p>
-            </article>
-          ))}
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 xl:grid-cols-2">
+        {vehicle.maintenanceRecords.length ? (
+          <Card data-testid="vehicle-maintenance-history">
+            <CardHeader>
+              <h2 className="font-bold">История технического обслуживания</h2>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {vehicle.maintenanceRecords.map((record) => {
+                const status = maintenanceStatuses[record.status];
+                return (
+                  <article
+                    key={record.id}
+                    className="grid gap-2 border-b border-[var(--color-border)] pb-3 last:border-0"
+                  >
+                    <header className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-semibold text-[var(--color-text-tertiary)]">
+                          {maintenanceKinds[record.kind]}
+                        </p>
+                        <strong>{record.title}</strong>
+                      </div>
+                      <Badge tone={status.tone}>{status.label}</Badge>
+                    </header>
+                    <p className="text-sm text-[var(--color-text-secondary)]">
+                      План: {formatDate(record.scheduledAt)} · Пробег:{' '}
+                      {formatOptionalMetric(record.targetOdometerKm, 'км')} · Стоимость:{' '}
+                      {formatCost(record.costMinor)}
+                      {record.provider ? ` · ${record.provider}` : ''}
+                    </p>
+                  </article>
+                );
+              })}
+            </CardContent>
+          </Card>
+        ) : null}
+        {vehicle.washRecords.length ? (
+          <Card data-testid="vehicle-wash-history">
+            <CardHeader>
+              <h2 className="font-bold">История моек</h2>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {vehicle.washRecords.map((record) => {
+                const status = washStatuses[record.status];
+                return (
+                  <article
+                    key={record.id}
+                    className="grid gap-2 border-b border-[var(--color-border)] pb-3 last:border-0"
+                  >
+                    <header className="flex flex-wrap items-start justify-between gap-2">
+                      <strong>{washKinds[record.kind]}</strong>
+                      <Badge tone={status.tone}>{status.label}</Badge>
+                    </header>
+                    <p className="text-sm text-[var(--color-text-secondary)]">
+                      План: {formatDate(record.scheduledAt)} · Завершение:{' '}
+                      {formatDate(record.completedAt)} · Стоимость: {formatCost(record.costMinor)}
+                      {record.provider ? ` · ${record.provider}` : ''}
+                    </p>
+                  </article>
+                );
+              })}
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
     );
   if (tab === 'documents' && vehicle.documents.length)
     return (

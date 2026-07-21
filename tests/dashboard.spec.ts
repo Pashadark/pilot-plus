@@ -29,6 +29,8 @@ test('настольная оболочка показывает постоян�
   await page.goto('/');
 
   await expect(page.getByRole('navigation', { name: 'Основная навигация' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Техническое обслуживание' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Мойка' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Дизайн-система' })).toBeVisible();
   await expect(page.getByTestId('app-header')).toBeVisible();
   await expect(page.getByRole('searchbox', { name: 'Глобальный поиск' })).toBeVisible();
@@ -219,7 +221,8 @@ test('глобальные клавиши учитывают тему, ввод 
     return event.defaultPrevented;
   });
 
-  expect(defaultPrevented).toBe(false);
+  expect(defaultPrevented).toBe(true);
+  await expect(page.getByRole('searchbox', { name: 'Глобальный поиск' })).toBeFocused();
 });
 
 test('мобильные плавающие элементы управления доступны с клавиатуры и в тёмной теме', async ({
@@ -260,6 +263,9 @@ test('общий drawer удерживает фокус, блокирует пр
 test('мобильный drawer закрывается после выбора ссылки', async ({ page }) => {
   await page.getByRole('button', { name: 'Открыть меню' }).click();
   const dialog = page.getByRole('dialog', { name: 'Мобильная навигация' });
+
+  await expect(dialog.getByRole('link', { name: 'Техническое обслуживание' })).toBeVisible();
+  await expect(dialog.getByRole('link', { name: 'Мойка' })).toBeVisible();
 
   await dialog.getByRole('link', { name: 'Панель управления' }).click();
   await expect(dialog).toBeHidden();
