@@ -41,3 +41,33 @@
 ## Коммит функциональности
 
 - `f2dcb59 feat: add wash workspace`
+
+## Review fixes
+
+- Введена доменная константа `CLEAN_WASH_WINDOW_DAYS = 7` и чистая функция `calculateFleetCleanliness(vehicleOptions, records, referenceTime)`. Для каждого уникального vehicle option она выбирает последнюю завершённую мойку: не старше семи дней — `CLEAN`, отсутствующая или более старая — `NEEDS_WASH`.
+- KPI «Требуют мойки» теперь равен числу уникальных tenant vehicle options со статусом `NEEDS_WASH`, а не числу записей мойки. На чистой E2E-базе проверяется реальное значение 130 и уменьшение до 129 после завершения мойки одного автомобиля.
+- KPI «Сегодня» считает только сегодняшние `PLANNED` и `IN_PROGRESS`; `COMPLETED` и `CANCELLED` исключены. E2E проверяет увеличение на единицу после планирования, сохранение значения в работе и возврат после завершения.
+- В desktop-таблицу и mobile-карточку добавлен cleanliness badge с иконкой, русской подписью «Чистый»/«Требует мойки» и semantic tone.
+- Отмена больше не отправляет действие напрямую. Кнопка открывает `ConfirmationDialog`, а скрытая cancel-submit вызывается через `requestSubmit` только после «Подтвердить». E2E проверяет отсутствие перехода и transition-тоста до подтверждения, затем статус `CANCELLED` и устойчивый success toast.
+- Pending-состояние связано с парой `recordId + targetStatus`: loading показывается только на выбранном действии выбранной записи; остальные действия временно отключаются без ложных spinner/копирайта «Обновляем…» во всех строках.
+- Мобильный тест дополнительно проверяет отсутствие horizontal overflow при открытом planning dialog и после выбора автомобиля/появления локального WebP; все видимые controls по-прежнему не меньше 44 px.
+
+### Review TDD
+
+1. RED unit: `src/modules/wash/cleanliness.test.ts` ожидаемо завершился `Cannot find module './cleanliness'` до создания production-модуля.
+2. GREEN unit: четыре cleanliness-сценария прошли — нет завершённой мойки, свежая, устаревшая, несколько записей одного автомобиля с уникальным fleet count.
+3. RED E2E после cleanliness GREEN дошёл до отмены и ожидаемо упал на отсутствующем диалоге «Отменить мойку?», подтвердив, что старый cancel отправлялся сразу.
+4. GREEN E2E после confirmation/pending исправления прошёл весь desktop и mobile workflow.
+
+### Проверки после review
+
+- `npx vitest run src/modules/wash/cleanliness.test.ts src/modules/wash/validation.test.ts src/modules/wash/status.test.ts src/modules/wash/server/queries.test.ts src/modules/wash/actions.test.ts` — 5 файлов, 21/21 PASS.
+- `npx playwright test tests/wash.spec.ts --project=desktop --workers=1` с переменными из корневого `.env` — 2/2 PASS.
+- `npm run typecheck` — PASS.
+- `npx eslint src/modules/wash/cleanliness.ts src/modules/wash/cleanliness.test.ts src/modules/wash/components/WashWorkspace.tsx src/modules/wash/components/WashRecordCard.tsx tests/wash.spec.ts` — PASS.
+- `npx prettier --check src/modules/wash/cleanliness.ts src/modules/wash/cleanliness.test.ts src/modules/wash/components/WashWorkspace.tsx src/modules/wash/components/WashRecordCard.tsx tests/wash.spec.ts` — PASS после механического форматирования обновлённого E2E-файла.
+- `git diff --cached --check` — PASS.
+
+## Коммит review fixes
+
+- `e0e6e50 fix: address wash workspace review`
