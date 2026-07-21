@@ -34,4 +34,18 @@ describe('доменная схема автопарка', () => {
     expect(schema).toContain('@@unique([vehicleId, position])');
     expect(schema).toContain('@@index([vehicleId, isPrimary])');
   });
+
+  it('типизирует ТО и хранит записи моек автомобиля', () => {
+    expect(schema).toContain('enum MaintenanceStatus {');
+    expect(schema).toContain('enum MaintenanceKind {');
+    expect(schema).toContain('enum WashStatus {');
+    expect(schema).toContain('enum WashKind {');
+    expect(schema).toContain('model WashRecord {');
+    expect(schema).toMatch(/kind\s+MaintenanceKind/);
+    expect(schema).toMatch(/status\s+MaintenanceStatus/);
+    expect(schema).toMatch(/targetOdometerKm\s+Decimal\?/);
+    expect(schema).toMatch(/washRecords\s+WashRecord\[\]/);
+    expect(schema).toMatch(/status\s+WashStatus\s+@default\(PLANNED\)/);
+    expect(schema).toContain('@@index([status, scheduledAt])');
+  });
 });

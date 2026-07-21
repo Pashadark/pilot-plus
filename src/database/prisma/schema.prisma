@@ -38,6 +38,40 @@ enum TelemetrySeverity {
   DANGER
 }
 
+enum MaintenanceStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+  CANCELLED
+}
+
+enum MaintenanceKind {
+  OIL
+  FILTERS
+  BRAKES
+  TIRES
+  TIMING
+  INSPECTION
+  OTHER
+}
+
+enum WashStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum WashKind {
+  BODY
+  COMPLEX
+  INTERIOR
+  MATS
+  ENGINE
+  OTHER
+}
+
 model User {
   id           String          @id @default(cuid())
   email        String          @unique
@@ -120,6 +154,7 @@ model Vehicle {
   events             VehicleEvent[]
   fuelRecords        FuelRecord[]
   maintenanceRecords MaintenanceRecord[]
+  washRecords        WashRecord[]
   documents          VehicleDocument[]
   images             VehicleImage[]
   createdAt          DateTime            @default(now())
@@ -210,19 +245,43 @@ model FuelRecord {
 }
 
 model MaintenanceRecord {
-  id          String    @id @default(cuid())
-  vehicleId   String
-  vehicle     Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  title       String
-  description String?
-  status      String
-  odometerKm  Decimal?  @db.Decimal(12, 1)
-  scheduledAt DateTime?
-  completedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id               String            @id @default(cuid())
+  vehicleId        String
+  vehicle          Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  title            String
+  description      String?
+  kind             MaintenanceKind
+  status           MaintenanceStatus
+  odometerKm       Decimal?          @db.Decimal(12, 1)
+  targetOdometerKm Decimal?          @db.Decimal(12, 1)
+  scheduledAt      DateTime?
+  completedAt      DateTime?
+  provider         String?
+  costMinor        Int?
+  notes            String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   @@index([vehicleId, scheduledAt])
+}
+
+model WashRecord {
+  id          String     @id @default(cuid())
+  vehicleId   String
+  vehicle     Vehicle    @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  kind        WashKind
+  status      WashStatus @default(PLANNED)
+  scheduledAt DateTime
+  startedAt   DateTime?
+  completedAt DateTime?
+  provider    String?
+  costMinor   Int?
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([vehicleId, scheduledAt])
+  @@index([status, scheduledAt])
 }
 
 model VehicleDocument {
