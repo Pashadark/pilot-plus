@@ -11,6 +11,7 @@ import {
 } from 'react-icons/fi';
 
 import { transitionWashAction } from '../actions';
+import { calculateFleetCleanliness } from '../cleanliness';
 import type { WashRecordDto } from '../server/queries';
 import type { OperationActionState, WashKind, WashStatus } from '../types';
 import type { VehicleOptionDto } from '@/modules/vehicles/types';
@@ -21,6 +22,7 @@ import { WashForm } from './WashForm';
 import {
   formatWashCost,
   formatWashDate,
+  CleanlinessBadge,
   washKindLabels,
   WashRecordActions,
   WashRecordCard,
@@ -69,9 +71,19 @@ function sameMonth(left: Date, right: Date) {
   return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
 }
 
-function StatCard({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
+function StatCard({
+  label,
+  value,
+  icon,
+  testId,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  testId?: string;
+}) {
   return (
-    <Card className="min-w-0 p-4">
+    <Card className="min-w-0 p-4" data-testid={testId}>
       <div className="flex min-w-0 items-center gap-3">
         <span className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]">
           {icon}
@@ -94,6 +106,10 @@ export function WashWorkspace({
 }) {
   const [filters, setFilters] = useState(initialFilters);
   const [formOpen, setFormOpen] = useState(false);
+  const [pendingTransition, setPendingTransition] = useState<{
+    recordId: string;
+    toStatus: WashStatus;
+  } | null>(null);
   const [referenceTime] = useState(() => Date.now());
   const [transitionState, transitionFormAction, transitionPending] = useActionState(
     transitionWashAction,
@@ -105,7 +121,22 @@ export function WashWorkspace({
     [filters, records],
   );
   const referenceDate = new Date(referenceTime);
+  const fleetCleanliness = useMemo(
+    () => calculateFleetCleanliness(vehicles, records, new Date(referenceTime)),
+    [records, referenceTime, vehicles],
+  );
+  const cleanlinessByVehicleId = useMemo(
+    () =>
+      new Map(
+        fleetCleanliness.vehicles.map((vehicle) => [vehicle.vehicleId, vehicle.status] as const),
+      ),
+    [fleetCleanliness],
+  );
   const closeAfterSuccess = useCallback(() => setFormOpen(false), []);
+  const registerTransitionIntent = useCallback(
+    (transition: { recordId: string; toStatus: WashStatus }) => setPendingTransition(transition),
+    [],
+  );
 
   useEffect(() => {
     if (!transitionState.message || transitionState.status === 'idle') return;
@@ -121,9 +152,14 @@ export function WashWorkspace({
         <StatCard
           label="Сегодня"
           value={
-            records.filter((record) => sameDate(new Date(record.scheduledAt), referenceDate)).length
+            records.filter(
+              (record) =>
+                (record.status === 'PLANNED' || record.status === 'IN_PROGRESS') &&
+                sameDate(new Date(record.scheduledAt), referenceDate),
+            ).length
           }
           icon={<FiCalendar aria-hidden="true" />}
+          testId="wash-today-stat"
         />
         <StatCard
           label="В работе"
@@ -144,14 +180,9 @@ export function WashWorkspace({
         />
         <StatCard
           label="Требуют мойки"
-          value={
-            records.filter(
-              (record) =>
-                record.status === 'PLANNED' &&
-                new Date(record.scheduledAt).getTime() <= referenceTime,
-            ).length
-          }
+          value={fleetCleanliness.needsWashCount}
           icon={<FiAlertCircle aria-hidden="true" />}
+          testId="wash-needs-wash-stat"
         />
       </section>
 
@@ -257,6 +288,9 @@ export function WashWorkspace({
                   Статус
                 </th>
                 <th scope="col" className="px-4 py-3 font-semibold">
+                  Чистота
+                </th>
+                <th scope="col" className="px-4 py-3 font-semibold">
                   Действия
                 </th>
               </tr>
@@ -281,10 +315,17 @@ export function WashWorkspace({
                     <WashStatusBadge status={record.status} />
                   </td>
                   <td className="px-4 py-4">
+                    <CleanlinessBadge
+                      status={cleanlinessByVehicleId.get(record.vehicleId) ?? 'NEEDS_WASH'}
+                    />
+                  </td>
+                  <td className="px-4 py-4">
                     <WashRecordActions
                       record={record}
                       formAction={transitionFormAction}
-                      pending={transitionPending}
+                      transitionPending={transitionPending}
+                      pendingTransition={pendingTransition}
+                      onTransitionIntent={registerTransitionIntent}
                     />
                   </td>
                 </tr>
@@ -305,7 +346,10 @@ export function WashWorkspace({
               key={record.id}
               record={record}
               formAction={transitionFormAction}
-              pending={transitionPending}
+              transitionPending={transitionPending}
+              pendingTransition={pendingTransition}
+              onTransitionIntent={registerTransitionIntent}
+              cleanliness={cleanlinessByVehicleId.get(record.vehicleId) ?? 'NEEDS_WASH'}
               testId="wash-mobile-record"
             />
           ))

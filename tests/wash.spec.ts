@@ -17,18 +17,23 @@ test('администратор планирует, фильтрует и за�
   await expect(page.getByText('В работе', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Завершено за месяц', { exact: true })).toBeVisible();
   await expect(page.getByText('Требуют мойки', { exact: true })).toBeVisible();
+  const needsWashStat = page.getByTestId('wash-needs-wash-stat');
+  await expect(needsWashStat.getByText('130', { exact: true })).toBeVisible();
+  const todayStat = page.getByTestId('wash-today-stat');
+  const initialTodayCount = Number(await todayStat.locator('strong').textContent());
 
   const provider = `${E2E_WASH_PROVIDER_PREFIX}desktop-${Date.now()}`;
   await page.getByRole('button', { name: 'Запланировать мойку' }).click();
   await page.getByLabel('Автомобиль').selectOption({ index: 1 });
   await expect(page.getByRole('dialog').locator('img')).toBeVisible();
   await page.getByRole('dialog').getByLabel('Тип мойки').selectOption('COMPLEX');
-  await page.getByLabel('Плановая дата').fill('2026-07-23T12:00');
+  await page.getByLabel('Плановая дата').fill('2026-07-22T12:00');
   await page.getByLabel('Мойка или подрядчик').fill(provider);
   await page.getByRole('button', { name: 'Сохранить мойку' }).click();
 
   await expect(page.getByText('Мойка запланирована.')).toBeVisible();
   await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(todayStat.getByText(String(initialTodayCount + 1), { exact: true })).toBeVisible();
 
   await page.getByRole('searchbox', { name: 'Поиск по мойке' }).fill(provider);
   await page.getByLabel('Статус').selectOption('PLANNED');
@@ -39,6 +44,7 @@ test('администратор планирует, фильтрует и за�
   const plannedBadge = record.getByText('Запланировано', { exact: true });
   await expect(plannedBadge).toBeVisible();
   await expect(plannedBadge.locator('svg')).toBeVisible();
+  await expect(record.getByText('Требует мойки', { exact: true })).toBeVisible();
 
   await record.getByRole('button', { name: 'Начать мойку' }).click();
   await expect(record).toHaveCount(0);
@@ -48,6 +54,7 @@ test('администратор планирует, фильтрует и за�
   await expect(transitionToast).toBeVisible();
   await page.getByLabel('Статус').selectOption('IN_PROGRESS');
   await expect(record.getByText('В работе', { exact: true })).toBeVisible();
+  await expect(todayStat.getByText(String(initialTodayCount + 1), { exact: true })).toBeVisible();
 
   await transitionToast.getByRole('button', { name: 'Закрыть уведомление' }).click();
   await record.getByRole('button', { name: 'Завершить мойку' }).click();
@@ -55,6 +62,37 @@ test('администратор планирует, фильтрует и за�
   await expect(transitionToast).toBeVisible();
   await page.getByLabel('Статус').selectOption('COMPLETED');
   await expect(record.getByText('Завершено', { exact: true })).toBeVisible();
+  await expect(record.getByText('Чистый', { exact: true })).toBeVisible();
+  await expect(needsWashStat.getByText('129', { exact: true })).toBeVisible();
+  await expect(todayStat.getByText(String(initialTodayCount), { exact: true })).toBeVisible();
+
+  await transitionToast.getByRole('button', { name: 'Закрыть уведомление' }).click();
+  const cancelledProvider = `${E2E_WASH_PROVIDER_PREFIX}cancel-${Date.now()}`;
+  await page.getByRole('button', { name: 'Запланировать мойку' }).click();
+  const cancelDialog = page.getByRole('dialog', { name: 'Запланировать мойку' });
+  await cancelDialog.getByLabel('Автомобиль').selectOption({ index: 2 });
+  await cancelDialog.getByLabel('Тип мойки').selectOption('INTERIOR');
+  await cancelDialog.getByLabel('Плановая дата').fill('2026-07-23T14:00');
+  await cancelDialog.getByLabel('Мойка или подрядчик').fill(cancelledProvider);
+  await cancelDialog.getByRole('button', { name: 'Сохранить мойку' }).click();
+  await expect(cancelDialog).toBeHidden();
+
+  await page.getByRole('searchbox', { name: 'Поиск по мойке' }).fill(cancelledProvider);
+  await page.getByLabel('Статус').selectOption('PLANNED');
+  await page.getByLabel('Вид мойки').selectOption('INTERIOR');
+  const cancelledRecord = page.getByTestId('wash-record').filter({ hasText: cancelledProvider });
+  await cancelledRecord.getByRole('button', { name: 'Отменить' }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Отменить мойку?' });
+  await expect(confirmation).toBeVisible();
+  await expect(cancelledRecord.getByText('Запланировано', { exact: true })).toBeVisible();
+  await expect(transitionToast).toBeHidden();
+
+  await confirmation.getByRole('button', { name: 'Подтвердить' }).click();
+  await expect(confirmation).toBeHidden();
+  await expect(cancelledRecord).toHaveCount(0);
+  await expect(transitionToast).toBeVisible();
+  await page.getByLabel('Статус').selectOption('CANCELLED');
+  await expect(cancelledRecord.getByText('Отменено', { exact: true })).toBeVisible();
 
   await page.getByRole('searchbox', { name: 'Поиск по мойке' }).fill('нет-такой-мойки');
   const desktopTable = page.getByTestId('wash-desktop-table');
@@ -86,9 +124,12 @@ test('мобильная страница мойки не переполняет
     .all()) {
     expect((await control.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 
   const provider = `${E2E_WASH_PROVIDER_PREFIX}mobile-${Date.now()}`;
   await page.getByLabel('Автомобиль').selectOption({ index: 1 });
+  await expect(dialog.locator('img')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
   await page.getByLabel('Тип мойки').selectOption('BODY');
   await page.getByLabel('Плановая дата').fill('2026-07-24T12:00');
   await page.getByLabel('Мойка или подрядчик').fill(provider);

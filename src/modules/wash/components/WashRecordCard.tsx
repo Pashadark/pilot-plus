@@ -1,6 +1,8 @@
 'use client';
 
+import { useRef, useState } from 'react';
 import {
+  FiAlertCircle,
   FiCalendar,
   FiCheck,
   FiCheckCircle,
@@ -12,9 +14,10 @@ import {
   FiX,
 } from 'react-icons/fi';
 
+import type { VehicleCleanlinessStatus } from '../cleanliness';
 import type { WashRecordDto } from '../server/queries';
 import type { WashKind, WashStatus } from '../types';
-import { Badge, Button, Card } from '@/shared/ui';
+import { Badge, Button, Card, ConfirmationDialog } from '@/shared/ui';
 
 export const washStatusView: Record<
   WashStatus,
@@ -59,7 +62,9 @@ type TransitionFormAction = (formData: FormData) => void;
 
 export type WashTransitionControls = {
   formAction: TransitionFormAction;
-  pending: boolean;
+  transitionPending: boolean;
+  pendingTransition: { recordId: string; toStatus: WashStatus } | null;
+  onTransitionIntent: (transition: { recordId: string; toStatus: WashStatus }) => void;
 };
 
 export function formatWashDate(value: string) {
@@ -88,69 +93,144 @@ export function WashStatusBadge({ status }: { status: WashStatus }) {
   );
 }
 
+export function CleanlinessBadge({ status }: { status: VehicleCleanlinessStatus }) {
+  const view =
+    status === 'CLEAN'
+      ? {
+          label: 'Чистый',
+          tone: 'success' as const,
+          icon: <FiCheckCircle aria-hidden="true" />,
+        }
+      : {
+          label: 'Требует мойки',
+          tone: 'warning' as const,
+          icon: <FiAlertCircle aria-hidden="true" />,
+        };
+
+  return (
+    <Badge tone={view.tone} className="gap-1.5">
+      {view.icon}
+      {view.label}
+    </Badge>
+  );
+}
+
 export function WashRecordActions({
   record,
   formAction,
-  pending,
+  transitionPending,
+  pendingTransition,
+  onTransitionIntent,
 }: { record: WashRecordDto } & WashTransitionControls) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const cancelSubmitRef = useRef<HTMLButtonElement>(null);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
   const canStart = record.status === 'PLANNED';
   const canComplete = record.status === 'IN_PROGRESS';
   const canCancel = canStart || canComplete;
+  const isPending = (toStatus: WashStatus) =>
+    transitionPending &&
+    pendingTransition?.recordId === record.id &&
+    pendingTransition.toStatus === toStatus;
 
   if (!canStart && !canComplete && !canCancel) return null;
 
   return (
-    <form action={formAction} className="flex min-w-0 flex-wrap gap-2">
-      <input type="hidden" name="recordId" value={record.id} />
-      <input type="hidden" name="fromStatus" value={record.status} />
-      {canStart ? (
-        <Button
-          type="submit"
-          name="toStatus"
-          value="IN_PROGRESS"
-          size="sm"
-          loading={pending}
-          leadingIcon={<FiPlay aria-hidden="true" />}
-        >
-          {pending ? 'Обновляем…' : 'Начать мойку'}
+    <>
+      <form
+        ref={formRef}
+        action={formAction}
+        className="flex min-w-0 flex-wrap gap-2"
+        onSubmit={(event) => {
+          const submitter = (event.nativeEvent as SubmitEvent).submitter;
+          if (!(submitter instanceof HTMLButtonElement)) return;
+          onTransitionIntent({
+            recordId: record.id,
+            toStatus: submitter.value as WashStatus,
+          });
+        }}
+      >
+        <input type="hidden" name="recordId" value={record.id} />
+        <input type="hidden" name="fromStatus" value={record.status} />
+        {canStart ? (
+          <Button
+            type="submit"
+            name="toStatus"
+            value="IN_PROGRESS"
+            size="sm"
+            loading={isPending('IN_PROGRESS')}
+            disabled={transitionPending && !isPending('IN_PROGRESS')}
+            leadingIcon={<FiPlay aria-hidden="true" />}
+          >
+            {isPending('IN_PROGRESS') ? 'Обновляем…' : 'Начать мойку'}
+          </Button>
+        ) : null}
+        {canComplete ? (
+          <Button
+            type="submit"
+            name="toStatus"
+            value="COMPLETED"
+            size="sm"
+            loading={isPending('COMPLETED')}
+            disabled={transitionPending && !isPending('COMPLETED')}
+            leadingIcon={<FiCheckCircle aria-hidden="true" />}
+          >
+            {isPending('COMPLETED') ? 'Обновляем…' : 'Завершить мойку'}
+          </Button>
+        ) : null}
+        {canCancel ? (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              loading={isPending('CANCELLED')}
+              disabled={transitionPending && !isPending('CANCELLED')}
+              leadingIcon={<FiX aria-hidden="true" />}
+              onClick={() => setConfirmationOpen(true)}
+            >
+              {isPending('CANCELLED') ? 'Отменяем…' : 'Отменить'}
+            </Button>
+            <button
+              ref={cancelSubmitRef}
+              type="submit"
+              name="toStatus"
+              value="CANCELLED"
+              hidden
+              tabIndex={-1}
+            />
+          </>
+        ) : null}
+      </form>
+      <ConfirmationDialog
+        open={confirmationOpen}
+        onOpenChange={setConfirmationOpen}
+        title="Отменить мойку?"
+        description="Запись будет отменена, и это действие нельзя будет вернуть."
+        onConfirm={() => {
+          setConfirmationOpen(false);
+          formRef.current?.requestSubmit(cancelSubmitRef.current ?? undefined);
+        }}
+      >
+        <Button type="button" variant="secondary" onClick={() => setConfirmationOpen(false)}>
+          Не отменять
         </Button>
-      ) : null}
-      {canComplete ? (
-        <Button
-          type="submit"
-          name="toStatus"
-          value="COMPLETED"
-          size="sm"
-          loading={pending}
-          leadingIcon={<FiCheckCircle aria-hidden="true" />}
-        >
-          {pending ? 'Обновляем…' : 'Завершить мойку'}
-        </Button>
-      ) : null}
-      {canCancel ? (
-        <Button
-          type="submit"
-          name="toStatus"
-          value="CANCELLED"
-          size="sm"
-          variant="ghost"
-          disabled={pending}
-          leadingIcon={<FiX aria-hidden="true" />}
-        >
-          Отменить
-        </Button>
-      ) : null}
-    </form>
+      </ConfirmationDialog>
+    </>
   );
 }
 
 export function WashRecordCard({
   record,
   formAction,
-  pending,
+  transitionPending,
+  pendingTransition,
+  onTransitionIntent,
+  cleanliness,
   testId = 'wash-record',
 }: WashTransitionControls & {
   record: WashRecordDto;
+  cleanliness: VehicleCleanlinessStatus;
   testId?: string;
 }) {
   return (
@@ -165,7 +245,10 @@ export function WashRecordCard({
               {record.vehicle.internalNumber} · {record.vehicle.model}
             </h2>
           </div>
-          <WashStatusBadge status={record.status} />
+          <span className="flex flex-wrap justify-end gap-2">
+            <WashStatusBadge status={record.status} />
+            <CleanlinessBadge status={cleanliness} />
+          </span>
         </header>
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
           <div className="flex min-w-0 gap-2">
@@ -202,7 +285,13 @@ export function WashRecordCard({
         {record.notes ? (
           <p className="text-sm break-words text-[var(--color-text-secondary)]">{record.notes}</p>
         ) : null}
-        <WashRecordActions record={record} formAction={formAction} pending={pending} />
+        <WashRecordActions
+          record={record}
+          formAction={formAction}
+          transitionPending={transitionPending}
+          pendingTransition={pendingTransition}
+          onTransitionIntent={onTransitionIntent}
+        />
       </article>
     </Card>
   );
