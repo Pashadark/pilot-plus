@@ -1,16 +1,16 @@
--- CreateEnum
+-- Создаём статусы технического обслуживания.
 CREATE TYPE "public"."MaintenanceStatus" AS ENUM ('PLANNED', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE', 'CANCELLED');
 
--- CreateEnum
+-- Создаём виды технического обслуживания.
 CREATE TYPE "public"."MaintenanceKind" AS ENUM ('OIL', 'FILTERS', 'BRAKES', 'TIRES', 'TIMING', 'INSPECTION', 'OTHER');
 
--- CreateEnum
+-- Создаём статусы мойки.
 CREATE TYPE "public"."WashStatus" AS ENUM ('PLANNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED');
 
--- CreateEnum
+-- Создаём виды мойки.
 CREATE TYPE "public"."WashKind" AS ENUM ('BODY', 'COMPLEX', 'INTERIOR', 'MATS', 'ENGINE', 'OTHER');
 
--- AlterTable
+-- Расширяем записи ТО и переводим статус на типизированное перечисление.
 ALTER TABLE "public"."MaintenanceRecord"
   ADD COLUMN "kind" "public"."MaintenanceKind" NOT NULL DEFAULT 'OTHER',
   ADD COLUMN "targetOdometerKm" DECIMAL(12, 1),
@@ -27,7 +27,7 @@ ALTER TABLE "public"."MaintenanceRecord"
     ELSE 'PLANNED'::"public"."MaintenanceStatus"
   END;
 
--- CreateTable
+-- Создаём таблицу планируемых и выполненных моек.
 CREATE TABLE "public"."WashRecord" (
     "id" TEXT NOT NULL,
     "vehicleId" TEXT NOT NULL,
@@ -45,11 +45,11 @@ CREATE TABLE "public"."WashRecord" (
     CONSTRAINT "WashRecord_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
+-- Ускоряем выборку моек автомобиля по запланированной дате.
 CREATE INDEX "WashRecord_vehicleId_scheduledAt_idx" ON "public"."WashRecord"("vehicleId", "scheduledAt");
 
--- CreateIndex
+-- Ускоряем выборку моек по статусу и запланированной дате.
 CREATE INDEX "WashRecord_status_scheduledAt_idx" ON "public"."WashRecord"("status", "scheduledAt");
 
--- AddForeignKey
+-- Связываем мойку с автомобилем с каскадным удалением.
 ALTER TABLE "public"."WashRecord" ADD CONSTRAINT "WashRecord_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES "public"."Vehicle"("id") ON DELETE CASCADE ON UPDATE CASCADE;
