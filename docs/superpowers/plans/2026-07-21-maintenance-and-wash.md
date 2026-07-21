@@ -147,7 +147,8 @@ Reject invalid enum values, invalid dates, text longer than 500 characters, nega
 
 - [ ] **Step 5: Create and verify migration**
 
-Run: `npx prisma format && npx prisma generate && npx prisma migrate deploy`
+Run: `npx prisma format && npx prisma generate`, затем read-only
+`npm run db:preflight:maintenance` и только после его успеха `npx prisma migrate deploy`.
 
 Expected: schema formats, client generates, migration applies once.
 

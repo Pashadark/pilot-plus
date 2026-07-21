@@ -151,7 +151,7 @@ Expected: PASS; parser reports 130.
 
 - [ ] **Step 6: Применить миграцию и проверить реальную БД**
 
-Run: `npx prisma migrate deploy && npm run db:seed`  
+Run: `npm run db:preflight:maintenance && npx prisma migrate deploy && npm run db:seed`
 Expected: миграция применена; сообщение «Импортировано автомобилей: 130».
 
 Run: `docker exec pilot-postgres psql -U pilot -d pilot -tAc 'SELECT count(*) FROM "Vehicle"; SELECT count(*) FROM "VehiclePosition";'`  
@@ -422,6 +422,7 @@ npm run lint
 npm run typecheck
 npm run test:unit
 npx prisma validate
+npm run db:preflight:maintenance
 npx prisma migrate deploy
 npm run db:seed
 npx playwright test tests/auth.spec.ts tests/dashboard.spec.ts tests/ui-kit.spec.ts tests/vehicles.spec.ts --workers=1

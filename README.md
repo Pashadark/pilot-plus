@@ -35,10 +35,15 @@ Pilot+ — веб-платформа для управления коммерч�
 ```powershell
 npm install
 docker compose up -d
+npm run db:preflight:maintenance
 npx prisma migrate deploy
 npm run db:seed
 npm run dev
 ```
+
+`db:preflight:maintenance` выполняет только чтение и обязан запускаться непосредственно перед
+`prisma migrate deploy`. Он останавливает обновление, если legacy-статусы ТО нельзя безопасно
+сопоставить или нормализовать; сначала исправьте данные вручную и проверьте резервную копию.
 
 Перед seed скопируйте `.env.example` в `.env` и задайте собственные `PILOT_ADMIN_EMAIL`, `PILOT_ADMIN_PASSWORD` (минимум 12 символов) и `PILOT_ADMIN_NAME`. Для явной проверки Redis и MQTT на `/system` используйте `REDIS_HOST`, `REDIS_PORT`, `MQTT_HOST` и `MQTT_PORT`; в production все четыре переменные должны быть заданы. `.env` нельзя добавлять в Git или выводить в логи.
 
@@ -59,6 +64,7 @@ npm run test:e2e:auth
 npm run test:e2e:install
 npx playwright test tests/auth.spec.ts tests/system-states.spec.ts tests/profile.spec.ts tests/system-health.spec.ts tests/dashboard.spec.ts tests/ui-kit.spec.ts tests/vehicles.spec.ts --workers=1
 npx prisma validate
+npm run db:preflight:maintenance
 npx prisma migrate deploy
 npm run db:seed
 npm run vehicles:sync-images

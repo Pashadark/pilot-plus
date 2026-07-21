@@ -145,6 +145,7 @@ git branch --show-current
 git log -12 --oneline
 npm install
 docker compose up -d postgres
+npm run db:preflight:maintenance
 npx prisma migrate deploy
 npm run test:unit
 npm run lint
