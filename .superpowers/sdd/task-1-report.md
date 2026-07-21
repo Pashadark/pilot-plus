@@ -54,3 +54,18 @@ DONE_WITH_CONCERNS
 - Repository-wide `npm run format:check` remains red because of 13 existing unrelated files listed by Prettier; changed files themselves are formatted.
 - Prisma reports the existing deprecation warning for `package.json#prisma`; this task did not alter Prisma configuration.
 - Vitest had intermittent startup-only esbuild access-denied failures while resolving `vitest.config.ts` in chained shell commands; a standalone final required command completed successfully with all 10 tests passing.
+
+## Review fix — Russian migration comments
+
+- Replaced every Prisma-generated English migration section comment (`CreateEnum`, `AlterTable`, `CreateTable`, `CreateIndex`, `AddForeignKey`) with a clear Russian explanation; SQL statements are byte-for-byte unchanged.
+- Commit: `3e5707a fix: clarify maintenance migration comments`.
+
+| Command | Result |
+| --- | --- |
+| `npx prisma validate` with the root `.env` loaded | PASS: schema valid. |
+| `npx vitest run src/database/prisma/schema.test.ts src/modules/maintenance/validation.test.ts src/modules/wash/validation.test.ts` | PASS: 3 files, 10 tests. |
+| `git diff --check` | PASS: no whitespace errors. |
+
+### Additional review concern
+
+- `OperationActionState` and `parseCostMinor` are currently duplicated in the maintenance and wash module boundaries. This is intentionally not changed in this task: the current module boundaries remain acceptable, but a later shared-domain extraction should be considered when a third consumer appears.
