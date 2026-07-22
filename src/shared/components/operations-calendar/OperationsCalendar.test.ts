@@ -1,6 +1,11 @@
+// @vitest-environment jsdom
+
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Button } from '@/shared/ui';
 
@@ -19,60 +24,193 @@ const baseEvent: OperationsCalendarEvent = {
   icon: 'tool',
 };
 
-const defaultProps = {
-  events: [baseEvent],
-  month: '2026-07',
-  onMonthChange: vi.fn(),
-  onToday: vi.fn(),
-};
+function createCalendarProps(events: readonly OperationsCalendarEvent[] = [baseEvent]) {
+  return {
+    events,
+    month: '2026-07',
+    onMonthChange: vi.fn(),
+    onToday: vi.fn(),
+  };
+}
+
+function fourEvents() {
+  return Array.from({ length: 4 }, (_, index) => ({
+    ...baseEvent,
+    id: `maintenance-${index + 1}`,
+    title: `Работа ${index + 1}`,
+    startsAt: `2026-07-22T0${index + 5}:30:00.000Z`,
+  }));
+}
+
+function getThemeTokens(selector: string) {
+  const css = readFileSync(join(process.cwd(), 'src/app/globals.css'), 'utf8');
+  const blockStart = css.indexOf(`${selector} {`);
+  const blockEnd = css.indexOf('}', blockStart);
+  const block = css.slice(blockStart, blockEnd);
+
+  return Object.fromEntries(
+    [...block.matchAll(/--([\w-]+):\s*(#[\da-f]{6});/gi)].map((match) => [match[1], match[2]]),
+  );
+}
+
+function relativeLuminance(hex: string) {
+  const channels = [1, 3, 5].map((index) => Number.parseInt(hex.slice(index, index + 2), 16) / 255);
+  const [red, green, blue] = channels.map((channel) =>
+    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  );
+  return red * 0.2126 + green * 0.7152 + blue * 0.0722;
+}
+
+function contrastRatio(foreground: string, background: string) {
+  const light = Math.max(relativeLuminance(foreground), relativeLuminance(background));
+  const dark = Math.min(relativeLuminance(foreground), relativeLuminance(background));
+  return (light + 0.05) / (dark + 0.05);
+}
+
+afterEach(() => cleanup());
 
 describe('OperationsCalendar', () => {
-  it('публикует контракты desktop-сетки и мобильной повестки', () => {
-    const html = renderToStaticMarkup(createElement(OperationsCalendar, defaultProps));
+  it('публикует desktop-grid с полными заголовками и мобильную повестку', () => {
+    render(createElement(OperationsCalendar, createCalendarProps()));
 
-    expect(html).toContain('data-testid="operations-calendar-grid"');
-    expect(html).toContain('data-testid="operations-calendar-agenda"');
-    expect(html).toContain('Понедельник');
-    expect(html).toContain('Июль 2026');
-    expect(html).toMatch(
-      /data-testid="operations-calendar-grid"[^>]+class="[^"]*\bhidden\b[^"]*\bmd:grid\b/,
-    );
-    expect(html).toMatch(/data-testid="operations-calendar-agenda"[^>]+class="[^"]*\bmd:hidden\b/);
+    const grid = screen.getByRole('grid', { name: 'Календарь: Июль 2026' });
+    expect(screen.getByTestId('operations-calendar-grid')).toBe(grid);
+    expect(screen.getByTestId('operations-calendar-agenda')).not.toBeNull();
+    expect(within(grid).getAllByRole('columnheader')).toHaveLength(7);
+    expect(within(grid).getAllByRole('gridcell')).toHaveLength(35);
+    expect(within(grid).getByRole('columnheader', { name: 'Понедельник' })).not.toBeNull();
+    expect(within(grid).getByRole('gridcell', { name: /Среда 22 июля 2026 г\./ })).not.toBeNull();
   });
 
-  it('показывает первые три записи и раскрывает остаток дня', () => {
-    const events = Array.from({ length: 4 }, (_, index) => ({
+  it('раскрывает и скрывает остаток дня со стабильным фокусом и live-объявлением', async () => {
+    const user = userEvent.setup();
+    render(createElement(OperationsCalendar, createCalendarProps(fourEvents())));
+    const grid = within(screen.getByTestId('operations-calendar-grid'));
+    const toggle = grid.getByRole('button', { name: 'Ещё 1' });
+    const controlledId = toggle.getAttribute('aria-controls');
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(controlledId).not.toBeNull();
+    expect(document.getElementById(controlledId ?? '')).not.toBeNull();
+    expect(grid.queryByRole('button', { name: /Работа 4/ })).toBeNull();
+    expect(grid.queryByRole('status')).toBeNull();
+
+    toggle.focus();
+    await user.keyboard('{Enter}');
+
+    expect(toggle.textContent).toBe('Скрыть');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(toggle);
+    expect(grid.getByRole('button', { name: /Работа 4/ })).not.toBeNull();
+    expect(grid.getByRole('status').textContent).toContain(
+      'Показаны все 4 записи за среда, 22 июля 2026 г.',
+    );
+
+    await user.keyboard(' ');
+
+    expect(toggle.textContent).toBe('Ещё 1');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(toggle);
+    expect(grid.queryByRole('button', { name: /Работа 4/ })).toBeNull();
+    expect(grid.getByRole('status').textContent).toContain(
+      'Показаны первые 3 из 4 записей за среда, 22 июля 2026 г.',
+    );
+  });
+
+  it('включает полную дату в accessible name события и сохраняет контрастный статус', () => {
+    render(createElement(OperationsCalendar, createCalendarProps()));
+    const grid = within(screen.getByTestId('operations-calendar-grid'));
+    const eventButton = grid.getByRole('button', {
+      name: /Среда, 22 июля 2026 г\., 09:30, Плановое ТО, PLT-001 · GWM WEY, статус: Запланировано/,
+    });
+    const status = within(eventButton).getByTestId('operations-calendar-event-status');
+    const toneIcon = within(eventButton).getByTestId('operations-calendar-event-tone-icon');
+
+    expect(status.className).toContain('text-[var(--color-text)]');
+    expect(toneIcon.className).toContain('text-[var(--color-primary)]');
+    expect(document.body.innerHTML).not.toContain('--color-text-tertiary');
+  });
+
+  it('сохраняет контраст status text не ниже 4.5:1 на всех tone-фонах', () => {
+    const backgrounds = [
+      'color-elevated',
+      'color-primary-soft',
+      'color-success-soft',
+      'color-warning-soft',
+      'color-danger-soft',
+    ];
+
+    for (const selector of [':root', ":root[data-theme='dark']"]) {
+      const tokens = getThemeTokens(selector);
+      for (const background of backgrounds) {
+        expect(contrastRatio(tokens['color-text'], tokens[background])).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it('вызывает callbacks предыдущего, следующего месяца и сегодня', async () => {
+    const user = userEvent.setup();
+    const props = createCalendarProps();
+    render(createElement(OperationsCalendar, props));
+
+    await user.click(screen.getByRole('button', { name: 'Предыдущий месяц' }));
+    await user.click(screen.getByRole('button', { name: 'Следующий месяц' }));
+    await user.click(screen.getByRole('button', { name: 'Сегодня' }));
+
+    expect(props.onMonthChange.mock.calls).toEqual([['2026-06'], ['2026-08']]);
+    expect(props.onToday).toHaveBeenCalledTimes(1);
+  });
+
+  it('открывает dialog клавиатурой, закрывает Escape и возвращает фокус', async () => {
+    const user = userEvent.setup();
+    render(createElement(OperationsCalendar, createCalendarProps()));
+    const eventButton = within(screen.getByTestId('operations-calendar-grid')).getByRole('button', {
+      name: /Среда, 22 июля 2026 г\., 09:30, Плановое ТО/,
+    });
+
+    eventButton.focus();
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByRole('dialog', { name: 'Плановое ТО' })).not.toBeNull();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(eventButton);
+  });
+
+  it('обновляет открытые детали по id и не открывает dialog повторно после удаления', async () => {
+    const user = userEvent.setup();
+    const props = createCalendarProps();
+    const view = render(createElement(OperationsCalendar, props));
+    const eventButton = within(screen.getByTestId('operations-calendar-grid')).getByRole('button', {
+      name: /Плановое ТО/,
+    });
+
+    await user.click(eventButton);
+    expect(screen.getByRole('dialog', { name: 'Плановое ТО' })).not.toBeNull();
+
+    const updatedEvent = {
       ...baseEvent,
-      id: `maintenance-${index + 1}`,
-      title: `Работа ${index + 1}`,
-      startsAt: `2026-07-22T0${index + 5}:30:00.000Z`,
-    }));
-    const html = renderToStaticMarkup(
-      createElement(OperationsCalendar, { ...defaultProps, events }),
-    );
+      title: 'Обновлённое ТО',
+      vehicleLabel: 'PLT-002 · Haval',
+      statusLabel: 'В работе',
+      tone: 'warning' as const,
+    };
+    view.rerender(createElement(OperationsCalendar, { ...props, events: [updatedEvent] }));
 
-    expect(html).toContain('Ещё 1');
-    expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain('Работа 1');
-    expect(html).toContain('Работа 3');
-    expect(html).not.toContain('Работа 4');
-    expect(html).toContain('data-testid="operations-calendar-event-status"');
-  });
+    const updatedDialog = screen.getByRole('dialog', { name: 'Обновлённое ТО' });
+    expect(updatedDialog.textContent).toContain('PLT-002 · Haval');
+    expect(updatedDialog.textContent).toContain('В работе');
 
-  it('даёт клавиатурно-доступные названия навигации и не уменьшает touch-target', () => {
-    const html = renderToStaticMarkup(createElement(OperationsCalendar, defaultProps));
-
-    expect(html).toContain('aria-label="Предыдущий месяц"');
-    expect(html).toContain('aria-label="Следующий месяц"');
-    expect(html).toContain('>Сегодня</button>');
-    expect(html).toContain('min-h-11');
-    expect(html).toContain('motion-reduce:transition-none');
+    view.rerender(createElement(OperationsCalendar, { ...props, events: [] }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    view.rerender(createElement(OperationsCalendar, props));
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
 
 describe('CalendarEventDialog', () => {
   it('показывает дату, автомобиль, статус и доменное действие', () => {
-    const html = renderToStaticMarkup(
+    render(
       createElement(CalendarEventDialog, {
         event: baseEvent,
         open: true,
@@ -81,20 +219,19 @@ describe('CalendarEventDialog', () => {
       }),
     );
 
-    expect(html).toContain('role="dialog"');
-    expect(html).toContain('Плановое ТО');
-    expect(html).toContain('22 июля 2026');
-    expect(html).toContain('09:30');
-    expect(html).toContain('PLT-001 · GWM WEY');
-    expect(html).toContain('Запланировано');
-    expect(html).toContain('Открыть запись');
-    expect(html).toContain('max-h-[calc(100dvh-2rem)]');
-    expect(html).toContain('break-words');
+    const dialog = screen.getByRole('dialog', { name: 'Плановое ТО' });
+    expect(dialog.textContent).toContain('22 июля 2026');
+    expect(dialog.textContent).toContain('09:30');
+    expect(dialog.textContent).toContain('PLT-001 · GWM WEY');
+    expect(dialog.textContent).toContain('Запланировано');
+    expect(within(dialog).getByRole('button', { name: 'Открыть запись' })).not.toBeNull();
+    expect(dialog.className).toContain('max-h-[calc(100dvh-2rem)]');
+    expect(dialog.innerHTML).toContain('break-words');
   });
 });
 
 describe('публичный API', () => {
-  it('экспортирует календарь и диалог через barrel', () => {
+  it('экспортирует календарь и dialog через barrel', () => {
     expect(operationsCalendar.OperationsCalendar).toBe(OperationsCalendar);
     expect(operationsCalendar.CalendarEventDialog).toBe(CalendarEventDialog);
   });

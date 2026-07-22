@@ -24,22 +24,34 @@ const weekdays = [
 ] as const;
 
 const eventToneClasses: Record<OperationsCalendarEvent['tone'], string> = {
-  neutral:
-    'border-[var(--color-border)] bg-[var(--color-elevated)] text-[var(--color-text-secondary)]',
-  primary:
-    'border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]',
-  success:
-    'border-[var(--color-success)] bg-[var(--color-success-soft)] text-[var(--color-success)]',
-  warning:
-    'border-[var(--color-warning)] bg-[var(--color-warning-soft)] text-[var(--color-warning)]',
-  danger: 'border-[var(--color-danger)] bg-[var(--color-danger-soft)] text-[var(--color-danger)]',
+  neutral: 'border-[var(--color-border)] bg-[var(--color-elevated)]',
+  primary: 'border-[var(--color-primary)] bg-[var(--color-primary-soft)]',
+  success: 'border-[var(--color-success)] bg-[var(--color-success-soft)]',
+  warning: 'border-[var(--color-warning)] bg-[var(--color-warning-soft)]',
+  danger: 'border-[var(--color-danger)] bg-[var(--color-danger-soft)]',
 };
 
-const agendaDateFormatter = new Intl.DateTimeFormat('ru-RU', {
+const eventIconToneClasses: Record<OperationsCalendarEvent['tone'], string> = {
+  neutral: 'text-[var(--color-text-secondary)]',
+  primary: 'text-[var(--color-primary)]',
+  success: 'text-[var(--color-success)]',
+  warning: 'text-[var(--color-warning)]',
+  danger: 'text-[var(--color-danger)]',
+};
+
+const calendarDateFormatter = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'UTC',
+  year: 'numeric',
+});
+
+const calendarDayFormatter = new Intl.DateTimeFormat('ru-RU', {
   day: 'numeric',
   month: 'long',
   timeZone: 'UTC',
   weekday: 'long',
+  year: 'numeric',
 });
 
 function shiftCalendarMonth(month: string, offset: -1 | 1) {
@@ -63,32 +75,56 @@ function calendarDate(isoDate: string) {
   return date;
 }
 
-function formatAgendaDate(isoDate: string) {
-  const date = calendarDate(isoDate);
-  if (!date || Number.isNaN(date.getTime())) return isoDate;
-  const label = agendaDateFormatter.format(date);
+function capitalizeLabel(label: string) {
   return `${label[0]?.toUpperCase() ?? ''}${label.slice(1)}`;
 }
 
-function EventButton({ event, onClick }: { event: OperationsCalendarEvent; onClick: () => void }) {
+function formatCalendarDate(isoDate: string) {
+  const date = calendarDate(isoDate);
+  if (!date || Number.isNaN(date.getTime())) return isoDate;
+  return calendarDateFormatter.format(date);
+}
+
+function formatCalendarDayLabel(isoDate: string) {
+  const date = calendarDate(isoDate);
+  if (!date || Number.isNaN(date.getTime())) return isoDate;
+  return capitalizeLabel(calendarDayFormatter.format(date));
+}
+
+function EventButton({
+  event,
+  dayLabel,
+  onClick,
+}: {
+  event: OperationsCalendarEvent;
+  dayLabel: string;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={`${event.title}, ${event.vehicleLabel}, ${event.statusLabel}, ${formatCalendarEventTime(event)}`}
-      className={`min-h-11 w-full min-w-0 cursor-pointer rounded-[var(--radius-sm)] border px-2 py-1.5 text-left text-xs transition-colors duration-[var(--motion-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] active:opacity-80 motion-reduce:transition-none ${eventToneClasses[event.tone]}`}
+      aria-label={`${dayLabel}, ${formatCalendarEventTime(event)}, ${event.title}, ${event.vehicleLabel}, статус: ${event.statusLabel}`}
+      className={`min-h-11 w-full min-w-0 cursor-pointer rounded-[var(--radius-sm)] border px-2 py-1.5 text-left text-xs text-[var(--color-text)] transition-colors duration-[var(--motion-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] active:opacity-80 motion-reduce:transition-none ${eventToneClasses[event.tone]}`}
     >
       <span className="flex min-w-0 items-center gap-1.5 font-semibold">
-        <CalendarEventIcon icon={event.icon} />
+        <span
+          data-testid="operations-calendar-event-tone-icon"
+          className={eventIconToneClasses[event.tone]}
+        >
+          <CalendarEventIcon icon={event.icon} />
+        </span>
         <time className="shrink-0 tabular-nums" dateTime={event.startsAt}>
           {formatCalendarEventTime(event)}
         </time>
         <span className="truncate text-[var(--color-text)]">{event.title}</span>
       </span>
-      <span className="mt-0.5 block truncate">{event.vehicleLabel}</span>
+      <span className="mt-0.5 block truncate text-[var(--color-text-secondary)]">
+        {event.vehicleLabel}
+      </span>
       <span
         data-testid="operations-calendar-event-status"
-        className="mt-0.5 block truncate font-medium"
+        className="mt-0.5 block truncate font-medium text-[var(--color-text)]"
       >
         {event.statusLabel}
       </span>
@@ -98,34 +134,54 @@ function EventButton({ event, onClick }: { event: OperationsCalendarEvent; onCli
 
 function DayEvents({
   day,
+  dayLabel,
   expanded,
+  announced,
   onExpand,
   onSelect,
 }: {
   day: CalendarDay;
+  dayLabel: string;
   expanded: boolean;
+  announced: boolean;
   onExpand: () => void;
   onSelect: (event: OperationsCalendarEvent) => void;
 }) {
+  const listId = useId();
   const visibleEvents = expanded ? day.events : day.events.slice(0, 3);
-  const hiddenCount = day.events.length - visibleEvents.length;
+  const overflowCount = Math.max(0, day.events.length - 3);
 
   return (
-    <div className="grid min-w-0 gap-1.5">
-      {visibleEvents.map((event) => (
-        <EventButton key={event.id} event={event} onClick={() => onSelect(event)} />
-      ))}
-      {hiddenCount > 0 ? (
+    <>
+      <div id={listId} className="grid min-w-0 gap-1.5">
+        {visibleEvents.map((event) => (
+          <EventButton
+            key={event.id}
+            event={event}
+            dayLabel={dayLabel}
+            onClick={() => onSelect(event)}
+          />
+        ))}
+      </div>
+      {overflowCount > 0 ? (
         <button
           type="button"
           aria-expanded={expanded}
+          aria-controls={listId}
           onClick={onExpand}
           className="min-h-11 min-w-11 cursor-pointer rounded-[var(--radius-sm)] px-2 text-left text-xs font-semibold text-[var(--color-primary)] transition-colors duration-[var(--motion-fast)] hover:bg-[var(--color-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] active:bg-[var(--color-primary-soft)] motion-reduce:transition-none"
         >
-          Ещё {hiddenCount}
+          {expanded ? 'Скрыть' : `Ещё ${overflowCount}`}
         </button>
       ) : null}
-    </div>
+      {announced && overflowCount > 0 ? (
+        <p role="status" aria-live="polite" className="sr-only">
+          {expanded
+            ? `Показаны все ${day.events.length} записи за ${dayLabel.toLocaleLowerCase('ru-RU')}.`
+            : `Показаны первые 3 из ${day.events.length} записей за ${dayLabel.toLocaleLowerCase('ru-RU')}.`}
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -145,8 +201,20 @@ export function OperationsCalendar({
   onEventAction,
 }: OperationsCalendarProps) {
   const titleId = useId();
-  const [expandedDays, setExpandedDays] = useState<ReadonlySet<string>>(() => new Set());
-  const [selectedEvent, setSelectedEvent] = useState<OperationsCalendarEvent | null>(null);
+  const [dayDisclosures, setDayDisclosures] = useState<ReadonlyMap<string, boolean>>(
+    () => new Map(),
+  );
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const eventIdsKey = JSON.stringify(events.map((event) => event.id));
+  const [previousEventIdsKey, setPreviousEventIdsKey] = useState(eventIdsKey);
+
+  if (eventIdsKey !== previousEventIdsKey) {
+    setPreviousEventIdsKey(eventIdsKey);
+    if (selectedEventId !== null && !events.some((event) => event.id === selectedEventId)) {
+      setSelectedEventId(null);
+    }
+  }
+
   const calendarMonth = useMemo(() => buildCalendarMonth(month), [month]);
   const eventGroups = useMemo(() => groupCalendarEvents(events), [events]);
   const days = useMemo(
@@ -158,12 +226,19 @@ export function OperationsCalendar({
     [calendarMonth.days, eventGroups],
   );
   const agendaDays = days.filter((day) => day.inCurrentMonth && day.events.length > 0);
+  const weeks = Array.from({ length: days.length / 7 }, (_, index) =>
+    days.slice(index * 7, index * 7 + 7),
+  );
+  const weekdayIds = weekdays.map((_, index) => `${titleId}-weekday-${index}`);
+  const selectedEvent =
+    selectedEventId === null
+      ? null
+      : (events.find((event) => event.id === selectedEventId) ?? null);
 
   function toggleDay(isoDate: string) {
-    setExpandedDays((current) => {
-      const next = new Set(current);
-      if (next.has(isoDate)) next.delete(isoDate);
-      else next.add(isoDate);
+    setDayDisclosures((current) => {
+      const next = new Map(current);
+      next.set(isoDate, !(current.get(isoDate) ?? false));
       return next;
     });
   }
@@ -205,43 +280,69 @@ export function OperationsCalendar({
       </header>
 
       <div
+        role="grid"
         data-testid="operations-calendar-grid"
         aria-label={`Календарь: ${calendarMonth.label}`}
         className="hidden min-w-0 grid-cols-7 overflow-hidden rounded-[var(--radius-panel)] border border-r-0 border-b-0 bg-[var(--color-surface)] shadow-[var(--shadow-card)] md:grid"
       >
-        {weekdays.map((weekday) => (
-          <div
-            key={weekday}
-            className="min-w-0 border-r border-b bg-[var(--color-elevated)] px-2 py-3 text-center text-xs font-semibold text-[var(--color-text-secondary)]"
-          >
-            {weekday}
-          </div>
-        ))}
-        {days.map((day) => (
-          <div
-            key={day.isoDate}
-            aria-current={day.isToday ? 'date' : undefined}
-            className={`min-h-36 min-w-0 overflow-hidden border-r border-b p-2 ${day.inCurrentMonth ? 'bg-[var(--color-surface)]' : 'bg-[var(--color-elevated)] text-[var(--color-text-tertiary)]'}`}
-          >
-            <div className="mb-2 flex min-h-7 items-center justify-between gap-1">
-              <time
-                dateTime={day.isoDate}
-                className={`flex size-7 items-center justify-center rounded-full text-xs font-semibold tabular-nums ${day.isToday ? 'bg-[var(--color-primary)] text-[var(--color-text-inverse)]' : ''}`}
-              >
-                {day.dayNumber}
-              </time>
-              {day.events.length > 0 ? (
-                <span className="text-xs text-[var(--color-text-tertiary)] tabular-nums">
-                  {day.events.length}
-                </span>
-              ) : null}
+        <div role="row" className="contents">
+          {weekdays.map((weekday, index) => (
+            <div
+              key={weekday}
+              id={weekdayIds[index]}
+              role="columnheader"
+              className="min-w-0 border-r border-b bg-[var(--color-elevated)] px-2 py-3 text-center text-xs font-semibold text-[var(--color-text-secondary)]"
+            >
+              {weekday}
             </div>
-            <DayEvents
-              day={day}
-              expanded={expandedDays.has(day.isoDate)}
-              onExpand={() => toggleDay(day.isoDate)}
-              onSelect={setSelectedEvent}
-            />
+          ))}
+        </div>
+        {weeks.map((week) => (
+          <div key={week[0]?.isoDate} role="row" className="contents">
+            {week.map((day, weekdayIndex) => {
+              const dateId = `${titleId}-date-${day.isoDate}`;
+              const dayLabel = formatCalendarDayLabel(day.isoDate);
+              const disclosureState = dayDisclosures.get(day.isoDate);
+
+              return (
+                <div
+                  key={day.isoDate}
+                  role="gridcell"
+                  aria-labelledby={`${weekdayIds[weekdayIndex]} ${dateId}`}
+                  aria-current={day.isToday ? 'date' : undefined}
+                  className={`min-h-36 min-w-0 overflow-hidden border-r border-b p-2 ${day.inCurrentMonth ? 'bg-[var(--color-surface)]' : 'bg-[var(--color-elevated)] text-[var(--color-text-secondary)]'}`}
+                >
+                  <span id={dateId} className="sr-only">
+                    {formatCalendarDate(day.isoDate)}
+                  </span>
+                  <div className="mb-2 flex min-h-7 items-center justify-between gap-1">
+                    <time
+                      aria-hidden="true"
+                      dateTime={day.isoDate}
+                      className={`flex size-7 items-center justify-center rounded-full text-xs font-semibold tabular-nums ${day.isToday ? 'bg-[var(--color-primary)] text-[var(--color-text-inverse)]' : ''}`}
+                    >
+                      {day.dayNumber}
+                    </time>
+                    {day.events.length > 0 ? (
+                      <span
+                        aria-hidden="true"
+                        className="text-xs text-[var(--color-text-secondary)] tabular-nums"
+                      >
+                        {day.events.length}
+                      </span>
+                    ) : null}
+                  </div>
+                  <DayEvents
+                    day={day}
+                    dayLabel={dayLabel}
+                    expanded={disclosureState ?? false}
+                    announced={disclosureState !== undefined}
+                    onExpand={() => toggleDay(day.isoDate)}
+                    onSelect={(event) => setSelectedEventId(event.id)}
+                  />
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>
@@ -252,19 +353,35 @@ export function OperationsCalendar({
         className="grid min-w-0 gap-3 md:hidden"
       >
         {agendaDays.length ? (
-          agendaDays.map((day) => (
-            <Card key={day.isoDate} className="min-w-0 overflow-hidden p-3">
-              <h3 className="mb-3 font-semibold break-words text-[var(--color-text)]">
-                <time dateTime={day.isoDate}>{formatAgendaDate(day.isoDate)}</time>
-              </h3>
-              <DayEvents
-                day={day}
-                expanded={expandedDays.has(day.isoDate)}
-                onExpand={() => toggleDay(day.isoDate)}
-                onSelect={setSelectedEvent}
-              />
-            </Card>
-          ))
+          agendaDays.map((day) => {
+            const headingId = `${titleId}-agenda-${day.isoDate}`;
+            const dayLabel = formatCalendarDayLabel(day.isoDate);
+            const disclosureState = dayDisclosures.get(day.isoDate);
+
+            return (
+              <Card
+                key={day.isoDate}
+                role="group"
+                aria-labelledby={headingId}
+                className="min-w-0 overflow-hidden p-3"
+              >
+                <h3
+                  id={headingId}
+                  className="mb-3 font-semibold break-words text-[var(--color-text)]"
+                >
+                  <time dateTime={day.isoDate}>{dayLabel}</time>
+                </h3>
+                <DayEvents
+                  day={day}
+                  dayLabel={dayLabel}
+                  expanded={disclosureState ?? false}
+                  announced={disclosureState !== undefined}
+                  onExpand={() => toggleDay(day.isoDate)}
+                  onSelect={(event) => setSelectedEventId(event.id)}
+                />
+              </Card>
+            );
+          })
         ) : (
           <Card className="min-w-0 p-6 text-center">
             <p className="font-semibold text-[var(--color-text)]">Записей на этот месяц нет</p>
@@ -279,7 +396,7 @@ export function OperationsCalendar({
         event={selectedEvent}
         open={selectedEvent !== null}
         onOpenChange={(open) => {
-          if (!open) setSelectedEvent(null);
+          if (!open) setSelectedEventId(null);
         }}
         action={selectedEvent && onEventAction ? onEventAction(selectedEvent) : undefined}
       />
