@@ -48,6 +48,27 @@ function getCalendarMonthParts(month: string) {
   };
 }
 
+function getCalendarGridBounds(year: number, month: number) {
+  const firstDayOfMonth = createUtcCalendarDate(year, month - 1, 1);
+  const lastDayOfMonth = createUtcCalendarDate(year, month, 0);
+  const firstWeekday = (firstDayOfMonth.getUTCDay() + 6) % 7;
+  const lastWeekday = (lastDayOfMonth.getUTCDay() + 6) % 7;
+  const gridStart = new Date(firstDayOfMonth);
+  const gridEnd = new Date(lastDayOfMonth);
+
+  gridStart.setUTCDate(gridStart.getUTCDate() - firstWeekday);
+  gridEnd.setUTCDate(gridEnd.getUTCDate() + (6 - lastWeekday));
+
+  return { gridStart, gridEnd };
+}
+
+function hasFourDigitCalendarGrid(month: string) {
+  const { year, month: monthNumber } = getCalendarMonthParts(month);
+  const { gridStart, gridEnd } = getCalendarGridBounds(year, monthNumber);
+
+  return gridStart.getUTCFullYear() >= 0 && gridEnd.getUTCFullYear() <= 9999;
+}
+
 function parseCalendarInstant(value: string): Date | null {
   const match = calendarInstantPattern.exec(value);
   if (!match) return null;
@@ -85,7 +106,9 @@ function parseCalendarInstant(value: string): Date | null {
 }
 
 export function parseCalendarMonth(value: string | null | undefined, now = new Date()) {
-  return value && calendarMonthPattern.test(value) ? value : getCurrentBusinessMonth(now);
+  return value && calendarMonthPattern.test(value) && hasFourDigitCalendarGrid(value)
+    ? value
+    : getCurrentBusinessMonth(now);
 }
 
 export function buildCalendarMonth(
@@ -94,15 +117,7 @@ export function buildCalendarMonth(
 ): CalendarMonth {
   const month = parseCalendarMonth(requestedMonth, now);
   const { year, month: monthNumber } = getCalendarMonthParts(month);
-  const firstDayOfMonth = createUtcCalendarDate(year, monthNumber - 1, 1);
-  const lastDayOfMonth = createUtcCalendarDate(year, monthNumber, 0);
-  const firstWeekday = (firstDayOfMonth.getUTCDay() + 6) % 7;
-  const lastWeekday = (lastDayOfMonth.getUTCDay() + 6) % 7;
-  const gridStart = new Date(firstDayOfMonth);
-  const gridEnd = new Date(lastDayOfMonth);
-
-  gridStart.setUTCDate(gridStart.getUTCDate() - firstWeekday);
-  gridEnd.setUTCDate(gridEnd.getUTCDate() + (6 - lastWeekday));
+  const { gridStart, gridEnd } = getCalendarGridBounds(year, monthNumber);
 
   const todayParts = getPilotBusinessDateParts(now);
   const today = formatIsoDate(todayParts.year, todayParts.month, todayParts.day);

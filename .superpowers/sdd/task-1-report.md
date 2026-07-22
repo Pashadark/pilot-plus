@@ -8,6 +8,7 @@
 - Добавлен публичный API общего календарного модуля.
 - Устранена особая обработка JavaScript годов `0–99`: date-only арифметика использует `setUTCFullYear`, а ISO-даты всегда имеют вид `YYYY-MM-DD`.
 - `startsAt` теперь принимается только в строгом RFC3339-формате с `Z` или `±HH:mm`; строки без смещения и несуществующие календарные даты исключаются из группировки.
+- Месяц принимается только если его полная Monday–Sunday сетка целиком помещается в диапазон `0000–9999`; `0000-01` и `9999-12` нормализуются к текущему московскому месяцу, а `0000-02` и `9999-11` остаются допустимыми.
 
 ## TDD и проверки
 
@@ -17,6 +18,8 @@
 | `npx vitest run src/shared/components/operations-calendar/calendar-model.test.ts` после реализации | PASS: 1 файл, 6 тестов. |
 | `npx vitest run src/shared/components/operations-calendar/calendar-model.test.ts` после замечаний ревью | RED: 3 ожидаемых падения для годов `< 100`, timezone-less строки и `2026-02-30`. |
 | `npx vitest run src/shared/components/operations-calendar/calendar-model.test.ts` после исправления | PASS: 1 файл, 13 тестов. |
+| `npx vitest run src/shared/components/operations-calendar/calendar-model.test.ts` после повторного ревью | RED: `0000-01` проходил regex, хотя сетка выходила в год `-0001`. |
+| `npx vitest run src/shared/components/operations-calendar/calendar-model.test.ts` после граничного исправления | PASS: 1 файл, 17 тестов. |
 | `npm run typecheck` | PASS. |
 | `npm run lint -- src/shared/components/operations-calendar` | PASS. |
 | `npx prettier --check` для четырёх файлов календаря | PASS. |

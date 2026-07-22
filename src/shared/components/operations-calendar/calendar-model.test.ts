@@ -11,6 +11,20 @@ describe('parseCalendarMonth', () => {
   it('возвращает текущий московский месяц для некорректного значения', () => {
     expect(parseCalendarMonth('2026-7', new Date('2026-07-31T21:30:00Z'))).toBe('2026-08');
   });
+
+  it('отклоняет крайние месяцы, чья полная сетка выходит из четырёхзначного года', () => {
+    const now = new Date('2026-07-22T09:00:00Z');
+
+    expect(parseCalendarMonth('0000-01', now)).toBe('2026-07');
+    expect(parseCalendarMonth('9999-12', now)).toBe('2026-07');
+  });
+
+  it('сохраняет ближайшие допустимые месяцы на границах диапазона', () => {
+    const now = new Date('2026-07-22T09:00:00Z');
+
+    expect(parseCalendarMonth('0000-02', now)).toBe('0000-02');
+    expect(parseCalendarMonth('9999-11', now)).toBe('9999-11');
+  });
 });
 
 describe('buildCalendarMonth', () => {
@@ -54,6 +68,24 @@ describe('buildCalendarMonth', () => {
 
     expect(december.days[december.days.length - 1]?.isoDate).toBe('2027-01-03');
     expect(january.days[0]?.isoDate).toBe('2026-12-28');
+  });
+
+  it('нормализует крайние месяцы до построения невалидной ISO-сетки', () => {
+    const now = new Date('2026-07-22T09:00:00Z');
+
+    expect(buildCalendarMonth('0000-01', now).month).toBe('2026-07');
+    expect(buildCalendarMonth('9999-12', now).month).toBe('2026-07');
+  });
+
+  it('строит ISO-сетки для ближайших допустимых граничных месяцев', () => {
+    const now = new Date('2026-07-22T09:00:00Z');
+
+    for (const monthValue of ['0000-02', '9999-11']) {
+      const month = buildCalendarMonth(monthValue, now);
+
+      expect(month.month).toBe(monthValue);
+      expect(month.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.isoDate))).toBe(true);
+    }
   });
 });
 
