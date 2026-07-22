@@ -3,6 +3,8 @@ import { getPilotBusinessDateParts, PILOT_BUSINESS_TIME_ZONE } from '@/shared/bu
 import type { CalendarDay, CalendarMonth, OperationsCalendarEvent } from './types';
 
 const calendarMonthPattern = /^\d{4}-(0[1-9]|1[0-2])$/;
+const calendarInstantPattern =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
 const monthNameFormatter = new Intl.DateTimeFormat('ru-RU', {
   month: 'long',
@@ -13,8 +15,19 @@ function formatNumber(value: number) {
   return String(value).padStart(2, '0');
 }
 
+function formatYear(value: number) {
+  return String(value).padStart(4, '0');
+}
+
 function formatIsoDate(year: number, month: number, day: number) {
-  return `${year}-${formatNumber(month)}-${formatNumber(day)}`;
+  return `${formatYear(year)}-${formatNumber(month)}-${formatNumber(day)}`;
+}
+
+function createUtcCalendarDate(year: number, monthIndex: number, day: number) {
+  const date = new Date(0);
+  date.setUTCHours(0, 0, 0, 0);
+  date.setUTCFullYear(year, monthIndex, day);
+  return date;
 }
 
 function getCurrentBusinessMonth(now: Date) {
@@ -23,7 +36,7 @@ function getCurrentBusinessMonth(now: Date) {
 }
 
 function formatCalendarLabel(year: number, month: number) {
-  const date = new Date(Date.UTC(year, month - 1, 1));
+  const date = createUtcCalendarDate(year, month - 1, 1);
   const monthName = monthNameFormatter.format(date);
   return `${monthName[0]?.toUpperCase() ?? ''}${monthName.slice(1)} ${year}`;
 }
@@ -33,6 +46,42 @@ function getCalendarMonthParts(month: string) {
     year: Number(month.slice(0, 4)),
     month: Number(month.slice(5, 7)),
   };
+}
+
+function parseCalendarInstant(value: string): Date | null {
+  const match = calendarInstantPattern.exec(value);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const offset = match[7];
+
+  if (
+    month < 1 ||
+    month > 12 ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59 ||
+    (offset !== 'Z' && (Number(offset.slice(1, 3)) > 23 || Number(offset.slice(4, 6)) > 59))
+  ) {
+    return null;
+  }
+
+  const calendarDate = createUtcCalendarDate(year, month - 1, day);
+  if (
+    calendarDate.getUTCFullYear() !== year ||
+    calendarDate.getUTCMonth() + 1 !== month ||
+    calendarDate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  const instant = new Date(value);
+  return Number.isNaN(instant.getTime()) ? null : instant;
 }
 
 export function parseCalendarMonth(value: string | null | undefined, now = new Date()) {
@@ -45,8 +94,8 @@ export function buildCalendarMonth(
 ): CalendarMonth {
   const month = parseCalendarMonth(requestedMonth, now);
   const { year, month: monthNumber } = getCalendarMonthParts(month);
-  const firstDayOfMonth = new Date(Date.UTC(year, monthNumber - 1, 1));
-  const lastDayOfMonth = new Date(Date.UTC(year, monthNumber, 0));
+  const firstDayOfMonth = createUtcCalendarDate(year, monthNumber - 1, 1);
+  const lastDayOfMonth = createUtcCalendarDate(year, monthNumber, 0);
   const firstWeekday = (firstDayOfMonth.getUTCDay() + 6) % 7;
   const lastWeekday = (lastDayOfMonth.getUTCDay() + 6) % 7;
   const gridStart = new Date(firstDayOfMonth);
@@ -79,23 +128,29 @@ export function buildCalendarMonth(
 }
 
 export function groupCalendarEvents(events: readonly OperationsCalendarEvent[]) {
-  const groups = new Map<string, OperationsCalendarEvent[]>();
+  const groups = new Map<
+    string,
+    Array<{ event: OperationsCalendarEvent; instantMs: number; position: number }>
+  >();
 
-  for (const event of events) {
-    const startsAt = new Date(event.startsAt);
-    if (Number.isNaN(startsAt.getTime())) continue;
+  for (const [position, event] of events.entries()) {
+    const startsAt = parseCalendarInstant(event.startsAt);
+    if (!startsAt) continue;
 
     const { year, month, day } = getPilotBusinessDateParts(startsAt);
     const isoDate = formatIsoDate(year, month, day);
     const groupedEvents = groups.get(isoDate) ?? [];
 
-    groupedEvents.push(event);
+    groupedEvents.push({ event, instantMs: startsAt.getTime(), position });
     groups.set(isoDate, groupedEvents);
   }
 
-  for (const groupedEvents of groups.values()) {
-    groupedEvents.sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt));
-  }
-
-  return groups;
+  return new Map(
+    [...groups].map(([isoDate, groupedEvents]) => [
+      isoDate,
+      groupedEvents
+        .sort((left, right) => left.instantMs - right.instantMs || left.position - right.position)
+        .map(({ event }) => event),
+    ]),
+  );
 }

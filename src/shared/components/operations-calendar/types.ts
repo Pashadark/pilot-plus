@@ -1,5 +1,6 @@
 export interface OperationsCalendarEvent {
   id: string;
+  /** Строгий RFC3339-момент с `Z` или смещением `±HH:mm`. */
   startsAt: string;
   title: string;
   vehicleLabel: string;

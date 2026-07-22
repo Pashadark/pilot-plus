@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildCalendarMonth, groupCalendarEvents, parseCalendarMonth } from './calendar-model';
+import * as operationsCalendar from '.';
 
 describe('parseCalendarMonth', () => {
   it('принимает только месяц в каноническом формате', () => {
@@ -28,6 +29,31 @@ describe('buildCalendarMonth', () => {
     const month = buildCalendarMonth('2026-07', new Date('2026-07-21T21:30:00Z'));
 
     expect(month.days.find((day) => day.isoDate === '2026-07-22')?.isToday).toBe(true);
+  });
+
+  it('сохраняет годы от 0000 до 0099 в ISO-дате', () => {
+    for (const monthValue of ['0000-02', '0099-02']) {
+      const month = buildCalendarMonth(monthValue, new Date('2026-02-01T09:00:00Z'));
+
+      expect(month.days.some((day) => day.isoDate === `${monthValue}-01`)).toBe(true);
+      expect(month.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.isoDate))).toBe(true);
+    }
+  });
+
+  it('строит шесть недель для месяца, не помещающегося в пять', () => {
+    const month = buildCalendarMonth('2026-08', new Date('2026-08-12T09:00:00Z'));
+
+    expect(month.days).toHaveLength(42);
+    expect(month.days[0]?.isoDate).toBe('2026-07-27');
+    expect(month.days[41]?.isoDate).toBe('2026-09-06');
+  });
+
+  it('сохраняет границы года в декабрьской и январской сетках', () => {
+    const december = buildCalendarMonth('2026-12', new Date('2026-12-12T09:00:00Z'));
+    const january = buildCalendarMonth('2027-01', new Date('2027-01-12T09:00:00Z'));
+
+    expect(december.days[december.days.length - 1]?.isoDate).toBe('2027-01-03');
+    expect(january.days[0]?.isoDate).toBe('2026-12-28');
   });
 });
 
@@ -71,5 +97,70 @@ describe('groupCalendarEvents', () => {
     ]);
 
     expect(groups.get('2026-07-22')?.map((event) => event.id)).toEqual(['earlier', 'later']);
+  });
+
+  it('исключает время без смещения часового пояса', () => {
+    const groups = groupCalendarEvents([
+      {
+        id: 'timezone-less',
+        startsAt: '2026-07-22T09:00:00',
+        title: 'ТО',
+        vehicleLabel: 'PLT-1',
+        statusLabel: 'Запланировано',
+        tone: 'primary',
+        icon: 'tool',
+      },
+    ]);
+
+    expect(groups.size).toBe(0);
+  });
+
+  it('исключает несуществующие календарные даты', () => {
+    const groups = groupCalendarEvents([
+      {
+        id: 'invalid-date',
+        startsAt: '2026-02-30T09:00:00Z',
+        title: 'ТО',
+        vehicleLabel: 'PLT-1',
+        statusLabel: 'Запланировано',
+        tone: 'primary',
+        icon: 'tool',
+      },
+    ]);
+
+    expect(groups.size).toBe(0);
+  });
+
+  it('сохраняет порядок исходных событий с одинаковым временем', () => {
+    const groups = groupCalendarEvents([
+      {
+        id: 'first',
+        startsAt: '2026-07-22T09:00:00Z',
+        title: 'Первое',
+        vehicleLabel: 'PLT-1',
+        statusLabel: 'Запланировано',
+        tone: 'primary',
+        icon: 'tool',
+      },
+      {
+        id: 'second',
+        startsAt: '2026-07-22T09:00:00Z',
+        title: 'Второе',
+        vehicleLabel: 'PLT-2',
+        statusLabel: 'Запланировано',
+        tone: 'primary',
+        icon: 'tool',
+      },
+    ]);
+
+    expect(groups.get('2026-07-22')?.map((event) => event.id)).toEqual(['first', 'second']);
+  });
+});
+
+describe('публичный API', () => {
+  it('экспортирует контракты календарной модели через barrel', () => {
+    expect(operationsCalendar.buildCalendarMonth).toBe(buildCalendarMonth);
+    expect(operationsCalendar.groupCalendarEvents).toBe(groupCalendarEvents);
+    expect(operationsCalendar.parseCalendarMonth).toBe(parseCalendarMonth);
   });
 });
