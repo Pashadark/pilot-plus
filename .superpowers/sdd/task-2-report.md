@@ -1,39 +1,44 @@
-# Task 2 report — protected maintenance workflows
+# Отчёт Task 2 — общий responsive-календарь операций
 
-## Result
+## Результат
 
-- Added an explicit maintenance state machine: `PLANNED` and `OVERDUE` can move to `IN_PROGRESS` or `CANCELLED`; `IN_PROGRESS` can move to `COMPLETED` or `CANCELLED`; terminal states cannot be reopened.
-- Added tenant-scoped maintenance queries. The query only reads records whose vehicle belongs to a company where the supplied user has membership, and serializes only the UI DTO fields.
-- Added server actions for creation and transition. Both authenticate independently; creation verifies the submitted vehicle belongs to the authenticated user's company, and transitions use one guarded `updateMany` with record ID, expected current status, and company membership.
-- `revalidatePath('/maintenance')` runs only after a successful write. Failed, stale, or cross-company transitions return one non-enumerating error and do not revalidate.
-
-## Approved ambiguity
-
-Task 2 originally said to populate both `startedAt` and `completedAt`. The Task 1 schema and generated Prisma client deliberately do **not** contain `MaintenanceRecord.startedAt` (that field exists only on `WashRecord`). Owner decision: do not add a migration or workaround. Therefore `PLANNED`/`OVERDUE` → `IN_PROGRESS` updates only `status`, while a transition to `COMPLETED` also sets `completedAt`. A focused regression test asserts this behavior.
+- Добавлен общий client-компонент `OperationsCalendar`, который принимает сериализуемые события,
+  месяц и callbacks навигации без зависимостей от Prisma, ТО или мойки.
+- На `md` и шире компонент публикует семиколоночную месячную сетку с понедельника по
+  воскресенье; на телефоне — повестку по датам без горизонтального контейнера.
+- В одном дне изначально показываются первые три записи и кнопка «Ещё N». Раскрытие хранится
+  отдельно для каждой ISO-даты.
+- События — native-кнопки с областью не меньше 44 px, иконкой, временем, автомобилем, видимым
+  русским статусом, tone-токенами и focus-visible стилем.
+- Добавлен `CalendarEventDialog` на существующем `Modal`: дата и время в `Europe/Moscow`,
+  автомобиль, статус, опциональный доменный action-slot и явная кнопка «Закрыть».
+- Контролы месяца используют существующие `IconButton` и `Button`; переходы учитывают
+  `prefers-reduced-motion` через `motion-reduce:transition-none`.
+- Публичные компоненты и их props экспортируются из `operations-calendar/index.ts`.
 
 ## TDD evidence
 
-| Stage | Command | Result |
+| Этап | Команда | Результат |
 | --- | --- | --- |
-| RED | `npx vitest run src/modules/maintenance/status.test.ts src/modules/maintenance/server/queries.test.ts src/modules/maintenance/actions.test.ts` | Failed as expected: all three new suites could not import their missing production modules. |
-| GREEN | Same focused Vitest command | PASS: 3 files, 13 tests. |
+| RED | `npx vitest run src/shared/components/operations-calendar/OperationsCalendar.test.ts` | Ожидаемое падение: отсутствовали `CalendarEventDialog` и `OperationsCalendar`. |
+| GREEN | `npx vitest run src/shared/components/operations-calendar/OperationsCalendar.test.ts src/shared/components/operations-calendar/calendar-model.test.ts` | PASS: 2 файла, 27 тестов. |
+| RED review | `npx vitest run src/shared/components/operations-calendar/OperationsCalendar.test.ts` | Ожидаемое падение: статус события ещё не был визуально опубликован. |
+| GREEN review | focused-команда для компонента и модели | PASS: 2 файла, 27 тестов; статус видим и не передаётся только цветом. |
 
-## Verification
+## Проверки
 
-- `npx vitest run src/modules/maintenance/status.test.ts src/modules/maintenance/server/queries.test.ts src/modules/maintenance/actions.test.ts` — PASS: 3 files, 13 tests. The final run required the approved non-sandbox execution because sandboxed esbuild intermittently failed with `Access is denied` while resolving `vitest.config.ts`; the non-sandbox run passed.
+- `npx vitest run src/shared/components/operations-calendar/OperationsCalendar.test.ts src/shared/components/operations-calendar/calendar-model.test.ts` — PASS, 27/27.
 - `npm run typecheck` — PASS.
-- `npx eslint` for all six changed TypeScript files — PASS.
-- `npx prettier --check` for all six changed TypeScript files — PASS.
+- `npx eslint` для четырёх файлов Task 2 — PASS.
+- `npx prettier --check` для четырёх файлов Task 2 — PASS.
 - `git diff --check` — PASS.
 
-## Self-review
+## Границы и self-review
 
-- Confirmed every action independently calls `getAuthenticatedSession()`.
-- Confirmed creation filters the submitted vehicle with company membership before `maintenanceRecord.create`.
-- Confirmed the transition guard combines record ID, current status, and company membership in the same `updateMany`.
-- Confirmed the action does not reveal whether a zero-update record was foreign or concurrently changed.
-- Confirmed no UI, wash module, Prisma schema, migration, or generated Prisma files were changed.
-
-## Commits
-
-- `f94be62 feat: add protected maintenance workflows`
+- Не изменялись Prisma, Server Actions, формы, workspace ТО/мойки и query-параметры страниц.
+- Не добавлялись зависимости и новые цветовые значения: использованы существующие Pilot+
+  tokens, `Button`, `IconButton`, `Badge`, `Card` и `Modal`.
+- Интерактивные browser-сценарии календаря будут проверяться после интеграции в маршруты в
+  следующих задачах; текущая задача покрывает общий render-контракт focused unit-тестами.
+- Проверены min-width/overflow ограничения, перенос текста в диалоге, native keyboard controls,
+  русские accessible names и явный путь закрытия окна.
