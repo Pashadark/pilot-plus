@@ -19,6 +19,14 @@ const businessYearFormatter = new Intl.DateTimeFormat('en-CA', {
 
 const safeFallbackMonth = '1970-01';
 
+const safeFallbackBusinessDate = {
+  day: 1,
+  isoDate: '1970-01-01',
+  month: 1,
+  monthValue: safeFallbackMonth,
+  year: 1970,
+};
+
 function formatNumber(value: number) {
   return String(value).padStart(2, '0');
 }
@@ -43,10 +51,10 @@ function createUtcCalendarDate(year: number, monthIndex: number, day: number) {
   return date;
 }
 
-function getCurrentBusinessMonth(now: Date) {
-  if (Number.isNaN(now.getTime())) return safeFallbackMonth;
+function getNormalizedBusinessCurrentDate(now: Date) {
+  if (Number.isNaN(now.getTime())) return safeFallbackBusinessDate;
 
-  const { month } = getPilotBusinessDateParts(now);
+  const { month, day } = getPilotBusinessDateParts(now);
   const parts = Object.fromEntries(
     businessYearFormatter
       .formatToParts(now)
@@ -56,9 +64,15 @@ function getCurrentBusinessMonth(now: Date) {
   const formattedYear = Number(parts.year);
   const year = parts.era === 'BC' ? 1 - formattedYear : formattedYear;
 
-  return year >= 0 && year <= 9999
-    ? `${formatYear(year)}-${formatNumber(month)}`
-    : safeFallbackMonth;
+  if (year < 0 || year > 9999) return safeFallbackBusinessDate;
+
+  return {
+    day,
+    isoDate: formatIsoDate(year, month, day),
+    month,
+    monthValue: `${formatYear(year)}-${formatNumber(month)}`,
+    year,
+  };
 }
 
 function formatCalendarLabel(year: number, month: number) {
@@ -125,19 +139,23 @@ function parseCalendarInstant(value: string): Date | null {
 }
 
 export function parseCalendarMonth(value: string | null | undefined, now = new Date()) {
-  return value && calendarMonthPattern.test(value) ? value : getCurrentBusinessMonth(now);
+  const currentBusinessDate = getNormalizedBusinessCurrentDate(now);
+  return value && calendarMonthPattern.test(value) ? value : currentBusinessDate.monthValue;
 }
 
 export function buildCalendarMonth(
   requestedMonth: string | null | undefined,
   now = new Date(),
 ): CalendarMonth {
-  const month = parseCalendarMonth(requestedMonth, now);
+  const currentBusinessDate = getNormalizedBusinessCurrentDate(now);
+  const month =
+    requestedMonth && calendarMonthPattern.test(requestedMonth)
+      ? requestedMonth
+      : currentBusinessDate.monthValue;
   const { year, month: monthNumber } = getCalendarMonthParts(month);
   const { gridStart, gridEnd } = getCalendarGridBounds(year, monthNumber);
 
-  const todayParts = getPilotBusinessDateParts(now);
-  const today = formatIsoDate(todayParts.year, todayParts.month, todayParts.day);
+  const today = currentBusinessDate.isoDate;
   const days: CalendarDay[] = [];
 
   for (const date = new Date(gridStart); date <= gridEnd; date.setUTCDate(date.getUTCDate() + 1)) {

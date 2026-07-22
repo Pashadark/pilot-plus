@@ -49,6 +49,23 @@ describe('buildCalendarMonth', () => {
     expect(month.days.find((day) => day.isoDate === '2026-07-22')?.isToday).toBe(true);
   });
 
+  it('использует безопасную дату сегодня при невалидном now', () => {
+    const month = buildCalendarMonth('некорректно', new Date('invalid'));
+
+    expect(month.month).toBe('1970-01');
+    expect(month.days.filter((day) => day.isToday).map((day) => day.isoDate)).toEqual([
+      '1970-01-01',
+    ]);
+  });
+
+  it('отмечает московское сегодня в астрономическом году 0000', () => {
+    const month = buildCalendarMonth('0000-01', new Date('0000-01-15T12:00:00Z'));
+
+    expect(month.days.filter((day) => day.isToday).map((day) => day.isoDate)).toEqual([
+      '0000-01-15',
+    ]);
+  });
+
   it('сохраняет годы от 0000 до 0099 в ISO-дате', () => {
     for (const monthValue of ['0000-02', '0099-02']) {
       const month = buildCalendarMonth(monthValue, new Date('2026-02-01T09:00:00Z'));
