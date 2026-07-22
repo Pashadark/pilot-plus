@@ -11,12 +11,25 @@ const monthNameFormatter = new Intl.DateTimeFormat('ru-RU', {
   timeZone: PILOT_BUSINESS_TIME_ZONE,
 });
 
+const businessYearFormatter = new Intl.DateTimeFormat('en-CA', {
+  era: 'short',
+  timeZone: PILOT_BUSINESS_TIME_ZONE,
+  year: 'numeric',
+});
+
+const safeFallbackMonth = '1970-01';
+
 function formatNumber(value: number) {
   return String(value).padStart(2, '0');
 }
 
 function formatYear(value: number) {
-  return String(value).padStart(4, '0');
+  if (value >= 0 && value <= 9999) {
+    return String(value).padStart(4, '0');
+  }
+
+  const sign = value < 0 ? '-' : '+';
+  return `${sign}${String(Math.abs(value)).padStart(6, '0')}`;
 }
 
 function formatIsoDate(year: number, month: number, day: number) {
@@ -31,8 +44,21 @@ function createUtcCalendarDate(year: number, monthIndex: number, day: number) {
 }
 
 function getCurrentBusinessMonth(now: Date) {
-  const { year, month } = getPilotBusinessDateParts(now);
-  return `${year}-${formatNumber(month)}`;
+  if (Number.isNaN(now.getTime())) return safeFallbackMonth;
+
+  const { month } = getPilotBusinessDateParts(now);
+  const parts = Object.fromEntries(
+    businessYearFormatter
+      .formatToParts(now)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+  const formattedYear = Number(parts.year);
+  const year = parts.era === 'BC' ? 1 - formattedYear : formattedYear;
+
+  return year >= 0 && year <= 9999
+    ? `${formatYear(year)}-${formatNumber(month)}`
+    : safeFallbackMonth;
 }
 
 function formatCalendarLabel(year: number, month: number) {
@@ -60,13 +86,6 @@ function getCalendarGridBounds(year: number, month: number) {
   gridEnd.setUTCDate(gridEnd.getUTCDate() + (6 - lastWeekday));
 
   return { gridStart, gridEnd };
-}
-
-function hasFourDigitCalendarGrid(month: string) {
-  const { year, month: monthNumber } = getCalendarMonthParts(month);
-  const { gridStart, gridEnd } = getCalendarGridBounds(year, monthNumber);
-
-  return gridStart.getUTCFullYear() >= 0 && gridEnd.getUTCFullYear() <= 9999;
 }
 
 function parseCalendarInstant(value: string): Date | null {
@@ -106,9 +125,7 @@ function parseCalendarInstant(value: string): Date | null {
 }
 
 export function parseCalendarMonth(value: string | null | undefined, now = new Date()) {
-  return value && calendarMonthPattern.test(value) && hasFourDigitCalendarGrid(value)
-    ? value
-    : getCurrentBusinessMonth(now);
+  return value && calendarMonthPattern.test(value) ? value : getCurrentBusinessMonth(now);
 }
 
 export function buildCalendarMonth(

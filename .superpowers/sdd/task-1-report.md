@@ -8,7 +8,8 @@
 - Добавлен публичный API общего календарного модуля.
 - Устранена особая обработка JavaScript годов `0–99`: date-only арифметика использует `setUTCFullYear`, а ISO-даты всегда имеют вид `YYYY-MM-DD`.
 - `startsAt` теперь принимается только в строгом RFC3339-формате с `Z` или `±HH:mm`; строки без смещения и несуществующие календарные даты исключаются из группировки.
-- Месяц принимается только если его полная Monday–Sunday сетка целиком помещается в диапазон `0000–9999`; `0000-01` и `9999-12` нормализуются к текущему московскому месяцу, а `0000-02` и `9999-11` остаются допустимыми.
+- Все месяцы, разрешённые regex-контрактом `0000-01`…`9999-12`, принимаются. Spillover-дни граничных сеток используют ISO 8601 expanded years: `-000001-MM-DD` и `+010000-MM-DD`.
+- Fallback невалидного месяца возвращает канонический московский `YYYY-MM` для годов `0000–9999`; для `now` за пределами диапазона или невалидного `Date` выбран безопасный fallback `1970-01`.
 
 ## TDD и проверки
 
@@ -20,6 +21,8 @@
 | `npx vitest run src/shared/components/operations-calendar/calendar-model.test.ts` после исправления | PASS: 1 файл, 13 тестов. |
 | `npx vitest run src/shared/components/operations-calendar/calendar-model.test.ts` после повторного ревью | RED: `0000-01` проходил regex, хотя сетка выходила в год `-0001`. |
 | `npx vitest run src/shared/components/operations-calendar/calendar-model.test.ts` после граничного исправления | PASS: 1 файл, 17 тестов. |
+| `npx vitest run src/shared/components/operations-calendar/calendar-model.test.ts` после финального изменения подхода | RED: 4 ожидаемых падения для expanded ISO и fallback годов `0000/0099/9999`. |
+| `npx vitest run src/shared/components/operations-calendar/calendar-model.test.ts` после поддержки expanded ISO | PASS: 1 файл, 18 тестов. |
 | `npm run typecheck` | PASS. |
 | `npm run lint -- src/shared/components/operations-calendar` | PASS. |
 | `npx prettier --check` для четырёх файлов календаря | PASS. |

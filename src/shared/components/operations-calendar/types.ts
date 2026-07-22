@@ -10,6 +10,7 @@ export interface OperationsCalendarEvent {
 }
 
 export interface CalendarDay {
+  /** Дата ISO 8601: `YYYY-MM-DD` в основном диапазоне, expanded year для spillover-дней. */
   isoDate: string;
   dayNumber: number;
   inCurrentMonth: boolean;
