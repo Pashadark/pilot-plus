@@ -51,19 +51,24 @@ function createUtcCalendarDate(year: number, monthIndex: number, day: number) {
   return date;
 }
 
-function getNormalizedBusinessCurrentDate(now: Date) {
-  if (Number.isNaN(now.getTime())) return safeFallbackBusinessDate;
-
-  const { month, day } = getPilotBusinessDateParts(now);
+function getEraAwareBusinessDateParts(value: Date) {
+  const { month, day } = getPilotBusinessDateParts(value);
   const parts = Object.fromEntries(
     businessYearFormatter
-      .formatToParts(now)
+      .formatToParts(value)
       .filter((part) => part.type !== 'literal')
       .map((part) => [part.type, part.value]),
   );
   const formattedYear = Number(parts.year);
   const year = parts.era === 'BC' ? 1 - formattedYear : formattedYear;
 
+  return { day, month, year };
+}
+
+function getNormalizedBusinessCurrentDate(now: Date) {
+  if (Number.isNaN(now.getTime())) return safeFallbackBusinessDate;
+
+  const { year, month, day } = getEraAwareBusinessDateParts(now);
   if (year < 0 || year > 9999) return safeFallbackBusinessDate;
 
   return {
@@ -187,7 +192,7 @@ export function groupCalendarEvents(events: readonly OperationsCalendarEvent[]) 
     const startsAt = parseCalendarInstant(event.startsAt);
     if (!startsAt) continue;
 
-    const { year, month, day } = getPilotBusinessDateParts(startsAt);
+    const { year, month, day } = getEraAwareBusinessDateParts(startsAt);
     const isoDate = formatIsoDate(year, month, day);
     const groupedEvents = groups.get(isoDate) ?? [];
 

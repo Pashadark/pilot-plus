@@ -190,6 +190,38 @@ describe('groupCalendarEvents', () => {
     expect(groups.size).toBe(0);
   });
 
+  it('группирует RFC3339-событие года 0000 по астрономической московской дате', () => {
+    const groups = groupCalendarEvents([
+      {
+        id: 'year-zero',
+        startsAt: '0000-01-15T12:00:00Z',
+        title: 'ТО',
+        vehicleLabel: 'PLT-1',
+        statusLabel: 'Запланировано',
+        tone: 'primary',
+        icon: 'tool',
+      },
+    ]);
+
+    expect(groups.get('0000-01-15')?.map((event) => event.id)).toEqual(['year-zero']);
+  });
+
+  it('группирует московский spillover года 0000 в expanded предыдущий год', () => {
+    const groups = groupCalendarEvents([
+      {
+        id: 'previous-year',
+        startsAt: '0000-01-01T00:00:00+03:00',
+        title: 'ТО',
+        vehicleLabel: 'PLT-1',
+        statusLabel: 'Запланировано',
+        tone: 'primary',
+        icon: 'tool',
+      },
+    ]);
+
+    expect(groups.get('-000001-12-31')?.map((event) => event.id)).toEqual(['previous-year']);
+  });
+
   it('сохраняет порядок исходных событий с одинаковым временем', () => {
     const groups = groupCalendarEvents([
       {

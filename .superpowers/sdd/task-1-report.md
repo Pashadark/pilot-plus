@@ -11,6 +11,7 @@
 - Все месяцы, разрешённые regex-контрактом `0000-01`…`9999-12`, принимаются. Spillover-дни граничных сеток используют ISO 8601 expanded years: `-000001-MM-DD` и `+010000-MM-DD`.
 - Fallback невалидного месяца возвращает канонический московский `YYYY-MM` для годов `0000–9999`; для `now` за пределами диапазона или невалидного `Date` выбран безопасный fallback `1970-01`.
 - Единый internal-нормализатор бизнес-даты использует era-aware московский год для месяца и `isToday`; fallback-дата всегда `1970-01-01` и не вызывает `RangeError`.
+- Группировка событий использует то же era-aware преобразование, поэтому RFC3339-события года `0000` и московский spillover в expanded предыдущий год получают корректные ключи.
 
 ## TDD и проверки
 
@@ -26,6 +27,8 @@
 | `npx vitest run src/shared/components/operations-calendar/calendar-model.test.ts` после поддержки expanded ISO | PASS: 1 файл, 18 тестов. |
 | `npx vitest run src/shared/components/operations-calendar/calendar-model.test.ts` после последних замечаний ревью | RED: `Invalid Date` выбрасывал `RangeError`, а 0000 не отмечал `isToday`. |
 | `npx vitest run src/shared/components/operations-calendar/calendar-model.test.ts` после нормализации business date | PASS: 1 файл, 20 тестов. |
+| `npx vitest run src/shared/components/operations-calendar/calendar-model.test.ts` после замечания о группировке событий | RED: события года `0000` получали era-сдвинутые ключи. |
+| `npx vitest run src/shared/components/operations-calendar/calendar-model.test.ts` после era-aware группировки | PASS: 1 файл, 22 теста. |
 | `npm run typecheck` | PASS. |
 | `npm run lint -- src/shared/components/operations-calendar` | PASS. |
 | `npx prettier --check` для четырёх файлов календаря | PASS. |
