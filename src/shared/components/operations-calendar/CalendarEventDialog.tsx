@@ -48,6 +48,7 @@ export interface CalendarEventDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   action?: ReactNode;
+  details?: ReactNode;
   status?: ReactNode;
 }
 
@@ -56,6 +57,7 @@ export function CalendarEventDialog({
   open,
   onOpenChange,
   action,
+  details,
   status,
 }: CalendarEventDialogProps) {
   if (!event) return null;
@@ -103,6 +105,7 @@ export function CalendarEventDialog({
           </dd>
         </div>
       </dl>
+      {details ? <div className="mt-4 min-w-0 text-sm">{details}</div> : null}
     </Modal>
   );
 }

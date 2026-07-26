@@ -25,10 +25,12 @@ const record: WashRecordDto = {
 
 describe('washToCalendarEvent', () => {
   it('преобразует запланированную мойку в общий календарный контракт', () => {
-    expect(washToCalendarEvent(record)).toMatchObject({
+    const event = washToCalendarEvent(record);
+
+    expect(event.title).toBe('Комплексная');
+    expect(event).toMatchObject({
       id: record.id,
       startsAt: record.scheduledAt,
-      title: 'Комплексная · Чистый парк',
       icon: 'droplet',
       statusLabel: 'Запланировано',
       tone: 'primary',

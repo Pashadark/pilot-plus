@@ -189,6 +189,7 @@ export interface OperationsCalendarProps {
   onMonthChange: (month: string) => void;
   onToday: () => void;
   onEventAction?: (event: OperationsCalendarEvent) => ReactNode;
+  renderEventDetails?: (event: OperationsCalendarEvent) => ReactNode;
   renderEventStatus?: (event: OperationsCalendarEvent) => ReactNode;
 }
 
@@ -198,6 +199,7 @@ export function OperationsCalendar({
   onMonthChange,
   onToday,
   onEventAction,
+  renderEventDetails,
   renderEventStatus,
 }: OperationsCalendarProps) {
   const titleId = useId();
@@ -399,6 +401,9 @@ export function OperationsCalendar({
           if (!open) setSelectedEventId(null);
         }}
         action={selectedEvent && onEventAction ? onEventAction(selectedEvent) : undefined}
+        details={
+          selectedEvent && renderEventDetails ? renderEventDetails(selectedEvent) : undefined
+        }
         status={selectedEvent && renderEventStatus ? renderEventStatus(selectedEvent) : undefined}
       />
     </section>

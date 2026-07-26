@@ -216,6 +216,32 @@ describe('OperationsCalendar', () => {
     expect(renderEventStatus).toHaveBeenCalledWith(baseEvent);
   });
 
+  it('показывает доменные поля только в details dialog', async () => {
+    const user = userEvent.setup();
+    const renderEventDetails = vi.fn((event: OperationsCalendarEvent) =>
+      createElement('div', { 'data-testid': 'domain-event-details' }, `Подрядчик: ${event.id}`),
+    );
+    render(
+      createElement(OperationsCalendar, {
+        ...createCalendarProps(),
+        renderEventDetails,
+      }),
+    );
+
+    expect(screen.queryByTestId('domain-event-details')).toBeNull();
+    await user.click(
+      within(screen.getByTestId('operations-calendar-grid')).getByRole('button', {
+        name: /Плановое ТО/,
+      }),
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Плановое ТО' });
+    expect(within(dialog).getByTestId('domain-event-details').textContent).toBe(
+      'Подрядчик: maintenance-1',
+    );
+    expect(renderEventDetails).toHaveBeenCalledWith(baseEvent);
+  });
+
   it('обновляет открытые детали по id и не открывает dialog повторно после удаления', async () => {
     const user = userEvent.setup();
     const props = createCalendarProps();

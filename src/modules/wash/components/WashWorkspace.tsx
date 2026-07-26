@@ -440,6 +440,17 @@ export function WashWorkspace({
           month={month}
           onMonthChange={(nextMonth) => updateQuery({ month: nextMonth })}
           onToday={() => updateQuery({ month: parseCalendarMonth(null) })}
+          renderEventDetails={(event) => {
+            const record = recordsById.get(event.id);
+            return record ? (
+              <div className="min-w-0">
+                <p className="text-[var(--color-text-secondary)]">Мойка или подрядчик</p>
+                <p className="mt-1 font-semibold break-words text-[var(--color-text)]">
+                  {record.provider ?? 'Не указан'}
+                </p>
+              </div>
+            ) : undefined;
+          }}
           renderEventStatus={(event) => {
             const record = recordsById.get(event.id);
             return record ? <WashStatusBadge status={record.status} /> : undefined;

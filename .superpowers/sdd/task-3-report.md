@@ -24,6 +24,9 @@
   renderer, он полностью заменяет generic badge, а без renderer сохраняется прежний fallback.
   ТО и мойка используют существующие `MaintenanceStatusBadge` и `WashStatusBadge` для выбранной
   актуальной записи, не меняя action slots.
+- Короткий заголовок wash-события остаётся строго названием вида мойки. Необязательный
+  `renderEventDetails(event)` показывает доменные сведения только в открытом details dialog;
+  мойка использует его для отображения уникального подрядчика без перегрузки календарной сетки.
 - Ownership успешного создания перенесён из формы в постоянно смонтированный workspace.
   Форма передаёт `onSuccess(message)`, workspace публикует один success-toast и закрывает modal.
   Ошибки остаются inline через `role="alert"` и не закрывают форму.
@@ -42,11 +45,15 @@
 - Browser RED не дошёл до product assertions: Next.js dev-server аварийно завершил Turbopack
   worker с `TurbopackInternalError: failed to receive message`, причиной в выводе был
   разрыв локального worker-соединения (`os error 10054`).
+- Для последнего review-fix focused RED подтвердил две причины: mapper возвращал заголовок с
+  provider, а общий details dialog игнорировал доменные поля.
 
 ### GREEN
 
 - Mapper tests стали table-driven и покрывают все пять статусов ТО и все четыре статуса мойки.
 - Review-fix focused pure/shared/domain: 4 файла, 25 тестов — PASS.
+- Последний review-fix focused GREEN: 2 файла, 16 тестов — PASS; mapper test отдельно требует
+  точный заголовок `Комплексная`, shared interaction test проверяет details renderer.
 - Итоговые числа focused и full unit-набора приведены ниже по результатам финальной проверки.
 
 ## Playwright coverage
@@ -65,8 +72,10 @@ Targeted specs для обеих страниц теперь проверяют:
 - наличие существующего status action в action slot;
 - скрытие create dialog и ровно один matching success-toast.
 
-Wash calendar находит только что созданную запись по уникальному provider, который теперь входит
-в видимый заголовок события, и требует ровно одно совпадение вместо выбора первого generic event.
+Wash calendar строит точное accessible name кандидата из плановой даты и времени, вида мойки,
+автомобиля и статуса. Если таких записей несколько, тест последовательно открывает каждую,
+проверяет уникальный provider в details dialog и безопасно закрывает несовпавшие; `.first()` не
+используется как доказательство созданной записи.
 
 Фактический targeted Playwright GREEN в этой сессии не получен. Первый запуск завершился
 Turbopack panic до assertions. Повторный escalated-запуск был остановлен пользователем после
@@ -78,8 +87,8 @@ listener на порту 3000; generated `test-results` удалён после 
 
 | Проверка | Результат |
 | --- | --- |
-| Focused Vitest | PASS — 5 файлов, 48 тестов |
-| Full `npm run test:unit` | PASS — 49 файлов, 240 тестов |
+| Focused Vitest | PASS — 5 файлов, 49 тестов |
+| Full `npm run test:unit` | PASS — 49 файлов, 241 тест |
 | `npm run typecheck` | PASS |
 | `npm run lint` | PASS |
 | Scoped `prettier --check` | PASS |

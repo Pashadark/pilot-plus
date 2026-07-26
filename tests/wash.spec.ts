@@ -26,6 +26,31 @@ function localDateTimeTomorrow() {
   return `${formatMoscowDate(new Date(Date.now() + 24 * 60 * 60 * 1000))}T12:00`;
 }
 
+const calendarDayFormatter = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'UTC',
+  weekday: 'long',
+  year: 'numeric',
+});
+
+function calendarEventAccessibleName(
+  localDateTime: string,
+  title: string,
+  vehicle: string,
+  status: string,
+) {
+  const [datePart, time] = localDateTime.split('T');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const date = new Date(0);
+  date.setUTCHours(0, 0, 0, 0);
+  date.setUTCFullYear(year, month - 1, day);
+  const dayLabel = calendarDayFormatter.format(date);
+  const capitalizedDayLabel = `${dayLabel[0]?.toUpperCase() ?? ''}${dayLabel.slice(1)}`;
+
+  return `${capitalizedDayLabel}, ${time}, ${title}, ${vehicle}, статус: ${status}`;
+}
+
 test.afterAll(async () => {
   await cleanupE2EWashRecords();
 });
@@ -70,6 +95,10 @@ test('администратор планирует, фильтрует и за�
   const provider = `${E2E_WASH_PROVIDER_PREFIX}desktop-${Date.now()}`;
   await page.getByRole('button', { name: 'Запланировать мойку' }).click();
   await page.getByLabel('Автомобиль').selectOption({ index: 1 });
+  const selectedVehicleLabel = (
+    await page.getByLabel('Автомобиль').locator('option:checked').textContent()
+  )?.trim();
+  if (!selectedVehicleLabel) throw new Error('Не удалось определить выбранный автомобиль.');
   await expect(page.getByRole('dialog').locator('img')).toBeVisible();
   await page.getByRole('dialog').getByLabel('Тип мойки').selectOption('COMPLEX');
   await page.getByLabel('Плановая дата').fill(scheduledToday);
@@ -86,13 +115,32 @@ test('администратор планирует, фильтрует и за�
 
   await page.getByRole('tab', { name: 'Календарь' }).click();
   await page.getByRole('button', { name: 'Сегодня' }).click();
-  const calendarEvent = page
+  const candidateName = calendarEventAccessibleName(
+    scheduledToday,
+    'Комплексная',
+    selectedVehicleLabel,
+    'Запланировано',
+  );
+  const calendarCandidates = page
     .getByTestId('operations-calendar-grid')
-    .getByRole('button')
-    .filter({ hasText: provider });
-  await expect(calendarEvent).toHaveCount(1);
-  await calendarEvent.click();
-  const calendarDialog = page.getByRole('dialog', { name: `Комплексная · ${provider}` });
+    .getByRole('button', { name: candidateName, exact: true });
+  const candidateCount = await calendarCandidates.count();
+  expect(candidateCount).toBeGreaterThan(0);
+
+  const calendarDialog = page.getByRole('dialog', { name: 'Комплексная', exact: true });
+  let matchedProvider = false;
+  for (let candidateIndex = 0; candidateIndex < candidateCount; candidateIndex += 1) {
+    await calendarCandidates.nth(candidateIndex).click();
+    await expect(calendarDialog).toBeVisible();
+    if (await calendarDialog.getByText(provider, { exact: true }).isVisible()) {
+      matchedProvider = true;
+      break;
+    }
+    await calendarDialog.getByRole('button', { name: 'Закрыть' }).click();
+    await expect(calendarDialog).toBeHidden();
+  }
+  expect(matchedProvider).toBe(true);
+  await expect(calendarDialog.getByText(provider, { exact: true })).toBeVisible();
   const calendarStatus = calendarDialog.getByText('Запланировано', { exact: true });
   await expect(calendarStatus).toBeVisible();
   await expect(calendarStatus.locator('svg')).toBeVisible();
