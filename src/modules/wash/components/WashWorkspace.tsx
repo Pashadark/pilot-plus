@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useActionState, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FiAlertCircle,
@@ -11,13 +12,15 @@ import {
 } from 'react-icons/fi';
 
 import { transitionWashAction } from '../actions';
+import { washToCalendarEvent } from '../calendar';
 import { calculateFleetCleanliness } from '../cleanliness';
 import type { LatestCompletedWashDto, WashRecordDto } from '../server/queries';
 import type { OperationActionState, WashKind, WashStatus } from '../types';
 import type { VehicleOptionDto } from '@/modules/vehicles/types';
 import { getPilotBusinessDateParts } from '@/shared/business-time';
+import { OperationsCalendar, parseCalendarMonth } from '@/shared/components/operations-calendar';
 import { useToast } from '@/shared/providers/ToastProvider';
-import { Badge, Button, Card, EmptyState, Modal, SearchInput, Select } from '@/shared/ui';
+import { Badge, Button, Card, EmptyState, Modal, SearchInput, Select, Tabs } from '@/shared/ui';
 
 import { WashForm } from './WashForm';
 import {
@@ -32,9 +35,14 @@ import {
 } from './WashRecordCard';
 
 type Filters = { query: string; status: '' | WashStatus; kind: '' | WashKind };
+type WorkspaceView = 'list' | 'calendar';
 
 const initialFilters: Filters = { query: '', status: '', kind: '' };
 const initialTransitionState: OperationActionState = { status: 'idle' };
+const viewTabs = [
+  { value: 'list', label: 'Список' },
+  { value: 'calendar', label: 'Календарь' },
+] as const;
 
 function normalize(value: string) {
   return value.toLocaleLowerCase('ru-RU').trim();
@@ -111,6 +119,9 @@ export function WashWorkspace({
   vehicles: readonly VehicleOptionDto[];
   latestCompletedWashes: readonly LatestCompletedWashDto[];
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [filters, setFilters] = useState(initialFilters);
   const [formOpen, setFormOpen] = useState(false);
   const [pendingTransition, setPendingTransition] = useState<{
@@ -139,7 +150,35 @@ export function WashWorkspace({
       ),
     [fleetCleanliness],
   );
-  const closeAfterSuccess = useCallback(() => setFormOpen(false), []);
+  const view: WorkspaceView = searchParams.get('view') === 'calendar' ? 'calendar' : 'list';
+  const month = parseCalendarMonth(searchParams.get('month'), new Date(referenceTime));
+  const calendarEvents = useMemo(() => records.map(washToCalendarEvent), [records]);
+  const recordsById = useMemo(
+    () => new Map(records.map((record) => [record.id, record] as const)),
+    [records],
+  );
+  const updateQuery = useCallback(
+    (updates: Readonly<Record<string, string>>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      Object.entries(updates).forEach(([name, value]) => params.set(name, value));
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+  const changeView = useCallback(
+    (nextView: WorkspaceView) => {
+      updateQuery(nextView === 'calendar' ? { view: nextView, month } : { view: nextView });
+    },
+    [month, updateQuery],
+  );
+  const handleCreateSuccess = useCallback(
+    (message: string) => {
+      showToast({ tone: 'success', title: message });
+      setFormOpen(false);
+    },
+    [showToast],
+  );
   const registerTransitionIntent = useCallback(
     (transition: { recordId: string; toStatus: WashStatus }) => setPendingTransition(transition),
     [],
@@ -193,70 +232,76 @@ export function WashWorkspace({
         />
       </section>
 
-      <section
-        aria-label="Фильтры мойки"
-        className="grid min-w-0 gap-3 rounded-[var(--radius-panel)] border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)] lg:grid-cols-[minmax(16rem,1fr)_minmax(10rem,0.35fr)_minmax(10rem,0.35fr)_auto] lg:items-end"
-      >
-        <label className="grid min-w-0 gap-1.5">
-          <span className="text-sm font-medium">Поиск</span>
-          <span className="relative block min-w-0">
-            <FiSearch
-              aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--color-text-tertiary)]"
-            />
-            <SearchInput
-              value={filters.query}
-              onChange={(event) => setFilters({ ...filters, query: event.target.value })}
-              aria-label="Поиск по мойке"
-              placeholder="Автомобиль, подрядчик или примечание"
-              className="min-w-0 pl-9"
-            />
-          </span>
-        </label>
-        <Select
-          label="Статус"
-          value={filters.status}
-          onChange={(event) =>
-            setFilters({ ...filters, status: event.target.value as Filters['status'] })
-          }
+      <Tabs items={viewTabs} value={view} onChange={changeView} aria-label="Представление мойки" />
+
+      {view === 'list' ? (
+        <section
+          aria-label="Фильтры мойки"
+          className="grid min-w-0 gap-3 rounded-[var(--radius-panel)] border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)] lg:grid-cols-[minmax(16rem,1fr)_minmax(10rem,0.35fr)_minmax(10rem,0.35fr)_auto] lg:items-end"
         >
-          <option value="">Все статусы</option>
-          {Object.entries(washStatusView).map(([value, view]) => (
-            <option key={value} value={value}>
-              {view.label}
-            </option>
-          ))}
-        </Select>
-        <Select
-          label="Вид мойки"
-          value={filters.kind}
-          onChange={(event) =>
-            setFilters({ ...filters, kind: event.target.value as Filters['kind'] })
-          }
-        >
-          <option value="">Все виды</option>
-          {Object.entries(washKindLabels).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </Select>
-        <Button
-          variant="ghost"
-          onClick={() => setFilters(initialFilters)}
-          disabled={
-            filters.query === initialFilters.query &&
-            filters.status === initialFilters.status &&
-            filters.kind === initialFilters.kind
-          }
-        >
-          Сбросить
-        </Button>
-      </section>
+          <label className="grid min-w-0 gap-1.5">
+            <span className="text-sm font-medium">Поиск</span>
+            <span className="relative block min-w-0">
+              <FiSearch
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--color-text-tertiary)]"
+              />
+              <SearchInput
+                value={filters.query}
+                onChange={(event) => setFilters({ ...filters, query: event.target.value })}
+                aria-label="Поиск по мойке"
+                placeholder="Автомобиль, подрядчик или примечание"
+                className="min-w-0 pl-9"
+              />
+            </span>
+          </label>
+          <Select
+            label="Статус"
+            value={filters.status}
+            onChange={(event) =>
+              setFilters({ ...filters, status: event.target.value as Filters['status'] })
+            }
+          >
+            <option value="">Все статусы</option>
+            {Object.entries(washStatusView).map(([value, statusView]) => (
+              <option key={value} value={value}>
+                {statusView.label}
+              </option>
+            ))}
+          </Select>
+          <Select
+            label="Вид мойки"
+            value={filters.kind}
+            onChange={(event) =>
+              setFilters({ ...filters, kind: event.target.value as Filters['kind'] })
+            }
+          >
+            <option value="">Все виды</option>
+            {Object.entries(washKindLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </Select>
+          <Button
+            variant="ghost"
+            onClick={() => setFilters(initialFilters)}
+            disabled={
+              filters.query === initialFilters.query &&
+              filters.status === initialFilters.status &&
+              filters.kind === initialFilters.kind
+            }
+          >
+            Сбросить
+          </Button>
+        </section>
+      ) : null}
 
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
         <Badge tone="primary" size="lg">
-          Показано {visibleRecords.length} из {records.length}
+          {view === 'list'
+            ? `Показано ${visibleRecords.length} из ${records.length}`
+            : `Событий в календаре: ${calendarEvents.length}`}
         </Badge>
         <Button
           onClick={() => setFormOpen(true)}
@@ -268,102 +313,125 @@ export function WashWorkspace({
         </Button>
       </div>
 
-      <div
-        data-testid="wash-desktop-table"
-        className="hidden min-w-0 overflow-x-auto rounded-[var(--radius-panel)] border bg-[var(--color-surface)] shadow-[var(--shadow-card)] md:block"
-      >
-        {visibleRecords.length ? (
-          <table className="w-full min-w-[58rem] border-collapse text-left text-sm">
-            <thead className="bg-[var(--color-elevated)] text-xs tracking-wide text-[var(--color-text-secondary)] uppercase">
-              <tr>
-                <th scope="col" className="px-4 py-3 font-semibold">
-                  Автомобиль
-                </th>
-                <th scope="col" className="px-4 py-3 font-semibold">
-                  Тип мойки
-                </th>
-                <th scope="col" className="px-4 py-3 font-semibold">
-                  Дата
-                </th>
-                <th scope="col" className="px-4 py-3 font-semibold">
-                  Подрядчик
-                </th>
-                <th scope="col" className="px-4 py-3 font-semibold">
-                  Стоимость
-                </th>
-                <th scope="col" className="px-4 py-3 font-semibold">
-                  Статус
-                </th>
-                <th scope="col" className="px-4 py-3 font-semibold">
-                  Чистота
-                </th>
-                <th scope="col" className="px-4 py-3 font-semibold">
-                  Действия
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-border)]">
-              {visibleRecords.map((record) => (
-                <tr key={record.id} data-testid="wash-record" className="align-top">
-                  <th scope="row" className="max-w-56 px-4 py-4 font-semibold break-words">
-                    {vehicleLabel(record)}
-                  </th>
-                  <td className="px-4 py-4 whitespace-nowrap">{washKindLabels[record.kind]}</td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    {formatWashDate(record.scheduledAt)}
-                  </td>
-                  <td className="max-w-52 px-4 py-4 break-words">
-                    {record.provider ?? 'Не указан'}
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap tabular-nums">
-                    {formatWashCost(record.costMinor)}
-                  </td>
-                  <td className="px-4 py-4">
-                    <WashStatusBadge status={record.status} />
-                  </td>
-                  <td className="px-4 py-4">
-                    <CleanlinessBadge
-                      status={cleanlinessByVehicleId.get(record.vehicleId) ?? 'NEEDS_WASH'}
-                    />
-                  </td>
-                  <td className="px-4 py-4">
-                    <WashRecordActions
-                      record={record}
-                      formAction={transitionFormAction}
-                      transitionPending={transitionPending}
-                      pendingTransition={pendingTransition}
-                      onTransitionIntent={registerTransitionIntent}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className="p-4">
-            <EmptyState title="Записи не найдены" description="Измените поиск или фильтры." />
+      {view === 'list' ? (
+        <>
+          <div
+            data-testid="wash-desktop-table"
+            className="hidden min-w-0 overflow-x-auto rounded-[var(--radius-panel)] border bg-[var(--color-surface)] shadow-[var(--shadow-card)] md:block"
+          >
+            {visibleRecords.length ? (
+              <table className="w-full min-w-[58rem] border-collapse text-left text-sm">
+                <thead className="bg-[var(--color-elevated)] text-xs tracking-wide text-[var(--color-text-secondary)] uppercase">
+                  <tr>
+                    <th scope="col" className="px-4 py-3 font-semibold">
+                      Автомобиль
+                    </th>
+                    <th scope="col" className="px-4 py-3 font-semibold">
+                      Тип мойки
+                    </th>
+                    <th scope="col" className="px-4 py-3 font-semibold">
+                      Дата
+                    </th>
+                    <th scope="col" className="px-4 py-3 font-semibold">
+                      Подрядчик
+                    </th>
+                    <th scope="col" className="px-4 py-3 font-semibold">
+                      Стоимость
+                    </th>
+                    <th scope="col" className="px-4 py-3 font-semibold">
+                      Статус
+                    </th>
+                    <th scope="col" className="px-4 py-3 font-semibold">
+                      Чистота
+                    </th>
+                    <th scope="col" className="px-4 py-3 font-semibold">
+                      Действия
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {visibleRecords.map((record) => (
+                    <tr key={record.id} data-testid="wash-record" className="align-top">
+                      <th scope="row" className="max-w-56 px-4 py-4 font-semibold break-words">
+                        {vehicleLabel(record)}
+                      </th>
+                      <td className="px-4 py-4 whitespace-nowrap">{washKindLabels[record.kind]}</td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        {formatWashDate(record.scheduledAt)}
+                      </td>
+                      <td className="max-w-52 px-4 py-4 break-words">
+                        {record.provider ?? 'Не указан'}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap tabular-nums">
+                        {formatWashCost(record.costMinor)}
+                      </td>
+                      <td className="px-4 py-4">
+                        <WashStatusBadge status={record.status} />
+                      </td>
+                      <td className="px-4 py-4">
+                        <CleanlinessBadge
+                          status={cleanlinessByVehicleId.get(record.vehicleId) ?? 'NEEDS_WASH'}
+                        />
+                      </td>
+                      <td className="px-4 py-4">
+                        <WashRecordActions
+                          record={record}
+                          formAction={transitionFormAction}
+                          transitionPending={transitionPending}
+                          pendingTransition={pendingTransition}
+                          onTransitionIntent={registerTransitionIntent}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="p-4">
+                <EmptyState title="Записи не найдены" description="Измените поиск или фильтры." />
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      <div data-testid="wash-mobile-list" className="grid min-w-0 gap-3 md:hidden">
-        {visibleRecords.length ? (
-          visibleRecords.map((record) => (
-            <WashRecordCard
-              key={record.id}
-              record={record}
-              formAction={transitionFormAction}
-              transitionPending={transitionPending}
-              pendingTransition={pendingTransition}
-              onTransitionIntent={registerTransitionIntent}
-              cleanliness={cleanlinessByVehicleId.get(record.vehicleId) ?? 'NEEDS_WASH'}
-              testId="wash-mobile-record"
-            />
-          ))
-        ) : (
-          <EmptyState title="Записи не найдены" description="Измените поиск или фильтры." />
-        )}
-      </div>
+          <div data-testid="wash-mobile-list" className="grid min-w-0 gap-3 md:hidden">
+            {visibleRecords.length ? (
+              visibleRecords.map((record) => (
+                <WashRecordCard
+                  key={record.id}
+                  record={record}
+                  formAction={transitionFormAction}
+                  transitionPending={transitionPending}
+                  pendingTransition={pendingTransition}
+                  onTransitionIntent={registerTransitionIntent}
+                  cleanliness={cleanlinessByVehicleId.get(record.vehicleId) ?? 'NEEDS_WASH'}
+                  testId="wash-mobile-record"
+                />
+              ))
+            ) : (
+              <EmptyState title="Записи не найдены" description="Измените поиск или фильтры." />
+            )}
+          </div>
+        </>
+      ) : (
+        <OperationsCalendar
+          events={calendarEvents}
+          month={month}
+          onMonthChange={(nextMonth) => updateQuery({ month: nextMonth })}
+          onToday={() => updateQuery({ month: parseCalendarMonth(null) })}
+          onEventAction={(event) => {
+            const record = recordsById.get(event.id);
+            return record ? (
+              <WashRecordActions
+                record={record}
+                formAction={transitionFormAction}
+                transitionPending={transitionPending}
+                pendingTransition={pendingTransition}
+                onTransitionIntent={registerTransitionIntent}
+              />
+            ) : null;
+          }}
+        />
+      )}
 
       <Modal
         open={formOpen}
@@ -375,7 +443,7 @@ export function WashWorkspace({
         <WashForm
           vehicles={vehicles}
           onCancel={() => setFormOpen(false)}
-          onSuccess={closeAfterSuccess}
+          onSuccess={handleCreateSuccess}
         />
       </Modal>
     </>

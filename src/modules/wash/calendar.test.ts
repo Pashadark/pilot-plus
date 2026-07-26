@@ -1,0 +1,38 @@
+import { describe, expect, it } from 'vitest';
+
+import type { WashRecordDto } from './server/queries';
+import { washToCalendarEvent } from './calendar';
+
+const record: WashRecordDto = {
+  id: 'wash-1',
+  vehicleId: 'vehicle-1',
+  kind: 'COMPLEX',
+  status: 'PLANNED',
+  scheduledAt: '2026-07-22T07:00:00.000Z',
+  startedAt: null,
+  completedAt: null,
+  provider: 'Чистый парк',
+  costMinor: 150_000,
+  notes: null,
+  createdAt: '2026-07-20T09:00:00.000Z',
+  vehicle: {
+    id: 'vehicle-1',
+    internalNumber: 'PLT-001',
+    model: 'GWM WEY',
+    registrationNumber: null,
+  },
+};
+
+describe('washToCalendarEvent', () => {
+  it('преобразует запланированную мойку в общий календарный контракт', () => {
+    expect(washToCalendarEvent(record)).toMatchObject({
+      id: record.id,
+      startsAt: record.scheduledAt,
+      title: 'Комплексная',
+      icon: 'droplet',
+      statusLabel: 'Запланировано',
+      tone: 'primary',
+      vehicleLabel: 'PLT-001 · GWM WEY',
+    });
+  });
+});

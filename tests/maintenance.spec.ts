@@ -31,7 +31,7 @@ test.afterAll(async () => {
 
 test('администратор планирует, фильтрует и завершает ТО', async ({ page }) => {
   const vehicleId = await createE2EMaintenanceOdometerPosition();
-  await openAuthenticatedRoute(page, '/maintenance');
+  await openAuthenticatedRoute(page, '/maintenance?source=e2e');
 
   await expect(page.getByTestId('maintenance-page')).toBeVisible();
   await expect(page.getByTestId('app-header')).toBeVisible();
@@ -42,6 +42,19 @@ test('администратор планирует, фильтрует и за�
   await expect(page.getByText('Скоро', { exact: true })).toBeVisible();
   await expect(page.getByText('Просрочено', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Завершено за месяц', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Календарь' }).click();
+  await expect(page).toHaveURL(/view=calendar/);
+  await expect(page.getByTestId('operations-calendar-grid')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('tab', { name: 'Календарь' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await page.getByRole('button', { name: 'Следующий месяц' }).click();
+  await expect(page).toHaveURL(/month=\d{4}-\d{2}/);
+  await page.getByRole('tab', { name: 'Список' }).click();
+  await expect(page).toHaveURL(/view=list/);
+  await expect(page).toHaveURL(/source=e2e/);
   const plannedStat = page.getByTestId('maintenance-planned-stat').locator('strong');
   const dueSoonStat = page.getByTestId('maintenance-due-soon-stat').locator('strong');
   const overdueStat = page.getByTestId('maintenance-overdue-stat').locator('strong');
@@ -52,23 +65,39 @@ test('администратор планирует, фильтрует и за�
   const initialCompleted = Number(await completedStat.textContent());
 
   const title = `${E2E_MAINTENANCE_TITLE_PREFIX}desktop-${Date.now()}`;
+  const scheduledDateTime = formatMoscowDateTime(new Date(Date.now() + 24 * 60 * 60 * 1000));
+  const scheduledMonth = scheduledDateTime.slice(0, 7);
   await page.getByRole('button', { name: 'Запланировать ТО' }).click();
   await page.getByLabel('Автомобиль').selectOption(vehicleId);
   await page.getByLabel('Название работы').fill(title);
   await page.getByLabel('Вид работы').selectOption('OIL');
-  await page
-    .getByLabel('Плановая дата')
-    .fill(formatMoscowDateTime(new Date(Date.now() + 24 * 60 * 60 * 1000)));
+  await page.getByLabel('Плановая дата').fill(scheduledDateTime);
   await page.getByLabel('Плановый пробег, км').fill('15000');
   await page.getByRole('button', { name: 'Сохранить ТО' }).click();
 
   const plannedToast = page
     .locator('[data-toast-tone="success"]')
     .filter({ hasText: 'ТО запланировано.' });
-  await expect(plannedToast).toBeVisible();
   await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(plannedToast).toHaveCount(1);
+  await expect(plannedToast).toBeVisible();
   await expect(plannedStat).toHaveText(String(initialPlanned + 1));
   await expect(dueSoonStat).toHaveText(String(initialDueSoon + 1));
+
+  await page.getByRole('tab', { name: 'Календарь' }).click();
+  if (new URL(page.url()).searchParams.get('month') !== scheduledMonth) {
+    await page.getByRole('button', { name: 'Предыдущий месяц' }).click();
+  }
+  await page
+    .getByTestId('operations-calendar-grid')
+    .getByRole('button')
+    .filter({ hasText: title })
+    .click();
+  const calendarDialog = page.getByRole('dialog', { name: title });
+  await expect(calendarDialog.getByText('Запланировано', { exact: true })).toBeVisible();
+  await expect(calendarDialog.getByRole('button', { name: 'Начать работу' })).toBeVisible();
+  await calendarDialog.getByRole('button', { name: 'Закрыть' }).click();
+  await page.getByRole('tab', { name: 'Список' }).click();
 
   await page.getByRole('searchbox', { name: 'Поиск по обслуживанию' }).fill(title);
   await page.getByLabel('Статус').selectOption('PLANNED');

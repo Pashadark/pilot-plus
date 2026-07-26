@@ -6,7 +6,6 @@ import { useActionState, useEffect, useRef, useState } from 'react';
 import { createWashAction } from '../actions';
 import type { OperationActionState } from '../types';
 import type { VehicleOptionDto } from '@/modules/vehicles/types';
-import { useToast } from '@/shared/providers/ToastProvider';
 import { Button, Input, Select, Textarea } from '@/shared/ui';
 
 const initialState: OperationActionState = { status: 'idle' };
@@ -18,25 +17,18 @@ export function WashForm({
 }: {
   vehicles: readonly VehicleOptionDto[];
   onCancel: () => void;
-  onSuccess: () => void;
+  onSuccess: (message: string) => void;
 }) {
   const [state, formAction, pending] = useActionState(createWashAction, initialState);
   const [vehicleId, setVehicleId] = useState('');
   const formRef = useRef<HTMLFormElement>(null);
-  const { showToast } = useToast();
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === vehicleId);
 
   useEffect(() => {
-    if (!state.message || state.status === 'idle') return;
-    showToast({
-      tone: state.status === 'success' ? 'success' : 'danger',
-      title: state.message,
-    });
-    if (state.status === 'success') {
-      formRef.current?.reset();
-      onSuccess();
-    }
-  }, [onSuccess, showToast, state]);
+    if (!state.message || state.status !== 'success') return;
+    formRef.current?.reset();
+    onSuccess(state.message);
+  }, [onSuccess, state]);
 
   return (
     <form ref={formRef} action={formAction} className="grid min-w-0 gap-4">
