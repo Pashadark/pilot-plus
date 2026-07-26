@@ -119,9 +119,7 @@ function EventButton({
         </time>
         <span className="truncate text-[var(--color-text)]">{event.title}</span>
       </span>
-      <span className="mt-0.5 block truncate text-[var(--color-text-secondary)]">
-        {event.vehicleLabel}
-      </span>
+      <span className="mt-0.5 block truncate text-[var(--color-text)]">{event.vehicleLabel}</span>
       <span
         data-testid="operations-calendar-event-status"
         className="mt-0.5 block truncate font-medium text-[var(--color-text)]"

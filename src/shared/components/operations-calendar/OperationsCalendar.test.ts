@@ -67,6 +67,12 @@ function contrastRatio(foreground: string, background: string) {
   return (light + 0.05) / (dark + 0.05);
 }
 
+function getTextToken(element: HTMLElement) {
+  const match = element.className.match(/text-\[var\(--([^)]+)\)\]/);
+  if (!match?.[1]) throw new Error('У элемента отсутствует text color token');
+  return match[1];
+}
+
 afterEach(() => cleanup());
 
 describe('OperationsCalendar', () => {
@@ -131,7 +137,15 @@ describe('OperationsCalendar', () => {
     expect(document.body.innerHTML).not.toContain('--color-text-tertiary');
   });
 
-  it('сохраняет контраст status text не ниже 4.5:1 на всех tone-фонах', () => {
+  it('сохраняет контраст status и vehicle text не ниже 4.5:1 на всех tone-фонах', () => {
+    render(createElement(OperationsCalendar, createCalendarProps()));
+    const eventButton = within(screen.getByTestId('operations-calendar-grid')).getByRole('button', {
+      name: /Плановое ТО/,
+    });
+    const statusToken = getTextToken(
+      within(eventButton).getByTestId('operations-calendar-event-status'),
+    );
+    const vehicleToken = getTextToken(within(eventButton).getByText(baseEvent.vehicleLabel));
     const backgrounds = [
       'color-elevated',
       'color-primary-soft',
@@ -143,7 +157,8 @@ describe('OperationsCalendar', () => {
     for (const selector of [':root', ":root[data-theme='dark']"]) {
       const tokens = getThemeTokens(selector);
       for (const background of backgrounds) {
-        expect(contrastRatio(tokens['color-text'], tokens[background])).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(tokens[statusToken], tokens[background])).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(tokens[vehicleToken], tokens[background])).toBeGreaterThanOrEqual(4.5);
       }
     }
   });

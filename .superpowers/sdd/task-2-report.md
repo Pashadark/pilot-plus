@@ -32,6 +32,8 @@
 | GREEN review | focused-команда для компонента и модели | PASS: 2 файла, 27 тестов; статус видим и не передаётся только цветом. |
 | RED accessibility review | DOM interaction suite с Testing Library и `user-event` | Ожидаемо упали 5 из 8 тестов: disclosure исчезал после раскрытия, дата отсутствовала в accessible name, selection хранила устаревший объект, отсутствовала grid-семантика и status text наследовал tone-цвет. |
 | GREEN accessibility review | `npx vitest run src/shared/components/operations-calendar/OperationsCalendar.test.ts src/shared/components/operations-calendar/calendar-model.test.ts` | PASS: 2 файла, 31 тест. |
+| RED contrast review | `npx vitest run src/shared/components/operations-calendar/OperationsCalendar.test.ts -t "status и vehicle text"` | Ожидаемое падение: фактический `--color-text-secondary` автомобиля дал минимум 4.4423:1 на tone-фоне. |
+| GREEN contrast review | та же focused-команда после замены foreground | PASS: vehicle label использует `--color-text`; размер и weight продолжают задавать визуальную иерархию. |
 
 ## Проверки
 
@@ -40,8 +42,9 @@
 - DOM-сценарии проверяют раскрытие/сворачивание, стабильный фокус, live-объявления,
   открытие/закрытие dialog с клавиатуры, возврат фокуса, навигационные callbacks, обновление и
   удаление события через props и полные русские accessible names дат.
-- Автоматический contrast-тест проверяет `--color-text` на всех пяти event-фонах в light/dark;
-  все десять сочетаний соответствуют минимуму WCAG AA 4.5:1 для текста 12 px.
+- Автоматический contrast-тест извлекает фактические foreground-токены status и vehicle label
+  из DOM и проверяет оба на всех пяти event-фонах в light/dark; все двадцать сочетаний
+  соответствуют минимуму WCAG AA 4.5:1 для текста 12 px.
 - `npm run typecheck` — PASS.
 - `npm run lint` — PASS для всего проекта.
 - `npx prettier --check` для изменённых файлов Task 2 — PASS.
