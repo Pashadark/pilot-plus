@@ -192,6 +192,30 @@ describe('OperationsCalendar', () => {
     expect(document.activeElement).toBe(eventButton);
   });
 
+  it('заменяет generic badge результатом доменного status renderer', async () => {
+    const user = userEvent.setup();
+    const renderEventStatus = vi.fn((event: OperationsCalendarEvent) =>
+      createElement('span', { 'data-testid': 'domain-event-status' }, `ТО: ${event.statusLabel}`),
+    );
+    render(
+      createElement(OperationsCalendar, {
+        ...createCalendarProps(),
+        renderEventStatus,
+      }),
+    );
+
+    await user.click(
+      within(screen.getByTestId('operations-calendar-grid')).getByRole('button', {
+        name: /Плановое ТО/,
+      }),
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Плановое ТО' });
+    expect(within(dialog).getByTestId('domain-event-status').textContent).toBe('ТО: Запланировано');
+    expect(within(dialog).queryByText('Запланировано', { exact: true })).toBeNull();
+    expect(renderEventStatus).toHaveBeenCalledWith(baseEvent);
+  });
+
   it('обновляет открытые детали по id и не открывает dialog повторно после удаления', async () => {
     const user = userEvent.setup();
     const props = createCalendarProps();

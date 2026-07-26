@@ -48,6 +48,7 @@ export interface CalendarEventDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   action?: ReactNode;
+  status?: ReactNode;
 }
 
 export function CalendarEventDialog({
@@ -55,6 +56,7 @@ export function CalendarEventDialog({
   open,
   onOpenChange,
   action,
+  status,
 }: CalendarEventDialogProps) {
   if (!event) return null;
 
@@ -90,10 +92,14 @@ export function CalendarEventDialog({
         <div className="min-w-0 sm:col-span-2">
           <dt className="text-[var(--color-text-secondary)]">Статус</dt>
           <dd className="mt-2">
-            <Badge tone={event.tone} className="max-w-full gap-1.5">
-              <CalendarEventIcon icon={event.icon} />
-              <span className="break-words">{event.statusLabel}</span>
-            </Badge>
+            {status !== undefined ? (
+              status
+            ) : (
+              <Badge tone={event.tone} className="max-w-full gap-1.5">
+                <CalendarEventIcon icon={event.icon} />
+                <span className="break-words">{event.statusLabel}</span>
+              </Badge>
+            )}
           </dd>
         </div>
       </dl>

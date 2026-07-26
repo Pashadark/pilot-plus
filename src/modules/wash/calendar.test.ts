@@ -28,11 +28,23 @@ describe('washToCalendarEvent', () => {
     expect(washToCalendarEvent(record)).toMatchObject({
       id: record.id,
       startsAt: record.scheduledAt,
-      title: 'Комплексная',
+      title: 'Комплексная · Чистый парк',
       icon: 'droplet',
       statusLabel: 'Запланировано',
       tone: 'primary',
       vehicleLabel: 'PLT-001 · GWM WEY',
+    });
+  });
+
+  it.each([
+    ['PLANNED', 'Запланировано', 'primary'],
+    ['IN_PROGRESS', 'В работе', 'warning'],
+    ['COMPLETED', 'Завершено', 'success'],
+    ['CANCELLED', 'Отменено', 'neutral'],
+  ] as const)('преобразует статус %s в %s / %s', (status, statusLabel, tone) => {
+    expect(washToCalendarEvent({ ...record, status })).toMatchObject({
+      statusLabel,
+      tone,
     });
   });
 });

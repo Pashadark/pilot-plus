@@ -18,7 +18,12 @@ import type { LatestCompletedWashDto, WashRecordDto } from '../server/queries';
 import type { OperationActionState, WashKind, WashStatus } from '../types';
 import type { VehicleOptionDto } from '@/modules/vehicles/types';
 import { getPilotBusinessDateParts } from '@/shared/business-time';
-import { OperationsCalendar, parseCalendarMonth } from '@/shared/components/operations-calendar';
+import {
+  canonicalizeOperationsCalendarQuery,
+  OperationsCalendar,
+  parseCalendarMonth,
+  type OperationsCalendarView,
+} from '@/shared/components/operations-calendar';
 import { useToast } from '@/shared/providers/ToastProvider';
 import { Badge, Button, Card, EmptyState, Modal, SearchInput, Select, Tabs } from '@/shared/ui';
 
@@ -35,7 +40,6 @@ import {
 } from './WashRecordCard';
 
 type Filters = { query: string; status: '' | WashStatus; kind: '' | WashKind };
-type WorkspaceView = 'list' | 'calendar';
 
 const initialFilters: Filters = { query: '', status: '', kind: '' };
 const initialTransitionState: OperationActionState = { status: 'idle' };
@@ -150,25 +154,38 @@ export function WashWorkspace({
       ),
     [fleetCleanliness],
   );
-  const view: WorkspaceView = searchParams.get('view') === 'calendar' ? 'calendar' : 'list';
-  const month = parseCalendarMonth(searchParams.get('month'), new Date(referenceTime));
+  const currentQuery = searchParams.toString();
+  const canonicalQuery = useMemo(
+    () =>
+      canonicalizeOperationsCalendarQuery(
+        new URLSearchParams(currentQuery),
+        new Date(referenceTime),
+      ),
+    [currentQuery, referenceTime],
+  );
+  const { month, view } = canonicalQuery;
   const calendarEvents = useMemo(() => records.map(washToCalendarEvent), [records]);
   const recordsById = useMemo(
     () => new Map(records.map((record) => [record.id, record] as const)),
     [records],
   );
   const updateQuery = useCallback(
-    (updates: Readonly<Record<string, string>>) => {
-      const params = new URLSearchParams(searchParams.toString());
-      Object.entries(updates).forEach(([name, value]) => params.set(name, value));
+    (updates: Readonly<Record<string, string | null>>) => {
+      const params = new URLSearchParams(currentQuery);
+      Object.entries(updates).forEach(([name, value]) => {
+        if (value === null) params.delete(name);
+        else params.set(name, value);
+      });
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     },
-    [pathname, router, searchParams],
+    [currentQuery, pathname, router],
   );
   const changeView = useCallback(
-    (nextView: WorkspaceView) => {
-      updateQuery(nextView === 'calendar' ? { view: nextView, month } : { view: nextView });
+    (nextView: OperationsCalendarView) => {
+      updateQuery(
+        nextView === 'calendar' ? { view: nextView, month } : { view: nextView, month: null },
+      );
     },
     [month, updateQuery],
   );
@@ -183,6 +200,11 @@ export function WashWorkspace({
     (transition: { recordId: string; toStatus: WashStatus }) => setPendingTransition(transition),
     [],
   );
+
+  useEffect(() => {
+    if (!canonicalQuery.changed) return;
+    router.replace(`${pathname}?${canonicalQuery.query}`, { scroll: false });
+  }, [canonicalQuery, pathname, router]);
 
   useEffect(() => {
     if (!transitionState.message || transitionState.status === 'idle') return;
@@ -418,6 +440,10 @@ export function WashWorkspace({
           month={month}
           onMonthChange={(nextMonth) => updateQuery({ month: nextMonth })}
           onToday={() => updateQuery({ month: parseCalendarMonth(null) })}
+          renderEventStatus={(event) => {
+            const record = recordsById.get(event.id);
+            return record ? <WashStatusBadge status={record.status} /> : undefined;
+          }}
           onEventAction={(event) => {
             const record = recordsById.get(event.id);
             return record ? (

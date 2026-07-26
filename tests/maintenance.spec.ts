@@ -31,9 +31,12 @@ test.afterAll(async () => {
 
 test('администратор планирует, фильтрует и завершает ТО', async ({ page }) => {
   const vehicleId = await createE2EMaintenanceOdometerPosition();
-  await openAuthenticatedRoute(page, '/maintenance?source=e2e');
+  await openAuthenticatedRoute(page, '/maintenance?source=e2e&view=calendar&month=invalid');
 
   await expect(page.getByTestId('maintenance-page')).toBeVisible();
+  await expect(page).toHaveURL(/source=e2e/);
+  await expect(page).toHaveURL(/view=calendar/);
+  await expect(page).toHaveURL(/month=\d{4}-\d{2}/);
   await expect(page.getByTestId('app-header')).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Техническое обслуживание', level: 1 }),
@@ -42,8 +45,6 @@ test('администратор планирует, фильтрует и за�
   await expect(page.getByText('Скоро', { exact: true })).toBeVisible();
   await expect(page.getByText('Просрочено', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Завершено за месяц', { exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: 'Календарь' }).click();
-  await expect(page).toHaveURL(/view=calendar/);
   await expect(page.getByTestId('operations-calendar-grid')).toBeVisible();
   await page.reload();
   await expect(page.getByRole('tab', { name: 'Календарь' })).toHaveAttribute(
@@ -55,6 +56,11 @@ test('администратор планирует, фильтрует и за�
   await page.getByRole('tab', { name: 'Список' }).click();
   await expect(page).toHaveURL(/view=list/);
   await expect(page).toHaveURL(/source=e2e/);
+  await expect(page).not.toHaveURL(/month=/);
+  await page.getByRole('tab', { name: 'Календарь' }).click();
+  await expect(page).toHaveURL(/view=calendar/);
+  await expect(page).toHaveURL(/month=\d{4}-\d{2}/);
+  await page.getByRole('tab', { name: 'Список' }).click();
   const plannedStat = page.getByTestId('maintenance-planned-stat').locator('strong');
   const dueSoonStat = page.getByTestId('maintenance-due-soon-stat').locator('strong');
   const overdueStat = page.getByTestId('maintenance-overdue-stat').locator('strong');
@@ -94,7 +100,9 @@ test('администратор планирует, фильтрует и за�
     .filter({ hasText: title })
     .click();
   const calendarDialog = page.getByRole('dialog', { name: title });
-  await expect(calendarDialog.getByText('Запланировано', { exact: true })).toBeVisible();
+  const calendarStatus = calendarDialog.getByText('Запланировано', { exact: true });
+  await expect(calendarStatus).toBeVisible();
+  await expect(calendarStatus.locator('svg')).toBeVisible();
   await expect(calendarDialog.getByRole('button', { name: 'Начать работу' })).toBeVisible();
   await calendarDialog.getByRole('button', { name: 'Закрыть' }).click();
   await page.getByRole('tab', { name: 'Список' }).click();

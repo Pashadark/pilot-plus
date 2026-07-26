@@ -189,6 +189,7 @@ export interface OperationsCalendarProps {
   onMonthChange: (month: string) => void;
   onToday: () => void;
   onEventAction?: (event: OperationsCalendarEvent) => ReactNode;
+  renderEventStatus?: (event: OperationsCalendarEvent) => ReactNode;
 }
 
 export function OperationsCalendar({
@@ -197,6 +198,7 @@ export function OperationsCalendar({
   onMonthChange,
   onToday,
   onEventAction,
+  renderEventStatus,
 }: OperationsCalendarProps) {
   const titleId = useId();
   const [dayDisclosures, setDayDisclosures] = useState<ReadonlyMap<string, boolean>>(
@@ -397,6 +399,7 @@ export function OperationsCalendar({
           if (!open) setSelectedEventId(null);
         }}
         action={selectedEvent && onEventAction ? onEventAction(selectedEvent) : undefined}
+        status={selectedEvent && renderEventStatus ? renderEventStatus(selectedEvent) : undefined}
       />
     </section>
   );

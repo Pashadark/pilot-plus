@@ -28,7 +28,9 @@ export function washToCalendarEvent(record: WashRecordDto): OperationsCalendarEv
   return {
     id: record.id,
     startsAt: record.scheduledAt,
-    title: washCalendarTitles[record.kind],
+    title: record.provider
+      ? `${washCalendarTitles[record.kind]} · ${record.provider}`
+      : washCalendarTitles[record.kind],
     vehicleLabel: [
       record.vehicle.internalNumber,
       record.vehicle.model,

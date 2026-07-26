@@ -11,13 +11,19 @@
   `month=YYYY-MM`.
 - Изменение режима и месяца использует Next.js 16 App Router hooks
   `useRouter`/`usePathname`/`useSearchParams`, копирует текущий `URLSearchParams` и сохраняет
-  сторонние query-параметры. Некорректные значения безопасно нормализуются существующим
-  `parseCalendarMonth`.
+  сторонние query-параметры. Общий `canonicalizeOperationsCalendarQuery` нормализует URL через
+  `router.replace`: `view` всегда становится `list|calendar`, calendar-mode всегда получает
+  валидный `month=YYYY-MM`, а list-mode удаляет неактуальный `month`. Проверка `changed`
+  предотвращает replace-loop и лишние записи истории.
 - Существующие фильтры, таблицы, мобильные карточки и guarded status actions сохранены в list-mode.
   Состояние фильтров остаётся в workspace при переключении представлений.
 - Общий адаптивный `OperationsCalendar` подключён к обоим доменам. Details dialog получает
   существующие action-компоненты ТО/мойки через `onEventAction`; они продолжают вызывать прежние
   tenant-guarded Server Actions.
+- Общий календарь поддерживает необязательный `renderEventStatus(event)`: если домен передаёт
+  renderer, он полностью заменяет generic badge, а без renderer сохраняется прежний fallback.
+  ТО и мойка используют существующие `MaintenanceStatusBadge` и `WashStatusBadge` для выбранной
+  актуальной записи, не меняя action slots.
 - Ownership успешного создания перенесён из формы в постоянно смонтированный workspace.
   Форма передаёт `onSuccess(message)`, workspace публикует один success-toast и закрывает modal.
   Ошибки остаются inline через `role="alert"` и не закрывают форму.
@@ -39,23 +45,28 @@
 
 ### GREEN
 
-- Mapper tests: 2 файла, 3 теста — PASS.
-- Focused Task 3 + shared calendar: 4 файла, 34 теста — PASS.
-- Полный unit-набор: 48 файлов, 226 тестов — PASS.
+- Mapper tests стали table-driven и покрывают все пять статусов ТО и все четыре статуса мойки.
+- Review-fix focused pure/shared/domain: 4 файла, 25 тестов — PASS.
+- Итоговые числа focused и full unit-набора приведены ниже по результатам финальной проверки.
 
 ## Playwright coverage
 
 Targeted specs для обеих страниц теперь проверяют:
 
 - переключение на календарь и `view=calendar`;
+- канонизацию некорректного `month` и удаление `month` в list-mode без потери `source=e2e`;
 - видимость `operations-calendar-grid`;
 - сохранение выбранной вкладки после reload;
 - запись `month=YYYY-MM` при навигации;
 - возврат в `view=list`;
 - сохранение стороннего `source=e2e`;
 - открытие details dialog для доменного события;
+- отображение существующего доменного status badge с иконкой вместо generic badge;
 - наличие существующего status action в action slot;
 - скрытие create dialog и ровно один matching success-toast.
+
+Wash calendar находит только что созданную запись по уникальному provider, который теперь входит
+в видимый заголовок события, и требует ровно одно совпадение вместо выбора первого generic event.
 
 Фактический targeted Playwright GREEN в этой сессии не получен. Первый запуск завершился
 Turbopack panic до assertions. Повторный escalated-запуск был остановлен пользователем после
@@ -67,8 +78,8 @@ listener на порту 3000; generated `test-results` удалён после 
 
 | Проверка | Результат |
 | --- | --- |
-| Focused Vitest | PASS — 4 файла, 34 теста |
-| Full `npm run test:unit` | PASS — 48 файлов, 226 тестов |
+| Focused Vitest | PASS — 5 файлов, 48 тестов |
+| Full `npm run test:unit` | PASS — 49 файлов, 240 тестов |
 | `npm run typecheck` | PASS |
 | `npm run lint` | PASS |
 | Scoped `prettier --check` | PASS |

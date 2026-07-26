@@ -11,9 +11,11 @@ import type { MaintenanceRecordDto } from '../server/queries';
 import type { MaintenanceKind, MaintenanceStatus, OperationActionState } from '../types';
 import type { VehicleOptionDto } from '@/modules/vehicles/types';
 import {
+  canonicalizeOperationsCalendarQuery,
   OperationsCalendar,
   parseCalendarMonth,
   type OperationsCalendarEvent,
+  type OperationsCalendarView,
 } from '@/shared/components/operations-calendar';
 import { useToast } from '@/shared/providers/ToastProvider';
 import { Badge, Button, Card, EmptyState, Modal, SearchInput, Select, Tabs } from '@/shared/ui';
@@ -31,7 +33,6 @@ import {
 } from './MaintenanceRecordCard';
 
 type Filters = { query: string; status: '' | MaintenanceStatus; kind: '' | MaintenanceKind };
-type WorkspaceView = 'list' | 'calendar';
 
 const initialFilters: Filters = { query: '', status: '', kind: '' };
 const initialTransitionState: OperationActionState = { status: 'idle' };
@@ -115,8 +116,16 @@ export function MaintenanceWorkspace({
     [records, referenceTime],
   );
   const attentionCount = summary.dueSoon + summary.overdue;
-  const view: WorkspaceView = searchParams.get('view') === 'calendar' ? 'calendar' : 'list';
-  const month = parseCalendarMonth(searchParams.get('month'), new Date(referenceTime));
+  const currentQuery = searchParams.toString();
+  const canonicalQuery = useMemo(
+    () =>
+      canonicalizeOperationsCalendarQuery(
+        new URLSearchParams(currentQuery),
+        new Date(referenceTime),
+      ),
+    [currentQuery, referenceTime],
+  );
+  const { month, view } = canonicalQuery;
   const calendarEvents = useMemo(
     () =>
       records
@@ -129,17 +138,22 @@ export function MaintenanceWorkspace({
     [records],
   );
   const updateQuery = useCallback(
-    (updates: Readonly<Record<string, string>>) => {
-      const params = new URLSearchParams(searchParams.toString());
-      Object.entries(updates).forEach(([name, value]) => params.set(name, value));
+    (updates: Readonly<Record<string, string | null>>) => {
+      const params = new URLSearchParams(currentQuery);
+      Object.entries(updates).forEach(([name, value]) => {
+        if (value === null) params.delete(name);
+        else params.set(name, value);
+      });
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     },
-    [pathname, router, searchParams],
+    [currentQuery, pathname, router],
   );
   const changeView = useCallback(
-    (nextView: WorkspaceView) => {
-      updateQuery(nextView === 'calendar' ? { view: nextView, month } : { view: nextView });
+    (nextView: OperationsCalendarView) => {
+      updateQuery(
+        nextView === 'calendar' ? { view: nextView, month } : { view: nextView, month: null },
+      );
     },
     [month, updateQuery],
   );
@@ -150,6 +164,11 @@ export function MaintenanceWorkspace({
     },
     [showToast],
   );
+
+  useEffect(() => {
+    if (!canonicalQuery.changed) return;
+    router.replace(`${pathname}?${canonicalQuery.query}`, { scroll: false });
+  }, [canonicalQuery, pathname, router]);
 
   useEffect(() => {
     if (!transitionState.message || transitionState.status === 'idle') return;
@@ -404,6 +423,10 @@ export function MaintenanceWorkspace({
           month={month}
           onMonthChange={(nextMonth) => updateQuery({ month: nextMonth })}
           onToday={() => updateQuery({ month: parseCalendarMonth(null) })}
+          renderEventStatus={(event) => {
+            const record = recordsById.get(event.id);
+            return record ? <MaintenanceStatusBadge status={record.status} /> : undefined;
+          }}
           onEventAction={(event) => {
             const record = recordsById.get(event.id);
             return record ? (

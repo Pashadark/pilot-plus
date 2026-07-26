@@ -42,4 +42,17 @@ describe('maintenanceToCalendarEvent', () => {
   it('не создаёт календарное событие без плановой даты', () => {
     expect(maintenanceToCalendarEvent({ ...record, scheduledAt: null })).toBeNull();
   });
+
+  it.each([
+    ['PLANNED', 'Запланировано', 'primary'],
+    ['IN_PROGRESS', 'В работе', 'warning'],
+    ['COMPLETED', 'Завершено', 'success'],
+    ['OVERDUE', 'Просрочено', 'danger'],
+    ['CANCELLED', 'Отменено', 'neutral'],
+  ] as const)('преобразует статус %s в %s / %s', (status, statusLabel, tone) => {
+    expect(maintenanceToCalendarEvent({ ...record, status })).toMatchObject({
+      statusLabel,
+      tone,
+    });
+  });
 });
