@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useActionState, useEffect, useRef, useState } from 'react';
+import { useActionState, useCallback, useRef, useState } from 'react';
 
 import { createWashAction } from '../actions';
 import type { OperationActionState } from '../types';
@@ -19,16 +19,21 @@ export function WashForm({
   onCancel: () => void;
   onSuccess: (message: string) => void;
 }) {
-  const [state, formAction, pending] = useActionState(createWashAction, initialState);
-  const [vehicleId, setVehicleId] = useState('');
   const formRef = useRef<HTMLFormElement>(null);
+  const submitAction = useCallback(
+    async (previousState: OperationActionState, formData: FormData) => {
+      const nextState = await createWashAction(previousState, formData);
+      if (nextState.status === 'success' && nextState.message) {
+        formRef.current?.reset();
+        onSuccess(nextState.message);
+      }
+      return nextState;
+    },
+    [onSuccess],
+  );
+  const [state, formAction, pending] = useActionState(submitAction, initialState);
+  const [vehicleId, setVehicleId] = useState('');
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === vehicleId);
-
-  useEffect(() => {
-    if (!state.message || state.status !== 'success') return;
-    formRef.current?.reset();
-    onSuccess(state.message);
-  }, [onSuccess, state]);
 
   return (
     <form ref={formRef} action={formAction} className="grid min-w-0 gap-4">
