@@ -65,4 +65,24 @@ describe('жизненный цикл формы технического обс
     await submitMaintenance(2);
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(2));
   });
+
+  it('оставляет форму открытой и не завершает workspace lifecycle при ошибке', async () => {
+    createMaintenanceActionMock.mockResolvedValue({
+      status: 'error',
+      message: 'Не удалось сохранить ТО. Попробуйте позже.',
+    });
+    const onSuccess = vi.fn();
+
+    render(
+      createElement(MaintenanceForm, {
+        vehicles,
+        onCancel: vi.fn(),
+        onSuccess,
+      }),
+    );
+
+    await submitMaintenance(1);
+    await screen.findByRole('alert');
+    expect(onSuccess).not.toHaveBeenCalled();
+  });
 });

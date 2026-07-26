@@ -193,8 +193,9 @@ export function WashWorkspace({
     (message: string) => {
       showToast({ tone: 'success', title: message });
       setFormOpen(false);
+      router.refresh();
     },
-    [showToast],
+    [router, showToast],
   );
   const registerTransitionIntent = useCallback(
     (transition: { recordId: string; toStatus: WashStatus }) => setPendingTransition(transition),

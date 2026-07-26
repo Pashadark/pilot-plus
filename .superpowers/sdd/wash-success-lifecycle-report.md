@@ -103,3 +103,62 @@ maintenance/wash acceptance-сценария, включая mobile viewport в�
 Сохранены два известных предупреждения проекта: выбор workspace root из-за двух lockfiles и
 широкий NFT trace generated Prisma client. После проверки production listener остановлен,
 `test-results` и `playwright-report` удалены.
+
+## Follow-up: синхронизация RSC-данных workspace
+
+Повторная production-проверка Task 4 с `--repeat-each=2` обнаружила отдельный этап того же
+пользовательского lifecycle:
+
+- maintenance desktop во втором повторе получил успешный `next-action` response;
+- dialog закрылся;
+- matching success-toast был один;
+- `maintenance-overdue-stat` оставался `0` вместо `1` в течение штатных 5 секунд.
+
+Это исключило форму, action result и toast lifecycle: устаревшими остались серверные `records`,
+переданные workspace. Хотя `revalidatePath` должен включать обновлённый RSC payload в тот же Flight
+response, production evidence показал, что seeded navigation не является достаточно стабильным
+единственным сигналом для acceptance read-your-own-write.
+
+Локальная документация Next.js 16.2 подтверждает, что client `router.refresh()`:
+
+- делает новый запрос текущего маршрута;
+- повторно получает и сливает RSC payload;
+- не сбрасывает незатронутый React `useState`, scroll и browser state;
+- не меняет pathname или query-параметры.
+
+Поэтому workspace success coordinator теперь выполняет строго:
+
+1. один `showToast`;
+2. `setFormOpen(false)`;
+3. один `router.refresh()`.
+
+Refresh не вызывается из формы и не запускается для error state. Server Action по-прежнему
+выполняет `revalidatePath`: он инвалидирует server cache, а последующий client refresh гарантирует
+новое чтение уже инвалидированных данных.
+
+### Follow-up TDD
+
+Новые component-тесты `MaintenanceWorkspace.test.ts` и `WashWorkspace.test.ts` сначала получили
+корректный RED:
+
+- toast — 1;
+- dialog закрыт;
+- `router.refresh` — 0 вместо 1.
+
+После исправления два последовательных success в каждом workspace дают ровно два toast и два
+refresh. Тесты также требуют отсутствие `router.replace`, сохранение локального поискового фильтра
+и отсутствие `onSuccess` у форм при action error.
+
+### Итоговая follow-up-проверка
+
+| Проверка | Результат |
+| --- | --- |
+| Focused lifecycle Vitest | PASS — 4 файла, 6 тестов |
+| Full `npm run test:unit` | PASS — 53 файла, 247 тестов |
+| `npm run typecheck` | PASS |
+| `npm run lint` | PASS |
+| `npm run build` | PASS |
+| Production targeted `--repeat-each=2` | PASS — 8/8 |
+
+Production listener остановлен, browser-артефакты удалены. Канонический итог Task 4 зафиксирован в
+[`task-4-report.md`](task-4-report.md).

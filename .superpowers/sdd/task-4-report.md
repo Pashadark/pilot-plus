@@ -1,93 +1,114 @@
-# Task 4 report — mobile acceptance, документация и финальная проверка календарей
+# Task 4 report — mobile acceptance и финальная проверка календарей
 
-## Статус
+## Канонический статус
 
-**BLOCKED.** Усиленный post-review browser gate не прошёл: mobile wash получил успешный ответ
-Server Action, но форма создания не закрылась за штатный Playwright timeout 5 секунд. По правилу
-review после первого flake второй browser-run не запускался. Merge в `main`, push и cleanup
-worktree не выполнялись.
+**READY.** Финальный production gate прошёл 8/8 с `--repeat-each=2`. Merge в `main`, push и cleanup
+worktree в рамках Task 4 не выполнялись.
 
-## Изменения
+Полная диагностика двух follow-up lifecycle-дефектов, TDD evidence и точные проверки находятся в
+[`wash-success-lifecycle-report.md`](wash-success-lifecycle-report.md).
 
-- `tests/maintenance.spec.ts` и `tests/wash.spec.ts` проверяют для обоих модулей:
-  - безопасную нормализацию невалидного `month` в текущий месяц `Europe/Moscow`;
-  - точный URL и порядок query-параметров для перехода
-    `2026-12 → 2027-01 → 2026-12` с сохранением `source=e2e`;
-  - возврат «Сегодня» и невалидного месяца в текущий месяц `Europe/Moscow`;
-  - mobile viewport 390×844, видимую повестку и скрытую desktop-сетку;
-  - отсутствие горизонтального переполнения документа и details dialog;
-  - область календарных событий и трёх month-controls не меньше 44×44 px;
-  - раскрытие четырёх событий одного дня через «Ещё 1»;
-  - открытие details dialog клавишей Enter.
-- Общий test-helper для create-сценариев требует видимую форму и активный save-control, ждёт
-  конкретный POST с заголовком `next-action` на `/maintenance` или `/wash`, успешный HTTP-ответ,
-  стабильный pathname, закрытие формы и ровно один success-toast.
-- Перед следующим setup-созданием toast закрывается и обязательно удаляется из DOM через
-  `toHaveCount(0)`.
-- `README.md` и `docs/PROJECT_GUIDE.md` документируют list/calendar URL для ТО и мойки,
-  сериализуемую границу `OperationsCalendarEvent`, московский бизнес-месяц, ownership create-toast
-  постоянно смонтированным workspace и ограничения этапа.
-- Product-код, Prisma, Server Actions, tenant authorization, зависимости и общий
-  `playwright.config.ts` не изменялись.
+## Реализованный acceptance-контракт
 
-## Диагностика Playwright
+`tests/maintenance.spec.ts` и `tests/wash.spec.ts` проверяют:
 
-Репозиторный `webServer` запускает `next dev`, а предыдущий Task 3 был заблокирован аварией
-Turbopack worker. Локальная документация установленного Next.js 16.2 рекомендует E2E на
-production-коде и подтверждает команды `next build --webpack` и `next start`.
+- безопасную нормализацию невалидного `month` в текущий месяц `Europe/Moscow`;
+- точный URL и порядок query-параметров при навигации между месяцами;
+- возврат «Сегодня» в текущий московский месяц;
+- mobile viewport 390×844, видимую повестку и скрытую desktop-сетку;
+- отсутствие горизонтального переполнения документа и details dialog;
+- области календарных событий и month-controls не меньше 44×44 px;
+- раскрытие четырёх событий одного дня;
+- открытие details dialog клавишей Enter;
+- конкретный `POST` с заголовком `next-action`;
+- успешный HTTP-ответ и неизменный pathname;
+- закрытие create dialog;
+- ровно один matching success-toast;
+- обновлённые records, статистику и созданное событие после success.
 
-Для этой проверки выполнены:
+Общий helper перед следующим setup-созданием закрывает toast и ждёт его удаления из DOM.
 
-1. `npx next build --webpack`;
-2. production `next start` на изолированном `127.0.0.1:3104`;
-3. targeted Playwright через временную конфигурацию с тем же base URL и одним desktop worker.
+## История диагностики
 
-Pre-review browser-запуски помогли уточнить тестовую синхронизацию:
+### 1. Потерянное завершение временной формы
 
-- maintenance Server Action revalidation заменяла client-subtree сразу после создания; после
-  проверки toast/stat тест перезагружает календарный URL и открывает уже сохранённое событие;
-- после раскрытия кнопка «Ещё 1» корректно меняет accessible name на «Скрыть», поэтому
-  дальнейшая проверка использует новый locator;
-- закрываемый transition-toast оставался в DOM на exit-анимации;
-- production POST мойки содержит query string, который не покрывал старый route pattern.
+Первый post-review gate завершился 3/4: mobile wash получил успешный action response, но dialog
+остался видим. Причиной был `useEffect([state])` внутри временной формы: завершение запроса зависело
+от passive effect и идентичности action state.
 
-Pre-review controlled rerun проходил 4/4, но не связывал submit с конкретным Server Action
-response и не ждал удаления каждого toast. Поэтому этот результат больше не используется как
-доказательство готовности.
+Исправление:
 
-Post-review первый production-run завершился **3/4 PASS**:
+- каждая client action-функция ожидает существующий Server Action;
+- каждый resolved success сразу вызывает workspace callback;
+- workspace показывает toast и закрывает dialog;
+- ошибки остаются inline и не завершают success lifecycle.
 
-- maintenance desktop — PASS;
-- maintenance mobile — PASS;
-- wash desktop — PASS;
-- wash mobile — FAIL.
+### 2. Устаревший RSC payload после завершённого success lifecycle
 
-В failing mobile wash запрос с `next-action` на `/wash` завершился успешным HTTP-ответом,
-`page.url()` сохранил pathname `/wash`, но `getByRole('dialog')` оставался видимым после 5 секунд
-ожидания. Ошибка зафиксирована в `tests/helpers/operations-calendar.ts:47`. Timeout не увеличивался:
-серверный ответ уже был получен, а блокирующим этапом оказался клиентский lifecycle результата.
-По review gate повторный browser-run и новые исправительные циклы не выполнялись.
+Следующий reviewer gate с `--repeat-each=2` завершился 7/8: maintenance desktop во втором повторе
+получил успешный response, dialog закрылся и toast был один, но `maintenance-overdue-stat`
+оставался `0` вместо `1` в течение штатных 5 секунд.
 
-Listener остановлен, временная конфигурация и `test-results` удалены, порт 3104 свободен.
+Это был отдельный этап: action result уже обработан, но workspace продолжал видеть старые server
+props. `revalidatePath` и action return приходят одним Flight response; production evidence
+показал, что одного seeded RSC merge недостаточно как стабильной acceptance-синхронизации.
+
+Минимальное симметричное исправление для maintenance и wash:
+
+```text
+showToast → setFormOpen(false) → router.refresh()
+```
+
+`router.refresh()` делает отдельное чтение текущего маршрута после server-cache invalidation,
+сливает свежий RSC payload и по контракту Next.js 16.2 сохраняет незатронутый client/browser state.
+Query, выбранные `view`/`month`, локальные фильтры и scroll не переписываются. Error response не
+вызывает refresh.
+
+Timeout acceptance-тестов не увеличивался.
+
+## TDD
+
+Component regression для обоих workspace зафиксировал RED:
+
+- matching toast: 1;
+- dialog: закрыт;
+- `router.refresh`: 0 вместо 1.
+
+GREEN требует для двух последовательных success:
+
+- два action completion;
+- два toast;
+- два закрытия dialog;
+- ровно два `router.refresh`;
+- ни одного `router.replace`;
+- сохранённый локальный поисковый фильтр.
+
+Form tests отдельно требуют, чтобы action error оставлял форму в error state и не вызывал
+workspace `onSuccess`, следовательно не создавал toast/close/refresh lifecycle.
 
 ## Финальные проверки
 
 | Проверка | Результат |
 | --- | --- |
-| Focused Vitest: shared model/component/query + два mapper | PASS — 5 файлов, 49/49 тестов |
-| `npm run test:unit` | PASS — 49 файлов, 241/241 тест |
+| Focused lifecycle Vitest | PASS — 4 файла, 6 тестов |
+| Full `npm run test:unit` | PASS — 53 файла, 247 тестов |
 | `npm run typecheck` | PASS |
 | `npm run lint` | PASS |
-| Scoped `prettier --check` для task-файлов и отчёта | PASS |
-| Targeted production Playwright после review | BLOCKED — 3/4 PASS, mobile wash form remained open |
-| `npm run build` | PASS; routes `/maintenance` и `/wash` присутствуют |
+| `npm run build` | PASS; `/maintenance` и `/wash` присутствуют |
+| Production targeted `--repeat-each=2` | PASS — 8/8 за 37.1 с |
 | `git diff --check` | PASS |
 
-`npm run build` сохранил два известных неблокирующих предупреждения проекта: inferred workspace
-root из-за двух lockfiles и широкий NFT trace через generated Prisma client. Новых предупреждений
-или изменений product-кода для них не добавлялось.
+Production gate:
 
-## Известные границы
+```powershell
+npx playwright test tests/maintenance.spec.ts tests/wash.spec.ts `
+  --project=desktop --workers=1 --repeat-each=2
+```
+
+Сохранены известные предупреждения проекта о двух lockfiles и широком NFT trace generated Prisma
+client. Production listener остановлен, `test-results` и `playwright-report` удалены.
+
+## Границы этапа
 
 - Нет drag-and-drop переноса.
 - Нет недельного/дневного режима.

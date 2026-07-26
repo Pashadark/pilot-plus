@@ -60,4 +60,24 @@ describe('жизненный цикл формы мойки', () => {
     await submitWash(2);
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(2));
   });
+
+  it('оставляет форму открытой и не завершает workspace lifecycle при ошибке', async () => {
+    createWashActionMock.mockResolvedValue({
+      status: 'error',
+      message: 'Не удалось сохранить мойку.',
+    });
+    const onSuccess = vi.fn();
+
+    render(
+      createElement(WashForm, {
+        vehicles,
+        onCancel: vi.fn(),
+        onSuccess,
+      }),
+    );
+
+    await submitWash(1);
+    await screen.findByRole('alert');
+    expect(onSuccess).not.toHaveBeenCalled();
+  });
 });
