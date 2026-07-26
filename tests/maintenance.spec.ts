@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 
 import { openAuthenticatedRoute } from './helpers/auth';
 import {
@@ -25,18 +25,39 @@ function formatMoscowDateTime(value: Date) {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 }
 
+function formatMoscowMonth(value = new Date()) {
+  return formatMoscowDateTime(value).slice(0, 7);
+}
+
+function shiftMonth(month: string, offset: -1 | 1) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const shifted = new Date(0);
+  shifted.setUTCHours(0, 0, 0, 0);
+  shifted.setUTCFullYear(year, monthNumber - 1 + offset, 1);
+  return `${String(shifted.getUTCFullYear()).padStart(4, '0')}-${String(
+    shifted.getUTCMonth() + 1,
+  ).padStart(2, '0')}`;
+}
+
+async function expectTouchTarget(locator: Locator) {
+  const box = await locator.boundingBox();
+  expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+}
+
 test.afterAll(async () => {
   await cleanupE2EMaintenanceRecords();
 });
 
 test('администратор планирует, фильтрует и завершает ТО', async ({ page }) => {
   const vehicleId = await createE2EMaintenanceOdometerPosition();
+  const currentMonth = formatMoscowMonth();
   await openAuthenticatedRoute(page, '/maintenance?source=e2e&view=calendar&month=invalid');
 
   await expect(page.getByTestId('maintenance-page')).toBeVisible();
   await expect(page).toHaveURL(/source=e2e/);
   await expect(page).toHaveURL(/view=calendar/);
-  await expect(page).toHaveURL(/month=\d{4}-\d{2}/);
+  await expect.poll(() => new URL(page.url()).searchParams.get('month')).toBe(currentMonth);
   await expect(page.getByTestId('app-header')).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Техническое обслуживание', level: 1 }),
@@ -51,8 +72,18 @@ test('администратор планирует, фильтрует и за�
     'aria-selected',
     'true',
   );
+  await page.getByRole('button', { name: 'Предыдущий месяц' }).click();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get('month'))
+    .toBe(shiftMonth(currentMonth, -1));
   await page.getByRole('button', { name: 'Следующий месяц' }).click();
-  await expect(page).toHaveURL(/month=\d{4}-\d{2}/);
+  await expect.poll(() => new URL(page.url()).searchParams.get('month')).toBe(currentMonth);
+  await page.getByRole('button', { name: 'Следующий месяц' }).click();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get('month'))
+    .toBe(shiftMonth(currentMonth, 1));
+  await page.getByRole('button', { name: 'Сегодня' }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('month')).toBe(currentMonth);
   await page.getByRole('tab', { name: 'Список' }).click();
   await expect(page).toHaveURL(/view=list/);
   await expect(page).toHaveURL(/source=e2e/);
@@ -91,14 +122,24 @@ test('администратор планирует, фильтрует и за�
   await expect(dueSoonStat).toHaveText(String(initialDueSoon + 1));
 
   await page.getByRole('tab', { name: 'Календарь' }).click();
-  if (new URL(page.url()).searchParams.get('month') !== scheduledMonth) {
-    await page.getByRole('button', { name: 'Предыдущий месяц' }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('view')).toBe('calendar');
+  await expect.poll(() => new URL(page.url()).searchParams.get('month')).not.toBeNull();
+  const displayedMonth = new URL(page.url()).searchParams.get('month');
+  if (displayedMonth !== scheduledMonth) {
+    await page
+      .getByRole('button', {
+        name: scheduledMonth > (displayedMonth ?? '') ? 'Следующий месяц' : 'Предыдущий месяц',
+      })
+      .click();
   }
-  await page
+  await expect.poll(() => new URL(page.url()).searchParams.get('month')).toBe(scheduledMonth);
+  await page.reload();
+  const calendarEvent = page
     .getByTestId('operations-calendar-grid')
     .getByRole('button')
-    .filter({ hasText: title })
-    .click();
+    .filter({ hasText: title });
+  await expect(calendarEvent).toHaveCount(1);
+  await calendarEvent.press('Enter');
   const calendarDialog = page.getByRole('dialog', { name: title });
   const calendarStatus = calendarDialog.getByText('Запланировано', { exact: true });
   await expect(calendarStatus).toBeVisible();
@@ -116,7 +157,6 @@ test('администратор планирует, фильтрует и за�
   await expect(record).toContainText('Запланировано');
   await expect(record.getByText('Осталось: 3 000 км', { exact: true })).toBeVisible();
   await expect(record.getByRole('progressbar', { name: 'Прогресс до ТО' })).toBeVisible();
-  await plannedToast.getByRole('button', { name: 'Закрыть уведомление' }).click();
 
   await record.getByRole('button', { name: 'Начать работу' }).click();
   await expect(record).toHaveCount(0);
@@ -130,6 +170,7 @@ test('администратор планирует, фильтрует и за�
   await expect(record).toContainText('В работе');
 
   await transitionToast.getByRole('button', { name: 'Закрыть уведомление' }).click();
+  await expect(transitionToast).toBeHidden();
   await record.getByRole('button', { name: 'Завершить работу' }).click();
   await expect(record).toHaveCount(0);
   await expect(transitionToast).toBeVisible();
@@ -199,14 +240,18 @@ test('мобильная страница ТО не переполняет эк�
   }
 
   const title = `${E2E_MAINTENANCE_TITLE_PREFIX}mobile-${Date.now()}`;
+  const scheduledDateTime = formatMoscowDateTime(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000));
   await page.getByLabel('Автомобиль').selectOption({ index: 1 });
   await page.getByLabel('Название работы').fill(title);
   await page.getByLabel('Вид работы').selectOption('INSPECTION');
-  await page
-    .getByLabel('Плановая дата')
-    .fill(formatMoscowDateTime(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)));
+  await page.getByLabel('Плановая дата').fill(scheduledDateTime);
   await page.getByRole('button', { name: 'Сохранить ТО' }).click();
   await expect(dialog).toBeHidden();
+  const firstCreateToast = page
+    .locator('[data-toast-tone="success"]')
+    .filter({ hasText: 'ТО запланировано.' });
+  await expect(firstCreateToast).toHaveCount(1);
+  await firstCreateToast.getByRole('button', { name: 'Закрыть уведомление' }).click();
 
   await page.getByRole('searchbox', { name: 'Поиск по обслуживанию' }).fill(title);
   const record = page.getByTestId('maintenance-mobile-record').filter({ hasText: title });
@@ -214,5 +259,64 @@ test('мобильная страница ТО не переполняет эк�
   for (const action of await record.getByRole('button').all()) {
     expect((await action.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   }
-  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+
+  for (let index = 2; index <= 4; index += 1) {
+    await page.getByRole('button', { name: 'Запланировать ТО' }).click();
+    const overflowDialog = page.getByRole('dialog', { name: 'Запланировать ТО' });
+    await overflowDialog.getByLabel('Автомобиль').selectOption({ index: 1 });
+    await overflowDialog
+      .getByLabel('Название работы')
+      .fill(`${E2E_MAINTENANCE_TITLE_PREFIX}mobile-${Date.now()}-${index}`);
+    await overflowDialog.getByLabel('Вид работы').selectOption('INSPECTION');
+    await overflowDialog.getByLabel('Плановая дата').fill(scheduledDateTime);
+    await overflowDialog.getByRole('button', { name: 'Сохранить ТО' }).click();
+    await expect(overflowDialog).toBeHidden();
+    const toast = page
+      .locator('[data-toast-tone="success"]')
+      .filter({ hasText: 'ТО запланировано.' });
+    await expect(toast).toHaveCount(1);
+    await toast.getByRole('button', { name: 'Закрыть уведомление' }).click();
+  }
+
+  await page.getByRole('tab', { name: 'Календарь' }).click();
+  const scheduledMonth = scheduledDateTime.slice(0, 7);
+  await expect.poll(() => new URL(page.url()).searchParams.get('view')).toBe('calendar');
+  await expect.poll(() => new URL(page.url()).searchParams.get('month')).not.toBeNull();
+  const displayedMonth = new URL(page.url()).searchParams.get('month');
+  if (displayedMonth !== scheduledMonth) {
+    await page
+      .getByRole('button', {
+        name: scheduledMonth > (displayedMonth ?? '') ? 'Следующий месяц' : 'Предыдущий месяц',
+      })
+      .click();
+  }
+  await expect.poll(() => new URL(page.url()).searchParams.get('month')).toBe(scheduledMonth);
+  await page.reload();
+  const agenda = page.getByTestId('operations-calendar-agenda');
+  await expect(agenda).toBeVisible();
+  await expect(page.getByTestId('operations-calendar-grid')).toBeHidden();
+  const overflowButton = agenda.getByRole('button', { name: 'Ещё 1' });
+  await expect(overflowButton).toBeVisible();
+  await overflowButton.click();
+  await expect(agenda.getByRole('button', { name: 'Скрыть' })).toBeVisible();
+
+  for (const monthControl of [
+    page.getByRole('button', { name: 'Предыдущий месяц' }),
+    page.getByRole('button', { name: 'Сегодня' }),
+    page.getByRole('button', { name: 'Следующий месяц' }),
+  ]) {
+    await expectTouchTarget(monthControl);
+  }
+
+  const eventButton = agenda.getByRole('button').filter({ hasText: title });
+  await expect(eventButton).toHaveCount(1);
+  await expectTouchTarget(eventButton);
+  await eventButton.focus();
+  await page.keyboard.press('Enter');
+  const detailsDialog = page.getByRole('dialog', { name: title });
+  await expect(detailsDialog).toBeVisible();
+  expect(
+    await detailsDialog.evaluate((element) => element.scrollWidth <= element.clientWidth),
+  ).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
