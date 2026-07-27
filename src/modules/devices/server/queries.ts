@@ -133,7 +133,7 @@ const deviceListSelect = {
   vehicle: { select: vehicleSelect },
   commands: {
     where: { status: { in: ['PENDING', 'SENT'] } },
-    select: { id: true },
+    select: { id: true, status: true },
     take: 1,
   },
 } satisfies Prisma.DeviceSelect;
@@ -254,7 +254,9 @@ function mapDeviceListItem(
     updateAvailable: firmwareReleases.some((release) =>
       canUpdateFirmware(device.firmwareVersion, release.version),
     ),
-    hasActiveCommand: device.commands.length > 0,
+    hasActiveCommand: device.commands.some(
+      (command) => command.status === 'PENDING' || command.status === 'SENT',
+    ),
   };
 }
 

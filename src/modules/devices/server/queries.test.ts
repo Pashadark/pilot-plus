@@ -211,6 +211,7 @@ describe('запросы Pilot Connect', () => {
       installedAt: '2026-07-20T10:00:00.000Z',
       createdAt: '2026-07-20T10:00:00.000Z',
       updatedAt: '2026-07-27T09:55:00.000Z',
+      hasActiveCommand: false,
       commands: [
         expect.objectContaining({
           createdAt: '2026-07-27T08:00:00.000Z',
