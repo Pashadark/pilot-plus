@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 import { prisma } from './client';
+import { seedPilotConnectDevices } from './device-seed';
 import { parseFleetSource, type FleetImportRow } from './fleet-import';
 import { parseVehicleImageManifest, type VehicleImageManifestRow } from './vehicle-images';
 import { hashPassword } from '@/services/auth/password';
@@ -225,6 +226,22 @@ async function main() {
     );
     console.info(
       `Импортировано автомобилей: ${fleet.vehicles}; фотографий: ${fleet.images}. Компания: ${fleet.companyId}.`,
+    );
+
+    const fleetVehicles = await prisma.vehicle.findMany({
+      where: { companyId: fleet.companyId },
+      orderBy: { internalNumber: 'asc' },
+      take: 23,
+      select: { id: true, internalNumber: true },
+    });
+    const devices = await seedPilotConnectDevices(
+      prisma,
+      fleet.companyId,
+      admin.userId,
+      fleetVehicles,
+    );
+    console.info(
+      `Pilot Connect: ${devices.devices} устройств, ${devices.firmwareReleases} прошивки, ${devices.commands} команд`,
     );
   } finally {
     await prisma.$disconnect();
