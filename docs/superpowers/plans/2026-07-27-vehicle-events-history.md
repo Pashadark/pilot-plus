@@ -401,6 +401,9 @@ export async function getEventTimeline(
 }>;
 ```
 
+Validation normalizes an omitted period to the last 30 days and rejects a range longer than
+90 days. This bound applies to `/events`, mass-read and vehicle-history queries.
+
 - [ ] **Step 1: Write tenant tests**
 
 Mock `{ userId: 'user-1', companyId: 'company-1' }`. Assert every source query reaches the
@@ -434,9 +437,10 @@ Also cover read/unread, category, severity, period, search and vehicle filters.
 
 - [ ] **Step 3: Implement bounded source reads**
 
-Fetch at most `limit + 1` rows per source, with `limit` clamped to 10–50. Use the same
-`before` time on all sources, normalize, merge, apply the stable `(recordedAt desc, key asc)`
-order, then return the first `limit`.
+Fetch sources in bounded batches of 50 rows. Use the same cursor boundary on all sources,
+normalize and perform a stable k-way merge `(recordedAt desc, key asc)`. When `read` filtering
+removes rows, continue with the next bounded source batches until the requested page is full or
+all sources within the validated 90-day window are exhausted. Never use an unbounded `findMany`.
 
 `VehiclePosition` participates only when `speedKph > 0` and becomes the factual current-movement
 item. It does not infer a destination. Stale positions retain their recorded time and the UI
@@ -609,6 +613,7 @@ git commit -m "feat: add unified event timeline"
 ### Task 7: История в карточке автомобиля
 
 **Files:**
+- Modify: `src/app/(protected)/vehicles/[id]/page.tsx`
 - Modify: `src/modules/vehicles/components/vehicle-tabs.ts`
 - Modify: `src/modules/vehicles/components/vehicle-tabs.test.ts`
 - Modify: `src/modules/vehicles/components/VehicleDetailPage.tsx`
@@ -639,18 +644,32 @@ The `events` tab renders `VehicleEventHistory` fixed to the current vehicle. It 
 
 Existing `trips`, `maintenance` and `wash` tabs remain unchanged.
 
-- [ ] **Step 3: Handle movement summary**
+- [ ] **Step 3: Load the timeline in the server route**
+
+The server page requests both existing vehicle details and the timeline:
+
+```ts
+const [vehicle, timeline] = await Promise.all([
+  getVehicleDetails(id),
+  getEventTimeline({ vehicleId: id, limit: 30 }),
+]);
+```
+
+Call `notFound()` when the tenant-safe vehicle query returns `null`. Pass `timeline.events` and
+`timeline.nextCursor` to `VehicleDetailPage`; do not fetch Prisma data from a Client Component.
+
+- [ ] **Step 4: Handle movement summary**
 
 When the newest normalized item is active movement, show current speed, direction, location and
 last-seen time. When stale or absent, render `Нет актуальной телеметрии` explicitly.
 
-- [ ] **Step 4: Verify and commit**
+- [ ] **Step 5: Verify and commit**
 
 ```powershell
 npx vitest run src/modules/vehicles/components/vehicle-tabs.test.ts src/modules/vehicles/components/VehicleDetailPage.test.ts src/modules/events/components/VehicleEventHistory.test.tsx
 npm run typecheck
 npx eslint src/modules/vehicles/components src/modules/events/components
-git add src/modules/vehicles/components src/modules/events/components/VehicleEventHistory.tsx src/modules/events/components/VehicleEventHistory.test.tsx
+git add "src/app/(protected)/vehicles/[id]/page.tsx" src/modules/vehicles/components src/modules/events/components/VehicleEventHistory.tsx src/modules/events/components/VehicleEventHistory.test.tsx
 git commit -m "feat: add unified vehicle history"
 ```
 
