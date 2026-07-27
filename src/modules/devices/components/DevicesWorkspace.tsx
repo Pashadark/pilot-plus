@@ -306,11 +306,22 @@ function DevicesWorkspaceContent({
             data-testid="devices-table"
             className="hidden min-w-0 overflow-x-auto rounded-[var(--radius-panel)] border bg-[var(--color-surface)] shadow-[var(--shadow-card)] md:block"
           >
-            <DeviceTable devices={visibleDevices} />
+            <DeviceTable
+              devices={visibleDevices}
+              firmwareReleases={firmwareReleases}
+              availableVehicles={availableVehicles}
+            />
           </div>
           <div data-testid="devices-mobile-list" className="grid min-w-0 gap-3 md:hidden">
             {visibleDevices.length ? (
-              visibleDevices.map((device) => <DeviceCard key={device.id} device={device} />)
+              visibleDevices.map((device) => (
+                <DeviceCard
+                  key={device.id}
+                  device={device}
+                  firmwareReleases={firmwareReleases}
+                  availableVehicles={availableVehicles}
+                />
+              ))
             ) : (
               <EmptyState
                 title="Устройства не найдены"

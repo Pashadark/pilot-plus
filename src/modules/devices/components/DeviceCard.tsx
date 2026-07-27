@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { FiChevronRight, FiNavigation, FiRadio, FiZap } from 'react-icons/fi';
 
-import type { DeviceListItem } from '../types';
+import type { DeviceListItem, FirmwareReleaseItem } from '../types';
 import { Card } from '@/shared/ui';
 
+import { DeviceListActions } from './DeviceListActions';
 import { DeviceStatusBadge } from './DeviceStatusBadge';
 
 function formatLastSeen(lastSeenAt: string | null) {
@@ -15,7 +16,15 @@ function formatLastSeen(lastSeenAt: string | null) {
   }).format(new Date(lastSeenAt));
 }
 
-export function DeviceCard({ device }: { device: DeviceListItem }) {
+export function DeviceCard({
+  device,
+  firmwareReleases,
+  availableVehicles,
+}: {
+  device: DeviceListItem;
+  firmwareReleases: readonly FirmwareReleaseItem[];
+  availableVehicles: readonly { id: string; label: string }[];
+}) {
   const connection =
     device.connectionType === 'NONE'
       ? 'Нет связи'
@@ -73,6 +82,9 @@ export function DeviceCard({ device }: { device: DeviceListItem }) {
             <dd className="mt-0.5 break-words">
               {power}
               {device.batteryLevel === null ? '' : ` · ${device.batteryLevel}%`}
+              {device.externalVoltage === null
+                ? ''
+                : ` · ${device.externalVoltage.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} В`}
             </dd>
           </div>
           <div className="min-w-0">
@@ -88,12 +100,19 @@ export function DeviceCard({ device }: { device: DeviceListItem }) {
           <dd className="mt-0.5">{formatLastSeen(device.lastSeenAt)}</dd>
         </div>
       </dl>
-      <Link
-        href={`/devices/${device.id}`}
-        className="mt-4 flex min-h-11 items-center justify-between rounded-[var(--radius-sm)] px-1 font-medium text-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
-      >
-        Открыть устройство <FiChevronRight aria-hidden="true" />
-      </Link>
+      <div className="mt-4 flex min-w-0 items-center justify-between gap-2">
+        <Link
+          href={`/devices/${device.id}`}
+          className="flex min-h-11 min-w-0 flex-1 items-center justify-between rounded-[var(--radius-sm)] px-1 font-medium text-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
+        >
+          Открыть устройство <FiChevronRight aria-hidden="true" />
+        </Link>
+        <DeviceListActions
+          device={device}
+          firmwareReleases={firmwareReleases}
+          availableVehicles={availableVehicles}
+        />
+      </div>
     </Card>
   );
 }

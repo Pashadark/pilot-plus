@@ -262,6 +262,9 @@ export function DropdownMenu({
       {open && (
         <div
           role="menu"
+          onClick={(event) => {
+            if ((event.target as HTMLElement).closest('[role="menuitem"]')) setOpen(false);
+          }}
           className="absolute right-0 z-40 min-w-48 rounded-[var(--radius-panel)] border bg-[var(--color-surface)] p-1 shadow-[var(--shadow-floating)]"
         >
           {children}

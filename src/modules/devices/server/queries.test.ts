@@ -91,7 +91,7 @@ function createRepository() {
       device: {
         async findMany(args: unknown) {
           calls.devices = args;
-          return [rawDevice];
+          return [{ ...rawDevice, commands: [] }];
         },
         async findFirst(args: unknown) {
           calls.detail = args;
@@ -126,6 +126,9 @@ describe('запросы Pilot Connect', () => {
     const page = await queries.getDevicePageData();
 
     expect(fake.calls.devices).toMatchObject({ where: { companyId: 'company-1' } });
+    expect(fake.calls.devices).toMatchObject({
+      select: { commands: { where: { status: { in: ['PENDING', 'SENT'] } }, take: 1 } },
+    });
     expect(fake.calls.firmware).toMatchObject({ orderBy: { releasedAt: 'desc' } });
     expect(fake.calls.vehicles).toMatchObject({
       where: { companyId: 'company-1', OR: [{ device: null }] },
@@ -146,6 +149,7 @@ describe('запросы Pilot Connect', () => {
           signalStrength: 88,
           satellitesCount: 14,
           powerSource: 'VEHICLE',
+          externalVoltage: 12.6,
           batteryLevel: 96,
           lastSeenAt: '2026-07-27T09:55:00.000Z',
           vehicle: {
@@ -154,6 +158,7 @@ describe('запросы Pilot Connect', () => {
             registrationNumber: 'А001АА',
           },
           updateAvailable: true,
+          hasActiveCommand: false,
         },
       ],
       firmwareReleases: [

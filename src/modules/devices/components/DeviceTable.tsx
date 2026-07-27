@@ -1,9 +1,9 @@
 import Link from 'next/link';
-import { FiMoreHorizontal } from 'react-icons/fi';
 
-import type { DeviceListItem } from '../types';
-import { DropdownMenu, EmptyState } from '@/shared/ui';
+import type { DeviceListItem, FirmwareReleaseItem } from '../types';
+import { EmptyState } from '@/shared/ui';
 
+import { DeviceListActions } from './DeviceListActions';
 import { DeviceStatusBadge } from './DeviceStatusBadge';
 
 function formatLastSeen(lastSeenAt: string | null) {
@@ -26,27 +26,15 @@ function powerLabel(device: DeviceListItem) {
   return device.batteryLevel === null ? source : `${source} · ${device.batteryLevel}%`;
 }
 
-function DeviceActions({ device }: { device: DeviceListItem }) {
-  return (
-    <DropdownMenu
-      ariaLabel={`Действия устройства ${device.name}`}
-      label={<FiMoreHorizontal aria-hidden="true" className="mx-auto size-5" />}
-    >
-      <Link
-        href={`/devices/${device.id}`}
-        role="menuitem"
-        className="flex min-h-11 items-center rounded-[var(--radius-sm)] px-3 text-sm font-medium hover:bg-[var(--color-elevated)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
-      >
-        Открыть устройство
-      </Link>
-      <span className="block px-3 py-2 text-xs text-[var(--color-text-secondary)]">
-        Управление командами доступно в карточке устройства.
-      </span>
-    </DropdownMenu>
-  );
-}
-
-export function DeviceTable({ devices }: { devices: readonly DeviceListItem[] }) {
+export function DeviceTable({
+  devices,
+  firmwareReleases,
+  availableVehicles,
+}: {
+  devices: readonly DeviceListItem[];
+  firmwareReleases: readonly FirmwareReleaseItem[];
+  availableVehicles: readonly { id: string; label: string }[];
+}) {
   if (!devices.length) {
     return (
       <div className="p-4">
@@ -126,7 +114,11 @@ export function DeviceTable({ devices }: { devices: readonly DeviceListItem[] })
               <DeviceStatusBadge status={device.effectiveStatus} />
             </td>
             <td className="px-4 py-4">
-              <DeviceActions device={device} />
+              <DeviceListActions
+                device={device}
+                firmwareReleases={firmwareReleases}
+                availableVehicles={availableVehicles}
+              />
             </td>
           </tr>
         ))}

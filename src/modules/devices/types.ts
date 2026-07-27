@@ -56,14 +56,15 @@ export type DeviceListItem = {
   signalStrength: number | null;
   satellitesCount: number | null;
   powerSource: DevicePowerSource;
+  externalVoltage: number | null;
   batteryLevel: number | null;
   lastSeenAt: string | null;
   vehicle: DeviceVehicleSummary | null;
   updateAvailable: boolean;
+  hasActiveCommand: boolean;
 };
 
 export type DeviceDetails = DeviceListItem & {
-  externalVoltage: number | null;
   positionAccuracyMeters: number | null;
   ignitionOn: boolean;
   isMoving: boolean;

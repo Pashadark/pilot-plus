@@ -48,6 +48,7 @@ const devices = [
     signalStrength: 92,
     satellitesCount: 14,
     powerSource: 'VEHICLE',
+    externalVoltage: 12.6,
     batteryLevel: 88,
     lastSeenAt: '2026-07-27T09:30:00.000Z',
     vehicle: {
@@ -56,6 +57,7 @@ const devices = [
       registrationNumber: 'А123ВС 77',
     },
     updateAvailable: true,
+    hasActiveCommand: false,
   },
   {
     id: 'device-2',
@@ -71,10 +73,12 @@ const devices = [
     signalStrength: null,
     satellitesCount: 0,
     powerSource: 'BATTERY',
+    externalVoltage: null,
     batteryLevel: 46,
     lastSeenAt: null,
     vehicle: null,
     updateAvailable: false,
+    hasActiveCommand: true,
   },
 ] as const;
 

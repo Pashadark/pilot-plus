@@ -126,9 +126,15 @@ const deviceListSelect = {
   signalStrength: true,
   satellitesCount: true,
   powerSource: true,
+  externalVoltage: true,
   batteryLevel: true,
   lastSeenAt: true,
   vehicle: { select: vehicleSelect },
+  commands: {
+    where: { status: { in: ['PENDING', 'SENT'] } },
+    select: { id: true },
+    take: 1,
+  },
 } satisfies Prisma.DeviceSelect;
 
 const deviceDetailsSelect = {
@@ -238,12 +244,14 @@ function mapDeviceListItem(
     signalStrength: device.signalStrength,
     satellitesCount: device.satellitesCount,
     powerSource: device.powerSource,
+    externalVoltage: optionalNumber(device.externalVoltage),
     batteryLevel: device.batteryLevel,
     lastSeenAt: device.lastSeenAt?.toISOString() ?? null,
     vehicle: device.vehicle ? mapVehicle(device.vehicle) : null,
     updateAvailable: firmwareReleases.some((release) =>
       canUpdateFirmware(device.firmwareVersion, release.version),
     ),
+    hasActiveCommand: device.commands.length > 0,
   };
 }
 
@@ -254,7 +262,6 @@ function mapDeviceDetails(
 ): DeviceDetails {
   return {
     ...mapDeviceListItem(device, firmwareReleases, referenceTime),
-    externalVoltage: optionalNumber(device.externalVoltage),
     positionAccuracyMeters: optionalNumber(device.positionAccuracyMeters),
     ignitionOn: device.ignitionOn,
     isMoving: device.isMoving,
