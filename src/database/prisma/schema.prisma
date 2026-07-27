@@ -72,17 +72,56 @@ enum WashKind {
   OTHER
 }
 
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  WARNING
+  UNASSIGNED
+  DISABLED
+}
+
+enum DeviceConnectionType {
+  LTE
+  GSM
+  NONE
+}
+
+enum DevicePowerSource {
+  VEHICLE
+  BATTERY
+}
+
+enum FirmwareChannel {
+  STABLE
+  BETA
+}
+
+enum DeviceCommandType {
+  REBOOT
+  SHUTDOWN
+  UPDATE_FIRMWARE
+}
+
+enum DeviceCommandStatus {
+  PENDING
+  SENT
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
 model User {
-  id           String          @id @default(cuid())
-  email        String          @unique
-  name         String
-  passwordHash String
-  role         UserRole        @default(ADMIN)
-  isActive     Boolean         @default(true)
-  sessions     Session[]
-  memberships  CompanyMember[]
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id             String          @id @default(cuid())
+  email          String          @unique
+  name           String
+  passwordHash   String
+  role           UserRole        @default(ADMIN)
+  isActive       Boolean         @default(true)
+  sessions       Session[]
+  memberships    CompanyMember[]
+  deviceCommands DeviceCommand[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 }
 
 model Session {
@@ -105,13 +144,15 @@ model LoginThrottle {
 }
 
 model Company {
-  id        String          @id @default(cuid())
-  name      String
-  slug      String          @unique
-  members   CompanyMember[]
-  vehicles  Vehicle[]
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  id             String          @id @default(cuid())
+  name           String
+  slug           String          @unique
+  members        CompanyMember[]
+  vehicles       Vehicle[]
+  devices        Device[]
+  deviceCommands DeviceCommand[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 }
 
 model CompanyMember {
@@ -157,12 +198,85 @@ model Vehicle {
   washRecords        WashRecord[]
   documents          VehicleDocument[]
   images             VehicleImage[]
+  device             Device?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
   @@unique([companyId, internalNumber])
   @@index([companyId, status])
   @@index([companyId, city])
+}
+
+model Device {
+  id                     String               @id @default(cuid())
+  companyId              String
+  company                Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vehicleId              String?              @unique
+  vehicle                Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  name                   String
+  serialNumber           String               @unique
+  imei                   String               @unique
+  hardwareVersion        String
+  firmwareVersion        String
+  status                 DeviceStatus         @default(UNASSIGNED)
+  connectionType         DeviceConnectionType @default(NONE)
+  mobileOperator         String?
+  signalStrength         Int?
+  satellitesCount        Int?
+  positionAccuracyMeters Decimal?             @db.Decimal(8, 2)
+  powerSource            DevicePowerSource    @default(VEHICLE)
+  externalVoltage        Decimal?             @db.Decimal(5, 2)
+  batteryLevel           Int?
+  ignitionOn             Boolean              @default(false)
+  isMoving               Boolean              @default(false)
+  latitude               Decimal?             @db.Decimal(9, 6)
+  longitude              Decimal?             @db.Decimal(9, 6)
+  lastSeenAt             DateTime?
+  installedAt            DateTime?
+  commands               DeviceCommand[]
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+
+  @@index([companyId, status])
+  @@index([companyId, firmwareVersion])
+  @@index([companyId, lastSeenAt])
+}
+
+model FirmwareRelease {
+  id           String          @id @default(cuid())
+  version      String          @unique
+  channel      FirmwareChannel @default(STABLE)
+  releaseNotes String
+  isRequired   Boolean         @default(false)
+  releasedAt   DateTime
+  createdAt    DateTime        @default(now())
+  commands     DeviceCommand[]
+}
+
+model DeviceCommand {
+  id                    String              @id @default(cuid())
+  companyId             String
+  company               Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  deviceId              String
+  device                Device              @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  createdByUserId       String
+  createdByUser         User                @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  firmwareReleaseId     String?
+  firmwareRelease       FirmwareRelease?    @relation(fields: [firmwareReleaseId], references: [id], onDelete: Restrict)
+  type                  DeviceCommandType
+  status                DeviceCommandStatus @default(PENDING)
+  targetFirmwareVersion String?
+  payload               Json?
+  errorMessage          String?
+  sentAt                DateTime?
+  completedAt           DateTime?
+  cancelledAt           DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@index([companyId, status])
+  @@index([deviceId, status, createdAt])
+  @@index([createdByUserId, createdAt])
 }
 
 model VehicleImage {
