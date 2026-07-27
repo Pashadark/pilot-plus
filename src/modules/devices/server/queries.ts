@@ -65,6 +65,7 @@ type RawCommand = {
   firmwareReleaseId: string | null;
   targetFirmwareVersion: string | null;
   errorMessage: string | null;
+  createdByUser?: { name: string } | null;
   createdAt: Date;
   sentAt: Date | null;
   completedAt: Date | null;
@@ -157,6 +158,7 @@ const deviceDetailsSelect = {
       firmwareReleaseId: true,
       targetFirmwareVersion: true,
       errorMessage: true,
+      createdByUser: { select: { name: true } },
       createdAt: true,
       sentAt: true,
       completedAt: true,
@@ -216,6 +218,7 @@ function mapCommand(command: RawCommand): DeviceCommandItem {
     firmwareReleaseId: command.firmwareReleaseId,
     targetFirmwareVersion: command.targetFirmwareVersion,
     errorMessage: command.errorMessage,
+    createdByName: command.createdByUser?.name ?? null,
     createdAt: command.createdAt.toISOString(),
     sentAt: command.sentAt?.toISOString() ?? null,
     completedAt: command.completedAt?.toISOString() ?? null,

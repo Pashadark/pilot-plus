@@ -36,6 +36,7 @@ export type DeviceCommandItem = {
   firmwareReleaseId: string | null;
   targetFirmwareVersion: string | null;
   errorMessage: string | null;
+  createdByName: string | null;
   createdAt: string;
   sentAt: string | null;
   completedAt: string | null;
@@ -73,8 +74,8 @@ export type DeviceDetails = DeviceListItem & {
   installedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  commands: DeviceCommandItem[];
-  availableFirmwareReleases: FirmwareReleaseItem[];
+  commands: readonly DeviceCommandItem[];
+  availableFirmwareReleases: readonly FirmwareReleaseItem[];
 };
 
 export type DeviceActionState = {
