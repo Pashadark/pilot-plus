@@ -1,45 +1,38 @@
-# Task 3 report — контракты домена Pilot Connect
+# Task 3 — контракты и нормализация единой истории
 
 ## Результат
 
-- Добавлены сериализуемые контракты `DeviceListItem`, `DeviceDetails`,
-  `DeviceCommandItem` и `FirmwareReleaseItem`, а также связанные enum-like типы и
-  `DeviceActionState`.
-- `getEffectiveDeviceStatus` сначала отдаёт `UNASSIGNED` для устройства без
-  автомобиля, затем переводит сохранённый `ONLINE` в `OFFLINE` только после более чем
-  15 минут без связи. Ровно 15 минут остаются `ONLINE`.
-- Метаданные статусов используют утверждённые русские подписи: «Онлайн», «Офлайн»,
-  «Требует внимания», «Не привязано» и «Отключено».
-- Zod-схемы проверяют границы имени, серийного номера, IMEI, версий, bounded ID и
-  discriminated union команд. Обновление требует `firmwareReleaseId`; reboot/shutdown
-  не принимают firmware-поля.
-- `canUpdateFirmware` принимает ровно три числовых сегмента и возвращает `true` только
-  для строго более новой версии.
+- `zod@4.4.3` объявлен прямой production-зависимостью; `npm ls zod --depth=0`
+  подтверждает его наличие.
+- Добавлены сериализуемые `TimelineCategory`, `TimelineSeverity` и
+  `TimelineEventDto` без Prisma-типов.
+- Добавлены безопасные стабильные ключи источника `source:id` и их парсинг.
+- Реализованы pure normalizers для позиции, поездки, телематического события,
+  топлива, ТО, мойки, команды устройства и ручной записи. Все принимают raw
+  интерфейсы рядом с normalizers и преобразуют Decimal-like значения в числа.
+- Добавлена строгая Zod-схема создания ручного события: нормализация текста,
+  допустимые координаты, обязательная пара широты/долготы и ISO timestamp с offset.
+- Добавлены схемы одного ключа прочтения и пакета от 1 до 100 ключей.
 
 ## TDD
 
-### RED
-
-До реализации выполнен focused Vitest. Три suite ожидаемо завершились с ошибками
-`Cannot find module './status'`, `Cannot find module './validation'` и
-`Cannot find module './firmware'`: production-модули ещё отсутствовали.
-
-### GREEN
-
-После минимальной реализации focused-набор прошёл: 3 файла, 15 тестов.
+До реализации three focused test suites завершились с ожидаемыми ошибками импорта
+отсутствующих `event-key`, `normalizers` и `validation`. После минимальной реализации
+focused-набор проходит: 3 файла, 19 тестов.
 
 ## Проверки
 
 | Проверка | Результат |
 | --- | --- |
-| Focused Vitest | PASS — 3 файла, 15 тестов |
+| `npm ls zod --depth=0` | PASS — `zod@4.4.3` direct dependency |
+| Focused Vitest | PASS — 3 файла, 19 тестов |
 | `npm run typecheck` | PASS |
-| `npm run lint -- src/modules/devices` | PASS |
+| `npx eslint src/modules/events` | PASS |
 | Scoped Prettier | PASS |
 | `git diff --check` | PASS |
 
 ## Границы
 
-- Prisma schema, миграции, seed, Server Actions, страницы и другие модули не менялись.
-- Полный unit/e2e-набор намеренно не запускался: задача ограничена чистыми доменными
-  контрактами.
+- Не менялись Prisma schema/migrations, seed, queries, Server Actions и UI.
+- Normalizers намеренно не импортируют Prisma Client; доступ к данным остаётся
+  задачей server-query слоя.
