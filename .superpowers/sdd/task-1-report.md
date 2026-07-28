@@ -1,61 +1,63 @@
-# Task 1 — Prisma-модели Pilot Connect
+# Task 1 — Prisma-модели единой истории событий
+
+## Scope
+
+Реализован фундамент единой истории событий Pilot+ только на уровне Prisma-схемы и
+additive SQL-миграции. Изменения создают ручные события автомобиля и идемпотентные
+отметки прочтения. Миграция к базе данных не применялась.
 
 ## RED
 
-До изменения схемы создан `src/database/prisma/device-schema.test.ts` и выполнена команда:
+Сначала создан `src/database/prisma/event-timeline-schema.test.ts` строго по brief и
+выполнена команда:
 
 ```powershell
-npx vitest run src/database/prisma/device-schema.test.ts
+npx vitest run src/database/prisma/event-timeline-schema.test.ts
 ```
 
-Результат: 4 из 5 проверок упали ожидаемо — отсутствовали модели `Device`,
-`FirmwareRelease`, `DeviceCommand` и индекс очереди устройства. Проверка существующего
-`vehicleId`/`@unique` прошла, так как эти подстроки уже были в модели `Vehicle`.
+Результат: suite завершился с ожидаемой ошибкой `ENOENT`: ещё не существовал файл
+`src/database/prisma/migrations/20260727180000_add_event_timeline/migration.sql`.
+Это подтверждает, что проверка была добавлена до новой схемы и миграции.
 
 ## GREEN
 
-Добавлены точные enum-модели и связи из brief, а также один additive migration-каталог
-`20260727120000_add_pilot_connect_devices`. SQL создаёт enum-типы, таблицы, индексы и
-внешние ключи, а затем добавляет DB-level ограничения диапазонов сигнала, заряда,
-спутников и координат.
-
-Повторная schema-проверка:
-
-```powershell
-npx prisma format
-npx vitest run src/database/prisma/device-schema.test.ts src/database/prisma/schema.test.ts
-```
-
-Результат: 2 test files, 11 tests passed.
+- Добавлен enum `ManualVehicleEventKind` со значениями `NOTE`, `INCIDENT` и
+  `ASSIGNMENT`.
+- Добавлена `ManualVehicleEvent`: tenant, автомобиль, автор с `RESTRICT`, тип,
+  серьёзность, текст, необязательные координаты и хронологические индексы.
+- Добавлена `EventReadReceipt`: tenant, пользователь, `eventKey VARCHAR(191)`,
+  idempotent-ограничение `@@unique([userId, eventKey])` и индекс выдачи прочтений.
+- В `Company`, `User` и `Vehicle` добавлены только новые relation arrays, без
+  переименования существующих связей.
+- Создана миграция `20260727180000_add_event_timeline`: enum, две таблицы, все
+  индексы и foreign keys, а также PostgreSQL `CHECK`-ограничения широты, долготы и
+  длины ключа события от 3 до 191 символа.
 
 ## Изменённые файлы
 
 - `src/database/prisma/schema.prisma`
-- `src/database/prisma/migrations/20260727120000_add_pilot_connect_devices/migration.sql`
-- `src/database/prisma/device-schema.test.ts`
+- `src/database/prisma/migrations/20260727180000_add_event_timeline/migration.sql`
+- `src/database/prisma/event-timeline-schema.test.ts`
+- `.superpowers/sdd/task-1-report.md`
 
-## Выполненные проверки
+## Проверки
 
 ```powershell
 npx prisma format
-$env:DATABASE_URL='<parseable PostgreSQL URL>'; npx prisma validate
+$env:DATABASE_URL='postgresql://pilot:pilot@127.0.0.1:5432/pilot'; npx prisma validate
 npx prisma generate
-npx vitest run src/database/prisma/device-schema.test.ts src/database/prisma/schema.test.ts
+npx vitest run src/database/prisma/event-timeline-schema.test.ts src/database/prisma/schema.test.ts
 npm run typecheck
-npx eslint src/database/prisma/device-schema.test.ts
-npx prettier --check src/database/prisma/device-schema.test.ts
-git diff --check
+npx eslint src/database/prisma/event-timeline-schema.test.ts
 ```
 
-`prisma validate` получил URL только в процессе команды: это необходимо для разбора
-datasource и не подключает либо не изменяет базу. Миграция не запускалась.
+Результаты: schema valid, Prisma Client generated, 2 test files / 11 tests passed,
+typecheck passed, scoped ESLint passed. `DATABASE_URL` задавался только для разбора
+datasource Prisma; соединение с БД и применение миграции не выполнялись.
 
-## Ограничения
+## Ограничения и concerns
 
-- Prisma не представляет PostgreSQL `CHECK`-ограничения, поэтому пять диапазонов живут в
-  additive SQL-миграции.
-- Проверка принадлежности выбранного автомобиля той же компании и запрет конфликтующей
-  активной команды относятся к tenant-scoped Server Actions следующей задачи; текущая
-  схема и миграция точно соответствуют утверждённому Task 1 brief.
-- Prettier не содержит parser для `.prisma` или `.sql`; схема форматируется `prisma format`,
-  а scoped Prettier-проверка применена к новому TypeScript-тесту.
+- Prisma не моделирует PostgreSQL `CHECK`-ограничения, поэтому они намеренно
+  находятся в новой SQL-миграции.
+- `npx prisma` выводит уже известное предупреждение о deprecated
+  `package.json#prisma`; задача не меняет конфигурацию Prisma вне scope.
