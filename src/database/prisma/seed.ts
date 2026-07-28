@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 
 import { prisma } from './client';
 import { seedPilotConnectDevices } from './device-seed';
+import { seedVehicleEventTimeline } from './event-timeline-seed';
 import { parseFleetSource, type FleetImportRow } from './fleet-import';
 import { parseVehicleImageManifest, type VehicleImageManifestRow } from './vehicle-images';
 import { hashPassword } from '@/services/auth/password';
@@ -242,6 +243,17 @@ async function main() {
     );
     console.info(
       `Pilot Connect: ${devices.devices} устройств, ${devices.firmwareReleases} прошивки, ${devices.commands} команд`,
+    );
+
+    const timeline = await seedVehicleEventTimeline(
+      prisma,
+      fleet.companyId,
+      admin.userId,
+      fleetVehicles,
+    );
+    console.info(
+      `История: ${timeline.trips} поездок, ${timeline.events} событий, ` +
+        `${timeline.fuelRecords} операций с топливом, ${timeline.manualEvents} ручных записей`,
     );
   } finally {
     await prisma.$disconnect();
