@@ -528,6 +528,13 @@ describe('tenant-safe event timeline queries', () => {
         to: '2026-07-28T12:00:00.000Z',
       }),
     ).rejects.toThrow('90');
+
+    await expect(queries.getEventTimeline({ limit: 51 })).rejects.toThrow('50');
+
+    for (const receiptCall of fake.calls.eventReadReceipt) {
+      expect(receiptCall).toMatchObject({ take: expect.any(Number) });
+      expect((receiptCall as { take: number }).take).toBeLessThanOrEqual(50);
+    }
   });
 
   it('returns serialized vehicle options and no tenant data without an authenticated membership', async () => {

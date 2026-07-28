@@ -17,3 +17,15 @@
 - PASS — `npm run typecheck`.
 - PASS — `npx eslint src/modules/events/server`.
 - PASS — `git diff --check`.
+
+## Исправление по review (29 июля 2026)
+
+- `MAX_PAGE_SIZE` снижен с 100 до 50, поэтому `read: 'all'` не может передать в
+  запрос квитанций более 50 ключей.
+- Удалены неиспользуемые поля `fixedCategory` и `fixedSeverity` у внутренних
+  source-specifications без изменения нормализации.
+- PASS — `npx vitest run src/modules/events/server/queries.test.ts` (6/6); новый
+  регрессионный сценарий отклоняет `limit: 51` и проверяет `eventReadReceipt.take <= 50`.
+- PASS — `npm run typecheck`.
+- PASS — `npx eslint src/modules/events/server`.
+- PASS — `git diff --check`.

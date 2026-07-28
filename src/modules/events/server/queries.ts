@@ -19,7 +19,7 @@ import type { TimelineCategory, TimelineEventDto, TimelineSeverity } from '../ty
 
 const SOURCE_BATCH_SIZE = 50;
 const DEFAULT_PAGE_SIZE = 30;
-const MAX_PAGE_SIZE = 100;
+const MAX_PAGE_SIZE = 50;
 const DEFAULT_PERIOD_DAYS = 30;
 const MAX_PERIOD_DAYS = 90;
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
@@ -93,8 +93,6 @@ type SourceSpec = {
   select: Record<string, unknown>;
   orderBy: Array<Record<string, 'asc' | 'desc'>>;
   distinct?: string[];
-  fixedCategory?: TimelineCategory;
-  fixedSeverity?: TimelineSeverity;
   countable: boolean;
   normalize(record: unknown): TimelineEventDto;
 };
@@ -379,8 +377,6 @@ function createSourceSpecs(
       select: positionSelect,
       orderBy: [{ recordedAt: 'desc' }, { id: 'asc' }],
       distinct: ['vehicleId'],
-      fixedCategory: 'MOVEMENT',
-      fixedSeverity: 'INFO',
       countable: false,
       normalize: (record) =>
         normalizeVehiclePosition({
@@ -401,8 +397,6 @@ function createSourceSpecs(
       },
       select: tripSelect,
       orderBy: [{ endedAt: 'desc' }, { id: 'asc' }],
-      fixedCategory: 'TRIP',
-      fixedSeverity: 'INFO',
       countable: true,
       normalize: (record) => normalizeTrip(withMappedVehicle(record) as never),
     });
@@ -420,8 +414,6 @@ function createSourceSpecs(
       },
       select: tripSelect,
       orderBy: [{ startedAt: 'desc' }, { id: 'asc' }],
-      fixedCategory: 'MOVEMENT',
-      fixedSeverity: 'INFO',
       countable: true,
       normalize: (record) => normalizeTrip(withMappedVehicle(record) as never),
     });
@@ -438,7 +430,6 @@ function createSourceSpecs(
       },
       select: vehicleEventSelect,
       orderBy: [{ recordedAt: 'desc' }, { id: 'asc' }],
-      fixedCategory: 'ALERT',
       countable: true,
       normalize: (record) => normalizeVehicleEvent(withMappedVehicle(record) as never),
     });
@@ -455,7 +446,6 @@ function createSourceSpecs(
       },
       select: fuelRecordSelect,
       orderBy: [{ recordedAt: 'desc' }, { id: 'asc' }],
-      fixedCategory: 'FUEL',
       countable: true,
       normalize: (record) => normalizeFuelRecord(withMappedVehicle(record) as never),
     });
@@ -473,7 +463,6 @@ function createSourceSpecs(
         },
         select: maintenanceRecordSelect,
         orderBy: [{ completedAt: 'desc' }, { id: 'asc' }],
-        fixedCategory: 'MAINTENANCE',
         countable: true,
         normalize: (record) => normalizeMaintenanceRecord(withMappedVehicle(record) as never),
       },
@@ -488,7 +477,6 @@ function createSourceSpecs(
         },
         select: maintenanceRecordSelect,
         orderBy: [{ scheduledAt: 'desc' }, { id: 'asc' }],
-        fixedCategory: 'MAINTENANCE',
         countable: true,
         normalize: (record) => normalizeMaintenanceRecord(withMappedVehicle(record) as never),
       },
@@ -507,8 +495,6 @@ function createSourceSpecs(
         },
         select: washRecordSelect,
         orderBy: [{ completedAt: 'desc' }, { id: 'asc' }],
-        fixedCategory: 'WASH',
-        fixedSeverity: 'INFO',
         countable: true,
         normalize: (record) => normalizeWashRecord(withMappedVehicle(record) as never),
       },
@@ -523,8 +509,6 @@ function createSourceSpecs(
         },
         select: washRecordSelect,
         orderBy: [{ scheduledAt: 'desc' }, { id: 'asc' }],
-        fixedCategory: 'WASH',
-        fixedSeverity: 'INFO',
         countable: true,
         normalize: (record) => normalizeWashRecord(withMappedVehicle(record) as never),
       },
@@ -597,7 +581,6 @@ function createSourceSpecs(
       },
       select: manualVehicleEventSelect,
       orderBy: [{ recordedAt: 'desc' }, { id: 'asc' }],
-      fixedCategory: 'MANUAL',
       countable: true,
       normalize: (record) => normalizeManualVehicleEvent(withMappedVehicle(record) as never),
     });
