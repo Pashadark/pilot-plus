@@ -425,11 +425,11 @@ Use interleaved fixtures from all sources. Assert:
 expect(result.events.map((event) => event.key)).toEqual([
   'vehicle-event:event-new',
   'trip:trip-same-time',
-  'manual:manual-old',
+  'manual-vehicle-event:manual-old',
 ]);
 expect(result.nextCursor).toEqual({
   before: '2026-07-20T10:00:00.000Z',
-  beforeKey: 'manual:manual-old',
+  beforeKey: 'manual-vehicle-event:manual-old',
 });
 ```
 
