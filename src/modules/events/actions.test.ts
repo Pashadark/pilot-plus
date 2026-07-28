@@ -200,7 +200,7 @@ describe('действия истории событий', () => {
     timelineMocks.getEventTimeline.mockResolvedValue(timeline(['vehicle-event:event-1']));
 
     await expect(
-      markAllEventsReadAction({ vehicleId: 'vehicle-1', limit: 100, read: 'unread' }),
+      markAllEventsReadAction({ vehicleId: 'vehicle-1', limit: 50, read: 'unread' }),
     ).resolves.toEqual({
       status: 'success',
       message: 'События отмечены прочитанными.',
@@ -208,7 +208,7 @@ describe('действия истории событий', () => {
 
     expect(timelineMocks.getEventTimeline).toHaveBeenCalledWith({
       vehicleId: 'vehicle-1',
-      limit: 100,
+      limit: 50,
       read: 'unread',
     });
     expect(transaction.eventReadReceipt.upsert).toHaveBeenCalledTimes(1);
