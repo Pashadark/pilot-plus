@@ -21,6 +21,27 @@ const categoryLabel = {
   MANUAL: 'Ручная запись',
 };
 
+const headingLabels = [
+  'Север',
+  'Северо-восток',
+  'Восток',
+  'Юго-восток',
+  'Юг',
+  'Юго-запад',
+  'Запад',
+  'Северо-запад',
+];
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(value);
+}
+
+function formatHeading(value: number) {
+  const normalized = ((value % 360) + 360) % 360;
+  const label = headingLabels[Math.round(normalized / 45) % headingLabels.length];
+  return `${label} (${formatNumber(normalized)}°)`;
+}
+
 export function EventTimelineCard({
   event,
   onMarkRead,
@@ -73,6 +94,22 @@ export function EventTimelineCard({
           ) : null}
           {event.telemetry.speedKph !== null ? (
             <p className="mt-2 text-sm">Скорость: {event.telemetry.speedKph} км/ч</p>
+          ) : null}
+          {event.telemetry.heading !== null ? (
+            <p className="mt-1 text-sm">Направление: {formatHeading(event.telemetry.heading)}</p>
+          ) : null}
+          {event.telemetry.odometerKm !== null ? (
+            <p className="mt-1 text-sm">Пробег: {formatNumber(event.telemetry.odometerKm)} км</p>
+          ) : null}
+          {event.telemetry.fuelLevelPercent !== null ? (
+            <p className="mt-1 text-sm">
+              Уровень топлива: {formatNumber(event.telemetry.fuelLevelPercent)} %
+            </p>
+          ) : null}
+          {event.telemetry.fuelVolumeLiters !== null ? (
+            <p className="mt-1 text-sm">
+              Объём топлива: {formatNumber(event.telemetry.fuelVolumeLiters)} л
+            </p>
           ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
             {event.source.href ? (

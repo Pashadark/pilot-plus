@@ -36,10 +36,10 @@ const event = {
   coordinates: null,
   telemetry: {
     speedKph: 95,
-    heading: null,
-    odometerKm: null,
-    fuelLevelPercent: null,
-    fuelVolumeLiters: null,
+    heading: 90,
+    odometerKm: 12345,
+    fuelLevelPercent: 45.5,
+    fuelVolumeLiters: 37.2,
   },
   source: { type: 'vehicle-event', id: 'event-1', href: '/vehicles/vehicle-1?tab=events' },
 };
@@ -67,6 +67,11 @@ describe('workspace истории событий', () => {
     expect(screen.getByText('3')).toBeTruthy();
     expect(screen.getAllByText('Критическое').length).toBeGreaterThan(1);
     expect(screen.getByText('Не прочитано')).toBeTruthy();
+    expect(screen.getByText('Скорость: 95 км/ч')).toBeTruthy();
+    expect(screen.getByText('Направление: Восток (90°)')).toBeTruthy();
+    expect(screen.getByText(/Пробег: 12\s345 км/)).toBeTruthy();
+    expect(screen.getByText('Уровень топлива: 45,5 %')).toBeTruthy();
+    expect(screen.getByText('Объём топлива: 37,2 л')).toBeTruthy();
     expect(screen.getByTestId('events-desktop-filters')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Открыть фильтры' })).toBeTruthy();
   });
@@ -107,13 +112,29 @@ describe('workspace истории событий', () => {
     expect(routerMocks.refresh).toHaveBeenCalled();
   });
 
-  it('сохраняет фильтры в cursor-ссылке и различает пустую историю и пустой фильтр', () => {
-    const { rerender } = render(createElement(EventsWorkspace, props));
-    expect(screen.getByRole('link', { name: 'Показать ещё' }).getAttribute('href')).toContain(
-      'beforeKey=trip%3Atrip-1',
+  it('сохраняет все фильтры в cursor-ссылке и различает пустую историю и пустой фильтр', () => {
+    const multiFilters = {
+      ...props.filters,
+      categories: ['ALERT', 'FUEL'] as ('ALERT' | 'FUEL')[],
+      severities: ['WARNING', 'DANGER'] as ('WARNING' | 'DANGER')[],
+      read: 'all' as const,
+    };
+    const { rerender } = render(
+      createElement(EventsWorkspace, { ...props, filters: multiFilters }),
     );
+    const href = screen.getByRole('link', { name: 'Показать ещё' }).getAttribute('href') ?? '';
+    expect(href).toContain('category=ALERT%2CFUEL');
+    expect(href).toContain('severity=WARNING%2CDANGER');
+    expect(href).toContain('beforeKey=trip%3Atrip-1');
 
-    rerender(createElement(EventsWorkspace, { ...props, events: [], nextCursor: null }));
+    rerender(
+      createElement(EventsWorkspace, {
+        ...props,
+        filters: multiFilters,
+        events: [],
+        nextCursor: null,
+      }),
+    );
     expect(screen.getByText('По выбранным фильтрам событий нет')).toBeTruthy();
 
     rerender(
@@ -121,9 +142,9 @@ describe('workspace истории событий', () => {
         ...props,
         events: [],
         nextCursor: null,
-        filters: { limit: 30 },
+        filters: { limit: 30, read: 'all' },
       }),
     );
-    expect(screen.getByText('История пока пуста')).toBeTruthy();
+    expect(screen.getByText('История пока пуста.')).toBeTruthy();
   });
 });

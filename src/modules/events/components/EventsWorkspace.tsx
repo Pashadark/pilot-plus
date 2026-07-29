@@ -21,7 +21,7 @@ function hasActiveFilters(filters: TimelineFilters) {
     filters.vehicleId ||
     filters.categories?.length ||
     filters.severities?.length ||
-    filters.read ||
+    (filters.read && filters.read !== 'all') ||
     filters.from ||
     filters.to,
   );
@@ -31,8 +31,8 @@ function loadMoreHref(filters: TimelineFilters, cursor: { before: string; before
   const params = new URLSearchParams();
   if (filters.search) params.set('search', filters.search);
   if (filters.vehicleId) params.set('vehicle', filters.vehicleId);
-  if (filters.categories?.[0]) params.set('category', filters.categories[0]);
-  if (filters.severities?.[0]) params.set('severity', filters.severities[0]);
+  if (filters.categories?.length) params.set('category', filters.categories.join(','));
+  if (filters.severities?.length) params.set('severity', filters.severities.join(','));
   if (filters.read) params.set('read', filters.read);
   if (filters.from) params.set('from', filters.from);
   if (filters.to) params.set('to', filters.to);
@@ -134,7 +134,9 @@ export function EventsWorkspace({
         ) : (
           <EmptyState
             title={
-              hasActiveFilters(filters) ? 'По выбранным фильтрам событий нет' : 'История пока пуста'
+              hasActiveFilters(filters)
+                ? 'По выбранным фильтрам событий нет'
+                : 'История пока пуста.'
             }
             description={
               hasActiveFilters(filters)
