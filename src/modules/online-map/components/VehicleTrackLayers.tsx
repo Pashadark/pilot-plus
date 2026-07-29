@@ -13,6 +13,7 @@ const TRACK_EVENTS_SOURCE_ID = 'vehicle-track-events';
 const TRACK_ENDPOINTS_SOURCE_ID = 'vehicle-track-endpoints';
 
 const TRACK_LAYER_IDS = [
+  'vehicle-track-event-hitbox',
   'vehicle-track-event-counts',
   'vehicle-track-events',
   'vehicle-track-endpoint-labels',
@@ -178,9 +179,9 @@ export function mountVehicleTrackLayers(
   const cleanup = () => {
     map.off('mousemove', 'vehicle-track-hitbox', handleSegmentMove);
     map.off('mouseleave', 'vehicle-track-hitbox', handleSegmentLeave);
-    map.off('mousemove', 'vehicle-track-events', handleEventMove);
-    map.off('mouseleave', 'vehicle-track-events', handleEventLeave);
-    map.off('click', 'vehicle-track-events', handleEventClick);
+    map.off('mousemove', 'vehicle-track-event-hitbox', handleEventMove);
+    map.off('mouseleave', 'vehicle-track-event-hitbox', handleEventLeave);
+    map.off('click', 'vehicle-track-event-hitbox', handleEventClick);
 
     for (const layerId of TRACK_LAYER_IDS) {
       if (map.getLayer(layerId)) map.removeLayer(layerId);
@@ -318,6 +319,15 @@ export function mountVehicleTrackLayers(
         'text-color': '#ffffff',
       },
     });
+    map.addLayer({
+      id: 'vehicle-track-event-hitbox',
+      type: 'circle',
+      source: TRACK_EVENTS_SOURCE_ID,
+      paint: {
+        'circle-radius': 22,
+        'circle-color': 'rgba(0, 0, 0, 0)',
+      },
+    });
 
     for (const event of trackViewModel.eventGroups) {
       map.setFeatureState(
@@ -328,9 +338,9 @@ export function mountVehicleTrackLayers(
 
     map.on('mousemove', 'vehicle-track-hitbox', handleSegmentMove);
     map.on('mouseleave', 'vehicle-track-hitbox', handleSegmentLeave);
-    map.on('mousemove', 'vehicle-track-events', handleEventMove);
-    map.on('mouseleave', 'vehicle-track-events', handleEventLeave);
-    map.on('click', 'vehicle-track-events', handleEventClick);
+    map.on('mousemove', 'vehicle-track-event-hitbox', handleEventMove);
+    map.on('mouseleave', 'vehicle-track-event-hitbox', handleEventLeave);
+    map.on('click', 'vehicle-track-event-hitbox', handleEventClick);
   } catch (error) {
     cleanup();
     throw error;

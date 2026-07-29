@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
@@ -14,9 +14,16 @@ import { OnlineFleetMap } from './OnlineFleetMap';
 
 const mapMocks = vi.hoisted(() => {
   const canvas = document.createElement('canvas');
+  const loadHandlers = new Set<() => void>();
 
   return {
     canvas,
+    loadHandlers,
+    fireLoad: () => {
+      const handlers = [...loadHandlers];
+      loadHandlers.clear();
+      handlers.forEach((handler) => handler());
+    },
     mapOff: vi.fn(),
     mapOnce: vi.fn(),
     mapOn: vi.fn(),
@@ -33,6 +40,31 @@ const mapMocks = vi.hoisted(() => {
     mapFitBounds: vi.fn(),
     markerRemove: vi.fn(),
     popupRemove: vi.fn(),
+    reactRootContainers: [] as (Element | Document | DocumentFragment)[],
+    reactRootUnmount: vi.fn(),
+  };
+});
+
+vi.mock('react-dom/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-dom/client')>();
+
+  return {
+    ...actual,
+    createRoot: (
+      container: Parameters<typeof actual.createRoot>[0],
+      options?: Parameters<typeof actual.createRoot>[1],
+    ) => {
+      const root = actual.createRoot(container, options);
+      mapMocks.reactRootContainers.push(container);
+
+      return {
+        render: root.render.bind(root),
+        unmount: () => {
+          mapMocks.reactRootUnmount(container);
+          root.unmount();
+        },
+      };
+    },
   };
 });
 
@@ -40,9 +72,7 @@ vi.mock('maplibre-gl', () => {
   class Map {
     getCanvas = vi.fn(() => mapMocks.canvas);
     addControl = vi.fn();
-    once = mapMocks.mapOnce.mockImplementation(
-      (_event: string, handler: () => void) => void window.setTimeout(handler, 0),
-    );
+    once = mapMocks.mapOnce;
     on = mapMocks.mapOn;
     off = mapMocks.mapOff;
     loaded = mapMocks.mapLoaded;
@@ -129,6 +159,16 @@ function getTrackViewModel(vehicleId: string): VehicleTrackViewModel {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mapMocks.loadHandlers.clear();
+  mapMocks.reactRootContainers.length = 0;
+  mapMocks.mapOnce.mockImplementation((event: string, handler: () => void) => {
+    if (event === 'load') mapMocks.loadHandlers.add(handler);
+  });
+  mapMocks.mapOff.mockImplementation((event: string, layerOrHandler: string | (() => void)) => {
+    if (event === 'load' && typeof layerOrHandler === 'function') {
+      mapMocks.loadHandlers.delete(layerOrHandler);
+    }
+  });
   mapMocks.mapLoaded.mockReturnValue(true);
   mapMocks.mapGetLayer.mockReturnValue({});
   mapMocks.mapGetSource.mockReturnValue({});
@@ -188,6 +228,7 @@ it('удаляет обработчики, popup, источники и слои
     createElement(OnlineFleetMap, { ...props, trackViewModel: firstTrack }),
   );
 
+  act(() => mapMocks.fireLoad());
   await waitFor(() => expect(mapMocks.mapResize).toHaveBeenCalled());
 
   rerender(
@@ -207,6 +248,38 @@ it('удаляет обработчики, popup, источники и слои
   expect(mapMocks.mapRemoveLayer).toHaveBeenCalledWith('vehicle-track-lines');
   expect(mapMocks.mapRemoveSource).toHaveBeenCalledWith('vehicle-track');
   expect(mapMocks.popupRemove).toHaveBeenCalled();
+});
+
+it('монтирует новый маршрут сразу после первого load, даже если loaded временно false', async () => {
+  const firstTrack = getTrackViewModel('lada-vesta-a123mr77');
+  const secondTrack = getTrackViewModel('haval-jolion-v456kh178');
+  mapMocks.mapLoaded.mockReturnValue(false);
+  const props = {
+    vehicles,
+    selectedVehicleId: vehicles[0].id,
+    playbackPoint: firstTrack.start,
+    selectedEventId: null,
+    onVehicleSelect: vi.fn(),
+    onEventSelect: vi.fn(),
+    onPlaybackProgressRequest: vi.fn(),
+  };
+  const { rerender } = render(
+    createElement(OnlineFleetMap, { ...props, trackViewModel: firstTrack }),
+  );
+
+  act(() => mapMocks.fireLoad());
+  await waitFor(() => expect(mapMocks.mapAddSource).toHaveBeenCalledTimes(3));
+  mapMocks.mapAddSource.mockClear();
+
+  rerender(
+    createElement(OnlineFleetMap, {
+      ...props,
+      trackViewModel: secondTrack,
+      playbackPoint: secondTrack.start,
+    }),
+  );
+
+  await waitFor(() => expect(mapMocks.mapAddSource).toHaveBeenCalledTimes(3));
 });
 
 it('сериализует сегменты и события в GeoJSON без потери координат маршрута', async () => {
@@ -279,6 +352,28 @@ it('регистрирует видимую линию, hitbox, события, 
     expect.objectContaining({ id: 'vehicle-track-events', type: 'circle' }),
   );
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'vehicle-track-event-hitbox',
+      type: 'circle',
+      paint: expect.objectContaining({ 'circle-radius': 22 }),
+    }),
+  );
+  expect(mapMocks.mapOn).toHaveBeenCalledWith(
+    'mousemove',
+    'vehicle-track-event-hitbox',
+    expect.any(Function),
+  );
+  expect(mapMocks.mapOn).toHaveBeenCalledWith(
+    'mouseleave',
+    'vehicle-track-event-hitbox',
+    expect.any(Function),
+  );
+  expect(mapMocks.mapOn).toHaveBeenCalledWith(
+    'click',
+    'vehicle-track-event-hitbox',
+    expect.any(Function),
+  );
+  expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
     expect.objectContaining({ id: 'vehicle-track-endpoints', type: 'circle' }),
   );
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
@@ -289,6 +384,11 @@ it('регистрирует видимую линию, hitbox, события, 
   expect(mapMocks.mapOff).toHaveBeenCalledWith(
     'mousemove',
     'vehicle-track-hitbox',
+    expect.any(Function),
+  );
+  expect(mapMocks.mapOff).toHaveBeenCalledWith(
+    'click',
+    'vehicle-track-event-hitbox',
     expect.any(Function),
   );
 });
@@ -304,4 +404,42 @@ it('показывает доступное русское описание сг
   expect(screen.getByText(`${event.timestamp} · ${event.speedKph} км/ч`)).toBeTruthy();
   expect(screen.getByText(event.address)).toBeTruthy();
   expect(screen.getByText(event.description)).toBeTruthy();
+});
+
+it('немедленно размонтирует popup root при ошибке регистрации трекового слоя', async () => {
+  const track = getTrackViewModel('lada-vesta-a123mr77');
+  const props = {
+    vehicles,
+    selectedVehicleId: vehicles[0].id,
+    onVehicleSelect: vi.fn(),
+  };
+  const { rerender } = render(createElement(OnlineFleetMap, props));
+
+  act(() => mapMocks.fireLoad());
+  await waitFor(() => expect(mapMocks.mapResize).toHaveBeenCalled());
+
+  mapMocks.reactRootContainers.length = 0;
+  mapMocks.reactRootUnmount.mockClear();
+  mapMocks.mapAddLayer.mockImplementationOnce(() => {
+    throw new Error('Тестовая ошибка слоя');
+  });
+
+  rerender(
+    createElement(OnlineFleetMap, {
+      ...props,
+      trackViewModel: track,
+      playbackPoint: track.start,
+      selectedEventId: null,
+      onEventSelect: vi.fn(),
+      onPlaybackProgressRequest: vi.fn(),
+    }),
+  );
+
+  await waitFor(() =>
+    expect(screen.getByRole('status').textContent).toContain('Маршрут временно недоступен'),
+  );
+  await act(async () => Promise.resolve());
+
+  expect(mapMocks.reactRootContainers).toHaveLength(1);
+  expect(mapMocks.reactRootUnmount).toHaveBeenCalledWith(mapMocks.reactRootContainers[0]);
 });

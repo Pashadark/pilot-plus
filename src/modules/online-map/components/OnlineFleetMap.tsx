@@ -67,6 +67,7 @@ export function OnlineFleetMap({
 }: OnlineFleetMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const mapReadyRef = useRef(false);
   const markersRef = useRef<MarkerResource[]>([]);
   const playbackMarkerRef = useRef<maplibregl.Marker | null>(null);
   const trackCleanupRef = useRef<(() => void) | null>(null);
@@ -114,6 +115,7 @@ export function OnlineFleetMap({
     const container = containerRef.current;
     if (!container || stableVehicles.length === 0) return;
 
+    mapReadyRef.current = false;
     const map = new maplibregl.Map({
       container,
       attributionControl: false,
@@ -146,6 +148,7 @@ export function OnlineFleetMap({
 
     const handleLoad = () => {
       window.clearTimeout(loadTimeout);
+      mapReadyRef.current = true;
       setFailedInstanceKey(null);
       map.resize();
     };
@@ -197,6 +200,7 @@ export function OnlineFleetMap({
       }
       markersRef.current = [];
       trackCleanupRef.current?.();
+      mapReadyRef.current = false;
       map.remove();
       mapRef.current = null;
     };
@@ -298,6 +302,11 @@ export function OnlineFleetMap({
         layersCleanup = null;
         segmentPopup?.remove();
         eventPopup?.remove();
+        if (eventPopupRoot) {
+          const root = eventPopupRoot;
+          eventPopupRoot = null;
+          queueMicrotask(() => root.unmount());
+        }
         playbackMarkerRef.current?.remove();
         playbackMarkerRef.current = null;
         setTrackLayerFailed(true);
@@ -306,7 +315,7 @@ export function OnlineFleetMap({
 
     trackCleanupRef.current = cleanupTrack;
 
-    if (map.loaded()) {
+    if (mapReadyRef.current) {
       mountTrack();
     } else {
       map.once('load', mountTrack);
@@ -344,7 +353,7 @@ export function OnlineFleetMap({
 
       if (playbackMarkerRef.current) {
         playbackMarkerRef.current.setLngLat([...playbackPoint.coordinates]);
-      } else if (map.loaded()) {
+      } else if (mapReadyRef.current) {
         playbackMarkerRef.current = createPlaybackMarker(map, playbackPoint);
       }
     } catch {
