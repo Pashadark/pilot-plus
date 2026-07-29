@@ -97,3 +97,48 @@ Task 4. Все файлы этой задачи отдельно проходя�
 - Build сохраняет известные warnings о нескольких lockfiles/workspace root и NFT tracing
   `next.config.ts`; сборка завершается успешно. Эти предупреждения не вызваны динамическими треками.
 - Новых зависимостей нет. Источник маршрутов остаётся `track-fixtures.ts`; API/MQTT не имитируется.
+
+## Исправления после review
+
+Все четыре замечания review закрыты:
+
+1. Desktop-сценарий `1440×900` вызывает `expectNoPageOverflow` сразу после готовности трека.
+2. `vehicle-track-a11y` стал настоящей visually-hidden surface размером `1×1`, с clipping и
+   `pointer-events: none`. Он не перехватывает мышь карты, но вложенные кнопки остаются доступны
+   через программный focus и Enter/Space.
+3. DOM и MapLibre вызывают один локальный `activateEvent`; прежние соседние event-select и
+   playback callbacks заменены единым `onEventActivate` от workspace до слоя.
+4. Keyboard E2E фокусирует скрытый сегмент маршрута и проверяет popup: `08:00–08:08`,
+   `Средняя скорость: 32 км/ч`, `Красноярск, ул. Дубровинского`.
+
+### Review RED
+
+```powershell
+npx vitest run src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts
+```
+
+Результат: `1 failed`, `8 passed`; ожидаемое падение:
+`TypeError: options.onEventSelect is not a function`. Новый regression-тест требовал единственный
+`onEventActivate`.
+
+```powershell
+npx playwright test tests/online-map.spec.ts --project=desktop --workers=1 --grep "показывает цветной маршрут"
+```
+
+Результат: `1 failed`; ожидаемое значение `pointer-events: none`, фактическое старое значение
+`pointer-events: auto`.
+
+### Review GREEN и финальная проверка
+
+| Команда | Свежий результат |
+| --- | --- |
+| `npx vitest run OnlineFleetMap.cleanup.test.ts OnlineMapWorkspace.test.tsx` | PASS: 2 файла, 22 теста |
+| focused desktop E2E двух динамических сценариев | PASS: 2 теста |
+| `npm run typecheck` | PASS, код `0` |
+| `npm run lint` | PASS, код `0`, без warnings |
+| `npm run test:unit` | PASS: 79 файлов, 384 теста |
+| `npx playwright test tests/online-map.spec.ts --workers=1` | PASS: 22, skipped: 4, код `0` |
+| `npm run build` | PASS, код `0`, 15/15 static pages |
+
+Во время полного E2E один OSM tile ответил `Failed to fetch`; MapLibre продолжил работу, все 22
+исполняемых сценария прошли. Это внешняя tile-сеть, а не ошибка трека.

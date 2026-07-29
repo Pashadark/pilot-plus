@@ -51,8 +51,7 @@ export interface OnlineFleetMapProps {
   playbackPoint: VehicleTrackPoint | null;
   selectedEventId: string | null;
   onVehicleSelect: (vehicle: OnlineMapVehicle) => void;
-  onEventSelect: (event: VehicleTrackEventView) => void;
-  onPlaybackProgressRequest: (event: VehicleTrackEventView) => void;
+  onEventActivate: (event: VehicleTrackEventView) => void;
   onPlaybackPointRequest: (progress: number) => void;
 }
 
@@ -63,8 +62,7 @@ export function OnlineFleetMap({
   playbackPoint,
   selectedEventId,
   onVehicleSelect,
-  onEventSelect,
-  onPlaybackProgressRequest,
+  onEventActivate,
   onPlaybackPointRequest,
 }: OnlineFleetMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -77,15 +75,13 @@ export function OnlineFleetMap({
   const selectedEventIdRef = useRef(selectedEventId);
   const onVehicleSelectRef = useRef(onVehicleSelect);
   const playbackPointRef = useRef(playbackPoint);
-  const onEventSelectRef = useRef(onEventSelect);
-  const onPlaybackProgressRequestRef = useRef(onPlaybackProgressRequest);
+  const onEventActivateRef = useRef(onEventActivate);
   const onPlaybackPointRequestRef = useRef(onPlaybackPointRequest);
   const segmentHoverRef = useRef<
     (segment: VehicleTrackSegment, coordinates: TrackCoordinates) => void
   >(() => {});
   const segmentLeaveRef = useRef(() => {});
-  const eventSelectRef = useRef<(event: VehicleTrackEventView, count: number) => void>(() => {});
-  const playbackProgressRequestRef = useRef<(event: VehicleTrackEventView) => void>(() => {});
+  const eventActivateRef = useRef<(event: VehicleTrackEventView, count: number) => void>(() => {});
   const [failedInstanceKey, setFailedInstanceKey] = useState<string | null>(null);
   const [trackLayerFailed, setTrackLayerFailed] = useState(false);
   const [trackInteractionKey, setTrackInteractionKey] = useState<string | null>(null);
@@ -114,12 +110,8 @@ export function OnlineFleetMap({
   }, [selectedEventId]);
 
   useEffect(() => {
-    onEventSelectRef.current = onEventSelect;
-  }, [onEventSelect]);
-
-  useEffect(() => {
-    onPlaybackProgressRequestRef.current = onPlaybackProgressRequest;
-  }, [onPlaybackProgressRequest]);
+    onEventActivateRef.current = onEventActivate;
+  }, [onEventActivate]);
 
   useEffect(() => {
     onPlaybackPointRequestRef.current = onPlaybackPointRequest;
@@ -269,8 +261,7 @@ export function OnlineFleetMap({
       playbackMarkerRef.current = null;
       segmentHoverRef.current = () => {};
       segmentLeaveRef.current = () => {};
-      eventSelectRef.current = () => {};
-      playbackProgressRequestRef.current = () => {};
+      eventActivateRef.current = () => {};
       setTrackInteractionKey((current) =>
         current === currentTrackInteractionKey ? null : current,
       );
@@ -301,30 +292,25 @@ export function OnlineFleetMap({
             .addTo(map);
         };
         const handleSegmentLeave = () => segmentPopup?.remove();
-        const handleEventSelect = (event: VehicleTrackEventView, count: number) => {
+        const activateEvent = (event: VehicleTrackEventView, count: number) => {
           if (!eventPopup || !eventPopupRoot) return;
           eventPopupRoot.render(<TrackEventPopup event={event} count={count} />);
           eventPopup
             .setLngLat([...event.coordinates])
             .setDOMContent(eventPopupElement)
             .addTo(map);
-          onEventSelectRef.current(event);
-        };
-        const handlePlaybackProgressRequest = (event: VehicleTrackEventView) => {
-          onPlaybackProgressRequestRef.current(event);
+          onEventActivateRef.current(event);
         };
         segmentHoverRef.current = handleSegmentHover;
         segmentLeaveRef.current = handleSegmentLeave;
-        eventSelectRef.current = handleEventSelect;
-        playbackProgressRequestRef.current = handlePlaybackProgressRequest;
+        eventActivateRef.current = activateEvent;
 
         layersCleanup = mountVehicleTrackLayers(map, {
           trackViewModel,
           selectedEventId: selectedEventIdRef.current,
           onSegmentHover: handleSegmentHover,
           onSegmentLeave: handleSegmentLeave,
-          onEventSelect: handleEventSelect,
-          onPlaybackProgressRequest: handlePlaybackProgressRequest,
+          onEventActivate: activateEvent,
         });
 
         fitTrackBounds(map, trackViewModel);
@@ -428,8 +414,7 @@ export function OnlineFleetMap({
           }
           onSegmentHover={(segment, coordinates) => segmentHoverRef.current(segment, coordinates)}
           onSegmentLeave={() => segmentLeaveRef.current()}
-          onEventSelect={(event, count) => eventSelectRef.current(event, count)}
-          onPlaybackProgressRequest={(event) => playbackProgressRequestRef.current(event)}
+          onEventActivate={(event, count) => eventActivateRef.current(event, count)}
           onPlaybackPointRequest={(progress) => onPlaybackPointRequestRef.current(progress)}
         />
       ) : null}

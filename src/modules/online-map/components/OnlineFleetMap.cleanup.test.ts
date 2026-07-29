@@ -231,8 +231,7 @@ it('поднимает мобильные контролы карты над п�
       playbackPoint: null,
       selectedEventId: null,
       onVehicleSelect: vi.fn(),
-      onEventSelect: vi.fn(),
-      onPlaybackProgressRequest: vi.fn(),
+      onEventActivate: vi.fn(),
       onPlaybackPointRequest: vi.fn(),
     }),
   );
@@ -253,8 +252,7 @@ it('удаляет обработчики, popup, источники и слои
     playbackPoint: firstTrack.start,
     selectedEventId: null,
     onVehicleSelect: vi.fn(),
-    onEventSelect: vi.fn(),
-    onPlaybackProgressRequest: vi.fn(),
+    onEventActivate: vi.fn(),
     onPlaybackPointRequest: vi.fn(),
   };
   const { rerender, unmount } = render(
@@ -293,8 +291,7 @@ it('монтирует новый маршрут сразу после перв�
     playbackPoint: firstTrack.start,
     selectedEventId: null,
     onVehicleSelect: vi.fn(),
-    onEventSelect: vi.fn(),
-    onPlaybackProgressRequest: vi.fn(),
+    onEventActivate: vi.fn(),
     onPlaybackPointRequest: vi.fn(),
   };
   const { rerender } = render(
@@ -346,6 +343,7 @@ it('сериализует сегменты и события в GeoJSON без 
 it('регистрирует видимую линию, hitbox, события, концы и направление маршрута', async () => {
   const { mountVehicleTrackLayers } = await import('./VehicleTrackLayers');
   const track = getTrackViewModel('lada-vesta-a123mr77');
+  const onEventActivate = vi.fn();
   const map = {
     addLayer: mapMocks.mapAddLayer,
     addSource: mapMocks.mapAddSource,
@@ -364,8 +362,7 @@ it('регистрирует видимую линию, hitbox, события, 
     selectedEventId: null,
     onSegmentHover: vi.fn(),
     onSegmentLeave: vi.fn(),
-    onEventSelect: vi.fn(),
-    onPlaybackProgressRequest: vi.fn(),
+    onEventActivate,
   });
 
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
@@ -406,6 +403,15 @@ it('регистрирует видимую линию, hitbox, события, 
     'click',
     'vehicle-track-event-hitbox',
     expect.any(Function),
+  );
+  const eventClickHandler = mapMocks.mapOn.mock.calls.find(
+    ([eventName, layerId]) => eventName === 'click' && layerId === 'vehicle-track-event-hitbox',
+  )?.[2] as ((event: { features: { id: string }[] }) => void) | undefined;
+  expect(eventClickHandler).toBeTypeOf('function');
+  eventClickHandler?.({ features: [{ id: track.eventGroups[0].id }] });
+  expect(onEventActivate).toHaveBeenCalledExactlyOnceWith(
+    track.eventGroups[0],
+    track.eventGroups[0].count,
   );
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
     expect.objectContaining({ id: 'vehicle-track-endpoints', type: 'circle' }),
@@ -449,8 +455,7 @@ it('немедленно размонтирует popup root при ошибке
     playbackPoint: null,
     selectedEventId: null,
     onVehicleSelect: vi.fn(),
-    onEventSelect: vi.fn(),
-    onPlaybackProgressRequest: vi.fn(),
+    onEventActivate: vi.fn(),
     onPlaybackPointRequest: vi.fn(),
   };
   const { rerender } = render(createElement(OnlineFleetMap, props));
@@ -470,8 +475,7 @@ it('немедленно размонтирует popup root при ошибке
       trackViewModel: track,
       playbackPoint: track.start,
       selectedEventId: null,
-      onEventSelect: vi.fn(),
-      onPlaybackProgressRequest: vi.fn(),
+      onEventActivate: vi.fn(),
     }),
   );
 

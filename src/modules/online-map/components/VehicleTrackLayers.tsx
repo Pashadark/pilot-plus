@@ -59,17 +59,12 @@ export interface MountVehicleTrackLayersOptions {
   selectedEventId: string | null;
   onSegmentHover: (segment: VehicleTrackSegment, coordinates: TrackCoordinates) => void;
   onSegmentLeave: () => void;
-  onEventSelect: (event: VehicleTrackEventView, count: number) => void;
-  onPlaybackProgressRequest: (event: VehicleTrackEventView) => void;
+  onEventActivate: (event: VehicleTrackEventView, count: number) => void;
 }
 
 interface VehicleTrackAccessibilitySurfaceProps extends Pick<
   MountVehicleTrackLayersOptions,
-  | 'trackViewModel'
-  | 'onSegmentHover'
-  | 'onSegmentLeave'
-  | 'onEventSelect'
-  | 'onPlaybackProgressRequest'
+  'trackViewModel' | 'onSegmentHover' | 'onSegmentLeave' | 'onEventActivate'
 > {
   ready: boolean;
   onPlaybackPointRequest: (progress: number) => void;
@@ -80,8 +75,7 @@ export function VehicleTrackAccessibilitySurface({
   ready,
   onSegmentHover,
   onSegmentLeave,
-  onEventSelect,
-  onPlaybackProgressRequest,
+  onEventActivate,
   onPlaybackPointRequest,
 }: VehicleTrackAccessibilitySurfaceProps) {
   return (
@@ -89,10 +83,10 @@ export function VehicleTrackAccessibilitySurface({
       data-testid="vehicle-track-a11y"
       data-track-date={trackViewModel.date}
       data-track-ready={String(ready)}
-      className="absolute top-0 left-0 z-10 h-2 w-24 overflow-hidden whitespace-nowrap"
+      className="pointer-events-none absolute size-px overflow-hidden border-0 p-0 whitespace-nowrap [clip-path:inset(50%)] [clip:rect(0,0,0,0)]"
       aria-label={`Маршрут за ${trackViewModel.date}`}
     >
-      {trackViewModel.segments.map((segment, index) => (
+      {trackViewModel.segments.map((segment) => (
         <button
           key={segment.id}
           type="button"
@@ -101,38 +95,26 @@ export function VehicleTrackAccessibilitySurface({
           data-from-coordinate={serializeCoordinates(segment.from.coordinates)}
           data-to-coordinate={serializeCoordinates(segment.to.coordinates)}
           aria-label={`Участок маршрута ${segment.from.timestamp}–${segment.to.timestamp}`}
-          className="absolute top-0 size-2 border-0 bg-transparent p-0"
-          style={{ left: index * 8, opacity: segment.opacity }}
+          style={{ opacity: segment.opacity }}
           disabled={!ready}
-          onMouseEnter={() => onSegmentHover(segment, segment.to.coordinates)}
-          onMouseLeave={onSegmentLeave}
           onFocus={() => onSegmentHover(segment, segment.to.coordinates)}
           onBlur={onSegmentLeave}
         />
       ))}
-      {trackViewModel.eventGroups.map((event, index) => (
+      {trackViewModel.eventGroups.map((event) => (
         <button
           key={event.id}
           type="button"
           data-coordinate={serializeCoordinates(event.coordinates)}
           aria-label={`Событие: ${event.title}`}
-          className="absolute top-0 size-2 border-0 bg-transparent p-0"
-          style={{ left: (trackViewModel.segments.length + index) * 8 }}
           disabled={!ready}
-          onClick={() => {
-            onEventSelect(event, event.count);
-            onPlaybackProgressRequest(event);
-          }}
+          onClick={() => onEventActivate(event, event.count)}
         />
       ))}
       <button
         type="button"
         data-coordinate={serializeCoordinates(trackViewModel.start.coordinates)}
         aria-label="Начало маршрута"
-        className="absolute top-0 size-2 border-0 bg-transparent p-0"
-        style={{
-          left: (trackViewModel.segments.length + trackViewModel.eventGroups.length) * 8,
-        }}
         disabled={!ready}
         onClick={() => onPlaybackPointRequest(0)}
       />
@@ -140,10 +122,6 @@ export function VehicleTrackAccessibilitySurface({
         type="button"
         data-coordinate={serializeCoordinates(trackViewModel.finish.coordinates)}
         aria-label="Конец маршрута"
-        className="absolute top-0 size-2 border-0 bg-transparent p-0"
-        style={{
-          left: (trackViewModel.segments.length + trackViewModel.eventGroups.length + 1) * 8,
-        }}
         disabled={!ready}
         onClick={() => onPlaybackPointRequest(100)}
       />
@@ -260,8 +238,7 @@ export function mountVehicleTrackLayers(
 
     if (!trackEvent) return;
 
-    options.onEventSelect(trackEvent, trackEvent.count);
-    options.onPlaybackProgressRequest(trackEvent);
+    options.onEventActivate(trackEvent, trackEvent.count);
   };
 
   const cleanup = () => {

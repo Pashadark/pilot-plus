@@ -218,8 +218,7 @@ export function OnlineMapWorkspace({
             playbackPoint={playbackPoint}
             selectedEventId={selectedEventId}
             onVehicleSelect={handleVehicleSelect}
-            onEventSelect={handleTrackEventSelect}
-            onPlaybackProgressRequest={handleTrackEventSelect}
+            onEventActivate={handleTrackEventSelect}
             onPlaybackPointRequest={handleProgressChange}
           />
         ) : (

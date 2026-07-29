@@ -66,16 +66,24 @@ test.describe('онлайн-карта', () => {
     const trackSurface = page.getByTestId('vehicle-track-a11y');
     await expect(trackSurface).toHaveAttribute('data-track-date', '2026-07-29');
     await expect(trackSurface).toHaveAttribute('data-track-ready', 'true');
+    await expectNoPageOverflow(page);
+    await expect
+      .poll(() => trackSurface.evaluate((element) => getComputedStyle(element).pointerEvents))
+      .toBe('none');
+    const trackSurfaceBox = await trackSurface.boundingBox();
+    expect(trackSurfaceBox).not.toBeNull();
+    expect(trackSurfaceBox!.width).toBeLessThanOrEqual(1);
+    expect(trackSurfaceBox!.height).toBeLessThanOrEqual(1);
 
     const greenSegment = page.locator('[data-track-color="green"]').first();
-    await expect(greenSegment).toBeVisible();
-    await expect(page.locator('[data-track-color="yellow"]').first()).toBeVisible();
-    await expect(page.locator('[data-track-color="red"]').first()).toBeVisible();
+    await expect(page.locator('[data-track-color="green"]')).toHaveCount(3);
+    await expect(page.locator('[data-track-color="yellow"]')).toHaveCount(2);
+    await expect(page.locator('[data-track-color="red"]')).toHaveCount(2);
     await expect
       .poll(() => greenSegment.evaluate((element) => getComputedStyle(element).opacity))
       .toBe('0.72');
-    await expect(page.getByLabel('Начало маршрута')).toBeVisible();
-    await expect(page.getByLabel('Конец маршрута')).toBeVisible();
+    await expect(page.getByLabel('Начало маршрута')).toHaveCount(1);
+    await expect(page.getByLabel('Конец маршрута')).toHaveCount(1);
 
     const refuelEvent = page.getByRole('button', { name: 'Событие: Заправка' });
     const refuelCoordinate = await refuelEvent.getAttribute('data-coordinate');
@@ -84,18 +92,10 @@ test.describe('онлайн-карта', () => {
       page.locator(`[data-track-color][data-coordinate="${refuelCoordinate}"]`),
     ).toHaveCount(1);
 
-    const firstSegment = page.getByRole('button', {
-      name: 'Участок маршрута 08:00–08:08',
-    });
-    await firstSegment.hover({ force: true });
-    const segmentPopup = page.locator('.maplibregl-popup');
-    await expect(segmentPopup.getByText('08:00–08:08')).toBeVisible();
-    await expect(segmentPopup.getByText('Средняя скорость: 32 км/ч')).toBeVisible();
-    await expect(segmentPopup.getByText('Красноярск, ул. Дубровинского')).toBeVisible();
-
     const playbackMarker = page.getByLabel('Положение автомобиля на маршруте');
     const initialPlaybackPoint = await playbackMarker.getAttribute('data-playback-point');
-    await refuelEvent.click();
+    await refuelEvent.focus();
+    await refuelEvent.press('Enter');
     await expect(page.getByRole('article', { name: 'Событие: Заправка' })).toBeVisible();
     const playbackSlider = page.getByRole('slider', { name: 'Положение на маршруте' });
     await expect(playbackSlider).not.toHaveValue('0');
@@ -129,6 +129,15 @@ test.describe('онлайн-карта', () => {
     const trackSurface = page.getByTestId('vehicle-track-a11y');
     await expect(trackSurface).toHaveAttribute('data-track-ready', 'true');
     const playbackSlider = page.getByRole('slider', { name: 'Положение на маршруте' });
+
+    const firstSegment = page.getByRole('button', {
+      name: 'Участок маршрута 08:00–08:08',
+    });
+    await firstSegment.focus();
+    const segmentPopup = page.locator('.maplibregl-popup');
+    await expect(segmentPopup.getByText('08:00–08:08')).toBeVisible();
+    await expect(segmentPopup.getByText('Средняя скорость: 32 км/ч')).toBeVisible();
+    await expect(segmentPopup.getByText('Красноярск, ул. Дубровинского')).toBeVisible();
 
     const finish = page.getByRole('button', { name: 'Конец маршрута' });
     await finish.focus();

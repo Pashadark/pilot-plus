@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 function FakeMap(props: OnlineFleetMapProps) {
-  const { vehicles, selectedVehicleId, onVehicleSelect, trackViewModel, onEventSelect } = props;
+  const { vehicles, selectedVehicleId, onVehicleSelect, trackViewModel, onEventActivate } = props;
   return (
     <div aria-label="Тестовая карта">
       <output
@@ -37,7 +37,7 @@ function FakeMap(props: OnlineFleetMapProps) {
         </button>
       ))}
       {trackViewModel?.events.map((event) => (
-        <button key={event.id} type="button" onClick={() => onEventSelect(event)}>
+        <button key={event.id} type="button" onClick={() => onEventActivate(event)}>
           Выбрать событие {event.title}
         </button>
       ))}
