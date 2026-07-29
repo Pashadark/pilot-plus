@@ -96,3 +96,50 @@ Tests 4 passed (4)
 Блокирующих замечаний нет. Реальные сетевые тайлы OpenStreetMap и визуальное поведение canvas не
 запускаются в jsdom-компонентном тесте; интеграционный браузерный сценарий относится к следующему
 этапу подключения маршрута.
+
+## Исправления по итогам review
+
+- Контейнер стандартных MapLibre controls получает responsive inset: на mobile он расположен выше
+  нижней панели и safe area, на desktop — левее правой панели. Navigation buttons собраны
+  горизонтально и сохраняют touch target 44 px; OSM attribution остаётся в том же доступном
+  control container.
+- Оба перехода к выбранному автомобилю используют общую функцию с длительностью `200 ms`, а при
+  `prefers-reduced-motion` — `0 ms`.
+- Единичные ошибки raster tiles больше не открывают глобальное error state. Ошибка показывается,
+  только если экземпляр карты не загрузился за 10 секунд. Событие успешной загрузки очищает ошибку,
+  а повтор создаёт экземпляр с новым ключом и сразу скрывает stale failure.
+- Удалён обязательный `min-height: 36rem`; workspace занимает доступную высоту
+  `100dvh - header-height`, поэтому нижняя панель остаётся внутри малого или landscape viewport.
+- Добавлен component test пустого результата: выбор очищается, показывается честное empty state,
+  кнопка сброса восстанавливает пять автомобилей и первый выбор.
+
+### Дополнительный TDD-цикл
+
+RED:
+
+```text
+npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx
+Test Files 1 failed (1)
+Tests 1 failed | 1 passed (2)
+Unable to find an element with the text: По запросу ничего не найдено
+```
+
+GREEN после реализации:
+
+```text
+npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx
+Test Files 1 passed (1)
+Tests 2 passed (2)
+```
+
+### Финальные команды
+
+```text
+npx vitest run src/modules/online-map
+npm run typecheck
+npx eslint src/modules/online-map/components/OnlineFleetMap.tsx src/modules/online-map/components/OnlineFleetMapClient.tsx src/modules/online-map/components/SelectedVehiclePanel.tsx src/modules/online-map/components/OnlineMapWorkspace.tsx src/modules/online-map/components/OnlineMapWorkspace.test.tsx
+npx prettier --check src/modules/online-map/components/OnlineFleetMap.tsx src/modules/online-map/components/OnlineFleetMapClient.tsx src/modules/online-map/components/SelectedVehiclePanel.tsx src/modules/online-map/components/OnlineMapWorkspace.tsx src/modules/online-map/components/OnlineMapWorkspace.test.tsx
+```
+
+Финальный результат: 3 test files и 5 tests passed; TypeScript, scoped ESLint и scoped Prettier
+завершились с exit code 0.

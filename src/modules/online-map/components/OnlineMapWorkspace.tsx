@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type ComponentType, type ChangeEvent } from 'react';
 
-import { FilterChip, SearchInput } from '@/shared/ui';
+import { Button, EmptyState, FilterChip, SearchInput } from '@/shared/ui';
 
 import { onlineMapVehicles } from '../fixtures';
 import { filterOnlineMapVehicles } from '../filter-vehicles';
@@ -65,17 +65,27 @@ export function OnlineMapWorkspace({
     setSelectedVehicleId(vehicle.id);
   };
 
+  const resetFilters = () => {
+    setQuery('');
+    setActiveFilter('all');
+    setSelectedVehicleId(onlineMapVehicles[0]?.id ?? null);
+  };
+
   return (
     <section
       aria-label="Онлайн-карта транспорта"
-      className="relative h-[calc(100dvh-var(--header-height))] min-h-[36rem] overflow-hidden bg-[var(--color-canvas)]"
+      className="relative h-[calc(100dvh-var(--header-height))] min-h-0 overflow-hidden bg-[var(--color-canvas)]"
     >
       <div className="absolute inset-0">
-        <MapComponent
-          vehicles={filteredVehicles}
-          selectedVehicleId={effectiveSelectedVehicleId}
-          onVehicleSelect={handleVehicleSelect}
-        />
+        {filteredVehicles.length > 0 ? (
+          <MapComponent
+            vehicles={filteredVehicles}
+            selectedVehicleId={effectiveSelectedVehicleId}
+            onVehicleSelect={handleVehicleSelect}
+          />
+        ) : (
+          <div className="h-full bg-[var(--color-canvas)]" aria-label="Карта без автомобилей" />
+        )}
       </div>
 
       <div className="absolute top-3 right-3 left-3 z-20 grid gap-2 md:right-auto md:left-4 md:w-[min(25rem,calc(100%-2rem))]">
@@ -103,6 +113,16 @@ export function OnlineMapWorkspace({
           ))}
         </div>
       </div>
+
+      {filteredVehicles.length === 0 && (
+        <div className="absolute top-32 right-3 left-3 z-20 md:right-auto md:left-4 md:w-[min(25rem,calc(100%-2rem))]">
+          <EmptyState
+            title="По запросу ничего не найдено"
+            description="Сбросьте поиск и фильтр, чтобы снова увидеть весь автопарк."
+            action={<Button onClick={resetFilters}>Сбросить фильтры</Button>}
+          />
+        </div>
+      )}
 
       <SelectedVehiclePanel
         vehicle={selectedVehicle}

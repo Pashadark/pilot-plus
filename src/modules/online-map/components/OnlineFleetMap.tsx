@@ -12,11 +12,20 @@ import { VehicleMapMarker } from './VehicleMapMarker';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 const KRASNOYARSK_CENTER: [number, number] = [92.87, 56.01];
+const MAP_LOAD_TIMEOUT_MS = 10_000;
 
 interface MarkerResource {
   vehicle: OnlineMapVehicle;
   marker: maplibregl.Marker;
   root: Root;
+}
+
+function flyToVehicle(map: maplibregl.Map, vehicle: OnlineMapVehicle) {
+  map.flyTo({
+    center: [vehicle.longitude, vehicle.latitude],
+    zoom: 14,
+    duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 200,
+  });
 }
 
 export interface OnlineFleetMapProps {
@@ -35,8 +44,9 @@ export function OnlineFleetMap({
   const markersRef = useRef<MarkerResource[]>([]);
   const selectedVehicleIdRef = useRef(selectedVehicleId);
   const onVehicleSelectRef = useRef(onVehicleSelect);
-  const [failed, setFailed] = useState(false);
+  const [failedInstanceKey, setFailedInstanceKey] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const instanceKey = `${attempt}:${vehicles.map((vehicle) => vehicle.id).join('|')}`;
 
   useEffect(() => {
     selectedVehicleIdRef.current = selectedVehicleId;
@@ -71,10 +81,15 @@ export function OnlineFleetMap({
     mapRef.current = map;
     map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
 
-    const handleError = () => setFailed(true);
-    const handleLoad = () => map.resize();
-    map.on('error', handleError);
+    const handleLoad = () => {
+      window.clearTimeout(loadTimeout);
+      setFailedInstanceKey(null);
+      map.resize();
+    };
     map.once('load', handleLoad);
+    const loadTimeout = window.setTimeout(() => {
+      if (!map.loaded()) setFailedInstanceKey(instanceKey);
+    }, MAP_LOAD_TIMEOUT_MS);
 
     const resizeFrame = window.requestAnimationFrame(() => map.resize());
     const resizeObserver = new ResizeObserver(() => map.resize());
@@ -85,11 +100,7 @@ export function OnlineFleetMap({
       const root = createRoot(element);
       const selectVehicle = (selectedVehicle: OnlineMapVehicle) => {
         onVehicleSelectRef.current(selectedVehicle);
-        map.flyTo({
-          center: [selectedVehicle.longitude, selectedVehicle.latitude],
-          zoom: 14,
-          duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 600,
-        });
+        flyToVehicle(map, selectedVehicle);
       };
 
       root.render(
@@ -111,8 +122,8 @@ export function OnlineFleetMap({
 
     return () => {
       window.cancelAnimationFrame(resizeFrame);
+      window.clearTimeout(loadTimeout);
       resizeObserver.disconnect();
-      map.off('error', handleError);
       map.off('load', handleLoad);
       for (const { marker, root } of markerResources) {
         marker.remove();
@@ -122,7 +133,7 @@ export function OnlineFleetMap({
       map.remove();
       mapRef.current = null;
     };
-  }, [attempt, vehicles]);
+  }, [instanceKey, vehicles]);
 
   useEffect(() => {
     for (const { root, vehicle } of markersRef.current) {
@@ -132,11 +143,7 @@ export function OnlineFleetMap({
           selected={selectedVehicleId === vehicle.id}
           onSelect={(selectedVehicle) => {
             onVehicleSelectRef.current(selectedVehicle);
-            mapRef.current?.flyTo({
-              center: [selectedVehicle.longitude, selectedVehicle.latitude],
-              zoom: 14,
-              duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 600,
-            });
+            if (mapRef.current) flyToVehicle(mapRef.current, selectedVehicle);
           }}
         />,
       );
@@ -155,13 +162,13 @@ export function OnlineFleetMap({
   }
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full [&_.maplibregl-ctrl-bottom-right]:right-3 [&_.maplibregl-ctrl-bottom-right]:bottom-[calc(42dvh+max(1rem,env(safe-area-inset-bottom)))] md:[&_.maplibregl-ctrl-bottom-right]:right-[21rem] md:[&_.maplibregl-ctrl-bottom-right]:bottom-4">
       <div
         ref={containerRef}
-        className="h-full w-full [&_.maplibregl-ctrl-group_button]:size-11"
+        className="h-full w-full [&_.maplibregl-ctrl-group]:flex [&_.maplibregl-ctrl-group_button]:size-11"
         aria-label="Онлайн-карта автопарка"
       />
-      {failed && (
+      {failedInstanceKey === instanceKey && (
         <div className="absolute inset-4 z-10 grid place-items-center">
           <ErrorState
             title="Не удалось загрузить карту"
@@ -169,7 +176,7 @@ export function OnlineFleetMap({
             action={
               <Button
                 onClick={() => {
-                  setFailed(false);
+                  setFailedInstanceKey(null);
                   setAttempt((value) => value + 1);
                 }}
               >

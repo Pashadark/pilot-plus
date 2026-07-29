@@ -48,3 +48,22 @@ it('фильтрует пять тестовых машин и сбрасыва�
     ),
   );
 });
+
+it('очищает выбор при пустом результате и позволяет сбросить фильтры', async () => {
+  const user = userEvent.setup();
+
+  render(<OnlineMapWorkspace mapComponent={FakeMap} />);
+
+  await user.type(screen.getByRole('searchbox', { name: 'Поиск транспорта' }), 'Р 999');
+
+  expect(screen.queryAllByRole('button', { name: /Выбрать автомобиль/ })).toHaveLength(0);
+  expect(screen.getByText('Автомобиль не выбран')).toBeTruthy();
+  expect(screen.getByText('По запросу ничего не найдено')).toBeTruthy();
+
+  await user.click(screen.getByRole('button', { name: 'Сбросить фильтры' }));
+
+  expect(screen.getAllByRole('button', { name: /Выбрать автомобиль/ })).toHaveLength(5);
+  expect(screen.getByRole('button', { name: /А 123 МР 77/ }).getAttribute('aria-pressed')).toBe(
+    'true',
+  );
+});
