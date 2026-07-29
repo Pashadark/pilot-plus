@@ -150,6 +150,21 @@ it('использует container responsive layout и сохраняет ат�
   expect(attribution.closest('aside')).toBeNull();
 });
 
+it('центрирует desktop playback только в свободной от правой панели области карты', () => {
+  render(<OnlineMapWorkspace mapComponent={FakeMap} />);
+  fireEvent.click(screen.getByRole('button', { name: /А 123 МР 77/ }));
+
+  const slider = screen.getByRole('slider', { name: 'Положение на маршруте' });
+  const playbackPositioner = slider.parentElement?.parentElement;
+  expect(playbackPositioner?.className).toContain('@min-[48rem]:left-[var(--sidebar-width)]');
+  expect(playbackPositioner?.className).toContain('@min-[48rem]:right-[21rem]');
+  expect(playbackPositioner?.className).toContain('@min-[48rem]:mx-auto');
+  expect(playbackPositioner?.className).not.toContain(
+    '@min-[48rem]:left-[calc((100vw+var(--sidebar-width))/2)]',
+  );
+  expect(slider.closest('aside')).toBeTruthy();
+});
+
 it('выбирает последнюю дату автомобиля и передаёт маршрут карте', async () => {
   const user = userEvent.setup();
   render(<OnlineMapWorkspace mapComponent={FakeMap} />);
@@ -271,14 +286,19 @@ it('оставляет ручной ползунок активным при с�
     />,
   );
 
-  const playButton = screen.getByRole('button', { name: 'Воспроизвести маршрут' });
+  const playButton = screen.getByRole('button', {
+    name: 'Воспроизвести маршрут',
+    description: 'Сокращение анимации включено: используйте ползунок вручную.',
+  });
   const slider = screen.getByRole('slider', {
     name: 'Положение на маршруте',
   }) as HTMLInputElement;
-  expect(playButton.hasAttribute('disabled')).toBe(true);
-  expect(playButton.getAttribute('title')).toContain('Сокращение анимации');
+  expect(playButton.hasAttribute('disabled')).toBe(false);
+  expect(playButton.getAttribute('aria-disabled')).toBe('true');
   expect(slider.hasAttribute('disabled')).toBe(false);
 
+  fireEvent.click(playButton);
+  expect(onPlayingChange).not.toHaveBeenCalled();
   fireEvent.change(slider, { target: { value: '35' } });
   expect(onProgressChange).toHaveBeenCalledWith(35);
 });

@@ -133,3 +133,55 @@ exit 0
 
 Блокирующих замечаний нет. Данные остаются демонстрационными fixtures, поэтому
 «Сегодня» и «Вчера» означают первую и вторую доступные даты, как определено требованиями.
+
+## Исправления по итогам review
+
+Исправлены все три замечания review:
+
+- mobile inset стандартных MapLibre controls теперь использует ту же высоту `48dvh`,
+  что и нижняя панель, плюс `safe-area-inset-bottom`;
+- desktop playback ограничен свободной областью карты между
+  `left: var(--sidebar-width)` и `right: 21rem`, центрируется через auto margins и
+  больше не перекрывает правую панель;
+- при reduced motion кнопка autoplay остаётся keyboard-focusable, получает
+  `aria-disabled="true"` и связанное через `aria-describedby` скрытое русское
+  объяснение; активация guarded, ручной slider остаётся доступным.
+
+### Review RED
+
+До production-правок добавлены три regression assertion.
+
+```text
+npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts
+
+Test Files  2 failed (2)
+Tests       3 failed | 19 passed (22)
+```
+
+Ожидаемые падения отдельно подтвердили старый `42dvh`, desktop-центр без правого
+ограничения и наличие native `disabled` у reduced-motion кнопки.
+
+### Review GREEN и финальная проверка
+
+```text
+npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts
+
+Test Files  2 passed (2)
+Tests       22 passed (22)
+```
+
+```text
+npm run typecheck
+> tsc --noEmit
+exit 0
+```
+
+```text
+npx eslint src/modules/online-map/components/OnlineFleetMap.tsx src/modules/online-map/components/SelectedVehiclePanel.tsx src/modules/online-map/components/TrackPlayback.tsx src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts src/modules/online-map/components/OnlineMapWorkspace.test.tsx --max-warnings=0
+exit 0
+```
+
+```text
+npx prettier --check <пять затронутых TS/TSX-файлов>
+All matched files use Prettier code style!
+```

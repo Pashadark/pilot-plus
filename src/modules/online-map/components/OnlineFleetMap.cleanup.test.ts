@@ -212,6 +212,27 @@ it('не пересоздаёт карту из-за нового массива
   expect(source).not.toContain('[instanceKey, vehicles]');
 });
 
+it('поднимает мобильные контролы карты над панелью высотой 48dvh и safe area', () => {
+  render(
+    createElement(OnlineFleetMap, {
+      vehicles,
+      selectedVehicleId: null,
+      trackViewModel: null,
+      playbackPoint: null,
+      selectedEventId: null,
+      onVehicleSelect: vi.fn(),
+      onEventSelect: vi.fn(),
+      onPlaybackProgressRequest: vi.fn(),
+    }),
+  );
+
+  const mapShell = screen.getByLabelText('Онлайн-карта автопарка').parentElement;
+  expect(mapShell?.className).toContain(
+    '[&_.maplibregl-ctrl-bottom-right]:bottom-[calc(48dvh+max(1rem,env(safe-area-inset-bottom)))]',
+  );
+  expect(mapShell?.className).not.toContain('calc(42dvh');
+});
+
 it('удаляет обработчики, popup, источники и слои маршрута при смене автомобиля', async () => {
   const firstTrack = getTrackViewModel('lada-vesta-a123mr77');
   const secondTrack = getTrackViewModel('haval-jolion-v456kh178');

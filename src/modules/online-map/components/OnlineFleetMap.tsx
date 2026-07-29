@@ -374,7 +374,7 @@ export function OnlineFleetMap({
   }
 
   return (
-    <div className="relative h-full w-full [&_.maplibregl-ctrl-bottom-right]:right-3 [&_.maplibregl-ctrl-bottom-right]:bottom-[calc(42dvh+max(1rem,env(safe-area-inset-bottom)))] @min-[48rem]:[&_.maplibregl-ctrl-bottom-right]:right-[21rem] @min-[48rem]:[&_.maplibregl-ctrl-bottom-right]:bottom-4">
+    <div className="relative h-full w-full [&_.maplibregl-ctrl-bottom-right]:right-3 [&_.maplibregl-ctrl-bottom-right]:bottom-[calc(48dvh+max(1rem,env(safe-area-inset-bottom)))] @min-[48rem]:[&_.maplibregl-ctrl-bottom-right]:right-[21rem] @min-[48rem]:[&_.maplibregl-ctrl-bottom-right]:bottom-4">
       <div
         ref={containerRef}
         className="h-full w-full [&_.maplibregl-ctrl-group]:flex [&_.maplibregl-ctrl-group_button]:size-11"

@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { FiPause, FiPlay } from 'react-icons/fi';
 
 import { Button } from '@/shared/ui';
@@ -17,21 +18,29 @@ export function TrackPlayback({
   onProgressChange,
   onPlayingChange,
 }: TrackPlaybackProps) {
+  const motionHintId = useId();
   const motionHint = reducedMotion
     ? 'Сокращение анимации включено: используйте ползунок вручную.'
     : undefined;
 
   return (
     <div className="flex min-h-11 items-center gap-3">
+      {motionHint ? (
+        <span id={motionHintId} className="sr-only">
+          {motionHint}
+        </span>
+      ) : null}
       <Button
         type="button"
         variant="secondary"
         size="sm"
         aria-label={playing ? 'Приостановить маршрут' : 'Воспроизвести маршрут'}
-        title={motionHint}
-        disabled={reducedMotion}
-        onClick={() => onPlayingChange(!playing)}
-        className="shrink-0"
+        aria-disabled={reducedMotion}
+        aria-describedby={motionHint ? motionHintId : undefined}
+        onClick={() => {
+          if (!reducedMotion) onPlayingChange(!playing);
+        }}
+        className={`shrink-0 ${reducedMotion ? 'cursor-not-allowed opacity-55' : ''}`}
       >
         {playing ? (
           <FiPause aria-hidden="true" className="size-5" />
