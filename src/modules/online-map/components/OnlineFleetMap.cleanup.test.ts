@@ -411,7 +411,12 @@ it('немедленно размонтирует popup root при ошибке
   const props = {
     vehicles,
     selectedVehicleId: vehicles[0].id,
+    trackViewModel: null,
+    playbackPoint: null,
+    selectedEventId: null,
     onVehicleSelect: vi.fn(),
+    onEventSelect: vi.fn(),
+    onPlaybackProgressRequest: vi.fn(),
   };
   const { rerender } = render(createElement(OnlineFleetMap, props));
 

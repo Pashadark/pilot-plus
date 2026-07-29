@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { FiClock, FiMapPin, FiTruck, FiX } from 'react-icons/fi';
 
 import { IconButton } from '@/shared/ui/IconButton';
@@ -19,12 +20,18 @@ const statusClasses: Record<OnlineMapStatus, string> = {
 export interface SelectedVehiclePanelProps {
   vehicle: OnlineMapVehicle;
   onClose: () => void;
+  trackControls: ReactNode;
+  trackSummary: ReactNode;
+  trackPlayback: ReactNode;
   className?: string;
 }
 
 export function SelectedVehiclePanel({
   vehicle,
   onClose,
+  trackControls,
+  trackSummary,
+  trackPlayback,
   className = '',
 }: SelectedVehiclePanelProps) {
   return (
@@ -48,7 +55,7 @@ export function SelectedVehiclePanel({
               {statusLabels[vehicle.status]}
             </span>
             <IconButton
-              label="Закрыть панель автомобиля"
+              label="Закрыть карточку автомобиля"
               variant="ghost"
               size="sm"
               onClick={onClose}
@@ -79,7 +86,13 @@ export function SelectedVehiclePanel({
               <span>Связь: {vehicle.lastSeenLabel}</span>
             </p>
           </div>
+
+          <div className="border-t border-[var(--color-border)] pt-4">{trackControls}</div>
+          {trackSummary}
         </article>
+      </div>
+      <div className="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface)] pt-3 @min-[48rem]:fixed @min-[48rem]:bottom-4 @min-[48rem]:left-[calc((100vw+var(--sidebar-width))/2)] @min-[48rem]:z-30 @min-[48rem]:w-[min(32rem,calc(100vw-var(--sidebar-width)-24rem))] @min-[48rem]:-translate-x-1/2 @min-[48rem]:rounded-[var(--radius-panel)] @min-[48rem]:border @min-[48rem]:p-3 @min-[48rem]:shadow-[var(--shadow-floating)]">
+        {trackPlayback}
       </div>
     </aside>
   );

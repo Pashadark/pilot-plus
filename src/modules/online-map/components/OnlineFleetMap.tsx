@@ -28,7 +28,6 @@ const RUSSIAN_MAP_LOCALE = {
   'NavigationControl.ZoomOut': 'Уменьшить масштаб',
   'NavigationControl.ResetBearing': 'Повернуть карту или вернуть север наверх',
 };
-const ignoreTrackEvent: (event: VehicleTrackEventView) => void = () => undefined;
 
 interface MarkerResource {
   vehicle: OnlineMapVehicle;
@@ -47,23 +46,23 @@ function flyToVehicle(map: maplibregl.Map, vehicle: OnlineMapVehicle) {
 export interface OnlineFleetMapProps {
   vehicles: readonly OnlineMapVehicle[];
   selectedVehicleId: string | null;
-  trackViewModel?: VehicleTrackViewModel | null;
-  playbackPoint?: VehicleTrackPoint | null;
-  selectedEventId?: string | null;
+  trackViewModel: VehicleTrackViewModel | null;
+  playbackPoint: VehicleTrackPoint | null;
+  selectedEventId: string | null;
   onVehicleSelect: (vehicle: OnlineMapVehicle) => void;
-  onEventSelect?: (event: VehicleTrackEventView) => void;
-  onPlaybackProgressRequest?: (event: VehicleTrackEventView) => void;
+  onEventSelect: (event: VehicleTrackEventView) => void;
+  onPlaybackProgressRequest: (event: VehicleTrackEventView) => void;
 }
 
 export function OnlineFleetMap({
   vehicles,
   selectedVehicleId,
-  trackViewModel = null,
-  playbackPoint = null,
-  selectedEventId = null,
+  trackViewModel,
+  playbackPoint,
+  selectedEventId,
   onVehicleSelect,
-  onEventSelect = ignoreTrackEvent,
-  onPlaybackProgressRequest = ignoreTrackEvent,
+  onEventSelect,
+  onPlaybackProgressRequest,
 }: OnlineFleetMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);

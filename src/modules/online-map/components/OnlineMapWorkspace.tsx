@@ -1,15 +1,26 @@
 'use client';
 
-import { useMemo, useState, type ComponentType, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useState, type ComponentType, type ChangeEvent } from 'react';
+import { useReducedMotion } from 'framer-motion';
 
 import { Button, EmptyState, FilterChip, SearchInput } from '@/shared/ui';
 
 import { onlineMapVehicles } from '../fixtures';
 import { filterOnlineMapVehicles } from '../filter-vehicles';
+import {
+  buildTrackViewModel,
+  getPlaybackPosition,
+  getVehicleTrack,
+  getVehicleTrackDates,
+} from '../track-model';
+import type { VehicleTrackEventView } from '../track-types';
 import type { OnlineMapFilter, OnlineMapVehicle } from '../types';
 import type { OnlineFleetMapProps } from './OnlineFleetMap';
 import { OnlineFleetMapClient } from './OnlineFleetMapClient';
 import { SelectedVehiclePanel } from './SelectedVehiclePanel';
+import { TrackDateControls } from './TrackDateControls';
+import { TrackDaySummary } from './TrackDaySummary';
+import { TrackPlayback } from './TrackPlayback';
 
 const filters: readonly { value: OnlineMapFilter; label: string }[] = [
   { value: 'all', label: 'Все' },
@@ -28,6 +39,11 @@ export function OnlineMapWorkspace({
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<OnlineMapFilter>('all');
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+  const [trackDate, setTrackDate] = useState('');
+  const [progress, setProgress] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const reducedMotion = useReducedMotion() ?? false;
 
   const filteredVehicles = useMemo(
     () => filterOnlineMapVehicles(onlineMapVehicles, query, activeFilter),
@@ -36,12 +52,60 @@ export function OnlineMapWorkspace({
   const selectedVehicle =
     filteredVehicles.find((vehicle) => vehicle.id === selectedVehicleId) ?? null;
   const effectiveSelectedVehicleId = selectedVehicle?.id ?? null;
+  const trackDates = useMemo(
+    () => (selectedVehicle ? getVehicleTrackDates(selectedVehicle.id) : []),
+    [selectedVehicle],
+  );
+  const selectedTrack = useMemo(
+    () => (selectedVehicle && trackDate ? getVehicleTrack(selectedVehicle.id, trackDate) : null),
+    [selectedVehicle, trackDate],
+  );
+  const trackViewModel = useMemo(
+    () => (selectedTrack ? buildTrackViewModel(selectedTrack) : null),
+    [selectedTrack],
+  );
+  const playbackPoint = useMemo(
+    () => (selectedTrack ? getPlaybackPosition(selectedTrack, progress) : null),
+    [progress, selectedTrack],
+  );
+
+  useEffect(() => {
+    if (!playing || reducedMotion || !selectedTrack) return;
+
+    const timer = window.setInterval(() => {
+      setProgress((currentProgress) => {
+        const nextProgress = Math.min(100, currentProgress + 2);
+
+        if (nextProgress === 100) {
+          window.clearInterval(timer);
+          setPlaying(false);
+        }
+
+        return nextProgress;
+      });
+    }, 250);
+
+    return () => window.clearInterval(timer);
+  }, [playing, reducedMotion, selectedTrack]);
+
+  const resetTrackState = () => {
+    setTrackDate('');
+    setProgress(0);
+    setPlaying(false);
+    setSelectedEventId(null);
+  };
+
+  const clearVehicleSelection = () => {
+    setSelectedVehicleId(null);
+    resetTrackState();
+  };
 
   const applyFilter = (nextQuery: string, nextFilter: OnlineMapFilter) => {
     const nextVehicles = filterOnlineMapVehicles(onlineMapVehicles, nextQuery, nextFilter);
-    setSelectedVehicleId((current) =>
-      nextVehicles.some((vehicle) => vehicle.id === current) ? current : null,
-    );
+
+    if (!nextVehicles.some((vehicle) => vehicle.id === selectedVehicleId)) {
+      clearVehicleSelection();
+    }
   };
 
   const handleQueryChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -56,13 +120,49 @@ export function OnlineMapWorkspace({
   };
 
   const handleVehicleSelect = (vehicle: OnlineMapVehicle) => {
+    const dates = getVehicleTrackDates(vehicle.id);
     setSelectedVehicleId(vehicle.id);
+    setTrackDate(dates[0] ?? '');
+    setProgress(0);
+    setPlaying(false);
+    setSelectedEventId(null);
+  };
+
+  const handleTrackDateChange = (date: string) => {
+    setTrackDate(date);
+    setProgress(0);
+    setPlaying(false);
+    setSelectedEventId(null);
+  };
+
+  const handleProgressChange = (nextProgress: number) => {
+    setProgress(Math.min(100, Math.max(0, nextProgress)));
+    setPlaying(false);
+    setSelectedEventId(null);
+  };
+
+  const handlePlayingChange = (nextPlaying: boolean) => {
+    if (reducedMotion) return;
+    if (nextPlaying && progress >= 100) setProgress(0);
+    setPlaying(nextPlaying);
+  };
+
+  const handleTrackEventSelect = (event: VehicleTrackEventView) => {
+    if (!selectedTrack) return;
+
+    const pointIndex = selectedTrack.points.findIndex((point) => point.id === event.pointId);
+    if (pointIndex < 0) return;
+
+    const lastPointIndex = selectedTrack.points.length - 1;
+    setSelectedEventId(event.id);
+    setProgress(lastPointIndex > 0 ? (pointIndex / lastPointIndex) * 100 : 0);
+    setPlaying(false);
   };
 
   const resetFilters = () => {
     setQuery('');
     setActiveFilter('all');
-    setSelectedVehicleId(null);
+    clearVehicleSelection();
   };
 
   return (
@@ -114,7 +214,12 @@ export function OnlineMapWorkspace({
           <MapComponent
             vehicles={filteredVehicles}
             selectedVehicleId={effectiveSelectedVehicleId}
+            trackViewModel={trackViewModel}
+            playbackPoint={playbackPoint}
+            selectedEventId={selectedEventId}
             onVehicleSelect={handleVehicleSelect}
+            onEventSelect={handleTrackEventSelect}
+            onPlaybackProgressRequest={handleTrackEventSelect}
           />
         ) : (
           <div className="h-full bg-[var(--color-canvas)]" aria-label="Карта без автомобилей" />
@@ -124,8 +229,25 @@ export function OnlineMapWorkspace({
       {selectedVehicle ? (
         <SelectedVehiclePanel
           vehicle={selectedVehicle}
-          onClose={() => setSelectedVehicleId(null)}
-          className="absolute right-0 bottom-0 left-0 z-20 max-h-[42dvh] rounded-t-[var(--radius-panel)] pb-[max(4rem,env(safe-area-inset-bottom))] @min-[48rem]:top-4 @min-[48rem]:right-4 @min-[48rem]:bottom-4 @min-[48rem]:left-auto @min-[48rem]:max-h-none @min-[48rem]:w-80 @min-[48rem]:rounded-[var(--radius-panel)] @min-[48rem]:pb-4"
+          onClose={clearVehicleSelection}
+          trackControls={
+            <TrackDateControls
+              dates={trackDates}
+              value={trackDate}
+              onChange={handleTrackDateChange}
+            />
+          }
+          trackSummary={<TrackDaySummary model={trackViewModel} />}
+          trackPlayback={
+            <TrackPlayback
+              progress={progress}
+              playing={playing && !reducedMotion}
+              reducedMotion={reducedMotion}
+              onProgressChange={handleProgressChange}
+              onPlayingChange={handlePlayingChange}
+            />
+          }
+          className="absolute right-0 bottom-0 left-0 z-20 max-h-[48dvh] rounded-t-[var(--radius-panel)] pb-[max(1rem,env(safe-area-inset-bottom))] @min-[48rem]:top-4 @min-[48rem]:right-4 @min-[48rem]:bottom-4 @min-[48rem]:left-auto @min-[48rem]:max-h-none @min-[48rem]:w-80 @min-[48rem]:rounded-[var(--radius-panel)] @min-[48rem]:pb-4"
         />
       ) : null}
 
