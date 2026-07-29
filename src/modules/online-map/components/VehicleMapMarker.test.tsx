@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, it, vi } from 'vitest';
@@ -20,4 +22,3 @@ it('показывает госномер и позволяет выбрать �
 
   expect(onSelect).toHaveBeenCalledWith(onlineMapVehicles[0]);
 });
-// @vitest-environment jsdom
