@@ -23,7 +23,8 @@ Playwright-покрытие и документация демонстрацио
 - `playwright.config.ts` принимает tracked-переменную `PLAYWRIGHT_PORT`. При её наличии
   Playwright обязательно поднимает собственный сервер и не переиспользует случайный listener.
 - `tests/online-map.spec.ts` дополнительно проверяет перенаправление анонимного `/map` на
-  `/login`.
+  `/login`. Hover/focus и low-height desktop-сценарии выполняются только в desktop project;
+  мобильная нижняя панель проверяется отдельным viewport-сценарием.
 - `route-states.test.tsx` проверяет loading geometry, error alert/heading, условный reference и
   `unstable_retry`; `OnlineFleetMap.cleanup.test.ts` фиксирует deferred cleanup-контракт.
 - `docs/PROJECT_GUIDE.md` явно описывает пять fixtures и отсутствие живой телеметрии MQTT/Redis.
@@ -36,12 +37,17 @@ Playwright-покрытие и документация демонстрацио
   src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts` — 3 ожидаемых падения:
   отсутствовали `role="alert"`, условный reference и deferred `root.unmount()`.
 - Review GREEN: та же команда — 2 файла, 4/4 теста прошли.
+- Project-scope RED: канонический запуск обеих Playwright projects дал 9 passed, 1 failed:
+  mobile project корректно не показывал hover preview, а тест ошибочно ожидал desktop-поведение.
+- Project-scope GREEN: после явного desktop-only skip для hover/focus и low-height сценариев
+  полный запуск дал 8 passed, 2 skipped.
 
 ## Проверки
 
-- PASS — `$env:PLAYWRIGHT_PORT='3414'; npx playwright test tests/online-map.spec.ts
-  --workers=1 --project=desktop` — 5/5. Учётные данные загружены только в память процесса через
-  существующий auth-helper; порт 3000 не использовался.
+- PASS — `$env:PLAYWRIGHT_PORT='3415'; npx playwright test tests/online-map.spec.ts
+  --workers=1` — обе projects, 8 passed и 2 ожидаемо skipped desktop-only сценария в mobile
+  project. Учётные данные загружены только в память процесса через существующий auth-helper;
+  порт 3000 не использовался.
 - PASS — `npx vitest run src/modules/online-map
   "src/app/(protected)/map/route-states.test.tsx"` — 5 файлов, 10/10 тестов.
 - PASS — `npm run typecheck`.

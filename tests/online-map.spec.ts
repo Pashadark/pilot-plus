@@ -36,7 +36,8 @@ test.describe('онлайн-карта', () => {
 
   test('поддерживает hover, focus, выбор, поиск и пустое состояние на desktop', async ({
     page,
-  }) => {
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'Hover/focus preview проверяется на desktop.');
     await page.setViewportSize({ width: 1440, height: 900 });
     await openAuthenticatedRoute(page, '/map');
 
@@ -81,7 +82,8 @@ test.describe('онлайн-карта', () => {
     await expectNoPageOverflow(page);
   });
 
-  test('не создаёт прокрутку на низком desktop-экране', async ({ page }) => {
+  test('не создаёт прокрутку на низком desktop-экране', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'Низкий desktop viewport проверяется отдельно.');
     await page.setViewportSize({ width: 1280, height: 600 });
     await openAuthenticatedRoute(page, '/map');
 
