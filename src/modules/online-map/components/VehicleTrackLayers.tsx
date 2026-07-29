@@ -86,21 +86,27 @@ export function VehicleTrackAccessibilitySurface({
       className="pointer-events-none absolute size-px overflow-hidden border-0 p-0 whitespace-nowrap [clip-path:inset(50%)] [clip:rect(0,0,0,0)]"
       aria-label={`Маршрут за ${trackViewModel.date}`}
     >
-      {trackViewModel.segments.map((segment) => (
-        <button
-          key={segment.id}
-          type="button"
-          data-track-color={segment.color}
-          data-coordinate={serializeCoordinates(segment.to.coordinates)}
-          data-from-coordinate={serializeCoordinates(segment.from.coordinates)}
-          data-to-coordinate={serializeCoordinates(segment.to.coordinates)}
-          aria-label={`Участок маршрута ${segment.from.timestamp}–${segment.to.timestamp}`}
-          style={{ opacity: segment.opacity }}
-          disabled={!ready}
-          onFocus={() => onSegmentHover(segment, segment.to.coordinates)}
-          onBlur={onSegmentLeave}
-        />
-      ))}
+      {trackViewModel.segments.map((segment) => {
+        const activateSegment = () => onSegmentHover(segment, segment.to.coordinates);
+
+        return (
+          <button
+            key={segment.id}
+            type="button"
+            data-track-color={segment.color}
+            data-coordinate={serializeCoordinates(segment.to.coordinates)}
+            data-from-coordinate={serializeCoordinates(segment.from.coordinates)}
+            data-to-coordinate={serializeCoordinates(segment.to.coordinates)}
+            aria-label={`Участок маршрута ${segment.from.timestamp}–${segment.to.timestamp}`}
+            style={{ opacity: segment.opacity }}
+            disabled={!ready}
+            onMouseEnter={activateSegment}
+            onMouseLeave={onSegmentLeave}
+            onFocus={activateSegment}
+            onBlur={onSegmentLeave}
+          />
+        );
+      })}
       {trackViewModel.eventGroups.map((event) => (
         <button
           key={event.id}

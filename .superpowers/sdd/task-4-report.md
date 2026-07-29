@@ -62,6 +62,7 @@ desktop/mobile-specific сценариям противоположного пр
 - `src/modules/online-map/components/VehicleTrackLayers.tsx`
 - `src/modules/online-map/components/OnlineFleetMap.tsx`
 - `src/modules/online-map/components/OnlineMapWorkspace.tsx`
+- `src/modules/online-map/components/OnlineMapWorkspace.test.tsx`
 - `src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts`
 - `tests/online-map.spec.ts`
 - `docs/PROJECT_GUIDE.md`
@@ -142,3 +143,44 @@ npx playwright test tests/online-map.spec.ts --project=desktop --workers=1 --gre
 
 Во время полного E2E один OSM tile ответил `Failed to fetch`; MapLibre продолжил работу, все 22
 исполняемых сценария прошли. Это внешняя tile-сеть, а не ошибка трека.
+
+## Финальный review loop
+
+Clipped semantic segment снова получил `onMouseEnter`, но без восстановления pointer hit-testing:
+контейнер остаётся `pointer-events: none`. `onMouseEnter` и `onFocus` используют одну локальную
+функцию `activateSegment`, поэтому popup не имеет отдельной бизнес-логики для E2E.
+
+RED:
+
+```powershell
+npx playwright test tests/online-map.spec.ts --project=desktop --workers=1 --grep "показывает цветной маршрут"
+```
+
+Результат: `1 failed`; после браузерного `dispatchEvent('mouseover')` popup
+`08:00–08:08` отсутствовал.
+
+GREEN:
+
+```powershell
+npx playwright test tests/online-map.spec.ts --project=desktop --workers=1 --grep "показывает цветной маршрут"
+```
+
+Результат: `1 passed (10.1s)`, код `0`. Тест программно отправляет реальный browser `mouseover` на
+неперехватывающий segment control и проверяет время, скорость и адрес popup. Отдельная keyboard
+проверка focus сохранена.
+
+```powershell
+npm run typecheck
+```
+
+Результат: PASS, код `0`.
+
+Post-fix formatting и whitespace:
+
+```powershell
+npx prettier --check ".superpowers/sdd/task-4-report.md" "docs/PROJECT_GUIDE.md" "src/app/(protected)/map/loading.tsx" "src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts" "src/modules/online-map/components/OnlineFleetMap.tsx" "src/modules/online-map/components/OnlineMapWorkspace.test.tsx" "src/modules/online-map/components/OnlineMapWorkspace.tsx" "src/modules/online-map/components/VehicleTrackLayers.tsx" "tests/online-map.spec.ts"
+git diff --check
+```
+
+Ожидаемый и подтверждённый ниже результат: Prettier — `All matched files use Prettier code style!`;
+`git diff --check` — код `0`, вывода нет.

@@ -92,6 +92,16 @@ test.describe('онлайн-карта', () => {
       page.locator(`[data-track-color][data-coordinate="${refuelCoordinate}"]`),
     ).toHaveCount(1);
 
+    const firstSegment = page.getByRole('button', {
+      name: 'Участок маршрута 08:00–08:08',
+    });
+    await firstSegment.dispatchEvent('mouseover');
+    const segmentPopup = page.locator('.maplibregl-popup');
+    await expect(segmentPopup.getByText('08:00–08:08')).toBeVisible();
+    await expect(segmentPopup.getByText('Средняя скорость: 32 км/ч')).toBeVisible();
+    await expect(segmentPopup.getByText('Красноярск, ул. Дубровинского')).toBeVisible();
+    await firstSegment.dispatchEvent('mouseout');
+
     const playbackMarker = page.getByLabel('Положение автомобиля на маршруте');
     const initialPlaybackPoint = await playbackMarker.getAttribute('data-playback-point');
     await refuelEvent.focus();
