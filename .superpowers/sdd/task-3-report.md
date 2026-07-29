@@ -1,45 +1,15 @@
-# Task 3 — отчёт о реализации
+# Task 3 — даты, сводка и воспроизведение маршрута
 
-## Статус
+## Status
 
-Task 3 реализован в границах brief: добавлены MapLibre canvas, client-only wrapper, адаптивное
-рабочее пространство онлайн-карты и панель выбранного автомобиля.
+Завершено. Реализовано полностью управляемое отображение маршрута выбранного автомобиля:
+выбор даты и быстрых периодов, дневная сводка, выбор события, ручной ползунок и
+автоматическое воспроизведение. Состояние и interval сбрасываются при смене даты,
+автомобиля, скрытии выбранного автомобиля фильтром и закрытии панели.
 
-## Изменённые файлы
+Кодовый commit: `88564fe feat: add track dates and playback controls`.
 
-- `src/modules/online-map/components/OnlineFleetMap.tsx`
-- `src/modules/online-map/components/OnlineFleetMapClient.tsx`
-- `src/modules/online-map/components/SelectedVehiclePanel.tsx`
-- `src/modules/online-map/components/OnlineMapWorkspace.tsx`
-- `src/modules/online-map/components/OnlineMapWorkspace.test.tsx`
-
-Существующие dashboard-компоненты и файлы вне Task 3 не изменялись. Ранее изменённый
-`.superpowers/sdd/task-1-report.md` сохранён без вмешательства и не включается в commit.
-
-## Реализация
-
-- Карта MapLibre создаётся для текущего набора автомобилей с центром Красноярска
-  `[92.87, 56.01]` и растровыми тайлами OpenStreetMap.
-- Каждый маркер отрисовывается отдельным React root через существующий `VehicleMapMarker`.
-- Выбор маркера передаётся в workspace и вызывает `flyTo`; при включённом reduced motion
-  длительность перелёта равна нулю.
-- Cleanup отключает обработчики и `ResizeObserver`, отменяет animation frame, удаляет маркеры,
-  размонтирует все React roots и вызывает `map.remove()`.
-- MapLibre загружается через `next/dynamic` с `ssr: false` внутри Client Component, в соответствии
-  с локальной документацией Next.js 16.2.
-- Поиск по госномеру и четыре статусных фильтра используют готовый
-  `filterOnlineMapVehicles`.
-- Если фильтрация скрывает выбранный автомобиль, выбирается первый видимый; при пустом результате
-  выбор очищается.
-- На desktop поиск и фильтры расположены слева сверху, панель автомобиля — справа.
-- На mobile фильтры прокручиваются горизонтально, панель закреплена снизу и учитывает
-  `safe-area-inset-bottom`.
-- Интерактивные элементы имеют touch target не меньше 44 px; применены семантические токены
-  Pilot+, русские подписи и отключение лишней анимации при reduced motion.
-- Для пустого набора и ошибки загрузки карты предусмотрены честные состояния с понятными
-  действиями.
-
-## TDD
+## TDD evidence
 
 ### RED
 
@@ -49,143 +19,117 @@ Task 3 реализован в границах brief: добавлены MapLib
 npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx
 ```
 
-Ожидаемое падение:
+Первый запуск после добавления интеграционных сценариев:
 
 ```text
-Failed to resolve import "./OnlineMapWorkspace"
-Test Files 1 failed
+Test Files  1 failed (1)
+Tests       5 failed | 5 passed (10)
 ```
 
-Тест был создан до production-файлов и зафиксировал контракт `mapComponent`, пять fixtures,
-поиск и сброс скрытого выбора.
+Ожидаемые причины падения: отсутствовали `Дата маршрута`, событие маршрута,
+`Положение на маршруте` и `Воспроизвести маршрут`.
+
+Узкие контрактные тесты для новых компонентов также были добавлены до компонентов.
+Контрольный RED:
+
+```text
+Failed to resolve import "./TrackDaySummary"
+Test Files  1 failed (1)
+```
 
 ### GREEN
 
-Команда:
+После минимальной реализации:
 
 ```text
-npx vitest run src/modules/online-map
+npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx
+
+Test Files  1 passed (1)
+Tests       12 passed (12)
 ```
 
-Результат:
+Совместная focused-регрессия workspace и жизненного цикла карты:
 
 ```text
-Test Files 3 passed (3)
-Tests 4 passed (4)
+npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts
+
+Test Files  2 passed (2)
+Tests       20 passed (20)
 ```
 
-## Проверки
+Проверены: последняя дата, ручной выбор дня, «Сегодня», «Вчера», «7 дней»,
+русское пустое состояние, сводка, событие → progress/маркер, ручной slider,
+шаг autoplay `2` каждые `250 ms`, остановка на `100`, reduced motion,
+сбросы даты/автомобиля/события/таймера и закрытие панели.
 
-- `npx vitest run src/modules/online-map` — 3 файла, 4 теста, успешно.
-- `npm run typecheck` — успешно.
-- scoped `npx eslint` для пяти файлов Task 3 — успешно.
-- scoped `npx prettier --check` для пяти файлов Task 3 — успешно.
+## Files
+
+Созданы:
+
+- `src/modules/online-map/components/TrackDateControls.tsx`
+- `src/modules/online-map/components/TrackDaySummary.tsx`
+- `src/modules/online-map/components/TrackPlayback.tsx`
+
+Изменены:
+
+- `src/modules/online-map/components/OnlineMapWorkspace.tsx`
+- `src/modules/online-map/components/SelectedVehiclePanel.tsx`
+- `src/modules/online-map/components/OnlineMapWorkspace.test.tsx`
+- `src/modules/online-map/components/OnlineFleetMap.tsx`
+- `src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts`
+
+`OnlineFleetMapClient.tsx` проверен, но менять его не потребовалось: он прозрачно
+принимает и передаёт тот же `OnlineFleetMapProps`.
+
+`OnlineFleetMap.tsx` — подтверждённое владельцем задачи минимальное исключение из
+первоначального списка файлов: пять новых props переведены из optional/defaulted
+в required. `OnlineFleetMap.cleanup.test.ts` изменён только для передачи этих
+обязательных props в существующий render-вызов. Поведение Task 2 не менялось.
+
+Чужие незакоммиченные изменения в `task-1-report.md` и `task-2-report.md` сохранены
+и не добавлялись в индекс.
+
+## Verification
+
+```text
+npm run typecheck
+> tsc --noEmit
+exit 0
+```
+
+```text
+npm run lint -- --max-warnings=0
+> eslint --max-warnings=0
+exit 0
+```
+
+```text
+npx prettier --check <изменённые TS/TSX-файлы>
+All matched files use Prettier code style!
+```
+
+```text
+git diff --check
+exit 0
+```
 
 ## Self-review
 
-- Требования brief сопоставлены с реализацией по пунктам.
-- Новые зависимости не добавлялись.
-- Пользовательские тексты написаны по-русски.
-- Цвета и поверхности используют семантические CSS tokens.
-- Выбор автомобиля не приводит к пересозданию карты; карта пересоздаётся только при изменении
-  набора автомобилей или явном повторе после ошибки.
-- Cleanup симметричен созданным MapLibre/React-ресурсам.
+- Все пользовательские строки новые/изменённые — русские.
+- Select, быстрые chips, play/pause и slider имеют область взаимодействия не менее `44 px`.
+- На мобильном карта остаётся основной: нижняя панель ограничена `48dvh`, имеет
+  внутренний scroll и safe-area padding; все три маршрутных блока находятся внутри панели.
+- На desktop playback визуально вынесен вниз по центру карты через container-responsive
+  классы, а дата и сводка остаются в правой панели.
+- `useReducedMotion` блокирует автоматический запуск, но не отключает range input;
+  кнопка содержит русскую подсказку.
+- Событие ищет связанную точку по `pointId`, вычисляет точный процент относительно
+  `points.length - 1` и останавливает autoplay.
+- Effect всегда очищает interval при unmount и смене зависимостей; явные обработчики
+  сбрасывают progress, playing, дату и событие в требуемых переходах.
+- «7 дней» намеренно сохраняет текущую дату и полный список доступных дат согласно brief.
 
 ## Concerns
 
-Блокирующих замечаний нет. Реальные сетевые тайлы OpenStreetMap и визуальное поведение canvas не
-запускаются в jsdom-компонентном тесте; интеграционный браузерный сценарий относится к следующему
-этапу подключения маршрута.
-
-## Исправления по итогам review
-
-- Контейнер стандартных MapLibre controls получает responsive inset: на mobile он расположен выше
-  нижней панели и safe area, на desktop — левее правой панели. Navigation buttons собраны
-  горизонтально и сохраняют touch target 44 px; OSM attribution остаётся в том же доступном
-  control container.
-- Оба перехода к выбранному автомобилю используют общую функцию с длительностью `200 ms`, а при
-  `prefers-reduced-motion` — `0 ms`.
-- Единичные ошибки raster tiles больше не открывают глобальное error state. Ошибка показывается,
-  только если экземпляр карты не загрузился за 10 секунд. Событие успешной загрузки очищает ошибку,
-  а повтор создаёт экземпляр с новым ключом и сразу скрывает stale failure.
-- Удалён обязательный `min-height: 36rem`; workspace занимает доступную высоту
-  `100dvh - header-height`, поэтому нижняя панель остаётся внутри малого или landscape viewport.
-- Добавлен component test пустого результата: выбор очищается, показывается честное empty state,
-  кнопка сброса восстанавливает пять автомобилей и первый выбор.
-
-### Дополнительный TDD-цикл
-
-RED:
-
-```text
-npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx
-Test Files 1 failed (1)
-Tests 1 failed | 1 passed (2)
-Unable to find an element with the text: По запросу ничего не найдено
-```
-
-GREEN после реализации:
-
-```text
-npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx
-Test Files 1 passed (1)
-Tests 2 passed (2)
-```
-
-### Финальные команды
-
-```text
-npx vitest run src/modules/online-map
-npm run typecheck
-npx eslint src/modules/online-map/components/OnlineFleetMap.tsx src/modules/online-map/components/OnlineFleetMapClient.tsx src/modules/online-map/components/SelectedVehiclePanel.tsx src/modules/online-map/components/OnlineMapWorkspace.tsx src/modules/online-map/components/OnlineMapWorkspace.test.tsx
-npx prettier --check src/modules/online-map/components/OnlineFleetMap.tsx src/modules/online-map/components/OnlineFleetMapClient.tsx src/modules/online-map/components/SelectedVehiclePanel.tsx src/modules/online-map/components/OnlineMapWorkspace.tsx src/modules/online-map/components/OnlineMapWorkspace.test.tsx
-```
-
-Финальный результат: 3 test files и 5 tests passed; TypeScript, scoped ESLint и scoped Prettier
-завершились с exit code 0.
-
-## Исправление low-height controls
-
-- Встроенная MapLibre attribution отключена через `attributionControl: false`.
-- Постоянная ссылка `© OpenStreetMap` размещена в непрокручиваемом footer панели автомобиля,
-  имеет touch target 44 px и остаётся pointer- и keyboard-доступной при любой прокрутке содержимого.
-- При высоте viewport не более `42rem` NavigationControl скрывается через responsive media variant.
-  `display: none` убирает невидимые кнопки из layout и tab order; жесты карты не отключаются.
-- При большей высоте стандартная навигация остаётся над mobile-панелью или левее desktop-панели.
-
-TDD RED:
-
-```text
-npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx
-Test Files 1 failed (1)
-Tests 1 failed | 2 passed (3)
-expected workspace class to contain low-height navigation policy
-```
-
-TDD GREEN:
-
-```text
-npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx
-Test Files 1 passed (1)
-Tests 3 passed (3)
-```
-
-Проверяемый component contract подтверждает наличие low-height media policy и доступной OSM-ссылки
-с корректным `href`.
-
-Финальная проверка после low-height исправления:
-
-```text
-npx vitest run src/modules/online-map
-Test Files 3 passed (3)
-Tests 6 passed (6)
-
-npm run typecheck
-exit code 0
-
-npx eslint src/modules/online-map/components/OnlineFleetMap.tsx src/modules/online-map/components/OnlineFleetMapClient.tsx src/modules/online-map/components/SelectedVehiclePanel.tsx src/modules/online-map/components/OnlineMapWorkspace.tsx src/modules/online-map/components/OnlineMapWorkspace.test.tsx
-exit code 0
-
-npx prettier --check src/modules/online-map/components/OnlineFleetMap.tsx src/modules/online-map/components/OnlineFleetMapClient.tsx src/modules/online-map/components/SelectedVehiclePanel.tsx src/modules/online-map/components/OnlineMapWorkspace.tsx src/modules/online-map/components/OnlineMapWorkspace.test.tsx
-All matched files use Prettier code style
-```
+Блокирующих замечаний нет. Данные остаются демонстрационными fixtures, поэтому
+«Сегодня» и «Вчера» означают первую и вторую доступные даты, как определено требованиями.
