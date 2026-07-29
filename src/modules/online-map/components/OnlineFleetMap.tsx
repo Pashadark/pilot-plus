@@ -128,7 +128,7 @@ export function OnlineFleetMap({
       map.off('load', handleLoad);
       for (const { marker, root } of markerResources) {
         marker.remove();
-        root.unmount();
+        queueMicrotask(() => root.unmount());
       }
       markersRef.current = [];
       map.remove();

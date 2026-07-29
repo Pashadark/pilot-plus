@@ -15,6 +15,13 @@ async function expectNoPageOverflow(page: Page) {
 }
 
 test.describe('онлайн-карта', () => {
+  test('перенаправляет анонимного пользователя на вход', async ({ page }) => {
+    await page.goto('/map');
+
+    await expect(page).toHaveURL('/login');
+    await expect(page.getByRole('heading', { name: 'Вход в Pilot+' })).toBeVisible();
+  });
+
   test('показывает пять тестовых автомобилей', async ({ page }) => {
     await openAuthenticatedRoute(page, '/map');
 
