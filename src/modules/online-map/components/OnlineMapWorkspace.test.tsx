@@ -67,3 +67,15 @@ it('очищает выбор при пустом результате и поз
     'true',
   );
 });
+
+it('скрывает навигацию на низком экране и сохраняет доступную атрибуцию карты', () => {
+  render(<OnlineMapWorkspace mapComponent={FakeMap} />);
+
+  const workspace = screen.getByRole('region', { name: 'Онлайн-карта транспорта' });
+  expect(workspace.className).toContain(
+    '[@media(max-height:42rem)]:[&_.maplibregl-ctrl-group]:hidden',
+  );
+
+  const attribution = screen.getByRole('link', { name: '© OpenStreetMap' });
+  expect(attribution.getAttribute('href')).toBe('https://www.openstreetmap.org/copyright');
+});

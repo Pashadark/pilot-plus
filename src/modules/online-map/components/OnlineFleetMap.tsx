@@ -62,6 +62,7 @@ export function OnlineFleetMap({
 
     const map = new maplibregl.Map({
       container,
+      attributionControl: false,
       style: {
         version: 8,
         sources: {

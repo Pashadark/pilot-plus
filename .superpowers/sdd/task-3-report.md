@@ -143,3 +143,49 @@ npx prettier --check src/modules/online-map/components/OnlineFleetMap.tsx src/mo
 
 Финальный результат: 3 test files и 5 tests passed; TypeScript, scoped ESLint и scoped Prettier
 завершились с exit code 0.
+
+## Исправление low-height controls
+
+- Встроенная MapLibre attribution отключена через `attributionControl: false`.
+- Постоянная ссылка `© OpenStreetMap` размещена в непрокручиваемом footer панели автомобиля,
+  имеет touch target 44 px и остаётся pointer- и keyboard-доступной при любой прокрутке содержимого.
+- При высоте viewport не более `42rem` NavigationControl скрывается через responsive media variant.
+  `display: none` убирает невидимые кнопки из layout и tab order; жесты карты не отключаются.
+- При большей высоте стандартная навигация остаётся над mobile-панелью или левее desktop-панели.
+
+TDD RED:
+
+```text
+npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx
+Test Files 1 failed (1)
+Tests 1 failed | 2 passed (3)
+expected workspace class to contain low-height navigation policy
+```
+
+TDD GREEN:
+
+```text
+npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx
+Test Files 1 passed (1)
+Tests 3 passed (3)
+```
+
+Проверяемый component contract подтверждает наличие low-height media policy и доступной OSM-ссылки
+с корректным `href`.
+
+Финальная проверка после low-height исправления:
+
+```text
+npx vitest run src/modules/online-map
+Test Files 3 passed (3)
+Tests 6 passed (6)
+
+npm run typecheck
+exit code 0
+
+npx eslint src/modules/online-map/components/OnlineFleetMap.tsx src/modules/online-map/components/OnlineFleetMapClient.tsx src/modules/online-map/components/SelectedVehiclePanel.tsx src/modules/online-map/components/OnlineMapWorkspace.tsx src/modules/online-map/components/OnlineMapWorkspace.test.tsx
+exit code 0
+
+npx prettier --check src/modules/online-map/components/OnlineFleetMap.tsx src/modules/online-map/components/OnlineFleetMapClient.tsx src/modules/online-map/components/SelectedVehiclePanel.tsx src/modules/online-map/components/OnlineMapWorkspace.tsx src/modules/online-map/components/OnlineMapWorkspace.test.tsx
+All matched files use Prettier code style
+```

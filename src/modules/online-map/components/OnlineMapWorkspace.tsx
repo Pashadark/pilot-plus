@@ -74,7 +74,7 @@ export function OnlineMapWorkspace({
   return (
     <section
       aria-label="Онлайн-карта транспорта"
-      className="relative h-[calc(100dvh-var(--header-height))] min-h-0 overflow-hidden bg-[var(--color-canvas)]"
+      className="relative h-[calc(100dvh-var(--header-height))] min-h-0 overflow-hidden bg-[var(--color-canvas)] [@media(max-height:42rem)]:[&_.maplibregl-ctrl-group]:hidden"
     >
       <div className="absolute inset-0">
         {filteredVehicles.length > 0 ? (
