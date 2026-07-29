@@ -63,6 +63,94 @@ export interface MountVehicleTrackLayersOptions {
   onPlaybackProgressRequest: (event: VehicleTrackEventView) => void;
 }
 
+interface VehicleTrackAccessibilitySurfaceProps extends Pick<
+  MountVehicleTrackLayersOptions,
+  | 'trackViewModel'
+  | 'onSegmentHover'
+  | 'onSegmentLeave'
+  | 'onEventSelect'
+  | 'onPlaybackProgressRequest'
+> {
+  ready: boolean;
+  onPlaybackPointRequest: (progress: number) => void;
+}
+
+export function VehicleTrackAccessibilitySurface({
+  trackViewModel,
+  ready,
+  onSegmentHover,
+  onSegmentLeave,
+  onEventSelect,
+  onPlaybackProgressRequest,
+  onPlaybackPointRequest,
+}: VehicleTrackAccessibilitySurfaceProps) {
+  return (
+    <div
+      data-testid="vehicle-track-a11y"
+      data-track-date={trackViewModel.date}
+      data-track-ready={String(ready)}
+      className="absolute top-0 left-0 z-10 h-2 w-24 overflow-hidden whitespace-nowrap"
+      aria-label={`Маршрут за ${trackViewModel.date}`}
+    >
+      {trackViewModel.segments.map((segment, index) => (
+        <button
+          key={segment.id}
+          type="button"
+          data-track-color={segment.color}
+          data-coordinate={serializeCoordinates(segment.to.coordinates)}
+          data-from-coordinate={serializeCoordinates(segment.from.coordinates)}
+          data-to-coordinate={serializeCoordinates(segment.to.coordinates)}
+          aria-label={`Участок маршрута ${segment.from.timestamp}–${segment.to.timestamp}`}
+          className="absolute top-0 size-2 border-0 bg-transparent p-0"
+          style={{ left: index * 8, opacity: segment.opacity }}
+          disabled={!ready}
+          onMouseEnter={() => onSegmentHover(segment, segment.to.coordinates)}
+          onMouseLeave={onSegmentLeave}
+          onFocus={() => onSegmentHover(segment, segment.to.coordinates)}
+          onBlur={onSegmentLeave}
+        />
+      ))}
+      {trackViewModel.eventGroups.map((event, index) => (
+        <button
+          key={event.id}
+          type="button"
+          data-coordinate={serializeCoordinates(event.coordinates)}
+          aria-label={`Событие: ${event.title}`}
+          className="absolute top-0 size-2 border-0 bg-transparent p-0"
+          style={{ left: (trackViewModel.segments.length + index) * 8 }}
+          disabled={!ready}
+          onClick={() => {
+            onEventSelect(event, event.count);
+            onPlaybackProgressRequest(event);
+          }}
+        />
+      ))}
+      <button
+        type="button"
+        data-coordinate={serializeCoordinates(trackViewModel.start.coordinates)}
+        aria-label="Начало маршрута"
+        className="absolute top-0 size-2 border-0 bg-transparent p-0"
+        style={{
+          left: (trackViewModel.segments.length + trackViewModel.eventGroups.length) * 8,
+        }}
+        disabled={!ready}
+        onClick={() => onPlaybackPointRequest(0)}
+      />
+      <button
+        type="button"
+        data-coordinate={serializeCoordinates(trackViewModel.finish.coordinates)}
+        aria-label="Конец маршрута"
+        className="absolute top-0 size-2 border-0 bg-transparent p-0"
+        style={{
+          left: (trackViewModel.segments.length + trackViewModel.eventGroups.length + 1) * 8,
+        }}
+        disabled={!ready}
+        onClick={() => onPlaybackPointRequest(100)}
+      />
+    </div>
+  );
+}
+
 export function trackSegmentsToGeoJson(
   segments: readonly VehicleTrackSegment[],
 ): FeatureCollection<LineString, TrackSegmentProperties> {
@@ -373,6 +461,10 @@ function endpointsToGeoJson(
 function getFeatureId(event: MapLayerMouseEvent): string | null {
   const id = event.features?.[0]?.id;
   return id === undefined ? null : String(id);
+}
+
+function serializeCoordinates(coordinates: TrackCoordinates): string {
+  return JSON.stringify(coordinates);
 }
 
 function clearFeatureState(

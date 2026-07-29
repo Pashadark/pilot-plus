@@ -220,6 +220,7 @@ export function OnlineMapWorkspace({
             onVehicleSelect={handleVehicleSelect}
             onEventSelect={handleTrackEventSelect}
             onPlaybackProgressRequest={handleTrackEventSelect}
+            onPlaybackPointRequest={handleProgressChange}
           />
         ) : (
           <div className="h-full bg-[var(--color-canvas)]" aria-label="Карта без автомобилей" />

@@ -36,14 +36,18 @@ export default function OnlineMapLoading() {
             </div>
             <Skeleton className="h-7 w-20 rounded-full" />
           </div>
+          <Skeleton className="h-11 w-full" aria-label="Загружается выбор даты" />
           <div className="grid grid-cols-2 gap-3">
-            <Skeleton className="h-16" />
-            <Skeleton className="h-16" />
+            {Array.from({ length: 4 }, (_, index) => (
+              <Skeleton key={index} className="h-16 rounded-[var(--radius-md)]" />
+            ))}
           </div>
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-2/3" />
           <Skeleton className="mt-auto h-11 w-28" />
         </aside>
+
+        <Skeleton className="absolute bottom-4 left-1/2 h-14 w-[min(34rem,calc(100%-2rem))] -translate-x-1/2" />
       </main>
     </AppShell>
   );

@@ -90,12 +90,22 @@ vi.mock('maplibre-gl', () => {
   }
 
   class Marker {
+    element: HTMLElement;
+
+    constructor(options?: { element?: HTMLElement }) {
+      this.element = options?.element ?? document.createElement('div');
+    }
+
     setLngLat() {
       return this;
     }
 
     addTo() {
       return this;
+    }
+
+    getElement() {
+      return this.element;
     }
 
     remove = mapMocks.markerRemove;
@@ -223,6 +233,7 @@ it('поднимает мобильные контролы карты над п�
       onVehicleSelect: vi.fn(),
       onEventSelect: vi.fn(),
       onPlaybackProgressRequest: vi.fn(),
+      onPlaybackPointRequest: vi.fn(),
     }),
   );
 
@@ -244,6 +255,7 @@ it('удаляет обработчики, popup, источники и слои
     onVehicleSelect: vi.fn(),
     onEventSelect: vi.fn(),
     onPlaybackProgressRequest: vi.fn(),
+    onPlaybackPointRequest: vi.fn(),
   };
   const { rerender, unmount } = render(
     createElement(OnlineFleetMap, { ...props, trackViewModel: firstTrack }),
@@ -283,6 +295,7 @@ it('монтирует новый маршрут сразу после перв�
     onVehicleSelect: vi.fn(),
     onEventSelect: vi.fn(),
     onPlaybackProgressRequest: vi.fn(),
+    onPlaybackPointRequest: vi.fn(),
   };
   const { rerender } = render(
     createElement(OnlineFleetMap, { ...props, trackViewModel: firstTrack }),
@@ -438,6 +451,7 @@ it('немедленно размонтирует popup root при ошибке
     onVehicleSelect: vi.fn(),
     onEventSelect: vi.fn(),
     onPlaybackProgressRequest: vi.fn(),
+    onPlaybackPointRequest: vi.fn(),
   };
   const { rerender } = render(createElement(OnlineFleetMap, props));
 

@@ -7,6 +7,7 @@ import maplibregl from 'maplibre-gl';
 import { Button, EmptyState, ErrorState } from '@/shared/ui';
 
 import type {
+  TrackCoordinates,
   VehicleTrackEventView,
   VehicleTrackPoint,
   VehicleTrackSegment,
@@ -14,7 +15,7 @@ import type {
 } from '../track-types';
 import type { OnlineMapVehicle } from '../types';
 import { TrackEventPopup } from './TrackEventPopup';
-import { mountVehicleTrackLayers } from './VehicleTrackLayers';
+import { mountVehicleTrackLayers, VehicleTrackAccessibilitySurface } from './VehicleTrackLayers';
 import { VehicleMapMarker } from './VehicleMapMarker';
 
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -52,6 +53,7 @@ export interface OnlineFleetMapProps {
   onVehicleSelect: (vehicle: OnlineMapVehicle) => void;
   onEventSelect: (event: VehicleTrackEventView) => void;
   onPlaybackProgressRequest: (event: VehicleTrackEventView) => void;
+  onPlaybackPointRequest: (progress: number) => void;
 }
 
 export function OnlineFleetMap({
@@ -63,6 +65,7 @@ export function OnlineFleetMap({
   onVehicleSelect,
   onEventSelect,
   onPlaybackProgressRequest,
+  onPlaybackPointRequest,
 }: OnlineFleetMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -76,8 +79,16 @@ export function OnlineFleetMap({
   const playbackPointRef = useRef(playbackPoint);
   const onEventSelectRef = useRef(onEventSelect);
   const onPlaybackProgressRequestRef = useRef(onPlaybackProgressRequest);
+  const onPlaybackPointRequestRef = useRef(onPlaybackPointRequest);
+  const segmentHoverRef = useRef<
+    (segment: VehicleTrackSegment, coordinates: TrackCoordinates) => void
+  >(() => {});
+  const segmentLeaveRef = useRef(() => {});
+  const eventSelectRef = useRef<(event: VehicleTrackEventView, count: number) => void>(() => {});
+  const playbackProgressRequestRef = useRef<(event: VehicleTrackEventView) => void>(() => {});
   const [failedInstanceKey, setFailedInstanceKey] = useState<string | null>(null);
   const [trackLayerFailed, setTrackLayerFailed] = useState(false);
+  const [trackInteractionKey, setTrackInteractionKey] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const vehiclesSnapshotKey = JSON.stringify(vehicles);
   const stableVehicles = useMemo(
@@ -109,6 +120,10 @@ export function OnlineFleetMap({
   useEffect(() => {
     onPlaybackProgressRequestRef.current = onPlaybackProgressRequest;
   }, [onPlaybackProgressRequest]);
+
+  useEffect(() => {
+    onPlaybackPointRequestRef.current = onPlaybackPointRequest;
+  }, [onPlaybackPointRequest]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -224,9 +239,11 @@ export function OnlineFleetMap({
     const map = mapRef.current;
     if (!map || !trackViewModel) {
       setTrackLayerFailed(false);
+      setTrackInteractionKey(null);
       return;
     }
 
+    const currentTrackInteractionKey = `${trackViewModel.vehicleId}:${trackViewModel.date}`;
     let disposed = false;
     let layersCleanup: (() => void) | null = null;
     let segmentPopup: maplibregl.Popup | null = null;
@@ -250,6 +267,13 @@ export function OnlineFleetMap({
       }
       playbackMarkerRef.current?.remove();
       playbackMarkerRef.current = null;
+      segmentHoverRef.current = () => {};
+      segmentLeaveRef.current = () => {};
+      eventSelectRef.current = () => {};
+      playbackProgressRequestRef.current = () => {};
+      setTrackInteractionKey((current) =>
+        current === currentTrackInteractionKey ? null : current,
+      );
       if (trackCleanupRef.current === cleanupTrack) trackCleanupRef.current = null;
     };
 
@@ -266,35 +290,48 @@ export function OnlineFleetMap({
         eventPopup = new maplibregl.Popup({ closeButton: true, offset: 16 });
         eventPopupRoot = createRoot(eventPopupElement);
 
+        const handleSegmentHover = (
+          segment: VehicleTrackSegment,
+          coordinates: readonly [number, number],
+        ) => {
+          if (!segmentPopup) return;
+          segmentPopup
+            .setLngLat([...coordinates])
+            .setDOMContent(createSegmentPopupContent(segment))
+            .addTo(map);
+        };
+        const handleSegmentLeave = () => segmentPopup?.remove();
+        const handleEventSelect = (event: VehicleTrackEventView, count: number) => {
+          if (!eventPopup || !eventPopupRoot) return;
+          eventPopupRoot.render(<TrackEventPopup event={event} count={count} />);
+          eventPopup
+            .setLngLat([...event.coordinates])
+            .setDOMContent(eventPopupElement)
+            .addTo(map);
+          onEventSelectRef.current(event);
+        };
+        const handlePlaybackProgressRequest = (event: VehicleTrackEventView) => {
+          onPlaybackProgressRequestRef.current(event);
+        };
+        segmentHoverRef.current = handleSegmentHover;
+        segmentLeaveRef.current = handleSegmentLeave;
+        eventSelectRef.current = handleEventSelect;
+        playbackProgressRequestRef.current = handlePlaybackProgressRequest;
+
         layersCleanup = mountVehicleTrackLayers(map, {
           trackViewModel,
           selectedEventId: selectedEventIdRef.current,
-          onSegmentHover: (segment, coordinates) => {
-            if (!segmentPopup) return;
-            segmentPopup
-              .setLngLat([...coordinates])
-              .setDOMContent(createSegmentPopupContent(segment))
-              .addTo(map);
-          },
-          onSegmentLeave: () => segmentPopup?.remove(),
-          onEventSelect: (event, count) => {
-            if (!eventPopup || !eventPopupRoot) return;
-            eventPopupRoot.render(<TrackEventPopup event={event} count={count} />);
-            eventPopup
-              .setLngLat([...event.coordinates])
-              .setDOMContent(eventPopupElement)
-              .addTo(map);
-            onEventSelectRef.current(event);
-          },
-          onPlaybackProgressRequest: (event) => {
-            onPlaybackProgressRequestRef.current(event);
-          },
+          onSegmentHover: handleSegmentHover,
+          onSegmentLeave: handleSegmentLeave,
+          onEventSelect: handleEventSelect,
+          onPlaybackProgressRequest: handlePlaybackProgressRequest,
         });
 
         fitTrackBounds(map, trackViewModel);
         if (playbackPointRef.current) {
           playbackMarkerRef.current = createPlaybackMarker(map, playbackPointRef.current);
         }
+        setTrackInteractionKey(currentTrackInteractionKey);
         setTrackLayerFailed(false);
       } catch {
         layersCleanup?.();
@@ -308,6 +345,7 @@ export function OnlineFleetMap({
         }
         playbackMarkerRef.current?.remove();
         playbackMarkerRef.current = null;
+        setTrackInteractionKey(null);
         setTrackLayerFailed(true);
       }
     };
@@ -351,6 +389,7 @@ export function OnlineFleetMap({
       }
 
       if (playbackMarkerRef.current) {
+        playbackMarkerRef.current.getElement().dataset.playbackPoint = playbackPoint.id;
         playbackMarkerRef.current.setLngLat([...playbackPoint.coordinates]);
       } else if (mapReadyRef.current) {
         playbackMarkerRef.current = createPlaybackMarker(map, playbackPoint);
@@ -380,6 +419,20 @@ export function OnlineFleetMap({
         className="h-full w-full [&_.maplibregl-ctrl-group]:flex [&_.maplibregl-ctrl-group_button]:size-11"
         aria-label="Онлайн-карта автопарка"
       />
+      {trackViewModel ? (
+        <VehicleTrackAccessibilitySurface
+          trackViewModel={trackViewModel}
+          ready={
+            trackInteractionKey === `${trackViewModel.vehicleId}:${trackViewModel.date}` &&
+            !trackLayerFailed
+          }
+          onSegmentHover={(segment, coordinates) => segmentHoverRef.current(segment, coordinates)}
+          onSegmentLeave={() => segmentLeaveRef.current()}
+          onEventSelect={(event, count) => eventSelectRef.current(event, count)}
+          onPlaybackProgressRequest={(event) => playbackProgressRequestRef.current(event)}
+          onPlaybackPointRequest={(progress) => onPlaybackPointRequestRef.current(progress)}
+        />
+      ) : null}
       {failedInstanceKey === instanceKey && (
         <div className="absolute inset-4 z-10 grid place-items-center">
           <ErrorState

@@ -1,70 +1,99 @@
-# Task 4 — маршрут, состояния и browser-проверка онлайн-карты
+# Task 4 — скелетоны, E2E, документация и полная проверка
 
 ## Статус
 
-**DONE_WITH_CONCERNS**
+Task 4 завершена. Добавлена доступная сериализованная поверхность реального `VehicleTrackViewModel`,
+расширен skeleton `/map`, актуализирован проектный handoff и проверен полный пользовательский поток
+динамических маршрутов на desktop, телефоне и планшете.
 
-Защищённый `/map`, геометрический loading skeleton, объявляемый error boundary Next.js 16.2,
-Playwright-покрытие и документация демонстрационных ограничений реализованы. Все замечания
-повторного review закрыты.
+## RED
 
-## Реализация
+1. После добавления базового сценария:
 
-- `src/app/(protected)/map/page.tsx` собирает страницу через существующие protected layout и
-  `AppShell`, содержит доступный `h1`, метку «Демонстрационные данные» и
-  `OnlineMapWorkspace`.
-- `src/app/(protected)/map/loading.tsx` повторяет геометрию карты, верхних контролов,
-  демонстрационной метки и desktop/mobile панели через общий `Skeleton`.
-- `src/app/(protected)/map/error.tsx` использует `ErrorState`, актуальный `unstable_retry`,
-  `role="alert"` и доступный heading. Код обращения выводится только при непустом digest.
-- Cleanup MapLibre удаляет marker/map синхронно, а размонтирование вложенных React roots
-  откладывает через `queueMicrotask`, как существующая dashboard-карта. React 19 teardown warning
-  больше не воспроизводится.
-- `playwright.config.ts` принимает tracked-переменную `PLAYWRIGHT_PORT`. При её наличии
-  Playwright обязательно поднимает собственный сервер и не переиспользует случайный listener.
-- `tests/online-map.spec.ts` дополнительно проверяет перенаправление анонимного `/map` на
-  `/login`. Hover/focus и low-height desktop-сценарии выполняются только в desktop project;
-  мобильная нижняя панель проверяется отдельным viewport-сценарием.
-- `route-states.test.tsx` проверяет loading geometry, error alert/heading, условный reference и
-  `unstable_retry`; `OnlineFleetMap.cleanup.test.ts` фиксирует deferred cleanup-контракт.
-- `docs/PROJECT_GUIDE.md` явно описывает пять fixtures и отсутствие живой телеметрии MQTT/Redis.
+   ```powershell
+   npx playwright test tests/online-map.spec.ts --project=desktop --grep "показывает цветной маршрут"
+   ```
 
-## TDD
+   Результат: `1 failed`; ожидаемое функциональное падение на отсутствующем
+   `[data-track-color="green"]`.
 
-- Исходный RED: 4/4 browser-сценария упали из-за отсутствующего `/map`.
-- Review RED:
-  `npx vitest run "src/app/(protected)/map/route-states.test.tsx"
-  src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts` — 3 ожидаемых падения:
-  отсутствовали `role="alert"`, условный reference и deferred `root.unmount()`.
-- Review GREEN: та же команда — 2 файла, 4/4 теста прошли.
-- Project-scope RED: канонический запуск обеих Playwright projects дал 9 passed, 1 failed:
-  mobile project корректно не показывал hover preview, а тест ошибочно ожидал desktop-поведение.
-- Project-scope GREEN: после явного desktop-only skip для hover/focus и low-height сценариев
-  полный запуск дал 8 passed, 2 skipped.
+2. После добавления полного набора требований:
 
-## Проверки
+   ```powershell
+   npx playwright test tests/online-map.spec.ts --project=desktop --grep "показывает цветной|все действия маршрута|маршрут не создаёт горизонтальную"
+   ```
 
-- PASS — `$env:PLAYWRIGHT_PORT='3415'; npx playwright test tests/online-map.spec.ts
-  --workers=1` — обе projects, 8 passed и 2 ожидаемо skipped desktop-only сценария в mobile
-  project. Учётные данные загружены только в память процесса через существующий auth-helper;
-  порт 3000 не использовался.
-- PASS — `npx vitest run src/modules/online-map
-  "src/app/(protected)/map/route-states.test.tsx"` — 5 файлов, 10/10 тестов.
-- PASS — `npm run typecheck`.
-- PASS — полный `npm run lint`.
-- PASS — scoped Prettier для всех изменённых исходников, тестов, config и этого отчёта.
-- PASS — `npm run build`; production route table содержит `ƒ /map`.
-- PASS — `git diff --check`.
-- FAIL (pre-existing, вне Task 4) — `npm run format:check`: 14 несформатированных файлов в
-  существующих modules/app/shared/tests. Они не изменялись, чтобы не смешивать чужие продуктовые
-  правки с fix commit.
+   Результат: `4 failed`; во всех случаях отсутствовал `data-testid="vehicle-track-a11y"`.
 
-## Concerns
+3. E2E отдельно выявил узкий дефект предыдущей реализации: slider переходил к точке события, но
+   `data-playback-point` реального MapLibre marker оставался на `p0`. Причина: update-effect вызывал
+   `Marker.setLngLat`, но dataset задавался только при создании marker. После согласования с
+   родительской задачей добавлена синхронизация dataset перед реальным перемещением.
 
-- Build остаётся зелёным, но печатает уже известные предупреждения о нескольких lockfiles и
-  слишком широком Prisma NFT trace из `src/database/generated/prisma/index.js`; оба не относятся
-  к Task 4.
-- Полный format-check заблокирован 14 существующими файлами вне scope. Scoped проверка всех
-  файлов fix commit проходит.
-- Чужое незавершённое изменение `.superpowers/sdd/task-1-report.md` сохранено и не включается в
-  commit.
+Первый технический запуск остановился до проверки функции из-за отсутствия auth-переменных в
+worktree. Все зачтённые RED/GREEN-прогоны выполнялись с безопасной загрузкой корневого `.env` без
+вывода значений и на изолированных портах.
+
+## GREEN
+
+- Цвета `green/yellow/red`, вычисленная opacity `0.72`, дата и координаты сериализуются из того же
+  view model, который получает MapLibre.
+- Координата события «Заправка» точно совпадает с координатой точки линии.
+- Hover/focus сегмента вызывает реальные popup callbacks с временем, скоростью и адресом.
+- Клик/Enter по событию открывает реальный popup и перемещает slider/marker.
+- Начало и конец маршрута управляют тем же progress callback, что slider.
+- Воспроизведение меняет реальный `data-playback-point`; закрытие карточки удаляет surface, слои и
+  playback marker.
+- Проверены keyboard-only сценарий и отсутствие overflow на `390×844`, `1024×768`, а также
+  существующие проверки `1440×900`.
+
+Итоговый browser-прогон:
+
+```powershell
+npx playwright test tests/online-map.spec.ts --workers=1
+```
+
+Результат: `22 passed`, `4 skipped`, код `0`. Skip относятся только к намеренно
+desktop/mobile-specific сценариям противоположного проекта.
+
+## Изменённые файлы
+
+- `src/app/(protected)/map/loading.tsx`
+- `src/modules/online-map/components/VehicleTrackLayers.tsx`
+- `src/modules/online-map/components/OnlineFleetMap.tsx`
+- `src/modules/online-map/components/OnlineMapWorkspace.tsx`
+- `src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts`
+- `tests/online-map.spec.ts`
+- `docs/PROJECT_GUIDE.md`
+- `.superpowers/sdd/task-4-report.md`
+
+Отчёты Task 1–2 сохранены без изменений этой задачи.
+
+## Полная проверка
+
+| Команда | Результат |
+| --- | --- |
+| `npm run typecheck` | PASS, код `0` |
+| `npm run lint` | PASS, код `0`, без warnings |
+| `npm run test:unit` | PASS: 79 файлов, 384 теста |
+| `npm run build` | PASS, код `0`, 15/15 static pages |
+| `npx playwright test tests/online-map.spec.ts --workers=1` | PASS: 22, skipped: 4 |
+| `npx prettier --check <все файлы Task 4>` | PASS |
+| `npx prettier --check docs/PROJECT_GUIDE.md` | PASS |
+| `git diff --check` | PASS, вывода нет |
+
+`npm run format:check` остаётся красным на 14 несвязанных baseline-файлах, которые существовали до
+Task 4. Все файлы этой задачи отдельно проходят Prettier. Они не переформатировались массово, чтобы
+не затронуть пользовательские изменения.
+
+## Self-review и замечания
+
+- В brief указано `--project=chromium`, но в репозитории проекты называются `desktop` и `mobile`;
+  оба используют Chromium devices. Итоговая команда без фильтра проекта проверила оба проекта и
+  сильнее указанной команды.
+- Параллельный E2E с восемью workers один раз поймал существующую auth-гонку:
+  `/?welcome=1` вместо строгого `/` в `tests/helpers/auth.ts`. Последовательный канонический прогон
+  стабильно зелёный; auth-helper вне scope Task 4 не менялся.
+- Build сохраняет известные warnings о нескольких lockfiles/workspace root и NFT tracing
+  `next.config.ts`; сборка завершается успешно. Эти предупреждения не вызваны динамическими треками.
+- Новых зависимостей нет. Источник маршрутов остаётся `track-fixtures.ts`; API/MQTT не имитируется.
