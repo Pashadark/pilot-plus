@@ -1,5 +1,9 @@
+import type { Metadata } from 'next';
+
 import { OnlineMapWorkspace } from '@/modules/online-map/components/OnlineMapWorkspace';
 import { AppShell } from '@/shared/components/app-shell/AppShell';
+
+export const metadata: Metadata = { title: 'Онлайн-карта | Pilot+' };
 
 export default function OnlineMapPage() {
   return (

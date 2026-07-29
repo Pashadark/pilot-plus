@@ -18,12 +18,13 @@ it('loading сохраняет геометрию карты, контролов
 
   const workspace = screen.getByRole('main', { name: 'Загрузка онлайн-карты' });
   expect(workspace.className).toContain('h-[calc(100dvh-var(--header-height))]');
+  expect(workspace.className).toContain('@container');
 
   const panel = screen.getByRole('complementary', {
     name: 'Загрузка панели выбранного автомобиля',
   });
   expect(panel.className).toContain('right-0');
-  expect(panel.className).toContain('md:w-80');
+  expect(panel.className).toContain('@min-[48rem]:w-80');
 });
 
 it('error объявляет ошибку, не показывает undefined и запускает повтор', async () => {

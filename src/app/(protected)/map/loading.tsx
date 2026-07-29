@@ -5,12 +5,12 @@ export default function OnlineMapLoading() {
   return (
     <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Онлайн-карта' }]}>
       <main
-        className="relative -m-4 h-[calc(100dvh-var(--header-height))] min-h-0 overflow-hidden bg-[var(--color-canvas)] lg:-m-5"
+        className="@container relative -m-4 h-[calc(100dvh-var(--header-height))] min-h-0 overflow-hidden bg-[var(--color-canvas)] lg:-m-5"
         aria-label="Загрузка онлайн-карты"
       >
         <Skeleton className="absolute inset-0 rounded-none bg-[var(--color-primary-soft)]" />
 
-        <div className="absolute top-3 right-3 left-3 z-10 grid gap-2 md:right-auto md:left-4 md:w-[min(25rem,calc(100%-2rem))]">
+        <div className="absolute top-3 right-3 left-3 z-10 grid gap-2 @min-[48rem]:right-auto @min-[48rem]:left-4 @min-[48rem]:w-[min(25rem,calc(100%-23rem))]">
           <Skeleton className="h-11 shadow-[var(--shadow-card)]" />
           <div className="flex gap-2 py-1">
             {Array.from({ length: 4 }, (_, index) => (
@@ -22,11 +22,11 @@ export default function OnlineMapLoading() {
           </div>
         </div>
 
-        <Skeleton className="absolute top-28 left-3 z-10 h-7 w-40 rounded-full shadow-[var(--shadow-card)] md:left-4" />
+        <Skeleton className="absolute top-28 left-3 z-10 h-7 w-40 rounded-full shadow-[var(--shadow-card)] @min-[48rem]:left-4" />
 
         <aside
           aria-label="Загрузка панели выбранного автомобиля"
-          className="absolute right-0 bottom-0 left-0 z-10 grid max-h-[42dvh] gap-4 rounded-t-[var(--radius-panel)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[var(--shadow-floating)] md:top-4 md:right-4 md:bottom-4 md:left-auto md:max-h-none md:w-80 md:rounded-[var(--radius-panel)] md:pb-4"
+          className="absolute right-0 bottom-0 left-0 z-10 grid max-h-[42dvh] gap-4 rounded-t-[var(--radius-panel)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 pb-[max(4rem,env(safe-area-inset-bottom))] shadow-[var(--shadow-floating)] @min-[48rem]:top-4 @min-[48rem]:right-4 @min-[48rem]:bottom-4 @min-[48rem]:left-auto @min-[48rem]:max-h-none @min-[48rem]:w-80 @min-[48rem]:rounded-[var(--radius-panel)] @min-[48rem]:pb-4"
         >
           <div className="flex gap-3">
             <Skeleton className="size-11 shrink-0" />

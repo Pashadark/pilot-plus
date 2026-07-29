@@ -8,6 +8,12 @@ describe('filterOnlineMapVehicles', () => {
     expect(filterOnlineMapVehicles(onlineMapVehicles, 'а123мр77', 'all')).toHaveLength(1);
   });
 
+  it('находит автомобиль по модели без учёта пробелов и регистра', () => {
+    expect(filterOnlineMapVehicles(onlineMapVehicles, 'GEELYATLAS', 'all')).toEqual([
+      expect.objectContaining({ plate: 'Е 789 НО 77' }),
+    ]);
+  });
+
   it('оставляет только автомобили в движении', () => {
     expect(
       filterOnlineMapVehicles(onlineMapVehicles, '', 'moving').every(

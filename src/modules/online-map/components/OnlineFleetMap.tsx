@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import maplibregl from 'maplibre-gl';
 
@@ -13,6 +13,13 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 
 const KRASNOYARSK_CENTER: [number, number] = [92.87, 56.01];
 const MAP_LOAD_TIMEOUT_MS = 10_000;
+const RUSSIAN_MAP_LOCALE = {
+  'Map.Title': 'Интерактивная карта автопарка',
+  'Marker.Title': 'Маркер автомобиля',
+  'NavigationControl.ZoomIn': 'Увеличить масштаб',
+  'NavigationControl.ZoomOut': 'Уменьшить масштаб',
+  'NavigationControl.ResetBearing': 'Повернуть карту или вернуть север наверх',
+};
 
 interface MarkerResource {
   vehicle: OnlineMapVehicle;
@@ -46,7 +53,12 @@ export function OnlineFleetMap({
   const onVehicleSelectRef = useRef(onVehicleSelect);
   const [failedInstanceKey, setFailedInstanceKey] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const instanceKey = `${attempt}:${vehicles.map((vehicle) => vehicle.id).join('|')}`;
+  const vehiclesSnapshotKey = JSON.stringify(vehicles);
+  const stableVehicles = useMemo(
+    () => JSON.parse(vehiclesSnapshotKey) as readonly OnlineMapVehicle[],
+    [vehiclesSnapshotKey],
+  );
+  const instanceKey = `${attempt}:${stableVehicles.map((vehicle) => vehicle.id).join('|')}`;
 
   useEffect(() => {
     selectedVehicleIdRef.current = selectedVehicleId;
@@ -58,7 +70,7 @@ export function OnlineFleetMap({
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || vehicles.length === 0) return;
+    if (!container || stableVehicles.length === 0) return;
 
     const map = new maplibregl.Map({
       container,
@@ -77,9 +89,17 @@ export function OnlineFleetMap({
       },
       center: KRASNOYARSK_CENTER,
       zoom: 11,
+      locale: RUSSIAN_MAP_LOCALE,
     });
 
     mapRef.current = map;
+    const canvas = map.getCanvas();
+    canvas.tabIndex = -1;
+    const activateKeyboardMap = () => {
+      canvas.tabIndex = 0;
+      canvas.focus({ preventScroll: true });
+    };
+    canvas.addEventListener('pointerdown', activateKeyboardMap);
     map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
 
     const handleLoad = () => {
@@ -96,7 +116,7 @@ export function OnlineFleetMap({
     const resizeObserver = new ResizeObserver(() => map.resize());
     resizeObserver.observe(container);
 
-    const markerResources = vehicles.map((vehicle) => {
+    const markerResources = stableVehicles.map((vehicle) => {
       const element = document.createElement('div');
       const root = createRoot(element);
       const selectVehicle = (selectedVehicle: OnlineMapVehicle) => {
@@ -115,6 +135,8 @@ export function OnlineFleetMap({
       const marker = new maplibregl.Marker({ element, anchor: 'bottom' })
         .setLngLat([vehicle.longitude, vehicle.latitude])
         .addTo(map);
+      element.removeAttribute('aria-label');
+      element.removeAttribute('role');
 
       return { vehicle, marker, root };
     });
@@ -125,6 +147,7 @@ export function OnlineFleetMap({
       window.cancelAnimationFrame(resizeFrame);
       window.clearTimeout(loadTimeout);
       resizeObserver.disconnect();
+      canvas.removeEventListener('pointerdown', activateKeyboardMap);
       map.off('load', handleLoad);
       for (const { marker, root } of markerResources) {
         marker.remove();
@@ -134,7 +157,7 @@ export function OnlineFleetMap({
       map.remove();
       mapRef.current = null;
     };
-  }, [instanceKey, vehicles]);
+  }, [instanceKey, stableVehicles]);
 
   useEffect(() => {
     for (const { root, vehicle } of markersRef.current) {
@@ -151,7 +174,7 @@ export function OnlineFleetMap({
     }
   }, [selectedVehicleId]);
 
-  if (vehicles.length === 0) {
+  if (stableVehicles.length === 0) {
     return (
       <div className="grid h-full place-items-center bg-[var(--color-canvas)] p-4">
         <EmptyState
@@ -163,7 +186,7 @@ export function OnlineFleetMap({
   }
 
   return (
-    <div className="relative h-full w-full [&_.maplibregl-ctrl-bottom-right]:right-3 [&_.maplibregl-ctrl-bottom-right]:bottom-[calc(42dvh+max(1rem,env(safe-area-inset-bottom)))] md:[&_.maplibregl-ctrl-bottom-right]:right-[21rem] md:[&_.maplibregl-ctrl-bottom-right]:bottom-4">
+    <div className="relative h-full w-full [&_.maplibregl-ctrl-bottom-right]:right-3 [&_.maplibregl-ctrl-bottom-right]:bottom-[calc(42dvh+max(1rem,env(safe-area-inset-bottom)))] @min-[48rem]:[&_.maplibregl-ctrl-bottom-right]:right-[21rem] @min-[48rem]:[&_.maplibregl-ctrl-bottom-right]:bottom-4">
       <div
         ref={containerRef}
         className="h-full w-full [&_.maplibregl-ctrl-group]:flex [&_.maplibregl-ctrl-group_button]:size-11"

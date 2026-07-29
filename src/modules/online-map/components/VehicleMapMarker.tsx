@@ -48,12 +48,15 @@ export function VehicleMapMarker({ vehicle, selected, onSelect }: VehicleMapMark
       </span>
 
       <span
-        className={`pointer-events-none absolute bottom-full left-1/2 mb-2 w-max max-w-52 -translate-x-1/2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2 text-left text-xs text-[var(--color-text)] shadow-[var(--shadow-floating)] ${selected ? 'block' : 'hidden group-focus-within:block group-hover:block'}`}
+        className={`pointer-events-none absolute bottom-full left-1/2 mb-2 hidden w-max max-w-56 -translate-x-1/2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2 text-left text-xs text-[var(--color-text)] shadow-[var(--shadow-floating)] [@media(hover:hover)_and_(pointer:fine)]:group-focus-within:block [@media(hover:hover)_and_(pointer:fine)]:group-hover:block ${selected ? '[@media(hover:hover)_and_(pointer:fine)]:block' : ''}`}
       >
         <span className="block font-semibold">{vehicle.plate}</span>
         <span className="block text-[var(--color-text-secondary)]">
           {vehicle.name} · {statusLabels[vehicle.status]}
         </span>
+        <span className="mt-1.5 block">Скорость: {vehicle.speedKph} км/ч</span>
+        <span className="block">Топливо: {vehicle.fuelPercent}%</span>
+        <span className="block">Последний сигнал: {vehicle.lastSeenLabel}</span>
       </span>
     </motion.button>
   );
