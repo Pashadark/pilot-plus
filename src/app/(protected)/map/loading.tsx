@@ -26,7 +26,7 @@ export default function OnlineMapLoading() {
 
         <aside
           aria-label="Загрузка панели выбранного автомобиля"
-          className="absolute right-0 bottom-0 left-0 z-10 grid max-h-[42dvh] gap-4 rounded-t-[var(--radius-panel)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 pb-[max(4rem,env(safe-area-inset-bottom))] shadow-[var(--shadow-floating)] @min-[48rem]:top-4 @min-[48rem]:right-4 @min-[48rem]:bottom-4 @min-[48rem]:left-auto @min-[48rem]:max-h-none @min-[48rem]:w-80 @min-[48rem]:rounded-[var(--radius-panel)] @min-[48rem]:pb-4"
+          className="absolute right-0 bottom-0 left-0 z-10 grid max-h-[48dvh] gap-4 overflow-hidden rounded-t-[var(--radius-panel)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[var(--shadow-floating)] @min-[48rem]:top-4 @min-[48rem]:right-4 @min-[48rem]:bottom-4 @min-[48rem]:left-auto @min-[48rem]:max-h-none @min-[48rem]:w-80 @min-[48rem]:rounded-[var(--radius-panel)] @min-[48rem]:pb-4"
         >
           <div className="flex gap-3">
             <Skeleton className="size-11 shrink-0" />
@@ -44,10 +44,10 @@ export default function OnlineMapLoading() {
           </div>
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-2/3" />
-          <Skeleton className="mt-auto h-11 w-28" />
+          <Skeleton className="mt-auto h-14 w-full @min-[48rem]:hidden" />
         </aside>
 
-        <Skeleton className="absolute bottom-4 left-1/2 h-14 w-[min(34rem,calc(100%-2rem))] -translate-x-1/2" />
+        <Skeleton className="absolute bottom-4 left-[var(--sidebar-width)] z-20 mx-auto hidden h-14 w-[min(32rem,calc(100vw-var(--sidebar-width)-24rem))] @min-[48rem]:right-[21rem] @min-[48rem]:block" />
       </main>
     </AppShell>
   );

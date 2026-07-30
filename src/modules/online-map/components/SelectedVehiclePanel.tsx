@@ -22,6 +22,7 @@ export interface SelectedVehiclePanelProps {
   onClose: () => void;
   trackControls: ReactNode;
   trackSummary: ReactNode;
+  trackEvents: ReactNode;
   trackPlayback: ReactNode;
   className?: string;
 }
@@ -31,6 +32,7 @@ export function SelectedVehiclePanel({
   onClose,
   trackControls,
   trackSummary,
+  trackEvents,
   trackPlayback,
   className = '',
 }: SelectedVehiclePanelProps) {
@@ -89,6 +91,7 @@ export function SelectedVehiclePanel({
 
           <div className="border-t border-[var(--color-border)] pt-4">{trackControls}</div>
           {trackSummary}
+          {trackEvents}
         </article>
       </div>
       <div className="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface)] pt-3 @min-[48rem]:fixed @min-[48rem]:right-[21rem] @min-[48rem]:bottom-4 @min-[48rem]:left-[var(--sidebar-width)] @min-[48rem]:z-30 @min-[48rem]:mx-auto @min-[48rem]:w-[min(32rem,calc(100vw-var(--sidebar-width)-24rem))] @min-[48rem]:rounded-[var(--radius-panel)] @min-[48rem]:border @min-[48rem]:p-3 @min-[48rem]:shadow-[var(--shadow-floating)]">

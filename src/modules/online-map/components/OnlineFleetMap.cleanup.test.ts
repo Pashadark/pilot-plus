@@ -3,12 +3,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-import { buildTrackViewModel, getVehicleTrack } from '../track-model';
-import type { VehicleTrackViewModel } from '../track-types';
+import { buildTrackPeriodViewModel, getVehicleTrack } from '../track-model';
+import type { VehicleTrackPeriodViewModel } from '../track-types';
 import type { OnlineMapVehicle } from '../types';
 import { OnlineFleetMap } from './OnlineFleetMap';
 
@@ -38,6 +38,7 @@ const mapMocks = vi.hoisted(() => {
     mapRemoveSource: vi.fn(),
     mapSetFeatureState: vi.fn(),
     mapFitBounds: vi.fn(),
+    resizeObserverCallbacks: [] as ResizeObserverCallback[],
     markerRemove: vi.fn(),
     popupRemove: vi.fn(),
     reactRootContainers: [] as (Element | Document | DocumentFragment)[],
@@ -157,19 +158,20 @@ const vehicles: readonly OnlineMapVehicle[] = [
   },
 ];
 
-function getTrackViewModel(vehicleId: string): VehicleTrackViewModel {
+function getTrackViewModel(vehicleId: string): VehicleTrackPeriodViewModel {
   const track = getVehicleTrack(vehicleId, '2026-07-29');
 
   if (!track) {
     throw new Error('Тестовый маршрут не найден');
   }
 
-  return buildTrackViewModel(track);
+  return buildTrackPeriodViewModel([track], 'day');
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   mapMocks.loadHandlers.clear();
+  mapMocks.resizeObserverCallbacks.length = 0;
   mapMocks.reactRootContainers.length = 0;
   mapMocks.mapOnce.mockImplementation((event: string, handler: () => void) => {
     if (event === 'load') mapMocks.loadHandlers.add(handler);
@@ -185,6 +187,9 @@ beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',
     class ResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        mapMocks.resizeObserverCallbacks.push(callback);
+      }
       observe() {}
       disconnect() {}
     },
@@ -198,6 +203,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -329,6 +335,8 @@ it('сериализует сегменты и события в GeoJSON без 
     properties: {
       color: '#22c55e',
       opacity: 0.72,
+      tripId: track.activeTrip.tripId,
+      tripIndex: 0,
     },
   });
   expect(events.features[0]).toMatchObject({
@@ -338,6 +346,64 @@ it('сериализует сегменты и события в GeoJSON без 
       coordinates: track.events[0].coordinates,
     },
   });
+});
+
+it('вычисляет fit padding по ширине контейнера карты, а не окна', async () => {
+  const { getTrackFitOptions } = await import('./OnlineFleetMap');
+
+  expect(getTrackFitOptions(640, 900, true).padding).toEqual({
+    top: 96,
+    right: 24,
+    bottom: 432,
+    left: 24,
+  });
+  expect(getTrackFitOptions(1024, 600, true).padding).toEqual({
+    top: 32,
+    right: 352,
+    bottom: 32,
+    left: 32,
+  });
+});
+
+it('повторно вписывает маршрут при смене container breakpoint и ориентации', async () => {
+  let width = 640;
+  let height = 800;
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => width);
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(() => height);
+  const track = getTrackViewModel('lada-vesta-a123mr77');
+
+  render(
+    createElement(OnlineFleetMap, {
+      vehicles,
+      selectedVehicleId: vehicles[0].id,
+      trackViewModel: track,
+      playbackPoint: track.start,
+      selectedEventId: null,
+      onVehicleSelect: vi.fn(),
+      onEventActivate: vi.fn(),
+      onPlaybackPointRequest: vi.fn(),
+    }),
+  );
+
+  act(() => mapMocks.fireLoad());
+  await waitFor(() => expect(mapMocks.mapFitBounds).toHaveBeenCalled());
+  mapMocks.mapFitBounds.mockClear();
+  const trackResize = mapMocks.resizeObserverCallbacks.at(-1);
+
+  width = 1024;
+  height = 600;
+  act(() => trackResize?.([], {} as ResizeObserver));
+  expect(mapMocks.mapFitBounds).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.objectContaining({
+      padding: { top: 32, right: 352, bottom: 32, left: 32 },
+    }),
+  );
+
+  mapMocks.mapFitBounds.mockClear();
+  height = 1200;
+  act(() => trackResize?.([], {} as ResizeObserver));
+  expect(mapMocks.mapFitBounds).toHaveBeenCalledTimes(1);
 });
 
 it('регистрирует видимую линию, hitbox, события, концы и направление маршрута', async () => {
@@ -486,4 +552,36 @@ it('немедленно размонтирует popup root при ошибке
 
   expect(mapMocks.reactRootContainers).toHaveLength(1);
   expect(mapMocks.reactRootUnmount).toHaveBeenCalledWith(mapMocks.reactRootContainers[0]);
+});
+
+it('повторяет только трековые ресурсы после ошибки, не пересоздавая базовую карту', async () => {
+  const track = getTrackViewModel('lada-vesta-a123mr77');
+  mapMocks.mapAddLayer.mockImplementationOnce(() => {
+    throw new Error('Тестовая ошибка слоя');
+  });
+
+  render(
+    createElement(OnlineFleetMap, {
+      vehicles,
+      selectedVehicleId: vehicles[0].id,
+      trackViewModel: track,
+      playbackPoint: track.start,
+      selectedEventId: null,
+      onVehicleSelect: vi.fn(),
+      onEventActivate: vi.fn(),
+      onPlaybackPointRequest: vi.fn(),
+    }),
+  );
+
+  act(() => mapMocks.fireLoad());
+  const retry = await screen.findByRole('button', { name: 'Повторить маршрут' });
+  const mapRemoveCallsBeforeRetry = mapMocks.mapRemove.mock.calls.length;
+  mapMocks.mapAddLayer.mockImplementation(() => undefined);
+
+  fireEvent.click(retry);
+
+  await waitFor(() => expect(mapMocks.mapAddSource.mock.calls.length).toBeGreaterThan(3));
+  expect(screen.queryByRole('button', { name: 'Повторить маршрут' })).toBeNull();
+  expect(mapMocks.mapRemove).toHaveBeenCalledTimes(mapRemoveCallsBeforeRetry);
+  expect(mapMocks.mapAddSource.mock.calls.length).toBeGreaterThan(3);
 });

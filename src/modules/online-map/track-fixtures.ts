@@ -33,6 +33,7 @@ function createTrack(
   date: string,
   longitude: number,
   latitude: number,
+  routeIndex: number,
 ): VehicleTrack {
   const pointId = (index: number) => `${vehicleId}-${date}-p${index}`;
   const points = [
@@ -45,6 +46,31 @@ function createTrack(
     createPoint(pointId(6), longitude + 0.018, latitude + 0.006, '08:48', 72, routeAddresses[6]),
     createPoint(pointId(7), longitude + 0.021, latitude + 0.007, '08:56', 0, routeAddresses[7]),
   ] as const;
+
+  const distributedEvent =
+    routeIndex % 3 === 0
+      ? {
+          id: `${vehicleId}-${date}-connection-loss`,
+          type: 'connection-loss' as const,
+          pointId: pointId(4),
+          title: 'Потеря связи',
+          description: 'Сигнал восстановлен через 2 минуты',
+        }
+      : routeIndex % 3 === 1
+        ? {
+            id: `${vehicleId}-${date}-geofence-enter`,
+            type: 'geofence-enter' as const,
+            pointId: pointId(3),
+            title: 'Въезд в геозону',
+            description: 'Склад на улице Ленина',
+          }
+        : {
+            id: `${vehicleId}-${date}-geofence-exit`,
+            type: 'geofence-exit' as const,
+            pointId: pointId(5),
+            title: 'Выезд из геозоны',
+            description: 'Покинул зону доставки',
+          };
 
   return {
     vehicleId,
@@ -72,6 +98,7 @@ function createTrack(
         title: 'Превышение скорости',
         description: '72 км/ч',
       },
+      distributedEvent,
     ],
   };
 }
@@ -88,8 +115,14 @@ const fixtureDates = ['2026-07-29', '2026-07-28', '2026-07-27'] as const;
 
 // Демонстрационные маршруты изолированы от будущего потока телеметрии.
 export const vehicleTrackFixtures: readonly VehicleTrack[] = fixtureDefinitions.flatMap(
-  ([vehicleId, longitude, latitude]) =>
+  ([vehicleId, longitude, latitude], vehicleIndex) =>
     fixtureDates.map((date, index) =>
-      createTrack(vehicleId, date, longitude + index * 0.001, latitude + index * 0.001),
+      createTrack(
+        vehicleId,
+        date,
+        longitude + index * 0.001,
+        latitude + index * 0.001,
+        vehicleIndex * fixtureDates.length + index,
+      ),
     ),
 );

@@ -1,10 +1,12 @@
 import { vehicleTrackFixtures } from './track-fixtures';
 import type {
   TrackCoordinates,
+  TrackPeriodMode,
   TrackSpeedColor,
   VehicleTrack,
   VehicleTrackEventView,
   VehicleTrackPoint,
+  VehicleTrackPeriodViewModel,
   VehicleTrackSegment,
   VehicleTrackViewModel,
 } from './track-types';
@@ -31,6 +33,17 @@ export function getVehicleTrack(vehicleId: string, date: string): VehicleTrack |
   );
 }
 
+export function getVehicleTracks(
+  vehicleId: string,
+  dates: readonly string[],
+): readonly VehicleTrack[] {
+  const requestedDates = new Set(dates);
+
+  return vehicleTrackFixtures
+    .filter((track) => track.vehicleId === vehicleId && requestedDates.has(track.date))
+    .sort((left, right) => right.date.localeCompare(left.date));
+}
+
 export function getPlaybackPosition(track: VehicleTrack, progress: number): VehicleTrackPoint {
   const bounded = Math.min(100, Math.max(0, progress));
   const index = Math.round((bounded / 100) * (track.points.length - 1));
@@ -38,7 +51,7 @@ export function getPlaybackPosition(track: VehicleTrack, progress: number): Vehi
   return track.points[index];
 }
 
-export function buildTrackViewModel(track: VehicleTrack): VehicleTrackViewModel {
+export function buildTrackViewModel(track: VehicleTrack, tripIndex = 0): VehicleTrackViewModel {
   if (track.points.length < 2) {
     throw new Error('Маршрут должен содержать минимум две точки');
   }
@@ -51,7 +64,7 @@ export function buildTrackViewModel(track: VehicleTrack): VehicleTrackViewModel 
       throw new Error('Событие не привязано к точке маршрута');
     }
 
-    return toEventView(event, point);
+    return toEventView(event, point, track.date, tripIndex);
   });
 
   const eventGroups = groupEventsByCoordinates(events);
@@ -61,7 +74,9 @@ export function buildTrackViewModel(track: VehicleTrack): VehicleTrackViewModel 
   return {
     vehicleId: track.vehicleId,
     date: track.date,
-    segments: buildSegments(track.points),
+    tripId: track.date,
+    tripIndex,
+    segments: buildSegments(track.points, track.date, tripIndex),
     events,
     eventGroups,
     start,
@@ -69,12 +84,50 @@ export function buildTrackViewModel(track: VehicleTrack): VehicleTrackViewModel 
     distanceKm: calculateDistanceKm(track.points),
     durationMinutes: getDurationMinutes(start.timestamp, finish.timestamp),
     maxSpeedKph: Math.max(...track.points.map((point) => point.speedKph)),
+    stopsCount: events.filter((event) => event.type === 'stop').length,
   };
 }
 
-function buildSegments(points: readonly VehicleTrackPoint[]): readonly VehicleTrackSegment[] {
+export function buildTrackPeriodViewModel(
+  tracks: readonly VehicleTrack[],
+  period: TrackPeriodMode,
+): VehicleTrackPeriodViewModel {
+  if (tracks.length === 0) {
+    throw new Error('Период маршрута должен содержать минимум одну поездку');
+  }
+
+  const trips = [...tracks]
+    .sort((left, right) => right.date.localeCompare(left.date))
+    .map((track, tripIndex) => buildTrackViewModel(track, tripIndex));
+  const activeTrip = trips[0];
+
+  return {
+    vehicleId: activeTrip.vehicleId,
+    period,
+    date: activeTrip.date,
+    trips,
+    activeTrip,
+    segments: trips.flatMap((trip) => trip.segments),
+    events: trips.flatMap((trip) => trip.events),
+    eventGroups: trips.flatMap((trip) => trip.eventGroups),
+    start: activeTrip.start,
+    finish: activeTrip.finish,
+    distanceKm: trips.reduce((total, trip) => total + trip.distanceKm, 0),
+    durationMinutes: trips.reduce((total, trip) => total + trip.durationMinutes, 0),
+    maxSpeedKph: Math.max(...trips.map((trip) => trip.maxSpeedKph)),
+    stopsCount: trips.reduce((total, trip) => total + trip.stopsCount, 0),
+  };
+}
+
+function buildSegments(
+  points: readonly VehicleTrackPoint[],
+  tripId: string,
+  tripIndex: number,
+): readonly VehicleTrackSegment[] {
   return points.slice(1).map((to, index) => ({
     id: `${points[index].id}-${to.id}`,
+    tripId,
+    tripIndex,
     from: points[index],
     to,
     speedKph: to.speedKph,
@@ -86,9 +139,13 @@ function buildSegments(points: readonly VehicleTrackPoint[]): readonly VehicleTr
 function toEventView(
   event: VehicleTrack['events'][number],
   point: VehicleTrackPoint,
+  tripId: string,
+  tripIndex: number,
 ): VehicleTrackEventView {
   return {
     ...event,
+    tripId,
+    tripIndex,
     coordinates: point.coordinates,
     timestamp: point.timestamp,
     speedKph: point.speedKph,

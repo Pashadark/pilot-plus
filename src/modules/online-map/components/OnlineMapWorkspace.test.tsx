@@ -22,6 +22,8 @@ function FakeMap(props: OnlineFleetMapProps) {
         data-testid="map-track-state"
         data-vehicle-id={trackViewModel?.vehicleId ?? ''}
         data-track-date={trackViewModel?.date ?? ''}
+        data-track-period={trackViewModel?.period ?? ''}
+        data-trip-count={trackViewModel?.trips.length ?? 0}
         data-playback-point={props.playbackPoint?.id ?? ''}
         data-selected-event={props.selectedEventId ?? ''}
       />
@@ -155,7 +157,7 @@ it('центрирует desktop playback только в свободной о�
   fireEvent.click(screen.getByRole('button', { name: /А 123 МР 77/ }));
 
   const slider = screen.getByRole('slider', { name: 'Положение на маршруте' });
-  const playbackPositioner = slider.parentElement?.parentElement;
+  const playbackPositioner = slider.closest('aside')?.lastElementChild;
   expect(playbackPositioner?.className).toContain('@min-[48rem]:left-[var(--sidebar-width)]');
   expect(playbackPositioner?.className).toContain('@min-[48rem]:right-[21rem]');
   expect(playbackPositioner?.className).toContain('@min-[48rem]:mx-auto');
@@ -195,12 +197,54 @@ it('меняет день и быстрый период, сохраняя до�
   expect(dateControl.value).toBe('2026-07-28');
 
   await user.click(screen.getByRole('button', { name: '7 дней' }));
-  expect(dateControl.value).toBe('2026-07-28');
+  expect(dateControl.value).toBe('2026-07-29');
+  expect(getMapTrackState().trackPeriod).toBe('seven-days');
+  expect(getMapTrackState().tripCount).toBe('3');
+  expect(screen.getByText('3 поездки')).toBeTruthy();
+  expect(screen.getByText('Воспроизводится последняя поездка: 29.07.2026')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Сегодня' }).getAttribute('aria-pressed')).toBe(
+    'false',
+  );
+  expect(screen.getByRole('button', { name: '7 дней' }).getAttribute('aria-pressed')).toBe('true');
   expect([...dateControl.options].map((option) => option.value)).toEqual([
     '2026-07-29',
     '2026-07-28',
     '2026-07-27',
   ]);
+
+  await user.selectOptions(dateControl, '2026-07-27');
+  expect(getMapTrackState().trackPeriod).toBe('day');
+  expect(getMapTrackState().tripCount).toBe('1');
+});
+
+it('показывает видимый список событий и использует один callback для hover, focus и tap', async () => {
+  const user = userEvent.setup();
+  render(<OnlineMapWorkspace mapComponent={FakeMap} />);
+
+  await user.click(screen.getByRole('button', { name: /А 123 МР 77/ }));
+  const eventButton = screen.getByRole('button', { name: /Заправка, 08:32/ });
+
+  expect(eventButton.closest('[aria-label="События маршрута"]')).toBeTruthy();
+  expect(screen.getByRole('button', { name: /Потеря связи, 08:32/ })).toBeTruthy();
+  fireEvent.mouseEnter(eventButton);
+  expect(getMapTrackState().selectedEvent).toContain('-refuel');
+
+  fireEvent.blur(eventButton);
+  fireEvent.focus(eventButton);
+  expect(getMapTrackState().selectedEvent).toContain('-refuel');
+
+  await user.click(eventButton);
+  expect(getMapTrackState().playbackPoint).toContain('-p4');
+});
+
+it('показывает в сводке количество стоянок вместо количества событий', async () => {
+  const user = userEvent.setup();
+  render(<OnlineMapWorkspace mapComponent={FakeMap} />);
+
+  await user.click(screen.getByRole('button', { name: /А 123 МР 77/ }));
+
+  expect(screen.getByText('Стоянки')).toBeTruthy();
+  expect(screen.queryByText('События')).toBeNull();
 });
 
 it('синхронизирует выбранное событие с ползунком и картой', async () => {

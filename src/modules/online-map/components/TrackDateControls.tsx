@@ -1,9 +1,12 @@
 import { FilterChip, Select } from '@/shared/ui';
+import type { TrackPeriodMode } from '../track-types';
 
 export interface TrackDateControlsProps {
   dates: readonly string[];
   value: string;
+  period: TrackPeriodMode;
   onChange: (date: string) => void;
+  onPeriodChange: (period: TrackPeriodMode) => void;
 }
 
 const quickPeriods = ['Сегодня', 'Вчера', '7 дней'] as const;
@@ -12,10 +15,25 @@ function formatDate(date: string): string {
   return date.split('-').reverse().join('.');
 }
 
-export function TrackDateControls({ dates, value, onChange }: TrackDateControlsProps) {
+export function TrackDateControls({
+  dates,
+  value,
+  period: activePeriod,
+  onChange,
+  onPeriodChange,
+}: TrackDateControlsProps) {
   const applyQuickPeriod = (period: (typeof quickPeriods)[number]) => {
-    if (period === 'Сегодня' && dates[0]) onChange(dates[0]);
-    if (period === 'Вчера' && dates[1]) onChange(dates[1]);
+    if (period === 'Сегодня' && dates[0]) {
+      onPeriodChange('day');
+      onChange(dates[0]);
+    }
+    if (period === 'Вчера' && dates[1]) {
+      onPeriodChange('day');
+      onChange(dates[1]);
+    }
+    if (period === '7 дней' && dates[0]) {
+      onPeriodChange('seven-days');
+    }
   };
 
   return (
@@ -25,7 +43,10 @@ export function TrackDateControls({ dates, value, onChange }: TrackDateControlsP
         aria-label="Дата маршрута"
         value={value}
         disabled={dates.length === 0}
-        onChange={(event) => onChange(event.currentTarget.value)}
+        onChange={(event) => {
+          onPeriodChange('day');
+          onChange(event.currentTarget.value);
+        }}
       >
         {dates.length === 0 ? (
           <option value="">Нет доступных дат</option>
@@ -44,8 +65,9 @@ export function TrackDateControls({ dates, value, onChange }: TrackDateControlsP
       >
         {quickPeriods.map((period) => {
           const selected =
-            (period === 'Сегодня' && value === dates[0]) ||
-            (period === 'Вчера' && value === dates[1]);
+            (activePeriod === 'day' && period === 'Сегодня' && value === dates[0]) ||
+            (activePeriod === 'day' && period === 'Вчера' && value === dates[1]) ||
+            (period === '7 дней' && activePeriod === 'seven-days');
 
           return (
             <FilterChip

@@ -1,11 +1,11 @@
-import type { Feature, FeatureCollection, LineString, Point } from 'geojson';
-import type { Map, MapLayerMouseEvent } from 'maplibre-gl';
+import type { FeatureCollection, LineString, Point } from 'geojson';
+import type { ExpressionSpecification, Map, MapLayerMouseEvent } from 'maplibre-gl';
 
 import type {
   TrackCoordinates,
   VehicleTrackEventView,
+  VehicleTrackPeriodViewModel,
   VehicleTrackSegment,
-  VehicleTrackViewModel,
 } from '../track-types';
 
 const TRACK_SOURCE_ID = 'vehicle-track';
@@ -21,6 +21,7 @@ const TRACK_LAYER_IDS = [
   'vehicle-track-directions',
   'vehicle-track-hitbox',
   'vehicle-track-lines',
+  'vehicle-track-casing',
 ] as const;
 
 const TRACK_SOURCE_IDS = [
@@ -43,6 +44,8 @@ interface TrackSegmentProperties {
   toTimestamp: string;
   speedKph: number;
   address: string;
+  tripId: string;
+  tripIndex: number;
 }
 
 interface TrackEventProperties {
@@ -50,12 +53,14 @@ interface TrackEventProperties {
   type: VehicleTrackEventView['type'];
   title: string;
   count: number;
+  tripId: string;
+  tripIndex: number;
 }
 
 type TrackEventWithCount = VehicleTrackEventView & { count?: number };
 
 export interface MountVehicleTrackLayersOptions {
-  trackViewModel: VehicleTrackViewModel;
+  trackViewModel: VehicleTrackPeriodViewModel;
   selectedEventId: string | null;
   onSegmentHover: (segment: VehicleTrackSegment, coordinates: TrackCoordinates) => void;
   onSegmentLeave: () => void;
@@ -82,9 +87,15 @@ export function VehicleTrackAccessibilitySurface({
     <div
       data-testid="vehicle-track-a11y"
       data-track-date={trackViewModel.date}
+      data-track-period={trackViewModel.period}
+      data-trip-count={trackViewModel.trips.length}
       data-track-ready={String(ready)}
       className="pointer-events-none absolute size-px overflow-hidden border-0 p-0 whitespace-nowrap [clip-path:inset(50%)] [clip:rect(0,0,0,0)]"
-      aria-label={`Маршрут за ${trackViewModel.date}`}
+      aria-label={
+        trackViewModel.period === 'seven-days'
+          ? `Маршруты за 7 дней, ${trackViewModel.trips.length} поездки`
+          : `Маршрут за ${trackViewModel.date}`
+      }
     >
       {trackViewModel.segments.map((segment) => {
         const activateSegment = () => onSegmentHover(segment, segment.to.coordinates);
@@ -94,6 +105,8 @@ export function VehicleTrackAccessibilitySurface({
             key={segment.id}
             type="button"
             data-track-color={segment.color}
+            data-trip-id={segment.tripId}
+            data-trip-index={segment.tripIndex}
             data-coordinate={serializeCoordinates(segment.to.coordinates)}
             data-from-coordinate={serializeCoordinates(segment.from.coordinates)}
             data-to-coordinate={serializeCoordinates(segment.to.coordinates)}
@@ -112,6 +125,7 @@ export function VehicleTrackAccessibilitySurface({
           key={event.id}
           type="button"
           data-coordinate={serializeCoordinates(event.coordinates)}
+          data-trip-id={event.tripId}
           aria-label={`Событие: ${event.title}`}
           disabled={!ready}
           onClick={() => onEventActivate(event, event.count)}
@@ -155,6 +169,8 @@ export function trackSegmentsToGeoJson(
         toTimestamp: segment.to.timestamp,
         speedKph: segment.speedKph,
         address: segment.to.address,
+        tripId: segment.tripId,
+        tripIndex: segment.tripIndex,
       },
     })),
   };
@@ -177,6 +193,8 @@ export function trackEventsToGeoJson(
         type: event.type,
         title: event.title,
         count: event.count ?? 1,
+        tripId: event.tripId,
+        tripIndex: event.tripIndex,
       },
     })),
   };
@@ -280,6 +298,18 @@ export function mountVehicleTrackLayers(
     });
 
     map.addLayer({
+      id: 'vehicle-track-casing',
+      type: 'line',
+      source: TRACK_SOURCE_ID,
+      paint: {
+        'line-color': '#ffffff',
+        'line-opacity': 0.9,
+        'line-width': 8,
+        'line-offset': getTripLineOffsetExpression(),
+      },
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+    });
+    map.addLayer({
       id: 'vehicle-track-lines',
       type: 'line',
       source: TRACK_SOURCE_ID,
@@ -287,6 +317,7 @@ export function mountVehicleTrackLayers(
         'line-color': ['get', 'color'],
         'line-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.95, 0.72],
         'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 7, 5],
+        'line-offset': getTripLineOffsetExpression(),
       },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
     });
@@ -297,6 +328,7 @@ export function mountVehicleTrackLayers(
       paint: {
         'line-color': 'rgba(0, 0, 0, 0)',
         'line-width': 16,
+        'line-offset': getTripLineOffsetExpression(),
       },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
     });
@@ -421,24 +453,45 @@ export function mountVehicleTrackLayers(
 }
 
 function endpointsToGeoJson(
-  track: VehicleTrackViewModel,
-): FeatureCollection<Point, { kind: 'start' | 'finish'; label: string; color: string }> {
-  const features: Feature<Point, { kind: 'start' | 'finish'; label: string; color: string }>[] = [
-    {
-      type: 'Feature',
-      id: 'start',
-      geometry: { type: 'Point', coordinates: [...track.start.coordinates] },
-      properties: { kind: 'start', label: 'Старт', color: '#22c55e' },
-    },
-    {
-      type: 'Feature',
-      id: 'finish',
-      geometry: { type: 'Point', coordinates: [...track.finish.coordinates] },
-      properties: { kind: 'finish', label: 'Финиш', color: '#2563eb' },
-    },
-  ];
+  track: VehicleTrackPeriodViewModel,
+): FeatureCollection<
+  Point,
+  { kind: 'start' | 'finish'; label: string; color: string; tripId: string }
+> {
+  const features = track.trips.flatMap((trip) => {
+    const dateLabel = trip.date.split('-').reverse().slice(0, 2).join('.');
+
+    return [
+      {
+        type: 'Feature' as const,
+        id: `${trip.tripId}-start`,
+        geometry: { type: 'Point' as const, coordinates: [...trip.start.coordinates] },
+        properties: {
+          kind: 'start' as const,
+          label: track.trips.length > 1 ? `Старт ${dateLabel}` : 'Старт',
+          color: '#22c55e',
+          tripId: trip.tripId,
+        },
+      },
+      {
+        type: 'Feature' as const,
+        id: `${trip.tripId}-finish`,
+        geometry: { type: 'Point' as const, coordinates: [...trip.finish.coordinates] },
+        properties: {
+          kind: 'finish' as const,
+          label: track.trips.length > 1 ? `Финиш ${dateLabel}` : 'Финиш',
+          color: '#2563eb',
+          tripId: trip.tripId,
+        },
+      },
+    ];
+  });
 
   return { type: 'FeatureCollection', features };
+}
+
+function getTripLineOffsetExpression(): ExpressionSpecification {
+  return ['match', ['get', 'tripIndex'], 1, -5, 2, 5, 0];
 }
 
 function getFeatureId(event: MapLayerMouseEvent): string | null {

@@ -8,18 +8,20 @@ import { Button, EmptyState, FilterChip, SearchInput } from '@/shared/ui';
 import { onlineMapVehicles } from '../fixtures';
 import { filterOnlineMapVehicles } from '../filter-vehicles';
 import {
-  buildTrackViewModel,
+  buildTrackPeriodViewModel,
   getPlaybackPosition,
   getVehicleTrack,
   getVehicleTrackDates,
+  getVehicleTracks,
 } from '../track-model';
-import type { VehicleTrackEventView } from '../track-types';
+import type { TrackPeriodMode, VehicleTrackEventView } from '../track-types';
 import type { OnlineMapFilter, OnlineMapVehicle } from '../types';
 import type { OnlineFleetMapProps } from './OnlineFleetMap';
 import { OnlineFleetMapClient } from './OnlineFleetMapClient';
 import { SelectedVehiclePanel } from './SelectedVehiclePanel';
 import { TrackDateControls } from './TrackDateControls';
 import { TrackDaySummary } from './TrackDaySummary';
+import { TrackEventList } from './TrackEventList';
 import { TrackPlayback } from './TrackPlayback';
 
 const filters: readonly { value: OnlineMapFilter; label: string }[] = [
@@ -40,6 +42,7 @@ export function OnlineMapWorkspace({
   const [activeFilter, setActiveFilter] = useState<OnlineMapFilter>('all');
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [trackDate, setTrackDate] = useState('');
+  const [trackPeriod, setTrackPeriod] = useState<TrackPeriodMode>('day');
   const [progress, setProgress] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -56,14 +59,20 @@ export function OnlineMapWorkspace({
     () => (selectedVehicle ? getVehicleTrackDates(selectedVehicle.id) : []),
     [selectedVehicle],
   );
-  const selectedTrack = useMemo(
+  const dayTrack = useMemo(
     () => (selectedVehicle && trackDate ? getVehicleTrack(selectedVehicle.id, trackDate) : null),
     [selectedVehicle, trackDate],
   );
+  const periodTracks = useMemo(() => {
+    if (!selectedVehicle) return [];
+    if (trackPeriod === 'seven-days') return getVehicleTracks(selectedVehicle.id, trackDates);
+    return dayTrack ? [dayTrack] : [];
+  }, [dayTrack, selectedVehicle, trackDates, trackPeriod]);
   const trackViewModel = useMemo(
-    () => (selectedTrack ? buildTrackViewModel(selectedTrack) : null),
-    [selectedTrack],
+    () => (periodTracks.length > 0 ? buildTrackPeriodViewModel(periodTracks, trackPeriod) : null),
+    [periodTracks, trackPeriod],
   );
+  const selectedTrack = trackPeriod === 'seven-days' ? (periodTracks[0] ?? null) : dayTrack;
   const playbackPoint = useMemo(
     () => (selectedTrack ? getPlaybackPosition(selectedTrack, progress) : null),
     [progress, selectedTrack],
@@ -90,6 +99,7 @@ export function OnlineMapWorkspace({
 
   const resetTrackState = () => {
     setTrackDate('');
+    setTrackPeriod('day');
     setProgress(0);
     setPlaying(false);
     setSelectedEventId(null);
@@ -123,6 +133,7 @@ export function OnlineMapWorkspace({
     const dates = getVehicleTrackDates(vehicle.id);
     setSelectedVehicleId(vehicle.id);
     setTrackDate(dates[0] ?? '');
+    setTrackPeriod('day');
     setProgress(0);
     setPlaying(false);
     setSelectedEventId(null);
@@ -130,6 +141,14 @@ export function OnlineMapWorkspace({
 
   const handleTrackDateChange = (date: string) => {
     setTrackDate(date);
+    setProgress(0);
+    setPlaying(false);
+    setSelectedEventId(null);
+  };
+
+  const handleTrackPeriodChange = (period: TrackPeriodMode) => {
+    setTrackPeriod(period);
+    if (period === 'seven-days') setTrackDate(trackDates[0] ?? '');
     setProgress(0);
     setPlaying(false);
     setSelectedEventId(null);
@@ -148,15 +167,15 @@ export function OnlineMapWorkspace({
   };
 
   const handleTrackEventSelect = (event: VehicleTrackEventView) => {
-    if (!selectedTrack) return;
+    setSelectedEventId(event.id);
+    setPlaying(false);
+    if (!selectedTrack || event.tripId !== selectedTrack.date) return;
 
     const pointIndex = selectedTrack.points.findIndex((point) => point.id === event.pointId);
     if (pointIndex < 0) return;
 
     const lastPointIndex = selectedTrack.points.length - 1;
-    setSelectedEventId(event.id);
     setProgress(lastPointIndex > 0 ? (pointIndex / lastPointIndex) * 100 : 0);
-    setPlaying(false);
   };
 
   const resetFilters = () => {
@@ -234,18 +253,37 @@ export function OnlineMapWorkspace({
             <TrackDateControls
               dates={trackDates}
               value={trackDate}
+              period={trackPeriod}
               onChange={handleTrackDateChange}
+              onPeriodChange={handleTrackPeriodChange}
             />
           }
           trackSummary={<TrackDaySummary model={trackViewModel} />}
+          trackEvents={
+            trackViewModel ? (
+              <TrackEventList
+                model={trackViewModel}
+                selectedEventId={selectedEventId}
+                onActivate={handleTrackEventSelect}
+              />
+            ) : null
+          }
           trackPlayback={
-            <TrackPlayback
-              progress={progress}
-              playing={playing && !reducedMotion}
-              reducedMotion={reducedMotion}
-              onProgressChange={handleProgressChange}
-              onPlayingChange={handlePlayingChange}
-            />
+            <div className="grid gap-2">
+              {trackPeriod === 'seven-days' && trackViewModel ? (
+                <p className="text-xs font-medium text-[var(--color-text-secondary)]">
+                  Воспроизводится последняя поездка:{' '}
+                  {trackViewModel.activeTrip.date.split('-').reverse().join('.')}
+                </p>
+              ) : null}
+              <TrackPlayback
+                progress={progress}
+                playing={playing && !reducedMotion}
+                reducedMotion={reducedMotion}
+                onProgressChange={handleProgressChange}
+                onPlayingChange={handlePlayingChange}
+              />
+            </div>
           }
           className="absolute right-0 bottom-0 left-0 z-20 max-h-[48dvh] rounded-t-[var(--radius-panel)] pb-[max(1rem,env(safe-area-inset-bottom))] @min-[48rem]:top-4 @min-[48rem]:right-4 @min-[48rem]:bottom-4 @min-[48rem]:left-auto @min-[48rem]:max-h-none @min-[48rem]:w-80 @min-[48rem]:rounded-[var(--radius-panel)] @min-[48rem]:pb-4"
         />
@@ -255,7 +293,11 @@ export function OnlineMapWorkspace({
         href="https://www.openstreetmap.org/copyright"
         target="_blank"
         rel="noreferrer"
-        className="absolute bottom-2 left-3 z-30 inline-flex min-h-11 items-center rounded-[var(--radius-sm)] bg-[var(--color-surface)] px-2 text-xs font-medium text-[var(--color-text-secondary)] underline-offset-4 shadow-[var(--shadow-card)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+        className={`absolute left-3 z-30 inline-flex min-h-11 items-center rounded-[var(--radius-sm)] bg-[var(--color-surface)] px-2 text-xs font-medium text-[var(--color-text-secondary)] underline-offset-4 shadow-[var(--shadow-card)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] @min-[48rem]:bottom-2 ${
+          selectedVehicle
+            ? 'bottom-[calc(48dvh+0.5rem)]'
+            : 'bottom-[max(0.5rem,env(safe-area-inset-bottom))]'
+        }`}
       >
         © OpenStreetMap
       </a>

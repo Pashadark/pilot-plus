@@ -1,8 +1,8 @@
 import { EmptyState } from '@/shared/ui';
 
-import type { VehicleTrackViewModel } from '../track-types';
+import type { VehicleTrackPeriodViewModel } from '../track-types';
 
-export function TrackDaySummary({ model }: { model: VehicleTrackViewModel | null }) {
+export function TrackDaySummary({ model }: { model: VehicleTrackPeriodViewModel | null }) {
   if (!model) {
     return (
       <EmptyState
@@ -17,11 +17,16 @@ export function TrackDaySummary({ model }: { model: VehicleTrackViewModel | null
       <h3 id="track-summary-title" className="font-semibold">
         Сводка маршрута
       </h3>
+      {model.period === 'seven-days' ? (
+        <p className="text-sm font-medium text-[var(--color-text-secondary)]">
+          {model.trips.length} поездки
+        </p>
+      ) : null}
       <dl className="grid grid-cols-2 gap-3 text-sm">
         <Metric label="Пробег" value={`${model.distanceKm.toFixed(1)} км`} />
         <Metric label="В пути" value={`${model.durationMinutes} мин`} />
         <Metric label="Макс. скорость" value={`${model.maxSpeedKph} км/ч`} />
-        <Metric label="События" value={String(model.events.length)} />
+        <Metric label="Стоянки" value={String(model.stopsCount)} />
       </dl>
     </section>
   );

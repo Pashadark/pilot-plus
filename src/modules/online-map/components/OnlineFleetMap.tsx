@@ -9,9 +9,9 @@ import { Button, EmptyState, ErrorState } from '@/shared/ui';
 import type {
   TrackCoordinates,
   VehicleTrackEventView,
+  VehicleTrackPeriodViewModel,
   VehicleTrackPoint,
   VehicleTrackSegment,
-  VehicleTrackViewModel,
 } from '../track-types';
 import type { OnlineMapVehicle } from '../types';
 import { TrackEventPopup } from './TrackEventPopup';
@@ -47,7 +47,7 @@ function flyToVehicle(map: maplibregl.Map, vehicle: OnlineMapVehicle) {
 export interface OnlineFleetMapProps {
   vehicles: readonly OnlineMapVehicle[];
   selectedVehicleId: string | null;
-  trackViewModel: VehicleTrackViewModel | null;
+  trackViewModel: VehicleTrackPeriodViewModel | null;
   playbackPoint: VehicleTrackPoint | null;
   selectedEventId: string | null;
   onVehicleSelect: (vehicle: OnlineMapVehicle) => void;
@@ -82,9 +82,11 @@ export function OnlineFleetMap({
   >(() => {});
   const segmentLeaveRef = useRef(() => {});
   const eventActivateRef = useRef<(event: VehicleTrackEventView, count: number) => void>(() => {});
+  const eventPreviewRef = useRef<(event: VehicleTrackEventView, count: number) => void>(() => {});
   const [failedInstanceKey, setFailedInstanceKey] = useState<string | null>(null);
-  const [trackLayerFailed, setTrackLayerFailed] = useState(false);
+  const [failedTrackAttempt, setFailedTrackAttempt] = useState<number | null>(null);
   const [trackInteractionKey, setTrackInteractionKey] = useState<string | null>(null);
+  const [trackAttempt, setTrackAttempt] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const vehiclesSnapshotKey = JSON.stringify(vehicles);
   const stableVehicles = useMemo(
@@ -92,6 +94,7 @@ export function OnlineFleetMap({
     [vehiclesSnapshotKey],
   );
   const instanceKey = `${attempt}:${stableVehicles.map((vehicle) => vehicle.id).join('|')}`;
+  const trackLayerFailed = failedTrackAttempt === trackAttempt;
 
   useEffect(() => {
     selectedVehicleIdRef.current = selectedVehicleId;
@@ -230,17 +233,18 @@ export function OnlineFleetMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !trackViewModel) {
-      setTrackLayerFailed(false);
+      setFailedTrackAttempt(null);
       setTrackInteractionKey(null);
       return;
     }
 
-    const currentTrackInteractionKey = `${trackViewModel.vehicleId}:${trackViewModel.date}`;
+    const currentTrackInteractionKey = getTrackResourceKey(trackViewModel);
     let disposed = false;
     let layersCleanup: (() => void) | null = null;
     let segmentPopup: maplibregl.Popup | null = null;
     let eventPopup: maplibregl.Popup | null = null;
     let eventPopupRoot: Root | null = null;
+    let fitResizeObserver: ResizeObserver | null = null;
 
     const cleanupTrack = () => {
       if (disposed) return;
@@ -262,6 +266,9 @@ export function OnlineFleetMap({
       segmentHoverRef.current = () => {};
       segmentLeaveRef.current = () => {};
       eventActivateRef.current = () => {};
+      eventPreviewRef.current = () => {};
+      fitResizeObserver?.disconnect();
+      fitResizeObserver = null;
       setTrackInteractionKey((current) =>
         current === currentTrackInteractionKey ? null : current,
       );
@@ -292,18 +299,22 @@ export function OnlineFleetMap({
             .addTo(map);
         };
         const handleSegmentLeave = () => segmentPopup?.remove();
-        const activateEvent = (event: VehicleTrackEventView, count: number) => {
+        const showEvent = (event: VehicleTrackEventView, count: number) => {
           if (!eventPopup || !eventPopupRoot) return;
           eventPopupRoot.render(<TrackEventPopup event={event} count={count} />);
           eventPopup
             .setLngLat([...event.coordinates])
             .setDOMContent(eventPopupElement)
             .addTo(map);
+        };
+        const activateEvent = (event: VehicleTrackEventView, count: number) => {
+          showEvent(event, count);
           onEventActivateRef.current(event);
         };
         segmentHoverRef.current = handleSegmentHover;
         segmentLeaveRef.current = handleSegmentLeave;
         eventActivateRef.current = activateEvent;
+        eventPreviewRef.current = showEvent;
 
         layersCleanup = mountVehicleTrackLayers(map, {
           trackViewModel,
@@ -313,12 +324,20 @@ export function OnlineFleetMap({
           onEventActivate: activateEvent,
         });
 
-        fitTrackBounds(map, trackViewModel);
+        fitTrackBounds(map, trackViewModel, containerRef.current);
+        let layoutSignature = getMapLayoutSignature(containerRef.current);
+        fitResizeObserver = new ResizeObserver(() => {
+          const nextLayoutSignature = getMapLayoutSignature(containerRef.current);
+          if (nextLayoutSignature === layoutSignature) return;
+          layoutSignature = nextLayoutSignature;
+          fitTrackBounds(map, trackViewModel, containerRef.current);
+        });
+        if (containerRef.current) fitResizeObserver.observe(containerRef.current);
         if (playbackPointRef.current) {
           playbackMarkerRef.current = createPlaybackMarker(map, playbackPointRef.current);
         }
         setTrackInteractionKey(currentTrackInteractionKey);
-        setTrackLayerFailed(false);
+        setFailedTrackAttempt(null);
       } catch {
         layersCleanup?.();
         layersCleanup = null;
@@ -332,7 +351,7 @@ export function OnlineFleetMap({
         playbackMarkerRef.current?.remove();
         playbackMarkerRef.current = null;
         setTrackInteractionKey(null);
-        setTrackLayerFailed(true);
+        setFailedTrackAttempt(trackAttempt);
       }
     };
 
@@ -345,23 +364,40 @@ export function OnlineFleetMap({
     }
 
     return cleanupTrack;
-  }, [instanceKey, trackViewModel]);
+  }, [instanceKey, trackAttempt, trackViewModel]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map?.getSource('vehicle-track-events') || !trackViewModel) return;
 
     try {
+      const selectedEvent = trackViewModel.events.find((event) => event.id === selectedEventId);
+      const selectedEventCount = selectedEvent
+        ? trackViewModel.events.filter(
+            (event) =>
+              event.tripId === selectedEvent.tripId &&
+              event.coordinates[0] === selectedEvent.coordinates[0] &&
+              event.coordinates[1] === selectedEvent.coordinates[1],
+          ).length
+        : 0;
+      if (selectedEvent) eventPreviewRef.current(selectedEvent, selectedEventCount);
       for (const event of trackViewModel.eventGroups) {
         map.setFeatureState(
           { source: 'vehicle-track-events', id: event.id },
-          { selected: event.id === selectedEventId },
+          {
+            selected:
+              event.id === selectedEventId ||
+              (selectedEvent !== undefined &&
+                event.tripId === selectedEvent.tripId &&
+                event.coordinates[0] === selectedEvent.coordinates[0] &&
+                event.coordinates[1] === selectedEvent.coordinates[1]),
+          },
         );
       }
     } catch {
-      queueMicrotask(() => setTrackLayerFailed(true));
+      queueMicrotask(() => setFailedTrackAttempt(trackAttempt));
     }
-  }, [instanceKey, selectedEventId, trackViewModel]);
+  }, [instanceKey, selectedEventId, trackAttempt, trackViewModel]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -383,9 +419,9 @@ export function OnlineFleetMap({
     } catch {
       playbackMarkerRef.current?.remove();
       playbackMarkerRef.current = null;
-      queueMicrotask(() => setTrackLayerFailed(true));
+      queueMicrotask(() => setFailedTrackAttempt(trackAttempt));
     }
-  }, [instanceKey, playbackPoint, trackViewModel]);
+  }, [instanceKey, playbackPoint, trackAttempt, trackViewModel]);
 
   if (stableVehicles.length === 0) {
     return (
@@ -408,10 +444,7 @@ export function OnlineFleetMap({
       {trackViewModel ? (
         <VehicleTrackAccessibilitySurface
           trackViewModel={trackViewModel}
-          ready={
-            trackInteractionKey === `${trackViewModel.vehicleId}:${trackViewModel.date}` &&
-            !trackLayerFailed
-          }
+          ready={trackInteractionKey === getTrackResourceKey(trackViewModel) && !trackLayerFailed}
           onSegmentHover={(segment, coordinates) => segmentHoverRef.current(segment, coordinates)}
           onSegmentLeave={() => segmentLeaveRef.current()}
           onEventActivate={(event, count) => eventActivateRef.current(event, count)}
@@ -439,9 +472,19 @@ export function OnlineFleetMap({
       {trackLayerFailed ? (
         <div
           role="status"
-          className="absolute top-28 left-1/2 z-10 -translate-x-1/2 rounded-[var(--radius-md)] border border-[var(--color-warning)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-text)] shadow-[var(--shadow-card)]"
+          className="absolute top-28 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-warning)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-text)] shadow-[var(--shadow-card)]"
         >
-          Маршрут временно недоступен
+          <span>Маршрут временно недоступен</span>
+          <Button
+            size="sm"
+            variant="secondary"
+            aria-label="Повторить маршрут"
+            onClick={() => {
+              setTrackAttempt((value) => value + 1);
+            }}
+          >
+            Повторить
+          </Button>
         </div>
       ) : null}
     </div>
@@ -463,7 +506,11 @@ function createSegmentPopupContent(segment: VehicleTrackSegment): HTMLDivElement
   return content;
 }
 
-function fitTrackBounds(map: maplibregl.Map, track: VehicleTrackViewModel) {
+function fitTrackBounds(
+  map: maplibregl.Map,
+  track: VehicleTrackPeriodViewModel,
+  container: HTMLElement | null,
+) {
   const bounds = new maplibregl.LngLatBounds();
 
   for (const segment of track.segments) {
@@ -471,19 +518,40 @@ function fitTrackBounds(map: maplibregl.Map, track: VehicleTrackViewModel) {
     bounds.extend([...segment.to.coordinates]);
   }
 
-  const desktop = window.innerWidth >= 768;
-  map.fitBounds(bounds, {
+  const width = container?.clientWidth ?? 0;
+  const height = container?.clientHeight ?? 0;
+  const reducedMotion =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  map.fitBounds(bounds, getTrackFitOptions(width, height, reducedMotion));
+}
+
+export function getTrackFitOptions(width: number, height: number, reducedMotion: boolean) {
+  const desktop = width >= 768;
+
+  return {
     padding: desktop
       ? { top: 32, right: 352, bottom: 32, left: 32 }
       : {
           top: 96,
           right: 24,
-          bottom: Math.round(window.innerHeight * 0.48),
+          bottom: Math.round(height * 0.48),
           left: 24,
         },
-    duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 350,
+    duration: reducedMotion ? 0 : 350,
     maxZoom: 15,
-  });
+  };
+}
+
+function getMapLayoutSignature(container: HTMLElement | null): string {
+  if (!container) return 'missing';
+  return `${container.clientWidth >= 768 ? 'desktop' : 'mobile'}:${
+    container.clientWidth >= container.clientHeight ? 'landscape' : 'portrait'
+  }`;
+}
+
+function getTrackResourceKey(track: VehicleTrackPeriodViewModel): string {
+  return `${track.vehicleId}:${track.period}:${track.trips.map((trip) => trip.date).join('|')}`;
 }
 
 function createPlaybackMarker(map: maplibregl.Map, point: VehicleTrackPoint): maplibregl.Marker {

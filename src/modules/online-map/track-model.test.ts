@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildTrackPeriodViewModel,
   buildTrackViewModel,
   getPlaybackPosition,
   getVehicleTrack,
   getVehicleTrackDates,
+  getVehicleTracks,
 } from './track-model';
+import { vehicleTrackFixtures } from './track-fixtures';
 import type { VehicleTrack } from './track-types';
 
 const track: VehicleTrack = {
@@ -84,6 +87,7 @@ describe('buildTrackViewModel', () => {
     expect(model.finish.coordinates).toEqual([92.83, 56.03]);
     expect(model.durationMinutes).toBe(30);
     expect(model.maxSpeedKph).toBe(70);
+    expect(model.stopsCount).toBe(1);
     expect(model.distanceKm).toBeGreaterThan(0);
     expect(getPlaybackPosition(track, 50).coordinates).toEqual([92.82, 56.02]);
   });
@@ -117,6 +121,58 @@ describe('buildTrackViewModel', () => {
   });
 });
 
+describe('buildTrackPeriodViewModel', () => {
+  it('строит семидневный период из отдельных поездок и агрегирует сводку', () => {
+    const tracks = getVehicleTracks('lada-vesta-a123mr77', [
+      '2026-07-29',
+      '2026-07-28',
+      '2026-07-27',
+    ]);
+    const model = buildTrackPeriodViewModel(tracks, 'seven-days');
+
+    expect(model.period).toBe('seven-days');
+    expect(model.trips.map((trip) => trip.date)).toEqual([
+      '2026-07-29',
+      '2026-07-28',
+      '2026-07-27',
+    ]);
+    expect(model.activeTrip.date).toBe('2026-07-29');
+    expect(new Set(model.segments.map((segment) => segment.tripId)).size).toBe(3);
+    expect(model.distanceKm).toBeCloseTo(
+      model.trips.reduce((total, trip) => total + trip.distanceKm, 0),
+    );
+    expect(model.durationMinutes).toBe(
+      model.trips.reduce((total, trip) => total + trip.durationMinutes, 0),
+    );
+    expect(model.stopsCount).toBe(model.trips.reduce((total, trip) => total + trip.stopsCount, 0));
+  });
+
+  it('считает стоянки только по stop-событиям, а не по всем событиям', () => {
+    const model = buildTrackPeriodViewModel(
+      [
+        {
+          ...track,
+          events: [
+            ...track.events,
+            {
+              id: 'event-2',
+              type: 'connection-loss',
+              pointId: 'p2',
+              title: 'Потеря связи',
+              description: '2 минуты',
+            },
+          ],
+        },
+      ],
+      'day',
+    );
+
+    expect(model.events).toHaveLength(2);
+    expect(model.eventGroups[0].count).toBe(2);
+    expect(model.stopsCount).toBe(1);
+  });
+});
+
 describe('getVehicleTrackDates', () => {
   it('возвращает даты автомобиля от новой к старой', () => {
     expect(getVehicleTrackDates('haval-jolion-v456kh178')).toEqual([
@@ -132,5 +188,27 @@ describe('getVehicleTrackDates', () => {
       date: '2026-07-28',
     });
     expect(getVehicleTrack('haval-jolion-v456kh178', '2026-07-01')).toBeNull();
+  });
+});
+
+describe('vehicleTrackFixtures', () => {
+  it('распределяет потерю связи и геозоны по 15 поездкам', () => {
+    expect(vehicleTrackFixtures).toHaveLength(15);
+    const types = vehicleTrackFixtures.flatMap((fixture) =>
+      fixture.events.map((event) => event.type),
+    );
+
+    expect(types.filter((type) => type === 'connection-loss')).toHaveLength(5);
+    expect(types.filter((type) => type === 'geofence-enter')).toHaveLength(5);
+    expect(types.filter((type) => type === 'geofence-exit')).toHaveLength(5);
+  });
+
+  it('содержит сгруппированные события в одной точке', () => {
+    expect(
+      vehicleTrackFixtures.some((fixture) => {
+        const pointIds = fixture.events.map((event) => event.pointId);
+        return new Set(pointIds).size < pointIds.length;
+      }),
+    ).toBe(true);
   });
 });

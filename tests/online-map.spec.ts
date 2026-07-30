@@ -84,6 +84,9 @@ test.describe('онлайн-карта', () => {
       .toBe('0.72');
     await expect(page.getByLabel('Начало маршрута')).toHaveCount(1);
     await expect(page.getByLabel('Конец маршрута')).toHaveCount(1);
+    await expect(
+      page.getByRole('region', { name: 'События маршрута' }).getByRole('button'),
+    ).toHaveCount(4);
 
     const refuelEvent = page.getByRole('button', { name: 'Событие: Заправка' });
     const refuelCoordinate = await refuelEvent.getAttribute('data-coordinate');
@@ -126,6 +129,42 @@ test.describe('онлайн-карта', () => {
     await expect(trackSurface).toHaveCount(0);
     await expect(page.locator('[data-track-color]')).toHaveCount(0);
     await expect(playbackMarker).toHaveCount(0);
+  });
+
+  test('показывает несколько разделённых поездок за 7 дней и воспроизводит новейшую', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openAuthenticatedRoute(page, '/map');
+    await page.getByRole('button', { name: /А 123 МР 77/i }).click();
+    await page.getByRole('button', { name: '7 дней' }).click();
+
+    const trackSurface = page.getByTestId('vehicle-track-a11y');
+    await expect(trackSurface).toHaveAttribute('data-track-period', 'seven-days');
+    await expect(trackSurface).toHaveAttribute('data-trip-count', '3');
+    await expect(page.getByText('3 поездки')).toBeVisible();
+    await expect(page.getByText('Воспроизводится последняя поездка: 29.07.2026')).toBeVisible();
+    await expect(page.locator('[data-track-color][data-trip-index="0"]')).toHaveCount(7);
+    await expect(page.locator('[data-track-color][data-trip-index="1"]')).toHaveCount(7);
+    await expect(page.locator('[data-track-color][data-trip-index="2"]')).toHaveCount(7);
+  });
+
+  test('видимый список событий раскрывает карточку по hover, focus и click', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openAuthenticatedRoute(page, '/map');
+    await page.getByRole('button', { name: /А 123 МР 77/i }).click();
+    await expect(page.getByTestId('vehicle-track-a11y')).toHaveAttribute(
+      'data-track-ready',
+      'true',
+    );
+
+    const event = page.getByRole('button', { name: 'Заправка, 08:32' });
+    await event.hover();
+    await expect(page.getByRole('article', { name: 'Событие: Заправка' })).toBeVisible();
+    await event.focus();
+    await expect(event).toBeFocused();
+    await event.click();
+    await expect(page.getByRole('slider', { name: 'Положение на маршруте' })).not.toHaveValue('0');
   });
 
   test('все действия маршрута доступны с клавиатуры', async ({ page }) => {
@@ -266,6 +305,16 @@ test.describe('онлайн-карта', () => {
     await expect(selectedPanel).toBeVisible();
     await expect(selectedPanel.getByRole('heading', { name: 'Haval Jolion' })).toBeVisible();
     await expect(havalMarker.getByText(/Haval Jolion · На стоянке/)).toBeHidden();
+    const attribution = page.getByRole('link', { name: '© OpenStreetMap' });
+    await expectElementsDoNotOverlap(attribution, selectedPanel);
+    await expect(page.getByTestId('vehicle-track-a11y')).toHaveAttribute(
+      'data-track-ready',
+      'true',
+    );
+
+    const mobileEvent = page.getByRole('button', { name: 'Заправка, 08:32' });
+    await mobileEvent.tap();
+    await expect(page.getByRole('article', { name: 'Событие: Заправка' })).toBeVisible();
 
     const panelBox = await selectedPanel.boundingBox();
     expect(panelBox).not.toBeNull();
