@@ -26,6 +26,8 @@ function FakeMap(props: OnlineFleetMapProps) {
         data-trip-count={trackViewModel?.trips.length ?? 0}
         data-playback-point={props.playbackPoint?.id ?? ''}
         data-selected-event={props.selectedEventId ?? ''}
+        data-previewed-event={props.previewedEventId ?? ''}
+        data-previewed-segment={props.previewedSegmentId ?? ''}
       />
       {vehicles.map((vehicle) => (
         <button
@@ -217,24 +219,72 @@ it('меняет день и быстрый период, сохраняя до�
   expect(getMapTrackState().tripCount).toBe('1');
 });
 
-it('показывает видимый список событий и использует один callback для hover, focus и tap', async () => {
+it('предпросматривает событие по hover/focus без активации и закрывает preview по leave/blur', async () => {
   const user = userEvent.setup();
   render(<OnlineMapWorkspace mapComponent={FakeMap} />);
 
   await user.click(screen.getByRole('button', { name: /А 123 МР 77/ }));
   const eventButton = screen.getByRole('button', { name: /Заправка, 08:32/ });
+  const initialPlaybackPoint = getMapTrackState().playbackPoint;
 
   expect(eventButton.closest('[aria-label="События маршрута"]')).toBeTruthy();
   expect(screen.getByRole('button', { name: /Потеря связи, 08:32/ })).toBeTruthy();
   fireEvent.mouseEnter(eventButton);
-  expect(getMapTrackState().selectedEvent).toContain('-refuel');
+  expect(getMapTrackState().previewedEvent).toContain('-refuel');
+  expect(getMapTrackState().selectedEvent).toBe('');
+  expect(getMapTrackState().playbackPoint).toBe(initialPlaybackPoint);
 
-  fireEvent.blur(eventButton);
+  fireEvent.mouseLeave(eventButton);
+  expect(getMapTrackState().previewedEvent).toBe('');
   fireEvent.focus(eventButton);
-  expect(getMapTrackState().selectedEvent).toContain('-refuel');
+  expect(getMapTrackState().previewedEvent).toContain('-refuel');
+  expect(getMapTrackState().selectedEvent).toBe('');
+  fireEvent.blur(eventButton);
+  expect(getMapTrackState().previewedEvent).toBe('');
 
   await user.click(eventButton);
+  expect(getMapTrackState().selectedEvent).toContain('-refuel');
   expect(getMapTrackState().playbackPoint).toContain('-p4');
+});
+
+it('не останавливает autoplay при preview события', () => {
+  vi.useFakeTimers();
+  render(<OnlineMapWorkspace mapComponent={FakeMap} />);
+
+  fireEvent.click(screen.getByRole('button', { name: /А 123 МР 77/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Воспроизвести маршрут' }));
+  act(() => vi.advanceTimersByTime(250));
+  const eventButton = screen.getByRole('button', { name: /Заправка, 08:32/ });
+  fireEvent.mouseEnter(eventButton);
+
+  expect((screen.getByRole('slider') as HTMLInputElement).value).toBe('2');
+  expect(getMapTrackState().selectedEvent).toBe('');
+  act(() => vi.advanceTimersByTime(250));
+  expect((screen.getByRole('slider') as HTMLInputElement).value).toBe('4');
+});
+
+it('показывает видимые участки с focus-preview и все поездки семидневного периода', async () => {
+  const user = userEvent.setup();
+  render(<OnlineMapWorkspace mapComponent={FakeMap} />);
+
+  await user.click(screen.getByRole('button', { name: /А 123 МР 77/ }));
+  const segments = screen.getByRole('region', { name: 'Участки маршрута' });
+  const firstSegment = screen.getByRole('button', {
+    name: /Участок 29\.07\.2026, 08:00–08:08, 32 км\/ч, Красноярск/,
+  });
+
+  expect(segments.querySelectorAll('button')).toHaveLength(7);
+  expect(screen.getByText(/^Старт поездки 29\.07\.2026/)).toBeTruthy();
+  expect(screen.getByText(/^Финиш поездки 29\.07\.2026/)).toBeTruthy();
+  fireEvent.focus(firstSegment);
+  expect(getMapTrackState().previewedSegment).toContain('2026-07-29');
+  fireEvent.blur(firstSegment);
+  expect(getMapTrackState().previewedSegment).toBe('');
+
+  await user.click(screen.getByRole('button', { name: '7 дней' }));
+  expect(segments.querySelectorAll('button')).toHaveLength(21);
+  expect(screen.getByText(/^Старт поездки 28\.07\.2026/)).toBeTruthy();
+  expect(screen.getByText(/^Финиш поездки 27\.07\.2026/)).toBeTruthy();
 });
 
 it('показывает в сводке количество стоянок вместо количества событий', async () => {

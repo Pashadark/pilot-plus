@@ -96,3 +96,60 @@ git diff --check            — exit 0
 - Next.js сообщает о нескольких lockfiles и автоматически выбранном workspace root.
 - Turbopack сохраняет существующее предупреждение NFT trace из `next.config.ts`/Prisma/system-health.
 - Эти предупреждения существовали до final fix wave и не влияют на успешный build или тесты.
+
+---
+
+## Final fix wave 2 — preview, keyboard surface и event glyphs
+
+### Результат
+
+- Preview и activation разделены во всём вертикальном срезе. Hover/focus показывают popup и
+  подсветку, но не меняют выбранное событие, playback position или autoplay; click/Enter/tap
+  активируют событие.
+- MapLibre event hover закрывается по `mouseleave`. После click активированное событие остаётся
+  показанным, а `focusAfterOpen: false` не позволяет popup красть фокус у видимой кнопки.
+- Полностью clipped accessibility surface больше не содержит кнопок или `tabindex`. В нём остались
+  только неинтерактивные data probes для браузерной проверки отрисовки.
+- В панели открыт видимый collapsible-раздел «Участки маршрута». Он содержит все участки всех
+  поездок, дату в accessible name, время, скорость, адрес и видимые точки старта/финиша.
+- Клавиатурный E2E проходит реальным последовательным `Tab`, без программного `focus()` на
+  clipped-элементы.
+- Для шести типов событий регистрируются шесть разных raster glyphs через MapLibre `addImage`.
+  Symbol layer использует `icon-image: ["get", "icon"]` и не зависит от map font glyphs.
+- Runtime probe читает реальные MapLibre paint properties для casing width и trip line offset;
+  browser-тест проверяет точные сериализованные значения.
+
+### RED
+
+```text
+npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx \
+  src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts
+
+2 failed test files
+6 failed | 25 passed
+```
+
+Ожидаемые причины: clipped surface ещё содержал 12 кнопок; hover активировал событие и перемещал
+playback; не было видимого списка участков, raster glyphs, отдельного preview callback и runtime
+paint probe.
+
+### GREEN и полная проверка
+
+```text
+npm run lint       — exit 0
+npm run typecheck  — exit 0
+npm run test:unit  — 79 files, 397 tests passed
+npm run build      — exit 0, 15/15 static pages
+
+npx playwright test tests/online-map.spec.ts --workers=1
+26 passed, 4 skipped
+
+Focused component/unit
+31 passed
+```
+
+`npm run format:check` по всему репозиторию по-прежнему сообщает 14 исторически
+неформатированных файлов вне этого изменения. Проверка Prettier для touched files и
+`git diff --check` проходит. Файлы `.superpowers/sdd/task-1-report.md` и
+`.superpowers/sdd/task-2-report.md` являются посторонними незакоммиченными изменениями и намеренно
+не включаются в commit.

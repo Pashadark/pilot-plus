@@ -15,6 +15,7 @@ const TRACK_ENDPOINTS_SOURCE_ID = 'vehicle-track-endpoints';
 const TRACK_LAYER_IDS = [
   'vehicle-track-event-hitbox',
   'vehicle-track-event-counts',
+  'vehicle-track-event-icons',
   'vehicle-track-events',
   'vehicle-track-endpoint-labels',
   'vehicle-track-endpoints',
@@ -36,6 +37,24 @@ const TRACK_COLORS = {
   red: '#ef4444',
 } as const;
 
+const TRACK_EVENT_TYPES = [
+  'stop',
+  'refuel',
+  'speeding',
+  'connection-loss',
+  'geofence-enter',
+  'geofence-exit',
+] as const satisfies readonly VehicleTrackEventView['type'][];
+
+const TRACK_EVENT_ICON_PATTERNS: Record<VehicleTrackEventView['type'], readonly string[]> = {
+  stop: ['11111', '10001', '10001', '10001', '11111'],
+  refuel: ['11100', '10100', '11110', '10101', '11111'],
+  speeding: ['00110', '01100', '11110', '00110', '01100'],
+  'connection-loss': ['10001', '01010', '00100', '01010', '10001'],
+  'geofence-enter': ['00100', '00110', '11111', '00110', '00100'],
+  'geofence-exit': ['00100', '01100', '11111', '01100', '00100'],
+};
+
 interface TrackSegmentProperties {
   id: string;
   color: (typeof TRACK_COLORS)[keyof typeof TRACK_COLORS];
@@ -55,6 +74,7 @@ interface TrackEventProperties {
   count: number;
   tripId: string;
   tripIndex: number;
+  icon: string;
 }
 
 type TrackEventWithCount = VehicleTrackEventView & { count?: number };
@@ -62,27 +82,17 @@ type TrackEventWithCount = VehicleTrackEventView & { count?: number };
 export interface MountVehicleTrackLayersOptions {
   trackViewModel: VehicleTrackPeriodViewModel;
   selectedEventId: string | null;
-  onSegmentHover: (segment: VehicleTrackSegment, coordinates: TrackCoordinates) => void;
-  onSegmentLeave: () => void;
-  onEventActivate: (event: VehicleTrackEventView, count: number) => void;
+  onSegmentPreview: (segment: VehicleTrackSegment | null) => void;
+  onEventPreview: (event: VehicleTrackEventView | null) => void;
+  onEventActivate: (event: VehicleTrackEventView) => void;
 }
 
-interface VehicleTrackAccessibilitySurfaceProps extends Pick<
-  MountVehicleTrackLayersOptions,
-  'trackViewModel' | 'onSegmentHover' | 'onSegmentLeave' | 'onEventActivate'
-> {
+interface VehicleTrackDataSurfaceProps {
+  trackViewModel: VehicleTrackPeriodViewModel;
   ready: boolean;
-  onPlaybackPointRequest: (progress: number) => void;
 }
 
-export function VehicleTrackAccessibilitySurface({
-  trackViewModel,
-  ready,
-  onSegmentHover,
-  onSegmentLeave,
-  onEventActivate,
-  onPlaybackPointRequest,
-}: VehicleTrackAccessibilitySurfaceProps) {
+export function VehicleTrackDataSurface({ trackViewModel, ready }: VehicleTrackDataSurfaceProps) {
   return (
     <div
       data-testid="vehicle-track-a11y"
@@ -96,55 +106,42 @@ export function VehicleTrackAccessibilitySurface({
           ? `Маршруты за 7 дней, ${trackViewModel.trips.length} поездки`
           : `Маршрут за ${trackViewModel.date}`
       }
+      aria-hidden="true"
     >
-      {trackViewModel.segments.map((segment) => {
-        const activateSegment = () => onSegmentHover(segment, segment.to.coordinates);
-
-        return (
-          <button
-            key={segment.id}
-            type="button"
-            data-track-color={segment.color}
-            data-trip-id={segment.tripId}
-            data-trip-index={segment.tripIndex}
-            data-coordinate={serializeCoordinates(segment.to.coordinates)}
-            data-from-coordinate={serializeCoordinates(segment.from.coordinates)}
-            data-to-coordinate={serializeCoordinates(segment.to.coordinates)}
-            aria-label={`Участок маршрута ${segment.from.timestamp}–${segment.to.timestamp}`}
-            style={{ opacity: segment.opacity }}
-            disabled={!ready}
-            onMouseEnter={activateSegment}
-            onMouseLeave={onSegmentLeave}
-            onFocus={activateSegment}
-            onBlur={onSegmentLeave}
-          />
-        );
-      })}
-      {trackViewModel.eventGroups.map((event) => (
-        <button
-          key={event.id}
-          type="button"
-          data-coordinate={serializeCoordinates(event.coordinates)}
-          data-trip-id={event.tripId}
-          aria-label={`Событие: ${event.title}`}
-          disabled={!ready}
-          onClick={() => onEventActivate(event, event.count)}
+      {trackViewModel.segments.map((segment) => (
+        <span
+          key={segment.id}
+          data-track-color={segment.color}
+          data-trip-id={segment.tripId}
+          data-trip-index={segment.tripIndex}
+          data-segment-id={segment.id}
+          data-coordinate={serializeCoordinates(segment.to.coordinates)}
+          data-from-coordinate={serializeCoordinates(segment.from.coordinates)}
+          data-to-coordinate={serializeCoordinates(segment.to.coordinates)}
+          style={{ opacity: segment.opacity }}
         />
       ))}
-      <button
-        type="button"
-        data-coordinate={serializeCoordinates(trackViewModel.start.coordinates)}
-        aria-label="Начало маршрута"
-        disabled={!ready}
-        onClick={() => onPlaybackPointRequest(0)}
-      />
-      <button
-        type="button"
-        data-coordinate={serializeCoordinates(trackViewModel.finish.coordinates)}
-        aria-label="Конец маршрута"
-        disabled={!ready}
-        onClick={() => onPlaybackPointRequest(100)}
-      />
+      {trackViewModel.eventGroups.map((event) => (
+        <span
+          key={event.id}
+          data-coordinate={serializeCoordinates(event.coordinates)}
+          data-trip-id={event.tripId}
+        />
+      ))}
+      {trackViewModel.trips.flatMap((trip) => [
+        <span
+          key={`${trip.tripId}-start`}
+          data-endpoint="start"
+          data-trip-id={trip.tripId}
+          data-coordinate={serializeCoordinates(trip.start.coordinates)}
+        />,
+        <span
+          key={`${trip.tripId}-finish`}
+          data-endpoint="finish"
+          data-trip-id={trip.tripId}
+          data-coordinate={serializeCoordinates(trip.finish.coordinates)}
+        />,
+      ])}
     </div>
   );
 }
@@ -195,6 +192,7 @@ export function trackEventsToGeoJson(
         count: event.count ?? 1,
         tripId: event.tripId,
         tripIndex: event.tripIndex,
+        icon: getTrackEventIconId(event.type),
       },
     })),
   };
@@ -211,6 +209,7 @@ export function mountVehicleTrackLayers(
   const eventGroupsById = new globalThis.Map(
     trackViewModel.eventGroups.map((event) => [event.id, event]),
   );
+  const addedImageIds: string[] = [];
   let hoveredSegmentId: string | null = null;
   let hoveredEventId: string | null = null;
 
@@ -227,19 +226,20 @@ export function mountVehicleTrackLayers(
     }
 
     map.getCanvas().style.cursor = 'pointer';
-    options.onSegmentHover(segment, event.lngLat.toArray() as TrackCoordinates);
+    options.onSegmentPreview(segment);
   };
 
   const handleSegmentLeave = () => {
     clearFeatureState(map, TRACK_SOURCE_ID, hoveredSegmentId, 'hover');
     hoveredSegmentId = null;
     map.getCanvas().style.cursor = '';
-    options.onSegmentLeave();
+    options.onSegmentPreview(null);
   };
 
   const handleEventMove = (event: MapLayerMouseEvent) => {
     const featureId = getFeatureId(event);
-    if (!featureId) return;
+    const trackEvent = featureId ? eventGroupsById.get(featureId) : null;
+    if (!featureId || !trackEvent) return;
 
     if (hoveredEventId !== featureId) {
       clearFeatureState(map, TRACK_EVENTS_SOURCE_ID, hoveredEventId, 'hover');
@@ -248,12 +248,14 @@ export function mountVehicleTrackLayers(
     }
 
     map.getCanvas().style.cursor = 'pointer';
+    options.onEventPreview(trackEvent);
   };
 
   const handleEventLeave = () => {
     clearFeatureState(map, TRACK_EVENTS_SOURCE_ID, hoveredEventId, 'hover');
     hoveredEventId = null;
     map.getCanvas().style.cursor = '';
+    options.onEventPreview(null);
   };
 
   const handleEventClick = (event: MapLayerMouseEvent) => {
@@ -262,7 +264,7 @@ export function mountVehicleTrackLayers(
 
     if (!trackEvent) return;
 
-    options.onEventActivate(trackEvent, trackEvent.count);
+    options.onEventActivate(trackEvent);
   };
 
   const cleanup = () => {
@@ -276,11 +278,19 @@ export function mountVehicleTrackLayers(
       if (map.getLayer(layerId)) map.removeLayer(layerId);
     }
 
+    for (const imageId of addedImageIds) {
+      map.removeImage(imageId);
+    }
+    addedImageIds.length = 0;
+
     for (const sourceId of TRACK_SOURCE_IDS) {
       if (map.getSource(sourceId)) map.removeSource(sourceId);
     }
 
     map.getCanvas().style.cursor = '';
+    const container = map.getContainer();
+    delete container.dataset.trackCasingWidth;
+    delete container.dataset.trackLineOffset;
   };
 
   try {
@@ -296,6 +306,12 @@ export function mountVehicleTrackLayers(
       type: 'geojson',
       data: endpointsToGeoJson(trackViewModel),
     });
+
+    for (const type of TRACK_EVENT_TYPES) {
+      const imageId = getTrackEventIconId(type);
+      map.addImage(imageId, createTrackEventIconImage(type), { pixelRatio: 2 });
+      addedImageIds.push(imageId);
+    }
 
     map.addLayer({
       id: 'vehicle-track-casing',
@@ -410,6 +426,17 @@ export function mountVehicleTrackLayers(
       },
     });
     map.addLayer({
+      id: 'vehicle-track-event-icons',
+      type: 'symbol',
+      source: TRACK_EVENTS_SOURCE_ID,
+      layout: {
+        'icon-image': ['get', 'icon'],
+        'icon-size': 0.75,
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+    });
+    map.addLayer({
       id: 'vehicle-track-event-counts',
       type: 'symbol',
       source: TRACK_EVENTS_SOURCE_ID,
@@ -444,6 +471,14 @@ export function mountVehicleTrackLayers(
     map.on('mousemove', 'vehicle-track-event-hitbox', handleEventMove);
     map.on('mouseleave', 'vehicle-track-event-hitbox', handleEventLeave);
     map.on('click', 'vehicle-track-event-hitbox', handleEventClick);
+
+    const container = map.getContainer();
+    container.dataset.trackCasingWidth = JSON.stringify(
+      map.getPaintProperty('vehicle-track-casing', 'line-width'),
+    );
+    container.dataset.trackLineOffset = JSON.stringify(
+      map.getPaintProperty('vehicle-track-lines', 'line-offset'),
+    );
   } catch (error) {
     cleanup();
     throw error;
@@ -492,6 +527,73 @@ function endpointsToGeoJson(
 
 function getTripLineOffsetExpression(): ExpressionSpecification {
   return ['match', ['get', 'tripIndex'], 1, -5, 2, 5, 0];
+}
+
+export function getTrackEventIconId(type: VehicleTrackEventView['type']): string {
+  return `vehicle-track-event-${type}`;
+}
+
+export function createTrackEventIconImage(type: VehicleTrackEventView['type']): {
+  width: number;
+  height: number;
+  data: Uint8Array;
+} {
+  const width = 24;
+  const height = 24;
+  const data = new Uint8Array(width * height * 4);
+  const color = getEventIconColor(type);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if ((x - 11.5) ** 2 + (y - 11.5) ** 2 <= 11 ** 2) {
+        setIconPixel(data, width, x, y, color);
+      }
+    }
+  }
+
+  TRACK_EVENT_ICON_PATTERNS[type].forEach((row, rowIndex) => {
+    [...row].forEach((pixel, columnIndex) => {
+      if (pixel !== '1') return;
+      for (let offsetY = 0; offsetY < 2; offsetY += 1) {
+        for (let offsetX = 0; offsetX < 2; offsetX += 1) {
+          setIconPixel(
+            data,
+            width,
+            7 + columnIndex * 2 + offsetX,
+            7 + rowIndex * 2 + offsetY,
+            [255, 255, 255, 255],
+          );
+        }
+      }
+    });
+  });
+
+  return { width, height, data };
+}
+
+function getEventIconColor(
+  type: VehicleTrackEventView['type'],
+): readonly [number, number, number, number] {
+  if (type === 'speeding') return [239, 68, 68, 255];
+  if (type === 'connection-loss') return [71, 85, 105, 255];
+  if (type === 'refuel') return [37, 99, 235, 255];
+  if (type === 'stop') return [245, 158, 11, 255];
+  if (type === 'geofence-enter') return [22, 163, 74, 255];
+  return [124, 58, 237, 255];
+}
+
+function setIconPixel(
+  data: Uint8Array,
+  width: number,
+  x: number,
+  y: number,
+  color: readonly [number, number, number, number],
+) {
+  const index = (y * width + x) * 4;
+  data[index] = color[0];
+  data[index + 1] = color[1];
+  data[index + 2] = color[2];
+  data[index + 3] = color[3];
 }
 
 function getFeatureId(event: MapLayerMouseEvent): string | null {

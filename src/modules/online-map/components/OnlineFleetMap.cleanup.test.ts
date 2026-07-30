@@ -14,10 +14,12 @@ import { OnlineFleetMap } from './OnlineFleetMap';
 
 const mapMocks = vi.hoisted(() => {
   const canvas = document.createElement('canvas');
+  const mapContainer = document.createElement('div');
   const loadHandlers = new Set<() => void>();
 
   return {
     canvas,
+    mapContainer,
     loadHandlers,
     fireLoad: () => {
       const handlers = [...loadHandlers];
@@ -34,6 +36,10 @@ const mapMocks = vi.hoisted(() => {
     mapGetSource: vi.fn(),
     mapAddLayer: vi.fn(),
     mapAddSource: vi.fn(),
+    mapAddImage: vi.fn(),
+    mapGetImage: vi.fn(),
+    mapRemoveImage: vi.fn(),
+    mapGetPaintProperty: vi.fn(),
     mapRemoveLayer: vi.fn(),
     mapRemoveSource: vi.fn(),
     mapSetFeatureState: vi.fn(),
@@ -41,6 +47,7 @@ const mapMocks = vi.hoisted(() => {
     resizeObserverCallbacks: [] as ResizeObserverCallback[],
     markerRemove: vi.fn(),
     popupRemove: vi.fn(),
+    popupOptions: [] as unknown[],
     reactRootContainers: [] as (Element | Document | DocumentFragment)[],
     reactRootUnmount: vi.fn(),
   };
@@ -72,6 +79,7 @@ vi.mock('react-dom/client', async (importOriginal) => {
 vi.mock('maplibre-gl', () => {
   class Map {
     getCanvas = vi.fn(() => mapMocks.canvas);
+    getContainer = vi.fn(() => mapMocks.mapContainer);
     addControl = vi.fn();
     once = mapMocks.mapOnce;
     on = mapMocks.mapOn;
@@ -83,6 +91,10 @@ vi.mock('maplibre-gl', () => {
     getSource = mapMocks.mapGetSource;
     addLayer = mapMocks.mapAddLayer;
     addSource = mapMocks.mapAddSource;
+    addImage = mapMocks.mapAddImage;
+    getImage = mapMocks.mapGetImage;
+    removeImage = mapMocks.mapRemoveImage;
+    getPaintProperty = mapMocks.mapGetPaintProperty;
     removeLayer = mapMocks.mapRemoveLayer;
     removeSource = mapMocks.mapRemoveSource;
     setFeatureState = mapMocks.mapSetFeatureState;
@@ -113,6 +125,10 @@ vi.mock('maplibre-gl', () => {
   }
 
   class Popup {
+    constructor(options?: unknown) {
+      mapMocks.popupOptions.push(options);
+    }
+
     setLngLat() {
       return this;
     }
@@ -172,7 +188,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   mapMocks.loadHandlers.clear();
   mapMocks.resizeObserverCallbacks.length = 0;
+  mapMocks.popupOptions.length = 0;
   mapMocks.reactRootContainers.length = 0;
+  mapMocks.mapContainer.replaceChildren();
+  delete mapMocks.mapContainer.dataset.trackCasingWidth;
+  delete mapMocks.mapContainer.dataset.trackLineOffset;
   mapMocks.mapOnce.mockImplementation((event: string, handler: () => void) => {
     if (event === 'load') mapMocks.loadHandlers.add(handler);
   });
@@ -236,9 +256,12 @@ it('поднимает мобильные контролы карты над п�
       trackViewModel: null,
       playbackPoint: null,
       selectedEventId: null,
+      previewedEventId: null,
+      previewedSegmentId: null,
       onVehicleSelect: vi.fn(),
+      onEventPreview: vi.fn(),
       onEventActivate: vi.fn(),
-      onPlaybackPointRequest: vi.fn(),
+      onSegmentPreview: vi.fn(),
     }),
   );
 
@@ -249,6 +272,30 @@ it('поднимает мобильные контролы карты над п�
   expect(mapShell?.className).not.toContain('calc(42dvh');
 });
 
+it('оставляет data probe маршрута вне последовательного tab-flow', async () => {
+  const track = getTrackViewModel('lada-vesta-a123mr77');
+  render(
+    createElement(OnlineFleetMap, {
+      vehicles,
+      selectedVehicleId: vehicles[0].id,
+      trackViewModel: track,
+      playbackPoint: track.start,
+      selectedEventId: null,
+      previewedEventId: null,
+      previewedSegmentId: null,
+      onVehicleSelect: vi.fn(),
+      onEventPreview: vi.fn(),
+      onEventActivate: vi.fn(),
+      onSegmentPreview: vi.fn(),
+    }),
+  );
+
+  act(() => mapMocks.fireLoad());
+  const probe = await screen.findByTestId('vehicle-track-a11y');
+  expect(probe.querySelectorAll('button')).toHaveLength(0);
+  expect(probe.querySelectorAll('[tabindex]')).toHaveLength(0);
+});
+
 it('удаляет обработчики, popup, источники и слои маршрута при смене автомобиля', async () => {
   const firstTrack = getTrackViewModel('lada-vesta-a123mr77');
   const secondTrack = getTrackViewModel('haval-jolion-v456kh178');
@@ -257,9 +304,12 @@ it('удаляет обработчики, popup, источники и слои
     selectedVehicleId: vehicles[0].id,
     playbackPoint: firstTrack.start,
     selectedEventId: null,
+    previewedEventId: null,
+    previewedSegmentId: null,
     onVehicleSelect: vi.fn(),
+    onEventPreview: vi.fn(),
     onEventActivate: vi.fn(),
-    onPlaybackPointRequest: vi.fn(),
+    onSegmentPreview: vi.fn(),
   };
   const { rerender, unmount } = render(
     createElement(OnlineFleetMap, { ...props, trackViewModel: firstTrack }),
@@ -296,9 +346,12 @@ it('монтирует новый маршрут сразу после перв�
     selectedVehicleId: vehicles[0].id,
     playbackPoint: firstTrack.start,
     selectedEventId: null,
+    previewedEventId: null,
+    previewedSegmentId: null,
     onVehicleSelect: vi.fn(),
+    onEventPreview: vi.fn(),
     onEventActivate: vi.fn(),
-    onPlaybackPointRequest: vi.fn(),
+    onSegmentPreview: vi.fn(),
   };
   const { rerender } = render(
     createElement(OnlineFleetMap, { ...props, trackViewModel: firstTrack }),
@@ -345,7 +398,28 @@ it('сериализует сегменты и события в GeoJSON без 
       type: 'Point',
       coordinates: track.events[0].coordinates,
     },
+    properties: {
+      icon: 'vehicle-track-event-stop',
+    },
   });
+});
+
+it('создаёт шесть различных raster-иконок событий без зависимости от map font glyphs', async () => {
+  const { createTrackEventIconImage, getTrackEventIconId } = await import('./VehicleTrackLayers');
+  const types = [
+    'stop',
+    'refuel',
+    'speeding',
+    'connection-loss',
+    'geofence-enter',
+    'geofence-exit',
+  ] as const;
+  const ids = types.map(getTrackEventIconId);
+  const images = types.map(createTrackEventIconImage);
+
+  expect(new Set(ids).size).toBe(6);
+  expect(images.every((image) => image.width === 24 && image.height === 24)).toBe(true);
+  expect(new Set(images.map((image) => Array.from(image.data).join(','))).size).toBe(6);
 });
 
 it('вычисляет fit padding по ширине контейнера карты, а не окна', async () => {
@@ -379,14 +453,20 @@ it('повторно вписывает маршрут при смене contain
       trackViewModel: track,
       playbackPoint: track.start,
       selectedEventId: null,
+      previewedEventId: null,
+      previewedSegmentId: null,
       onVehicleSelect: vi.fn(),
+      onEventPreview: vi.fn(),
       onEventActivate: vi.fn(),
-      onPlaybackPointRequest: vi.fn(),
+      onSegmentPreview: vi.fn(),
     }),
   );
 
   act(() => mapMocks.fireLoad());
   await waitFor(() => expect(mapMocks.mapFitBounds).toHaveBeenCalled());
+  expect(mapMocks.popupOptions).toContainEqual(
+    expect.objectContaining({ closeButton: true, focusAfterOpen: false }),
+  );
   mapMocks.mapFitBounds.mockClear();
   const trackResize = mapMocks.resizeObserverCallbacks.at(-1);
 
@@ -410,9 +490,23 @@ it('регистрирует видимую линию, hitbox, события, 
   const { mountVehicleTrackLayers } = await import('./VehicleTrackLayers');
   const track = getTrackViewModel('lada-vesta-a123mr77');
   const onEventActivate = vi.fn();
+  const onEventPreview = vi.fn();
+  const tripOffsetExpression = ['match', ['get', 'tripIndex'], 1, -5, 2, 5, 0];
+  mapMocks.mapGetPaintProperty.mockImplementation((layerId: string, property: string) => {
+    if (layerId === 'vehicle-track-casing' && property === 'line-width') return 8;
+    if (layerId === 'vehicle-track-lines' && property === 'line-offset') {
+      return tripOffsetExpression;
+    }
+    return undefined;
+  });
   const map = {
     addLayer: mapMocks.mapAddLayer,
     addSource: mapMocks.mapAddSource,
+    addImage: mapMocks.mapAddImage,
+    getImage: mapMocks.mapGetImage,
+    removeImage: mapMocks.mapRemoveImage,
+    getContainer: () => mapMocks.mapContainer,
+    getPaintProperty: mapMocks.mapGetPaintProperty,
     getCanvas: () => mapMocks.canvas,
     getLayer: mapMocks.mapGetLayer,
     getSource: mapMocks.mapGetSource,
@@ -426,16 +520,26 @@ it('регистрирует видимую линию, hitbox, события, 
   const unmountLayers = mountVehicleTrackLayers(map, {
     trackViewModel: track,
     selectedEventId: null,
-    onSegmentHover: vi.fn(),
-    onSegmentLeave: vi.fn(),
+    onSegmentPreview: vi.fn(),
+    onEventPreview,
     onEventActivate,
   });
 
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
     expect.objectContaining({
+      id: 'vehicle-track-casing',
+      paint: expect.objectContaining({
+        'line-width': 8,
+        'line-offset': ['match', ['get', 'tripIndex'], 1, -5, 2, 5, 0],
+      }),
+    }),
+  );
+  expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
+    expect.objectContaining({
       id: 'vehicle-track-lines',
       paint: expect.objectContaining({
         'line-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.95, 0.72],
+        'line-offset': ['match', ['get', 'tripIndex'], 1, -5, 2, 5, 0],
       }),
     }),
   );
@@ -460,6 +564,17 @@ it('регистрирует видимую линию, hitbox, события, 
     'vehicle-track-event-hitbox',
     expect.any(Function),
   );
+  const eventMoveHandler = mapMocks.mapOn.mock.calls.find(
+    ([eventName, layerId]) => eventName === 'mousemove' && layerId === 'vehicle-track-event-hitbox',
+  )?.[2] as ((event: { features: { id: string }[] }) => void) | undefined;
+  const eventLeaveHandler = mapMocks.mapOn.mock.calls.find(
+    ([eventName, layerId]) =>
+      eventName === 'mouseleave' && layerId === 'vehicle-track-event-hitbox',
+  )?.[2] as (() => void) | undefined;
+  eventMoveHandler?.({ features: [{ id: track.eventGroups[0].id }] });
+  expect(onEventPreview).toHaveBeenCalledWith(track.eventGroups[0]);
+  eventLeaveHandler?.();
+  expect(onEventPreview).toHaveBeenLastCalledWith(null);
   expect(mapMocks.mapOn).toHaveBeenCalledWith(
     'mouseleave',
     'vehicle-track-event-hitbox',
@@ -475,9 +590,14 @@ it('регистрирует видимую линию, hitbox, события, 
   )?.[2] as ((event: { features: { id: string }[] }) => void) | undefined;
   expect(eventClickHandler).toBeTypeOf('function');
   eventClickHandler?.({ features: [{ id: track.eventGroups[0].id }] });
-  expect(onEventActivate).toHaveBeenCalledExactlyOnceWith(
-    track.eventGroups[0],
-    track.eventGroups[0].count,
+  expect(onEventActivate).toHaveBeenCalledExactlyOnceWith(track.eventGroups[0]);
+  expect(mapMocks.mapAddImage).toHaveBeenCalledTimes(6);
+  expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'vehicle-track-event-icons',
+      type: 'symbol',
+      layout: expect.objectContaining({ 'icon-image': ['get', 'icon'] }),
+    }),
   );
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
     expect.objectContaining({ id: 'vehicle-track-endpoints', type: 'circle' }),
@@ -485,6 +605,8 @@ it('регистрирует видимую линию, hitbox, события, 
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
     expect.objectContaining({ id: 'vehicle-track-directions', type: 'symbol' }),
   );
+  expect(mapMocks.mapContainer.dataset.trackCasingWidth).toBe('8');
+  expect(mapMocks.mapContainer.dataset.trackLineOffset).toBe(JSON.stringify(tripOffsetExpression));
 
   unmountLayers();
   expect(mapMocks.mapOff).toHaveBeenCalledWith(
@@ -497,6 +619,9 @@ it('регистрирует видимую линию, hitbox, события, 
     'vehicle-track-event-hitbox',
     expect.any(Function),
   );
+  expect(mapMocks.mapRemoveImage).toHaveBeenCalledTimes(6);
+  expect(mapMocks.mapContainer.dataset.trackCasingWidth).toBeUndefined();
+  expect(mapMocks.mapContainer.dataset.trackLineOffset).toBeUndefined();
 });
 
 it('показывает доступное русское описание сгруппированного события', async () => {
@@ -520,9 +645,12 @@ it('немедленно размонтирует popup root при ошибке
     trackViewModel: null,
     playbackPoint: null,
     selectedEventId: null,
+    previewedEventId: null,
+    previewedSegmentId: null,
     onVehicleSelect: vi.fn(),
+    onEventPreview: vi.fn(),
     onEventActivate: vi.fn(),
-    onPlaybackPointRequest: vi.fn(),
+    onSegmentPreview: vi.fn(),
   };
   const { rerender } = render(createElement(OnlineFleetMap, props));
 
@@ -567,9 +695,12 @@ it('повторяет только трековые ресурсы после �
       trackViewModel: track,
       playbackPoint: track.start,
       selectedEventId: null,
+      previewedEventId: null,
+      previewedSegmentId: null,
       onVehicleSelect: vi.fn(),
+      onEventPreview: vi.fn(),
       onEventActivate: vi.fn(),
-      onPlaybackPointRequest: vi.fn(),
+      onSegmentPreview: vi.fn(),
     }),
   );
 

@@ -14,7 +14,7 @@ import {
   getVehicleTrackDates,
   getVehicleTracks,
 } from '../track-model';
-import type { TrackPeriodMode, VehicleTrackEventView } from '../track-types';
+import type { TrackPeriodMode, VehicleTrackEventView, VehicleTrackSegment } from '../track-types';
 import type { OnlineMapFilter, OnlineMapVehicle } from '../types';
 import type { OnlineFleetMapProps } from './OnlineFleetMap';
 import { OnlineFleetMapClient } from './OnlineFleetMapClient';
@@ -23,6 +23,7 @@ import { TrackDateControls } from './TrackDateControls';
 import { TrackDaySummary } from './TrackDaySummary';
 import { TrackEventList } from './TrackEventList';
 import { TrackPlayback } from './TrackPlayback';
+import { TrackSegmentList } from './TrackSegmentList';
 
 const filters: readonly { value: OnlineMapFilter; label: string }[] = [
   { value: 'all', label: 'Все' },
@@ -46,6 +47,8 @@ export function OnlineMapWorkspace({
   const [progress, setProgress] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [previewedEventId, setPreviewedEventId] = useState<string | null>(null);
+  const [previewedSegmentId, setPreviewedSegmentId] = useState<string | null>(null);
   const reducedMotion = useReducedMotion() ?? false;
 
   const filteredVehicles = useMemo(
@@ -103,6 +106,8 @@ export function OnlineMapWorkspace({
     setProgress(0);
     setPlaying(false);
     setSelectedEventId(null);
+    setPreviewedEventId(null);
+    setPreviewedSegmentId(null);
   };
 
   const clearVehicleSelection = () => {
@@ -137,6 +142,8 @@ export function OnlineMapWorkspace({
     setProgress(0);
     setPlaying(false);
     setSelectedEventId(null);
+    setPreviewedEventId(null);
+    setPreviewedSegmentId(null);
   };
 
   const handleTrackDateChange = (date: string) => {
@@ -144,6 +151,8 @@ export function OnlineMapWorkspace({
     setProgress(0);
     setPlaying(false);
     setSelectedEventId(null);
+    setPreviewedEventId(null);
+    setPreviewedSegmentId(null);
   };
 
   const handleTrackPeriodChange = (period: TrackPeriodMode) => {
@@ -152,6 +161,8 @@ export function OnlineMapWorkspace({
     setProgress(0);
     setPlaying(false);
     setSelectedEventId(null);
+    setPreviewedEventId(null);
+    setPreviewedSegmentId(null);
   };
 
   const handleProgressChange = (nextProgress: number) => {
@@ -168,6 +179,8 @@ export function OnlineMapWorkspace({
 
   const handleTrackEventSelect = (event: VehicleTrackEventView) => {
     setSelectedEventId(event.id);
+    setPreviewedEventId(event.id);
+    setPreviewedSegmentId(null);
     setPlaying(false);
     if (!selectedTrack || event.tripId !== selectedTrack.date) return;
 
@@ -176,6 +189,16 @@ export function OnlineMapWorkspace({
 
     const lastPointIndex = selectedTrack.points.length - 1;
     setProgress(lastPointIndex > 0 ? (pointIndex / lastPointIndex) * 100 : 0);
+  };
+
+  const handleTrackEventPreview = (event: VehicleTrackEventView | null) => {
+    setPreviewedEventId(event?.id ?? null);
+    if (event) setPreviewedSegmentId(null);
+  };
+
+  const handleTrackSegmentPreview = (segment: VehicleTrackSegment | null) => {
+    setPreviewedSegmentId(segment?.id ?? null);
+    if (segment) setPreviewedEventId(null);
   };
 
   const resetFilters = () => {
@@ -236,9 +259,12 @@ export function OnlineMapWorkspace({
             trackViewModel={trackViewModel}
             playbackPoint={playbackPoint}
             selectedEventId={selectedEventId}
+            previewedEventId={previewedEventId}
+            previewedSegmentId={previewedSegmentId}
             onVehicleSelect={handleVehicleSelect}
+            onEventPreview={handleTrackEventPreview}
             onEventActivate={handleTrackEventSelect}
-            onPlaybackPointRequest={handleProgressChange}
+            onSegmentPreview={handleTrackSegmentPreview}
           />
         ) : (
           <div className="h-full bg-[var(--color-canvas)]" aria-label="Карта без автомобилей" />
@@ -259,11 +285,22 @@ export function OnlineMapWorkspace({
             />
           }
           trackSummary={<TrackDaySummary model={trackViewModel} />}
+          trackSegments={
+            trackViewModel ? (
+              <TrackSegmentList
+                model={trackViewModel}
+                previewedSegmentId={previewedSegmentId}
+                onPreview={handleTrackSegmentPreview}
+              />
+            ) : null
+          }
           trackEvents={
             trackViewModel ? (
               <TrackEventList
                 model={trackViewModel}
+                previewedEventId={previewedEventId}
                 selectedEventId={selectedEventId}
+                onPreview={handleTrackEventPreview}
                 onActivate={handleTrackEventSelect}
               />
             ) : null

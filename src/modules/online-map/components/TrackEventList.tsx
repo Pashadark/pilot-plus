@@ -15,11 +15,15 @@ function formatDate(date: string): string {
 
 export function TrackEventList({
   model,
+  previewedEventId,
   selectedEventId,
+  onPreview,
   onActivate,
 }: {
   model: VehicleTrackPeriodViewModel;
+  previewedEventId: string | null;
   selectedEventId: string | null;
+  onPreview: (event: VehicleTrackEventView | null) => void;
   onActivate: (event: VehicleTrackEventView) => void;
 }) {
   return (
@@ -34,7 +38,7 @@ export function TrackEventList({
           ) : null}
           <div className="grid gap-2">
             {trip.events.map((event) => {
-              const activate = () => onActivate(event);
+              const preview = () => onPreview(event);
               const countAtPoint = trip.events.filter(
                 (candidate) =>
                   candidate.coordinates[0] === event.coordinates[0] &&
@@ -47,10 +51,14 @@ export function TrackEventList({
                   type="button"
                   aria-label={`${eventTypeLabels[event.type]}, ${event.timestamp}`}
                   aria-pressed={selectedEventId === event.id}
-                  onMouseEnter={activate}
-                  onFocus={activate}
-                  onClick={activate}
-                  className="flex min-h-11 items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-left text-sm transition-colors hover:border-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] aria-pressed:border-[var(--color-primary)] aria-pressed:bg-[var(--color-primary-soft)]"
+                  data-previewed={previewedEventId === event.id}
+                  data-coordinate={JSON.stringify(event.coordinates)}
+                  onMouseEnter={preview}
+                  onMouseLeave={() => onPreview(null)}
+                  onFocus={preview}
+                  onBlur={() => onPreview(null)}
+                  onClick={() => onActivate(event)}
+                  className="flex min-h-11 items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-left text-sm transition-colors hover:border-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] aria-pressed:border-[var(--color-primary)] aria-pressed:bg-[var(--color-primary-soft)] data-[previewed=true]:border-[var(--color-primary)] data-[previewed=true]:bg-[var(--color-primary-soft)]"
                 >
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{event.title}</span>

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { openAuthenticatedRoute } from './helpers/auth';
 
@@ -28,6 +28,15 @@ async function expectElementsDoNotOverlap(
     firstBox!.y < secondBox!.y + secondBox!.height &&
     firstBox!.y + firstBox!.height > secondBox!.y;
   expect(overlap).toBe(false);
+}
+
+async function tabUntilFocused(page: Page, target: Locator, maxTabs = 40) {
+  for (let index = 0; index < maxTabs; index += 1) {
+    await page.keyboard.press('Tab');
+    if (await target.evaluate((element) => element === document.activeElement)) return;
+  }
+
+  await expect(target).toBeFocused();
 }
 
 test.describe('онлайн-карта', () => {
@@ -82,13 +91,13 @@ test.describe('онлайн-карта', () => {
     await expect
       .poll(() => greenSegment.evaluate((element) => getComputedStyle(element).opacity))
       .toBe('0.72');
-    await expect(page.getByLabel('Начало маршрута')).toHaveCount(1);
-    await expect(page.getByLabel('Конец маршрута')).toHaveCount(1);
+    await expect(trackSurface.locator('[data-endpoint="start"]')).toHaveCount(1);
+    await expect(trackSurface.locator('[data-endpoint="finish"]')).toHaveCount(1);
     await expect(
       page.getByRole('region', { name: 'События маршрута' }).getByRole('button'),
     ).toHaveCount(4);
 
-    const refuelEvent = page.getByRole('button', { name: 'Событие: Заправка' });
+    const refuelEvent = page.getByRole('button', { name: 'Заправка, 08:32' });
     const refuelCoordinate = await refuelEvent.getAttribute('data-coordinate');
     expect(refuelCoordinate).not.toBeNull();
     await expect(
@@ -96,18 +105,25 @@ test.describe('онлайн-карта', () => {
     ).toHaveCount(1);
 
     const firstSegment = page.getByRole('button', {
-      name: 'Участок маршрута 08:00–08:08',
+      name: /Участок 29\.07\.2026, 08:00–08:08, 32 км\/ч/,
     });
-    await firstSegment.dispatchEvent('mouseover');
+    await firstSegment.hover();
     const segmentPopup = page.locator('.maplibregl-popup');
     await expect(segmentPopup.getByText('08:00–08:08')).toBeVisible();
     await expect(segmentPopup.getByText('Средняя скорость: 32 км/ч')).toBeVisible();
     await expect(segmentPopup.getByText('Красноярск, ул. Дубровинского')).toBeVisible();
     await firstSegment.dispatchEvent('mouseout');
+    await expect(segmentPopup).toHaveCount(0);
 
     const playbackMarker = page.getByLabel('Положение автомобиля на маршруте');
     const initialPlaybackPoint = await playbackMarker.getAttribute('data-playback-point');
+    await refuelEvent.hover();
+    await expect(page.getByRole('article', { name: 'Событие: Заправка' })).toBeVisible();
+    await expect(page.getByRole('slider', { name: 'Положение на маршруте' })).toHaveValue('0');
+    await refuelEvent.dispatchEvent('mouseout');
+    await expect(page.getByRole('article', { name: 'Событие: Заправка' })).toHaveCount(0);
     await refuelEvent.focus();
+    await expect(page.getByRole('slider', { name: 'Положение на маршруте' })).toHaveValue('0');
     await refuelEvent.press('Enter');
     await expect(page.getByRole('article', { name: 'Событие: Заправка' })).toBeVisible();
     const playbackSlider = page.getByRole('slider', { name: 'Положение на маршруте' });
@@ -147,6 +163,18 @@ test.describe('онлайн-карта', () => {
     await expect(page.locator('[data-track-color][data-trip-index="0"]')).toHaveCount(7);
     await expect(page.locator('[data-track-color][data-trip-index="1"]')).toHaveCount(7);
     await expect(page.locator('[data-track-color][data-trip-index="2"]')).toHaveCount(7);
+    await expect(
+      page.getByRole('region', { name: 'Участки маршрута' }).getByRole('button'),
+    ).toHaveCount(21);
+    await expect(page.getByText(/^Старт поездки 28\.07\.2026/)).toBeVisible();
+    await expect(page.getByText(/^Финиш поездки 27\.07\.2026/)).toBeVisible();
+
+    const mapContainer = page.getByLabel('Онлайн-карта автопарка');
+    await expect(mapContainer).toHaveAttribute('data-track-casing-width', '8');
+    await expect(mapContainer).toHaveAttribute(
+      'data-track-line-offset',
+      JSON.stringify(['match', ['get', 'tripIndex'], 1, -5, 2, 5, 0]),
+    );
   });
 
   test('видимый список событий раскрывает карточку по hover, focus и click', async ({ page }) => {
@@ -159,66 +187,66 @@ test.describe('онлайн-карта', () => {
     );
 
     const event = page.getByRole('button', { name: 'Заправка, 08:32' });
+    const playback = page.getByRole('slider', { name: 'Положение на маршруте' });
     await event.hover();
     await expect(page.getByRole('article', { name: 'Событие: Заправка' })).toBeVisible();
+    await expect(playback).toHaveValue('0');
+    await event.dispatchEvent('mouseout');
+    await expect(page.getByRole('article', { name: 'Событие: Заправка' })).toHaveCount(0);
     await event.focus();
     await expect(event).toBeFocused();
+    await expect(playback).toHaveValue('0');
+    await event.blur();
+    await expect(page.getByRole('article', { name: 'Событие: Заправка' })).toHaveCount(0);
     await event.click();
-    await expect(page.getByRole('slider', { name: 'Положение на маршруте' })).not.toHaveValue('0');
+    await expect(playback).not.toHaveValue('0');
   });
 
   test('все действия маршрута доступны с клавиатуры', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await openAuthenticatedRoute(page, '/map');
 
+    const search = page.getByRole('searchbox', { name: 'Поиск транспорта' });
+    await search.click();
     const marker = page.getByRole('button', { name: /А 123 МР 77/i });
-    await marker.focus();
-    await marker.press('Enter');
+    await tabUntilFocused(page, marker, 8);
+    await page.keyboard.press('Enter');
 
     const trackSurface = page.getByTestId('vehicle-track-a11y');
     await expect(trackSurface).toHaveAttribute('data-track-ready', 'true');
     const playbackSlider = page.getByRole('slider', { name: 'Положение на маршруте' });
 
     const firstSegment = page.getByRole('button', {
-      name: 'Участок маршрута 08:00–08:08',
+      name: /Участок 29\.07\.2026, 08:00–08:08, 32 км\/ч/,
     });
-    await firstSegment.focus();
+    await tabUntilFocused(page, firstSegment);
+    await expect(firstSegment).toBeFocused();
     const segmentPopup = page.locator('.maplibregl-popup');
     await expect(segmentPopup.getByText('08:00–08:08')).toBeVisible();
     await expect(segmentPopup.getByText('Средняя скорость: 32 км/ч')).toBeVisible();
     await expect(segmentPopup.getByText('Красноярск, ул. Дубровинского')).toBeVisible();
 
-    const finish = page.getByRole('button', { name: 'Конец маршрута' });
-    await finish.focus();
-    await finish.press('Enter');
-    await expect(playbackSlider).toHaveValue('100');
-
-    const start = page.getByRole('button', { name: 'Начало маршрута' });
-    await start.focus();
-    await start.press('Enter');
-    await expect(playbackSlider).toHaveValue('0');
-
-    const event = page.getByRole('button', { name: 'Событие: Заправка' });
-    await event.focus();
-    await event.press('Enter');
+    const event = page.getByRole('button', { name: 'Заправка, 08:32' });
+    await tabUntilFocused(page, event, 12);
+    await page.keyboard.press('Enter');
     await expect(page.getByRole('article', { name: 'Событие: Заправка' })).toBeVisible();
-
-    const date = page.getByLabel('Дата маршрута');
-    await date.focus();
-    await date.press('ArrowDown');
-    await date.press('Enter');
-    await expect(trackSurface).toHaveAttribute('data-track-date', '2026-07-28');
 
     const play = page.locator(
       'button[aria-label="Воспроизвести маршрут"], button[aria-label="Приостановить маршрут"]',
     );
-    await play.focus();
-    await play.press('Space');
+    await tabUntilFocused(page, play, 12);
+    await page.keyboard.press('Space');
     await expect(play).toHaveAttribute('aria-label', 'Приостановить маршрут');
 
+    await tabUntilFocused(page, playbackSlider, 2);
+    await page.keyboard.press('End');
+    await expect(playbackSlider).toHaveValue('100');
+    await page.keyboard.press('Home');
+    await expect(playbackSlider).toHaveValue('0');
+
     const close = page.getByRole('button', { name: 'Закрыть карточку автомобиля' });
-    await close.focus();
-    await close.press('Enter');
+    await tabUntilFocused(page, close, 40);
+    await page.keyboard.press('Enter');
     await expect(trackSurface).toHaveCount(0);
   });
 

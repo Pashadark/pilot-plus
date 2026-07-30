@@ -22,6 +22,7 @@ export interface SelectedVehiclePanelProps {
   onClose: () => void;
   trackControls: ReactNode;
   trackSummary: ReactNode;
+  trackSegments: ReactNode;
   trackEvents: ReactNode;
   trackPlayback: ReactNode;
   className?: string;
@@ -32,6 +33,7 @@ export function SelectedVehiclePanel({
   onClose,
   trackControls,
   trackSummary,
+  trackSegments,
   trackEvents,
   trackPlayback,
   className = '',
@@ -91,6 +93,7 @@ export function SelectedVehiclePanel({
 
           <div className="border-t border-[var(--color-border)] pt-4">{trackControls}</div>
           {trackSummary}
+          {trackSegments}
           {trackEvents}
         </article>
       </div>
