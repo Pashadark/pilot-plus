@@ -44,6 +44,7 @@ export function OnlineMapWorkspace({
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [trackDate, setTrackDate] = useState('');
   const [trackPeriod, setTrackPeriod] = useState<TrackPeriodMode>('day');
+  const [playbackTripId, setPlaybackTripId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -75,14 +76,15 @@ export function OnlineMapWorkspace({
     () => (periodTracks.length > 0 ? buildTrackPeriodViewModel(periodTracks, trackPeriod) : null),
     [periodTracks, trackPeriod],
   );
-  const selectedTrack = trackPeriod === 'seven-days' ? (periodTracks[0] ?? null) : dayTrack;
+  const playbackTrack =
+    periodTracks.find((track) => track.date === playbackTripId) ?? periodTracks[0] ?? null;
   const playbackPoint = useMemo(
-    () => (selectedTrack ? getPlaybackPosition(selectedTrack, progress) : null),
-    [progress, selectedTrack],
+    () => (playbackTrack ? getPlaybackPosition(playbackTrack, progress) : null),
+    [playbackTrack, progress],
   );
 
   useEffect(() => {
-    if (!playing || reducedMotion || !selectedTrack) return;
+    if (!playing || reducedMotion || !playbackTrack) return;
 
     const timer = window.setInterval(() => {
       setProgress((currentProgress) => {
@@ -98,11 +100,12 @@ export function OnlineMapWorkspace({
     }, 250);
 
     return () => window.clearInterval(timer);
-  }, [playing, reducedMotion, selectedTrack]);
+  }, [playbackTrack, playing, reducedMotion]);
 
   const resetTrackState = () => {
     setTrackDate('');
     setTrackPeriod('day');
+    setPlaybackTripId(null);
     setProgress(0);
     setPlaying(false);
     setSelectedEventId(null);
@@ -139,6 +142,7 @@ export function OnlineMapWorkspace({
     setSelectedVehicleId(vehicle.id);
     setTrackDate(dates[0] ?? '');
     setTrackPeriod('day');
+    setPlaybackTripId(null);
     setProgress(0);
     setPlaying(false);
     setSelectedEventId(null);
@@ -148,6 +152,7 @@ export function OnlineMapWorkspace({
 
   const handleTrackDateChange = (date: string) => {
     setTrackDate(date);
+    setPlaybackTripId(null);
     setProgress(0);
     setPlaying(false);
     setSelectedEventId(null);
@@ -158,6 +163,7 @@ export function OnlineMapWorkspace({
   const handleTrackPeriodChange = (period: TrackPeriodMode) => {
     setTrackPeriod(period);
     if (period === 'seven-days') setTrackDate(trackDates[0] ?? '');
+    setPlaybackTripId(null);
     setProgress(0);
     setPlaying(false);
     setSelectedEventId(null);
@@ -182,12 +188,14 @@ export function OnlineMapWorkspace({
     setPreviewedEventId(event.id);
     setPreviewedSegmentId(null);
     setPlaying(false);
-    if (!selectedTrack || event.tripId !== selectedTrack.date) return;
+    const eventTrack = periodTracks.find((track) => track.date === event.tripId);
+    if (!eventTrack) return;
+    setPlaybackTripId(event.tripId);
 
-    const pointIndex = selectedTrack.points.findIndex((point) => point.id === event.pointId);
+    const pointIndex = eventTrack.points.findIndex((point) => point.id === event.pointId);
     if (pointIndex < 0) return;
 
-    const lastPointIndex = selectedTrack.points.length - 1;
+    const lastPointIndex = eventTrack.points.length - 1;
     setProgress(lastPointIndex > 0 ? (pointIndex / lastPointIndex) * 100 : 0);
   };
 
@@ -199,6 +207,16 @@ export function OnlineMapWorkspace({
   const handleTrackSegmentPreview = (segment: VehicleTrackSegment | null) => {
     setPreviewedSegmentId(segment?.id ?? null);
     if (segment) setPreviewedEventId(null);
+  };
+
+  const handleEndpointActivate = (tripId: string, endpoint: 'start' | 'finish') => {
+    if (!periodTracks.some((track) => track.date === tripId)) return;
+    setPlaybackTripId(tripId);
+    setProgress(endpoint === 'start' ? 0 : 100);
+    setPlaying(false);
+    setSelectedEventId(null);
+    setPreviewedEventId(null);
+    setPreviewedSegmentId(null);
   };
 
   const resetFilters = () => {
@@ -291,6 +309,7 @@ export function OnlineMapWorkspace({
                 model={trackViewModel}
                 previewedSegmentId={previewedSegmentId}
                 onPreview={handleTrackSegmentPreview}
+                onEndpointActivate={handleEndpointActivate}
               />
             ) : null
           }
@@ -309,8 +328,11 @@ export function OnlineMapWorkspace({
             <div className="grid gap-2">
               {trackPeriod === 'seven-days' && trackViewModel ? (
                 <p className="text-xs font-medium text-[var(--color-text-secondary)]">
-                  Воспроизводится последняя поездка:{' '}
-                  {trackViewModel.activeTrip.date.split('-').reverse().join('.')}
+                  Воспроизводится поездка:{' '}
+                  {(playbackTrack?.date ?? trackViewModel.activeTrip.date)
+                    .split('-')
+                    .reverse()
+                    .join('.')}
                 </p>
               ) : null}
               <TrackPlayback

@@ -153,3 +153,40 @@ Focused component/unit
 `git diff --check` проходит. Файлы `.superpowers/sdd/task-1-report.md` и
 `.superpowers/sdd/task-2-report.md` являются посторонними незакоммиченными изменениями и намеренно
 не включаются в commit.
+
+---
+
+## Final review follow-up — playback endpoints
+
+- Старт и финиш каждой поездки стали видимыми focusable-кнопками с датой, временем и адресом в
+  accessible name.
+- Workspace хранит отдельный `playbackTripId`. Семидневный период по умолчанию воспроизводит
+  новейшую поездку, но endpoint старой поездки переводит marker, slider и последующий autoplay на
+  выбранную поездку.
+- Выбор endpoint устанавливает точный прогресс `0`/`100`; смена периода, даты, автомобиля или
+  закрытие панели сбрасывает transient playback-trip selection.
+- Accessible name каждого события теперь всегда содержит дату поездки, поэтому одинаковые события
+  разных дней однозначны.
+
+### RED
+
+```text
+npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx
+
+1 failed file
+5 failed | 13 passed
+```
+
+Падения подтверждали отсутствие endpoint-кнопок, dated event names, playback-trip state и новой
+индикации активной поездки.
+
+### GREEN
+
+```text
+Focused component/unit: 33 passed
+Full unit:              79 files, 399 passed
+Targeted Playwright:    4 passed
+Full online-map E2E:    28 passed, 4 skipped
+npm run typecheck:      exit 0
+npm run lint:           exit 0
+```

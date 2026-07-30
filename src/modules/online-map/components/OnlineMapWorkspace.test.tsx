@@ -203,7 +203,7 @@ it('меняет день и быстрый период, сохраняя до�
   expect(getMapTrackState().trackPeriod).toBe('seven-days');
   expect(getMapTrackState().tripCount).toBe('3');
   expect(screen.getByText('3 поездки')).toBeTruthy();
-  expect(screen.getByText('Воспроизводится последняя поездка: 29.07.2026')).toBeTruthy();
+  expect(screen.getByText('Воспроизводится поездка: 29.07.2026')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Сегодня' }).getAttribute('aria-pressed')).toBe(
     'false',
   );
@@ -224,11 +224,13 @@ it('предпросматривает событие по hover/focus без а
   render(<OnlineMapWorkspace mapComponent={FakeMap} />);
 
   await user.click(screen.getByRole('button', { name: /А 123 МР 77/ }));
-  const eventButton = screen.getByRole('button', { name: /Заправка, 08:32/ });
+  const eventButton = screen.getByRole('button', {
+    name: /Заправка, 29\.07\.2026, 08:32/,
+  });
   const initialPlaybackPoint = getMapTrackState().playbackPoint;
 
   expect(eventButton.closest('[aria-label="События маршрута"]')).toBeTruthy();
-  expect(screen.getByRole('button', { name: /Потеря связи, 08:32/ })).toBeTruthy();
+  expect(screen.getByRole('button', { name: /Потеря связи, 29\.07\.2026, 08:32/ })).toBeTruthy();
   fireEvent.mouseEnter(eventButton);
   expect(getMapTrackState().previewedEvent).toContain('-refuel');
   expect(getMapTrackState().selectedEvent).toBe('');
@@ -254,7 +256,9 @@ it('не останавливает autoplay при preview события', () 
   fireEvent.click(screen.getByRole('button', { name: /А 123 МР 77/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Воспроизвести маршрут' }));
   act(() => vi.advanceTimersByTime(250));
-  const eventButton = screen.getByRole('button', { name: /Заправка, 08:32/ });
+  const eventButton = screen.getByRole('button', {
+    name: /Заправка, 29\.07\.2026, 08:32/,
+  });
   fireEvent.mouseEnter(eventButton);
 
   expect((screen.getByRole('slider') as HTMLInputElement).value).toBe('2');
@@ -273,18 +277,86 @@ it('показывает видимые участки с focus-preview и вс�
     name: /Участок 29\.07\.2026, 08:00–08:08, 32 км\/ч, Красноярск/,
   });
 
-  expect(segments.querySelectorAll('button')).toHaveLength(7);
-  expect(screen.getByText(/^Старт поездки 29\.07\.2026/)).toBeTruthy();
-  expect(screen.getByText(/^Финиш поездки 29\.07\.2026/)).toBeTruthy();
+  expect(segments.querySelectorAll('button')).toHaveLength(9);
+  expect(screen.getByRole('button', { name: /^Старт поездки 29\.07\.2026,/ })).toBeTruthy();
+  expect(screen.getByRole('button', { name: /^Финиш поездки 29\.07\.2026,/ })).toBeTruthy();
   fireEvent.focus(firstSegment);
   expect(getMapTrackState().previewedSegment).toContain('2026-07-29');
   fireEvent.blur(firstSegment);
   expect(getMapTrackState().previewedSegment).toBe('');
 
   await user.click(screen.getByRole('button', { name: '7 дней' }));
-  expect(segments.querySelectorAll('button')).toHaveLength(21);
-  expect(screen.getByText(/^Старт поездки 28\.07\.2026/)).toBeTruthy();
-  expect(screen.getByText(/^Финиш поездки 27\.07\.2026/)).toBeTruthy();
+  expect(segments.querySelectorAll('button')).toHaveLength(27);
+  expect(screen.getByRole('button', { name: /^Старт поездки 28\.07\.2026,/ })).toBeTruthy();
+  expect(screen.getByRole('button', { name: /^Финиш поездки 27\.07\.2026,/ })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Заправка, 29.07.2026, 08:32' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Заправка, 28.07.2026, 08:32' })).toBeTruthy();
+});
+
+it('переключает playback на старую поездку через её старт и финиш', () => {
+  vi.useFakeTimers();
+  render(<OnlineMapWorkspace mapComponent={FakeMap} />);
+
+  fireEvent.click(screen.getByRole('button', { name: /А 123 МР 77/ }));
+  fireEvent.click(screen.getByRole('button', { name: '7 дней' }));
+  const slider = screen.getByRole('slider', {
+    name: 'Положение на маршруте',
+  }) as HTMLInputElement;
+  const olderStart = screen.getByRole('button', {
+    name: /^Старт поездки 28\.07\.2026, 08:00,/,
+  });
+  const olderFinish = screen.getByRole('button', {
+    name: /^Финиш поездки 28\.07\.2026, 08:56,/,
+  });
+
+  fireEvent.click(olderStart);
+  expect(slider.value).toBe('0');
+  expect(getMapTrackState().playbackPoint).toContain('2026-07-28-p0');
+  expect(screen.getByText('Воспроизводится поездка: 28.07.2026')).toBeTruthy();
+
+  fireEvent.change(slider, { target: { value: '50' } });
+  expect(getMapTrackState().playbackPoint).toContain('2026-07-28-p4');
+
+  fireEvent.click(olderFinish);
+  expect(slider.value).toBe('100');
+  expect(getMapTrackState().playbackPoint).toContain('2026-07-28-p7');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Воспроизвести маршрут' }));
+  act(() => vi.advanceTimersByTime(1_000));
+  expect(Number(slider.value)).toBe(8);
+  expect(getMapTrackState().playbackPoint).toContain('2026-07-28-p1');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Сегодня' }));
+  expect(slider.value).toBe('0');
+  expect(getMapTrackState().playbackPoint).toContain('2026-07-29-p0');
+});
+
+it('сбрасывает выбранную playback-поездку при смене даты и автомобиля', () => {
+  render(<OnlineMapWorkspace mapComponent={FakeMap} />);
+
+  fireEvent.click(screen.getByRole('button', { name: /А 123 МР 77/ }));
+  fireEvent.click(screen.getByRole('button', { name: '7 дней' }));
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: /^Старт поездки 28\.07\.2026, 08:00,/,
+    }),
+  );
+  expect(getMapTrackState().playbackPoint).toContain('2026-07-28-p0');
+
+  fireEvent.change(screen.getByLabelText('Дата маршрута'), {
+    target: { value: '2026-07-27' },
+  });
+  expect(getMapTrackState().trackPeriod).toBe('day');
+  expect(getMapTrackState().playbackPoint).toContain('2026-07-27-p0');
+
+  fireEvent.click(screen.getByRole('button', { name: '7 дней' }));
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: /^Старт поездки 28\.07\.2026, 08:00,/,
+    }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: /В 456 КХ 178/ }));
+  expect(getMapTrackState().playbackPoint).toContain('haval-jolion-v456kh178-2026-07-29-p0');
 });
 
 it('показывает в сводке количество стоянок вместо количества событий', async () => {

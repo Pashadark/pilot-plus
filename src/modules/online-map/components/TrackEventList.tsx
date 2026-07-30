@@ -49,7 +49,7 @@ export function TrackEventList({
                 <button
                   key={event.id}
                   type="button"
-                  aria-label={`${eventTypeLabels[event.type]}, ${event.timestamp}`}
+                  aria-label={`${eventTypeLabels[event.type]}, ${formatDate(trip.date)}, ${event.timestamp}`}
                   aria-pressed={selectedEventId === event.id}
                   data-previewed={previewedEventId === event.id}
                   data-coordinate={JSON.stringify(event.coordinates)}

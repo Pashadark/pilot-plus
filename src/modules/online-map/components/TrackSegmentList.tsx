@@ -8,10 +8,12 @@ export function TrackSegmentList({
   model,
   previewedSegmentId,
   onPreview,
+  onEndpointActivate,
 }: {
   model: VehicleTrackPeriodViewModel;
   previewedSegmentId: string | null;
   onPreview: (segment: VehicleTrackSegment | null) => void;
+  onEndpointActivate: (tripId: string, endpoint: 'start' | 'finish') => void;
 }) {
   return (
     <section aria-label="Участки маршрута" className="grid gap-2">
@@ -29,9 +31,14 @@ export function TrackSegmentList({
             return (
               <div key={trip.tripId} className="grid gap-2">
                 <h4 className="text-sm font-semibold">Поездка {date}</h4>
-                <p className="text-xs text-[var(--color-text-secondary)]">
+                <button
+                  type="button"
+                  aria-label={`Старт поездки ${date}, ${trip.start.timestamp}, ${trip.start.address}`}
+                  onClick={() => onEndpointActivate(trip.tripId, 'start')}
+                  className="min-h-11 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-left text-xs text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+                >
                   Старт поездки {date} · {trip.start.timestamp} · {trip.start.address}
-                </p>
+                </button>
                 <div className="grid gap-2">
                   {trip.segments.map((segment) => {
                     const preview = () => onPreview(segment);
@@ -59,9 +66,14 @@ export function TrackSegmentList({
                     );
                   })}
                 </div>
-                <p className="text-xs text-[var(--color-text-secondary)]">
+                <button
+                  type="button"
+                  aria-label={`Финиш поездки ${date}, ${trip.finish.timestamp}, ${trip.finish.address}`}
+                  onClick={() => onEndpointActivate(trip.tripId, 'finish')}
+                  className="min-h-11 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-left text-xs text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+                >
                   Финиш поездки {date} · {trip.finish.timestamp} · {trip.finish.address}
-                </p>
+                </button>
               </div>
             );
           })}

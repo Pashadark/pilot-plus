@@ -97,7 +97,9 @@ test.describe('онлайн-карта', () => {
       page.getByRole('region', { name: 'События маршрута' }).getByRole('button'),
     ).toHaveCount(4);
 
-    const refuelEvent = page.getByRole('button', { name: 'Заправка, 08:32' });
+    const refuelEvent = page.getByRole('button', {
+      name: 'Заправка, 29.07.2026, 08:32',
+    });
     const refuelCoordinate = await refuelEvent.getAttribute('data-coordinate');
     expect(refuelCoordinate).not.toBeNull();
     await expect(
@@ -159,15 +161,17 @@ test.describe('онлайн-карта', () => {
     await expect(trackSurface).toHaveAttribute('data-track-period', 'seven-days');
     await expect(trackSurface).toHaveAttribute('data-trip-count', '3');
     await expect(page.getByText('3 поездки')).toBeVisible();
-    await expect(page.getByText('Воспроизводится последняя поездка: 29.07.2026')).toBeVisible();
+    await expect(page.getByText('Воспроизводится поездка: 29.07.2026')).toBeVisible();
     await expect(page.locator('[data-track-color][data-trip-index="0"]')).toHaveCount(7);
     await expect(page.locator('[data-track-color][data-trip-index="1"]')).toHaveCount(7);
     await expect(page.locator('[data-track-color][data-trip-index="2"]')).toHaveCount(7);
     await expect(
       page.getByRole('region', { name: 'Участки маршрута' }).getByRole('button'),
-    ).toHaveCount(21);
-    await expect(page.getByText(/^Старт поездки 28\.07\.2026/)).toBeVisible();
-    await expect(page.getByText(/^Финиш поездки 27\.07\.2026/)).toBeVisible();
+    ).toHaveCount(27);
+    await expect(page.getByRole('button', { name: /^Старт поездки 28\.07\.2026,/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Финиш поездки 27\.07\.2026,/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Заправка, 29.07.2026, 08:32' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Заправка, 28.07.2026, 08:32' })).toBeVisible();
 
     const mapContainer = page.getByLabel('Онлайн-карта автопарка');
     await expect(mapContainer).toHaveAttribute('data-track-casing-width', '8');
@@ -175,6 +179,34 @@ test.describe('онлайн-карта', () => {
       'data-track-line-offset',
       JSON.stringify(['match', ['get', 'tripIndex'], 1, -5, 2, 5, 0]),
     );
+  });
+
+  test('выбирает старт и финиш старой поездки последовательным Tab и Enter', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openAuthenticatedRoute(page, '/map');
+    await page.getByRole('button', { name: /А 123 МР 77/i }).click();
+    const sevenDays = page.getByRole('button', { name: '7 дней' });
+    await sevenDays.click();
+
+    const playbackMarker = page.getByLabel('Положение автомобиля на маршруте');
+    const playbackSlider = page.getByRole('slider', { name: 'Положение на маршруте' });
+    const olderStart = page.getByRole('button', {
+      name: /^Старт поездки 28\.07\.2026, 08:00,/,
+    });
+    const olderFinish = page.getByRole('button', {
+      name: /^Финиш поездки 28\.07\.2026, 08:56,/,
+    });
+
+    await tabUntilFocused(page, olderStart, 16);
+    await page.keyboard.press('Enter');
+    await expect(playbackSlider).toHaveValue('0');
+    await expect(playbackMarker).toHaveAttribute('data-playback-point', /2026-07-28-p0$/);
+    await expect(page.getByText('Воспроизводится поездка: 28.07.2026')).toBeVisible();
+
+    await tabUntilFocused(page, olderFinish, 10);
+    await page.keyboard.press('Enter');
+    await expect(playbackSlider).toHaveValue('100');
+    await expect(playbackMarker).toHaveAttribute('data-playback-point', /2026-07-28-p7$/);
   });
 
   test('видимый список событий раскрывает карточку по hover, focus и click', async ({ page }) => {
@@ -186,7 +218,9 @@ test.describe('онлайн-карта', () => {
       'true',
     );
 
-    const event = page.getByRole('button', { name: 'Заправка, 08:32' });
+    const event = page.getByRole('button', {
+      name: 'Заправка, 29.07.2026, 08:32',
+    });
     const playback = page.getByRole('slider', { name: 'Положение на маршруте' });
     await event.hover();
     await expect(page.getByRole('article', { name: 'Событие: Заправка' })).toBeVisible();
@@ -226,7 +260,9 @@ test.describe('онлайн-карта', () => {
     await expect(segmentPopup.getByText('Средняя скорость: 32 км/ч')).toBeVisible();
     await expect(segmentPopup.getByText('Красноярск, ул. Дубровинского')).toBeVisible();
 
-    const event = page.getByRole('button', { name: 'Заправка, 08:32' });
+    const event = page.getByRole('button', {
+      name: 'Заправка, 29.07.2026, 08:32',
+    });
     await tabUntilFocused(page, event, 12);
     await page.keyboard.press('Enter');
     await expect(page.getByRole('article', { name: 'Событие: Заправка' })).toBeVisible();
@@ -340,7 +376,9 @@ test.describe('онлайн-карта', () => {
       'true',
     );
 
-    const mobileEvent = page.getByRole('button', { name: 'Заправка, 08:32' });
+    const mobileEvent = page.getByRole('button', {
+      name: 'Заправка, 29.07.2026, 08:32',
+    });
     await mobileEvent.tap();
     await expect(page.getByRole('article', { name: 'Событие: Заправка' })).toBeVisible();
 
