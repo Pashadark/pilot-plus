@@ -1,4 +1,6 @@
-import type { HTMLAttributes, ReactNode, TableHTMLAttributes } from 'react';
+'use client';
+
+import { useState, type HTMLAttributes, type ReactNode, type TableHTMLAttributes } from 'react';
 const avatarSizes = {
   xs: 'size-7 text-xs',
   sm: 'size-9 text-sm',
@@ -6,7 +8,15 @@ const avatarSizes = {
   lg: 'size-14 text-lg',
 };
 
-export function Avatar({ name, size = 'md' }: { name: string; size?: keyof typeof avatarSizes }) {
+export interface AvatarProps {
+  name: string;
+  src?: string | null;
+  size?: 'xs' | 'sm' | 'md' | 'lg';
+  className?: string;
+}
+
+export function Avatar({ name, src, size = 'md', className }: AvatarProps) {
+  const [hasImageError, setHasImageError] = useState(false);
   const initials = name
     .split(/\s+/)
     .map((part) => part[0])
@@ -17,9 +27,14 @@ export function Avatar({ name, size = 'md' }: { name: string; size?: keyof typeo
     <span
       role="img"
       aria-label={name}
-      className={`grid place-items-center rounded-full bg-[var(--color-primary-soft)] font-semibold text-[var(--color-primary)] ${avatarSizes[size]}`}
+      onErrorCapture={() => setHasImageError(true)}
+      className={`grid place-items-center overflow-hidden rounded-full bg-[var(--color-primary-soft)] font-semibold text-[var(--color-primary)] ${avatarSizes[size]} ${className ?? ''}`}
     >
-      {initials}
+      {src && !hasImageError ? (
+        <img className="size-full object-cover" src={src} alt="" onError={() => setHasImageError(true)} />
+      ) : (
+        initials
+      )}
     </span>
   );
 }

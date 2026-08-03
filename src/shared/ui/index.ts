@@ -7,6 +7,7 @@ export * from './Navigation';
 export * from './Feedback';
 export * from './Overlays';
 export * from './DataDisplay';
+export * from './PageHeader';
 export * from './Toast';
 export * from './SystemState';
 export * from './ForbiddenState';
