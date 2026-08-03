@@ -161,12 +161,20 @@ it('центрирует desktop playback только в свободной о�
   const slider = screen.getByRole('slider', { name: 'Положение на маршруте' });
   const playbackPositioner = slider.closest('aside')?.lastElementChild;
   expect(playbackPositioner?.className).toContain('@min-[48rem]:left-[var(--sidebar-width)]');
-  expect(playbackPositioner?.className).toContain('@min-[48rem]:right-[21rem]');
+  expect(playbackPositioner?.className).toContain('@min-[48rem]:right-[26rem]');
   expect(playbackPositioner?.className).toContain('@min-[48rem]:mx-auto');
   expect(playbackPositioner?.className).not.toContain(
     '@min-[48rem]:left-[calc((100vw+var(--sidebar-width))/2)]',
   );
   expect(slider.closest('aside')).toBeTruthy();
+});
+
+it('резервирует непересекающиеся desktop-зоны поиска и карточки', () => {
+  render(<OnlineMapWorkspace mapComponent={FakeMap} />);
+  fireEvent.click(screen.getByRole('button', { name: /А 123 МР 77/ }));
+
+  expect(screen.getByTestId('online-map-controls').className).toContain('36rem');
+  expect(screen.getByTestId('selected-vehicle-panel').className).toContain('w-[25rem]');
 });
 
 it('выбирает последнюю дату автомобиля и передаёт маршрут карте', async () => {

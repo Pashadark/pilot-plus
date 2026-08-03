@@ -426,15 +426,15 @@ it('вычисляет fit padding по ширине контейнера кар
   const { getTrackFitOptions } = await import('./OnlineFleetMap');
 
   expect(getTrackFitOptions(640, 900, true).padding).toEqual({
-    top: 96,
+    top: 144,
     right: 24,
-    bottom: 432,
+    bottom: 456,
     left: 24,
   });
   expect(getTrackFitOptions(1024, 600, true).padding).toEqual({
-    top: 32,
-    right: 352,
-    bottom: 32,
+    top: 72,
+    right: 416,
+    bottom: 88,
     left: 32,
   });
 });
@@ -476,7 +476,7 @@ it('повторно вписывает маршрут при смене contain
   expect(mapMocks.mapFitBounds).toHaveBeenCalledWith(
     expect.anything(),
     expect.objectContaining({
-      padding: { top: 32, right: 352, bottom: 32, left: 32 },
+      padding: { top: 72, right: 416, bottom: 88, left: 32 },
     }),
   );
 

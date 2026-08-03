@@ -232,7 +232,7 @@ export function OnlineMapWorkspace({
     >
       <div
         data-testid="online-map-controls"
-        className="absolute top-3 right-3 left-3 z-20 grid gap-2 @min-[48rem]:right-auto @min-[48rem]:left-4 @min-[48rem]:w-[min(25rem,calc(100%-23rem))]"
+        className="absolute top-3 right-3 left-3 z-20 grid gap-2 @min-[48rem]:right-auto @min-[48rem]:left-4 @min-[48rem]:w-[min(36rem,calc(100%-27rem))]"
       >
         <SearchInput
           aria-label="Поиск транспорта"
@@ -260,7 +260,7 @@ export function OnlineMapWorkspace({
       </div>
 
       {filteredVehicles.length === 0 && (
-        <div className="absolute top-32 right-3 left-3 z-20 @min-[48rem]:right-auto @min-[48rem]:left-4 @min-[48rem]:w-[min(25rem,calc(100%-23rem))]">
+        <div className="absolute top-32 right-3 left-3 z-20 @min-[48rem]:right-auto @min-[48rem]:left-4 @min-[48rem]:w-[min(36rem,calc(100%-27rem))]">
           <EmptyState
             title="По запросу ничего не найдено"
             description="Сбросьте поиск и фильтр, чтобы снова увидеть весь автопарк."
@@ -344,7 +344,7 @@ export function OnlineMapWorkspace({
               />
             </div>
           }
-          className="absolute right-0 bottom-0 left-0 z-20 max-h-[48dvh] rounded-t-[var(--radius-panel)] pb-[max(1rem,env(safe-area-inset-bottom))] @min-[48rem]:top-4 @min-[48rem]:right-4 @min-[48rem]:bottom-4 @min-[48rem]:left-auto @min-[48rem]:max-h-none @min-[48rem]:w-80 @min-[48rem]:rounded-[var(--radius-panel)] @min-[48rem]:pb-4"
+          className="absolute right-0 bottom-0 left-0 z-20 max-h-[48dvh] rounded-t-[var(--radius-panel)] pb-[max(1rem,env(safe-area-inset-bottom))] @min-[48rem]:top-4 @min-[48rem]:right-4 @min-[48rem]:bottom-4 @min-[48rem]:left-auto @min-[48rem]:max-h-none @min-[48rem]:w-[25rem] @min-[48rem]:rounded-[var(--radius-panel)] @min-[48rem]:pb-4"
         />
       ) : null}
 

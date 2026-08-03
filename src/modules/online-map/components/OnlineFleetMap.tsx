@@ -478,7 +478,7 @@ export function OnlineFleetMap({
   }
 
   return (
-    <div className="relative h-full w-full [&_.maplibregl-ctrl-bottom-right]:right-3 [&_.maplibregl-ctrl-bottom-right]:bottom-[calc(48dvh+max(1rem,env(safe-area-inset-bottom)))] @min-[48rem]:[&_.maplibregl-ctrl-bottom-right]:right-[21rem] @min-[48rem]:[&_.maplibregl-ctrl-bottom-right]:bottom-4">
+    <div className="relative h-full w-full [&_.maplibregl-ctrl-bottom-right]:right-3 [&_.maplibregl-ctrl-bottom-right]:bottom-[calc(48dvh+max(1rem,env(safe-area-inset-bottom)))] @min-[48rem]:[&_.maplibregl-ctrl-bottom-right]:right-[26rem] @min-[48rem]:[&_.maplibregl-ctrl-bottom-right]:bottom-4">
       <div
         ref={containerRef}
         className="h-full w-full [&_.maplibregl-ctrl-group]:flex [&_.maplibregl-ctrl-group_button]:size-11"
@@ -570,11 +570,11 @@ export function getTrackFitOptions(width: number, height: number, reducedMotion:
 
   return {
     padding: desktop
-      ? { top: 32, right: 352, bottom: 32, left: 32 }
+      ? { top: 72, right: 416, bottom: 88, left: 32 }
       : {
-          top: 96,
+          top: 144,
           right: 24,
-          bottom: Math.round(height * 0.48),
+          bottom: Math.round(height * 0.48) + 24,
           left: 24,
         },
     duration: reducedMotion ? 0 : 350,
