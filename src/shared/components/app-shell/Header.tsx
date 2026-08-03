@@ -1,13 +1,15 @@
 'use client';
 
-import { FiBell, FiLogOut, FiMenu, FiMoon, FiSearch, FiSun, FiUser } from 'react-icons/fi';
+import Link from 'next/link';
+import { FiLogOut, FiMenu, FiMoon, FiSearch, FiSun } from 'react-icons/fi';
 
 import { logoutAction } from '@/modules/auth/actions';
 import type { SafeUser } from '@/modules/auth/types';
+import { demoNotifications } from '@/modules/notifications/fixtures';
+import { NotificationCenter } from '@/modules/notifications/NotificationCenter';
 import type { SystemHealthSummary } from '@/modules/system-health/types';
 import { useTheme } from '@/shared/providers/ThemeProvider';
-import { IconButton } from '@/shared/ui/IconButton';
-import { Breadcrumbs, DropdownMenu, SearchInput } from '@/shared/ui';
+import { Avatar, Breadcrumbs, DropdownMenu, IconButton, SearchInput } from '@/shared/ui';
 import type { Breadcrumb } from './AppShell';
 
 import { MobileNavigation } from './MobileNavigation';
@@ -61,9 +63,7 @@ export function Header({
                 className="h-10 pl-10"
               />
             </div>
-            <IconButton label="Уведомления" variant="ghost">
-              <FiBell aria-hidden="true" />
-            </IconButton>
+            <NotificationCenter notifications={demoNotifications} />
             <IconButton
               label={theme === 'light' ? 'Включить тёмную тему' : 'Включить светлую тему'}
               variant="ghost"
@@ -80,14 +80,21 @@ export function Header({
                 ariaLabel="Профиль и компания"
                 label={
                   <span className="flex size-11 items-center justify-center rounded-[var(--radius-md)] transition-colors hover:bg-[var(--color-primary-soft)]">
-                    <FiUser aria-hidden="true" className="size-5" />
+                    <Avatar name={user.name} size="sm" />
                   </span>
                 }
               >
                 <div className="border-b px-3 py-2">
-                  <p className="text-sm font-semibold">Администратор</p>
-                  <p className="text-xs text-[var(--color-text-secondary)]">Управление Pilot+</p>
+                  <p className="text-sm font-semibold">{user.name}</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">{user.email}</p>
                 </div>
+                <Link
+                  href="/profile"
+                  role="menuitem"
+                  className="flex min-h-11 items-center rounded-[var(--radius-sm)] px-3 text-sm font-medium transition-colors hover:bg-[var(--color-primary-soft)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
+                >
+                  Открыть профиль
+                </Link>
                 <form action={logoutAction}>
                   <button
                     type="submit"
