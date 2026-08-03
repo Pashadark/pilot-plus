@@ -44,7 +44,7 @@ describe('washToCalendarEvent', () => {
         ...record,
         vehicle: {
           ...record.vehicle,
-          internalNumber: null,
+          internalNumber: '',
           model: '   ',
           registrationNumber: null,
         },

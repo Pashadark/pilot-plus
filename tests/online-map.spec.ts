@@ -303,6 +303,26 @@ test.describe('онлайн-карта', () => {
     });
   }
 
+  test('desktop-панели карты не перекрываются на рабочих разрешениях', async ({ page }) => {
+    for (const viewport of [
+      { width: 1280, height: 720 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await openAuthenticatedRoute(page, '/map');
+      await page.getByRole('button', { name: /А 123 МР 77/i }).click();
+
+      await expectElementsDoNotOverlap(
+        page.getByTestId('online-map-controls'),
+        page.getByTestId('selected-vehicle-panel'),
+      );
+      await expect(
+        page.getByRole('group', { name: 'Статус автомобилей' }).getByRole('button'),
+      ).toHaveCount(4);
+      await expectNoPageOverflow(page);
+    }
+  });
+
   test('поддерживает полную hover-карточку, focus и выбор на desktop', async ({
     page,
   }, testInfo) => {

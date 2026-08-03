@@ -44,7 +44,11 @@ test.afterAll(async () => {
   await cleanupE2EMaintenanceRecords();
 });
 
-test('администратор планирует, фильтрует и завершает ТО', async ({ page }) => {
+test('администратор планирует, фильтрует и завершает ТО', async ({ page }, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'Desktop-календарь проверяется в desktop project.',
+  );
   const vehicleId = await createE2EMaintenanceOdometerPosition();
   const currentMonth = formatMoscowMonth();
   await openAuthenticatedRoute(page, '/maintenance?source=e2e&view=calendar&month=2026-12');
@@ -130,6 +134,10 @@ test('администратор планирует, фильтрует и за�
     .getByRole('button')
     .filter({ hasText: title });
   await expect(calendarEvent).toHaveCount(1);
+  await expect(calendarEvent.getByTestId('operations-calendar-event-vehicle')).toBeVisible();
+  await expect(calendarEvent.getByTestId('operations-calendar-event-status')).toHaveText(
+    'Запланировано',
+  );
   await calendarEvent.press('Enter');
   const calendarDialog = page.getByRole('dialog', { name: title });
   const calendarStatus = calendarDialog.getByText('Запланировано', { exact: true });
@@ -305,6 +313,10 @@ test('мобильная страница ТО не переполняет эк�
 
   const eventButton = agenda.getByRole('button').filter({ hasText: title });
   await expect(eventButton).toHaveCount(1);
+  await expect(eventButton.getByTestId('operations-calendar-event-vehicle')).toBeVisible();
+  await expect(eventButton.getByTestId('operations-calendar-event-status')).toHaveText(
+    'Запланировано',
+  );
   await expectTouchTarget(eventButton);
   await eventButton.focus();
   await page.keyboard.press('Enter');

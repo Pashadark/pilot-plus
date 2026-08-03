@@ -49,7 +49,7 @@ describe('maintenanceToCalendarEvent', () => {
         ...record,
         vehicle: {
           ...record.vehicle,
-          internalNumber: null,
+          internalNumber: '',
           model: '   ',
           registrationNumber: null,
         },

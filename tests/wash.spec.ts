@@ -74,7 +74,11 @@ test.afterAll(async () => {
   await cleanupE2EWashRecords();
 });
 
-test('администратор планирует, фильтрует и завершает мойку', async ({ page }) => {
+test('администратор планирует, фильтрует и завершает мойку', async ({ page }, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'Desktop-календарь проверяется в desktop project.',
+  );
   const currentMonth = formatMoscowMonth();
   await openAuthenticatedRoute(page, '/wash?source=e2e&view=calendar&month=2026-12');
 
@@ -154,6 +158,12 @@ test('администратор планирует, фильтрует и за�
     .getByRole('button', { name: candidateName, exact: true });
   const candidateCount = await calendarCandidates.count();
   expect(candidateCount).toBeGreaterThan(0);
+  await expect(
+    calendarCandidates.first().getByTestId('operations-calendar-event-vehicle'),
+  ).toContainText(selectedVehicleLabel);
+  await expect(
+    calendarCandidates.first().getByTestId('operations-calendar-event-status'),
+  ).toHaveText('Запланировано');
 
   const calendarDialog = page.getByRole('dialog', { name: 'Комплексная', exact: true });
   let matchedProvider = false;
@@ -388,6 +398,12 @@ test('мобильная страница мойки не переполняет
   });
   const candidateCount = await calendarCandidates.count();
   expect(candidateCount).toBeGreaterThan(0);
+  await expect(
+    calendarCandidates.first().getByTestId('operations-calendar-event-vehicle'),
+  ).toContainText(selectedVehicleLabel);
+  await expect(
+    calendarCandidates.first().getByTestId('operations-calendar-event-status'),
+  ).toHaveText('Запланировано');
 
   const detailsDialog = page.getByRole('dialog', { name: 'Кузов', exact: true });
   let matchedProvider = false;

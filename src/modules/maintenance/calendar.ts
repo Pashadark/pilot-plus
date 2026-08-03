@@ -25,9 +25,7 @@ export function maintenanceToCalendarEvent(
     record.vehicle.model,
     record.vehicle.registrationNumber,
   ]
-    .filter(
-      (value): value is string => typeof value === 'string' && value.trim().length > 0,
-    )
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
     .map((value) => value.trim())
     .join(' · ');
 

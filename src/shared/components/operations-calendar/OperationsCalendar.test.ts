@@ -144,9 +144,9 @@ describe('OperationsCalendar', () => {
       name: /Среда, 22 июля 2026 г\., 09:30, Плановое ТО, PLT-001 · GWM WEY, статус: Запланировано/,
     });
 
-    expect(
-      within(eventButton).getByTestId('operations-calendar-event-vehicle').textContent,
-    ).toBe(baseEvent.vehicleLabel);
+    expect(within(eventButton).getByTestId('operations-calendar-event-vehicle').textContent).toBe(
+      baseEvent.vehicleLabel,
+    );
     expect(within(eventButton).getByTestId('operations-calendar-event-status').textContent).toBe(
       baseEvent.statusLabel,
     );
