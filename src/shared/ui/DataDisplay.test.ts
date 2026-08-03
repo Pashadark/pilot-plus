@@ -24,9 +24,10 @@ describe('компоненты отображения данных', () => {
   it('после ошибки фотографии показывает инициалы', () => {
     render(createElement(Avatar, { name: 'Павел Седов', src: '/missing.webp' }));
     expect(screen.getByRole('img', { name: 'Павел Седов' }).querySelector('img')).not.toBeNull();
-    fireEvent.error(screen.getByRole('img', { name: 'Павел Седов' }));
+    fireEvent.error(screen.getByRole('img', { name: 'Павел Седов' }).querySelector('img')!);
 
     expect(screen.getByRole('img', { name: 'Павел Седов' }).textContent).toBe('ПС');
+    expect(screen.getByRole('img', { name: 'Павел Седов' }).querySelector('img')).toBeNull();
   });
 
   it('показывает основной статус без обязательной подписи', () => {

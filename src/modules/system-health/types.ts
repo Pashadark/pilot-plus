@@ -15,5 +15,6 @@ export interface ServiceHealth extends ServiceHealthStatus {
 export interface SystemHealthSummary {
   state: 'healthy' | 'degraded' | 'unavailable';
   count: number;
+  total: number;
   checkedAt: string;
 }

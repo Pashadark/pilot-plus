@@ -27,6 +27,7 @@ describe('ProtectedLayout', () => {
     mocks.getCachedSystemHealthSummary.mockResolvedValue({
       state: 'healthy',
       count: 3,
+      total: 4,
       checkedAt: '2026-07-20T12:00:00.000Z',
     });
 
@@ -41,6 +42,7 @@ describe('ProtectedLayout', () => {
       systemHealthSummary: {
         state: 'healthy',
         count: 3,
+        total: 4,
         checkedAt: '2026-07-20T12:00:00.000Z',
       },
     });

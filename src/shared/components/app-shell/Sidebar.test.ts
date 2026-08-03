@@ -17,6 +17,7 @@ const user = {
 const summary = {
   state: 'degraded' as const,
   count: 1,
+  total: 4,
   checkedAt: '2026-07-20T12:00:00.000Z',
 };
 
@@ -63,8 +64,19 @@ describe('Sidebar health summary', () => {
     expect(markup).toContain('href="/system"');
     expect(markup).toContain('Состояние системы');
     expect(markup).toContain('Требуется внимание');
-    expect(markup).toContain('1/3');
+    expect(markup).toContain('1/4');
+    expect(markup).toContain('1 из 4');
     expect(markup).not.toContain('postgresql');
     expect(markup).not.toContain('internal');
+  });
+
+  it('показывает общий Avatar с фактическим именем пользователя', () => {
+    const markup = renderToStaticMarkup(
+      createElement(Sidebar, { expanded: true, user, systemHealthSummary: summary }),
+    );
+
+    expect(markup).toContain('role="img"');
+    expect(markup).toContain('aria-label="Администратор"');
+    expect(markup).toContain('size-9');
   });
 });

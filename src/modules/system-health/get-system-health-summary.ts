@@ -26,7 +26,7 @@ export function summarizeSystemHealth(services: readonly ServiceHealth[]): Syste
     '',
   );
 
-  return { state, count, checkedAt };
+  return { state, count, total: services.length, checkedAt };
 }
 
 export function createCachedSystemHealthSummary(

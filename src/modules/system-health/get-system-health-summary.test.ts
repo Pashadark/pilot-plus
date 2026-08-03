@@ -26,6 +26,7 @@ function service(
 describe('summarizeSystemHealth', () => {
   it('возвращает компактный безопасный DTO без массивов сервисов и деталей probes', () => {
     const summary = summarizeSystemHealth([
+      service('api', 'healthy'),
       service('postgresql', 'healthy'),
       service('redis', 'unavailable', '2026-07-20T12:00:01.000Z'),
       service('mqtt', 'unconfigured'),
@@ -33,10 +34,11 @@ describe('summarizeSystemHealth', () => {
 
     expect(summary).toEqual({
       state: 'degraded',
-      count: 1,
+      count: 2,
+      total: 4,
       checkedAt: '2026-07-20T12:00:01.000Z',
     });
-    expect(Object.keys(summary).sort()).toEqual(['checkedAt', 'count', 'state'].sort());
+    expect(Object.keys(summary).sort()).toEqual(['checkedAt', 'count', 'state', 'total'].sort());
     expect(JSON.stringify(summary)).not.toMatch(/service|error|internal|5432|host|port/i);
   });
 

@@ -33,6 +33,7 @@ describe('шапка приложения', () => {
           systemHealthSummary={{
             state: 'healthy',
             count: 3,
+            total: 4,
             checkedAt: '2026-08-03T09:00:00.000Z',
           }}
         />

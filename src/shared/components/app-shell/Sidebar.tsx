@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FiActivity, FiChevronLeft, FiChevronRight, FiUser } from 'react-icons/fi';
+import { FiActivity, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 
 import type { SafeUser } from '@/modules/auth/types';
 import type { SystemHealthSummary } from '@/modules/system-health/types';
+import { Avatar } from '@/shared/ui';
 import { IconButton } from '@/shared/ui/IconButton';
 
 import { navigation } from './navigation';
@@ -89,7 +90,7 @@ export function Sidebar({
         <Link
           href="/system"
           aria-current={pathname === '/system' ? 'page' : undefined}
-          aria-label={`Состояние системы: ${healthPresentation[systemHealthSummary.state].label}, ${systemHealthSummary.count} из 3`}
+          aria-label={`Состояние системы: ${healthPresentation[systemHealthSummary.state].label}, ${systemHealthSummary.count} из ${systemHealthSummary.total}`}
           onClick={onNavigate}
           className="mb-1 flex min-h-12 items-center gap-3 overflow-hidden rounded-[var(--radius-md)] px-2 transition-colors hover:bg-[var(--color-elevated)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
         >
@@ -105,7 +106,8 @@ export function Sidebar({
           >
             <p className="truncate text-xs font-semibold">Состояние системы</p>
             <p className="truncate text-[10px] text-[var(--color-text-secondary)]">
-              {healthPresentation[systemHealthSummary.state].label} · {systemHealthSummary.count}/3
+              {healthPresentation[systemHealthSummary.state].label} · {systemHealthSummary.count}/
+              {systemHealthSummary.total}
             </p>
           </div>
         </Link>
@@ -116,9 +118,7 @@ export function Sidebar({
           onClick={onNavigate}
           className="flex min-h-12 items-center gap-3 overflow-hidden rounded-[var(--radius-md)] px-2 transition-colors hover:bg-[var(--color-elevated)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
         >
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--color-primary-soft)] text-[var(--color-primary)]">
-            <FiUser aria-hidden="true" />
-          </span>
+          <Avatar name={user.name} size="sm" />
           <div
             className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap transition-all ${expanded ? 'w-28 opacity-100' : 'w-0 opacity-0'}`}
           >
