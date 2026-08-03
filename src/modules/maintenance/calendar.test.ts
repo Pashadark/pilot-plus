@@ -43,6 +43,18 @@ describe('maintenanceToCalendarEvent', () => {
     expect(maintenanceToCalendarEvent({ ...record, scheduledAt: null })).toBeNull();
   });
 
+  it('сохраняет тип операции и приоритетную полную подпись автомобиля', () => {
+    expect(
+      maintenanceToCalendarEvent({
+        ...record,
+        vehicle: { ...record.vehicle, registrationNumber: 'А 123 МР 77' },
+      }),
+    ).toMatchObject({
+      title: 'Замена масла',
+      vehicleLabel: 'PLT-001 · GWM WEY · А 123 МР 77',
+    });
+  });
+
   it('использует безопасную подпись, когда данные автомобиля отсутствуют', () => {
     expect(
       maintenanceToCalendarEvent({

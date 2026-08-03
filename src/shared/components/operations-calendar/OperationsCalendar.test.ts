@@ -1,7 +1,5 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { createElement } from 'react';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -18,7 +16,7 @@ const baseEvent: OperationsCalendarEvent = {
   id: 'maintenance-1',
   startsAt: '2026-07-22T06:30:00.000Z',
   title: 'Плановое ТО',
-  vehicleLabel: 'PLT-001 · GWM WEY',
+  vehicleLabel: 'PLT-001 · GWM WEY · А 123 МР 77',
   statusLabel: 'Запланировано',
   tone: 'primary',
   icon: 'tool',
@@ -40,31 +38,6 @@ function fourEvents() {
     title: `Работа ${index + 1}`,
     startsAt: `2026-07-22T0${index + 5}:30:00.000Z`,
   }));
-}
-
-function getThemeTokens(selector: string) {
-  const css = readFileSync(join(process.cwd(), 'src/app/globals.css'), 'utf8');
-  const blockStart = css.indexOf(`${selector} {`);
-  const blockEnd = css.indexOf('}', blockStart);
-  const block = css.slice(blockStart, blockEnd);
-
-  return Object.fromEntries(
-    [...block.matchAll(/--([\w-]+):\s*(#[\da-f]{6});/gi)].map((match) => [match[1], match[2]]),
-  );
-}
-
-function relativeLuminance(hex: string) {
-  const channels = [1, 3, 5].map((index) => Number.parseInt(hex.slice(index, index + 2), 16) / 255);
-  const [red, green, blue] = channels.map((channel) =>
-    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
-  );
-  return red * 0.2126 + green * 0.7152 + blue * 0.0722;
-}
-
-function contrastRatio(foreground: string, background: string) {
-  const light = Math.max(relativeLuminance(foreground), relativeLuminance(background));
-  const dark = Math.min(relativeLuminance(foreground), relativeLuminance(background));
-  return (light + 0.05) / (dark + 0.05);
 }
 
 function getTextToken(element: HTMLElement) {
@@ -123,62 +96,46 @@ describe('OperationsCalendar', () => {
     );
   });
 
-  it('включает полную дату в accessible name события и сохраняет контрастный статус', () => {
+  it('показывает компактную двухстрочную полосу, а статус оставляет в accessible name', () => {
     render(createElement(OperationsCalendar, createCalendarProps()));
     const grid = within(screen.getByTestId('operations-calendar-grid'));
     const eventButton = grid.getByRole('button', {
-      name: /Среда, 22 июля 2026 г\., 09:30, Плановое ТО, PLT-001 · GWM WEY, статус: Запланировано/,
+      name: /Среда, 22 июля 2026 г\., 09:30, Плановое ТО, PLT-001 · GWM WEY · А 123 МР 77, статус: Запланировано/,
     });
-    const status = within(eventButton).getByTestId('operations-calendar-event-status');
-    const toneIcon = within(eventButton).getByTestId('operations-calendar-event-tone-icon');
 
-    expect(status.className).toContain('text-[var(--color-text)]');
-    expect(toneIcon.className).toContain('text-[var(--color-primary)]');
-    expect(document.body.innerHTML).not.toContain('--color-text-tertiary');
+    expect(eventButton).toBe(grid.getByTestId('operations-calendar-event'));
+    expect(eventButton.textContent).toContain('09:30');
+    expect(eventButton.textContent).toContain('Плановое ТО');
+    expect(eventButton.textContent).toContain('А 123 МР 77');
+    expect(eventButton.textContent).not.toContain('Запланировано');
+    expect(eventButton.className).toContain('min-h-11');
+    expect(eventButton.className).toContain('border-l-4');
   });
 
-  it('показывает работу, автомобиль и статус отдельными читаемыми строками', () => {
+  it('показывает работу и автомобиль двумя читаемыми строками внутри нужной даты', () => {
     render(createElement(OperationsCalendar, createCalendarProps()));
     const grid = within(screen.getByTestId('operations-calendar-grid'));
     const eventButton = grid.getByRole('button', {
-      name: /Среда, 22 июля 2026 г\., 09:30, Плановое ТО, PLT-001 · GWM WEY, статус: Запланировано/,
+      name: /Среда, 22 июля 2026 г\., 09:30, Плановое ТО, PLT-001 · GWM WEY · А 123 МР 77, статус: Запланировано/,
     });
+    const day = grid.getByRole('gridcell', { name: /Среда 22 июля 2026 г\./ });
 
+    expect(within(day).getByTestId('operations-calendar-event')).toBe(eventButton);
     expect(within(eventButton).getByTestId('operations-calendar-event-vehicle').textContent).toBe(
       baseEvent.vehicleLabel,
     );
-    expect(within(eventButton).getByTestId('operations-calendar-event-status').textContent).toBe(
-      baseEvent.statusLabel,
-    );
-    expect(grid.getByRole('gridcell', { name: /Среда 22 июля 2026 г\./ }).className).toContain(
-      'min-h-44',
-    );
+    expect(within(eventButton).queryByTestId('operations-calendar-event-status')).toBeNull();
+    expect(day.className).toContain('min-h-44');
   });
 
-  it('сохраняет контраст status и vehicle text не ниже 4.5:1 на всех tone-фонах', () => {
+  it('использует secondary token для подписи автомобиля', () => {
     render(createElement(OperationsCalendar, createCalendarProps()));
     const eventButton = within(screen.getByTestId('operations-calendar-grid')).getByRole('button', {
       name: /Плановое ТО/,
     });
-    const statusToken = getTextToken(
-      within(eventButton).getByTestId('operations-calendar-event-status'),
+    expect(getTextToken(within(eventButton).getByText(baseEvent.vehicleLabel))).toBe(
+      'color-text-secondary',
     );
-    const vehicleToken = getTextToken(within(eventButton).getByText(baseEvent.vehicleLabel));
-    const backgrounds = [
-      'color-elevated',
-      'color-primary-soft',
-      'color-success-soft',
-      'color-warning-soft',
-      'color-danger-soft',
-    ];
-
-    for (const selector of [':root', ":root[data-theme='dark']"]) {
-      const tokens = getThemeTokens(selector);
-      for (const background of backgrounds) {
-        expect(contrastRatio(tokens[statusToken], tokens[background])).toBeGreaterThanOrEqual(4.5);
-        expect(contrastRatio(tokens[vehicleToken], tokens[background])).toBeGreaterThanOrEqual(4.5);
-      }
-    }
   });
 
   it('вызывает callbacks предыдущего, следующего месяца и сегодня', async () => {

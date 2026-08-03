@@ -52,6 +52,18 @@ describe('washToCalendarEvent', () => {
     ).toBe('Автомобиль не указан');
   });
 
+  it('сохраняет тип операции и приоритетную полную подпись автомобиля', () => {
+    expect(
+      washToCalendarEvent({
+        ...record,
+        vehicle: { ...record.vehicle, registrationNumber: 'А 123 МР 77' },
+      }),
+    ).toMatchObject({
+      title: 'Комплексная',
+      vehicleLabel: 'PLT-001 · GWM WEY · А 123 МР 77',
+    });
+  });
+
   it.each([
     ['PLANNED', 'Запланировано', 'primary'],
     ['IN_PROGRESS', 'В работе', 'warning'],

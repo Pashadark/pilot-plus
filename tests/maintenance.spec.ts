@@ -131,13 +131,13 @@ test('администратор планирует, фильтрует и за�
   await page.reload();
   const calendarEvent = page
     .getByTestId('operations-calendar-grid')
-    .getByRole('button')
+    .getByTestId('operations-calendar-event')
     .filter({ hasText: title });
   await expect(calendarEvent).toHaveCount(1);
+  await expect(calendarEvent).toContainText(title);
   await expect(calendarEvent.getByTestId('operations-calendar-event-vehicle')).toBeVisible();
-  await expect(calendarEvent.getByTestId('operations-calendar-event-status')).toHaveText(
-    'Запланировано',
-  );
+  await expect(calendarEvent).toHaveAttribute('aria-label', /статус: Запланировано/);
+  await expect(calendarEvent.locator('xpath=ancestor::*[@role="gridcell"]')).toHaveCount(1);
   await calendarEvent.press('Enter');
   const calendarDialog = page.getByRole('dialog', { name: title });
   const calendarStatus = calendarDialog.getByText('Запланировано', { exact: true });
@@ -314,9 +314,7 @@ test('мобильная страница ТО не переполняет эк�
   const eventButton = agenda.getByRole('button').filter({ hasText: title });
   await expect(eventButton).toHaveCount(1);
   await expect(eventButton.getByTestId('operations-calendar-event-vehicle')).toBeVisible();
-  await expect(eventButton.getByTestId('operations-calendar-event-status')).toHaveText(
-    'Запланировано',
-  );
+  await expect(eventButton).toHaveAttribute('aria-label', /статус: Запланировано/);
   await expectTouchTarget(eventButton);
   await eventButton.focus();
   await page.keyboard.press('Enter');

@@ -155,15 +155,19 @@ test('администратор планирует, фильтрует и за�
   );
   const calendarCandidates = page
     .getByTestId('operations-calendar-grid')
-    .getByRole('button', { name: candidateName, exact: true });
+    .getByTestId('operations-calendar-event')
+    .filter({ hasText: selectedVehicleLabel })
+    .filter({ hasText: 'Комплексная' });
   const candidateCount = await calendarCandidates.count();
   expect(candidateCount).toBeGreaterThan(0);
   await expect(
     calendarCandidates.first().getByTestId('operations-calendar-event-vehicle'),
   ).toContainText(selectedVehicleLabel);
+  await expect(calendarCandidates.first()).toContainText('Комплексная');
+  await expect(calendarCandidates.first()).toHaveAttribute('aria-label', candidateName);
   await expect(
-    calendarCandidates.first().getByTestId('operations-calendar-event-status'),
-  ).toHaveText('Запланировано');
+    calendarCandidates.first().locator('xpath=ancestor::*[@role="gridcell"]'),
+  ).toHaveCount(1);
 
   const calendarDialog = page.getByRole('dialog', { name: 'Комплексная', exact: true });
   let matchedProvider = false;
@@ -392,18 +396,17 @@ test('мобильная страница мойки не переполняет
     selectedVehicleLabel,
     'Запланировано',
   );
-  const calendarCandidates = agenda.getByRole('button', {
-    name: candidateName,
-    exact: true,
-  });
+  const calendarCandidates = agenda
+    .getByTestId('operations-calendar-event')
+    .filter({ hasText: selectedVehicleLabel })
+    .filter({ hasText: 'Кузов' });
   const candidateCount = await calendarCandidates.count();
   expect(candidateCount).toBeGreaterThan(0);
   await expect(
     calendarCandidates.first().getByTestId('operations-calendar-event-vehicle'),
   ).toContainText(selectedVehicleLabel);
-  await expect(
-    calendarCandidates.first().getByTestId('operations-calendar-event-status'),
-  ).toHaveText('Запланировано');
+  await expect(calendarCandidates.first()).toContainText('Кузов');
+  await expect(calendarCandidates.first()).toHaveAttribute('aria-label', candidateName);
 
   const detailsDialog = page.getByRole('dialog', { name: 'Кузов', exact: true });
   let matchedProvider = false;

@@ -6,11 +6,7 @@ import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { Button, Card, IconButton } from '@/shared/ui';
 
 import { buildCalendarMonth, groupCalendarEvents } from './calendar-model';
-import {
-  CalendarEventDialog,
-  CalendarEventIcon,
-  formatCalendarEventTime,
-} from './CalendarEventDialog';
+import { CalendarEventDialog, formatCalendarEventTime } from './CalendarEventDialog';
 import type { CalendarDay, OperationsCalendarEvent } from './types';
 
 const weekdays = [
@@ -29,14 +25,6 @@ const eventToneClasses: Record<OperationsCalendarEvent['tone'], string> = {
   success: 'border-[var(--color-success)] bg-[var(--color-success-soft)]',
   warning: 'border-[var(--color-warning)] bg-[var(--color-warning-soft)]',
   danger: 'border-[var(--color-danger)] bg-[var(--color-danger-soft)]',
-};
-
-const eventIconToneClasses: Record<OperationsCalendarEvent['tone'], string> = {
-  neutral: 'text-[var(--color-text-secondary)]',
-  primary: 'text-[var(--color-primary)]',
-  success: 'text-[var(--color-success)]',
-  warning: 'text-[var(--color-warning)]',
-  danger: 'text-[var(--color-danger)]',
 };
 
 const calendarDateFormatter = new Intl.DateTimeFormat('ru-RU', {
@@ -104,33 +92,22 @@ function EventButton({
     <button
       type="button"
       onClick={onClick}
+      data-testid="operations-calendar-event"
       aria-label={`${dayLabel}, ${formatCalendarEventTime(event)}, ${event.title}, ${event.vehicleLabel}, статус: ${event.statusLabel}`}
-      className={`min-h-11 w-full min-w-0 cursor-pointer rounded-[var(--radius-sm)] border px-2 py-1.5 text-left text-xs text-[var(--color-text)] transition-colors duration-[var(--motion-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] active:opacity-80 motion-reduce:transition-none ${eventToneClasses[event.tone]}`}
+      className={`min-h-11 w-full min-w-0 cursor-pointer rounded-[var(--radius-sm)] border border-l-4 px-2 py-1.5 text-left text-xs text-[var(--color-text)] transition-colors duration-[var(--motion-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] active:opacity-80 motion-reduce:transition-none ${eventToneClasses[event.tone]}`}
     >
       <span className="grid min-w-0 gap-1">
-        <span className="flex min-w-0 items-start gap-1.5 font-semibold">
-          <span
-            data-testid="operations-calendar-event-tone-icon"
-            className={eventIconToneClasses[event.tone]}
-          >
-            <CalendarEventIcon icon={event.icon} />
-          </span>
+        <span className="flex min-w-0 items-center gap-1.5 font-semibold">
           <time className="shrink-0 tabular-nums" dateTime={event.startsAt}>
             {formatCalendarEventTime(event)}
           </time>
-          <span className="line-clamp-2 text-[var(--color-text)]">{event.title}</span>
+          <span className="truncate">{event.title}</span>
         </span>
         <span
           data-testid="operations-calendar-event-vehicle"
-          className="line-clamp-2 leading-4 text-[var(--color-text)]"
+          className="block truncate text-[var(--color-text-secondary)]"
         >
           {event.vehicleLabel}
-        </span>
-        <span
-          data-testid="operations-calendar-event-status"
-          className="font-medium text-[var(--color-text)]"
-        >
-          {event.statusLabel}
         </span>
       </span>
     </button>
