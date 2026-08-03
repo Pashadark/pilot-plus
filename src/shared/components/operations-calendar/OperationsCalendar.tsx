@@ -107,24 +107,31 @@ function EventButton({
       aria-label={`${dayLabel}, ${formatCalendarEventTime(event)}, ${event.title}, ${event.vehicleLabel}, статус: ${event.statusLabel}`}
       className={`min-h-11 w-full min-w-0 cursor-pointer rounded-[var(--radius-sm)] border px-2 py-1.5 text-left text-xs text-[var(--color-text)] transition-colors duration-[var(--motion-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] active:opacity-80 motion-reduce:transition-none ${eventToneClasses[event.tone]}`}
     >
-      <span className="flex min-w-0 items-center gap-1.5 font-semibold">
-        <span
-          data-testid="operations-calendar-event-tone-icon"
-          className={eventIconToneClasses[event.tone]}
-        >
-          <CalendarEventIcon icon={event.icon} />
+      <span className="grid min-w-0 gap-1">
+        <span className="flex min-w-0 items-start gap-1.5 font-semibold">
+          <span
+            data-testid="operations-calendar-event-tone-icon"
+            className={eventIconToneClasses[event.tone]}
+          >
+            <CalendarEventIcon icon={event.icon} />
+          </span>
+          <time className="shrink-0 tabular-nums" dateTime={event.startsAt}>
+            {formatCalendarEventTime(event)}
+          </time>
+          <span className="line-clamp-2 text-[var(--color-text)]">{event.title}</span>
         </span>
-        <time className="shrink-0 tabular-nums" dateTime={event.startsAt}>
-          {formatCalendarEventTime(event)}
-        </time>
-        <span className="truncate text-[var(--color-text)]">{event.title}</span>
-      </span>
-      <span className="mt-0.5 block truncate text-[var(--color-text)]">{event.vehicleLabel}</span>
-      <span
-        data-testid="operations-calendar-event-status"
-        className="mt-0.5 block truncate font-medium text-[var(--color-text)]"
-      >
-        {event.statusLabel}
+        <span
+          data-testid="operations-calendar-event-vehicle"
+          className="line-clamp-2 leading-4 text-[var(--color-text)]"
+        >
+          {event.vehicleLabel}
+        </span>
+        <span
+          data-testid="operations-calendar-event-status"
+          className="font-medium text-[var(--color-text)]"
+        >
+          {event.statusLabel}
+        </span>
       </span>
     </button>
   );
@@ -312,7 +319,7 @@ export function OperationsCalendar({
                   role="gridcell"
                   aria-labelledby={`${weekdayIds[weekdayIndex]} ${dateId}`}
                   aria-current={day.isToday ? 'date' : undefined}
-                  className={`min-h-36 min-w-0 overflow-hidden border-r border-b p-2 ${day.inCurrentMonth ? 'bg-[var(--color-surface)]' : 'bg-[var(--color-elevated)] text-[var(--color-text-secondary)]'}`}
+                  className={`min-h-44 min-w-0 overflow-hidden border-r border-b p-2 ${day.inCurrentMonth ? 'bg-[var(--color-surface)]' : 'bg-[var(--color-elevated)] text-[var(--color-text-secondary)]'}`}
                 >
                   <span id={dateId} className="sr-only">
                     {formatCalendarDate(day.isoDate)}

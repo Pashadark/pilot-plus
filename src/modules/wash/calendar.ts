@@ -24,18 +24,22 @@ const washCalendarTitles: Record<WashKind, string> = {
 
 export function washToCalendarEvent(record: WashRecordDto): OperationsCalendarEvent {
   const status = washCalendarStatus[record.status];
+  const vehicleLabel = [
+    record.vehicle.internalNumber,
+    record.vehicle.model,
+    record.vehicle.registrationNumber,
+  ]
+    .filter(
+      (value): value is string => typeof value === 'string' && value.trim().length > 0,
+    )
+    .map((value) => value.trim())
+    .join(' · ');
 
   return {
     id: record.id,
     startsAt: record.scheduledAt,
     title: washCalendarTitles[record.kind],
-    vehicleLabel: [
-      record.vehicle.internalNumber,
-      record.vehicle.model,
-      record.vehicle.registrationNumber,
-    ]
-      .filter(Boolean)
-      .join(' · '),
+    vehicleLabel: vehicleLabel || 'Автомобиль не указан',
     statusLabel: status.statusLabel,
     tone: status.tone,
     icon: 'droplet',

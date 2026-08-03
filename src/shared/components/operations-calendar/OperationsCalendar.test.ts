@@ -137,6 +137,24 @@ describe('OperationsCalendar', () => {
     expect(document.body.innerHTML).not.toContain('--color-text-tertiary');
   });
 
+  it('показывает работу, автомобиль и статус отдельными читаемыми строками', () => {
+    render(createElement(OperationsCalendar, createCalendarProps()));
+    const grid = within(screen.getByTestId('operations-calendar-grid'));
+    const eventButton = grid.getByRole('button', {
+      name: /Среда, 22 июля 2026 г\., 09:30, Плановое ТО, PLT-001 · GWM WEY, статус: Запланировано/,
+    });
+
+    expect(
+      within(eventButton).getByTestId('operations-calendar-event-vehicle').textContent,
+    ).toBe(baseEvent.vehicleLabel);
+    expect(within(eventButton).getByTestId('operations-calendar-event-status').textContent).toBe(
+      baseEvent.statusLabel,
+    );
+    expect(grid.getByRole('gridcell', { name: /Среда 22 июля 2026 г\./ }).className).toContain(
+      'min-h-44',
+    );
+  });
+
   it('сохраняет контраст status и vehicle text не ниже 4.5:1 на всех tone-фонах', () => {
     render(createElement(OperationsCalendar, createCalendarProps()));
     const eventButton = within(screen.getByTestId('operations-calendar-grid')).getByRole('button', {

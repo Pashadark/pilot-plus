@@ -38,6 +38,20 @@ describe('washToCalendarEvent', () => {
     });
   });
 
+  it('использует безопасную подпись, когда данные автомобиля отсутствуют', () => {
+    expect(
+      washToCalendarEvent({
+        ...record,
+        vehicle: {
+          ...record.vehicle,
+          internalNumber: null,
+          model: '   ',
+          registrationNumber: null,
+        },
+      }).vehicleLabel,
+    ).toBe('Автомобиль не указан');
+  });
+
   it.each([
     ['PLANNED', 'Запланировано', 'primary'],
     ['IN_PROGRESS', 'В работе', 'warning'],

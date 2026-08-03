@@ -43,6 +43,20 @@ describe('maintenanceToCalendarEvent', () => {
     expect(maintenanceToCalendarEvent({ ...record, scheduledAt: null })).toBeNull();
   });
 
+  it('использует безопасную подпись, когда данные автомобиля отсутствуют', () => {
+    expect(
+      maintenanceToCalendarEvent({
+        ...record,
+        vehicle: {
+          ...record.vehicle,
+          internalNumber: null,
+          model: '   ',
+          registrationNumber: null,
+        },
+      })?.vehicleLabel,
+    ).toBe('Автомобиль не указан');
+  });
+
   it.each([
     ['PLANNED', 'Запланировано', 'primary'],
     ['IN_PROGRESS', 'В работе', 'warning'],
