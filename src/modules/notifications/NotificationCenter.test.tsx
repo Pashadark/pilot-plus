@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { NotificationCenter } from './NotificationCenter';
 import type { PilotNotification } from './types';
 
-const notifications: PilotNotification[] = [
+const notifications: readonly PilotNotification[] = [
   {
     id: 'notification-1',
     title: 'Автомобиль вернулся в парк',
@@ -61,18 +61,24 @@ describe('центр уведомлений', () => {
     const trigger = screen.getByRole('button', { name: 'Уведомления: 3 непрочитанных' });
 
     await user.click(trigger);
+    expect(
+      screen.getByRole('dialog', { name: 'Уведомления' }).contains(document.activeElement),
+    ).toBe(true);
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog', { name: 'Уведомления' })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
 
     await user.click(trigger);
     await user.click(screen.getByRole('button', { name: 'Внешняя область' }));
     expect(screen.queryByRole('dialog', { name: 'Уведомления' })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
 
     await user.click(trigger);
     const notificationLink = screen.getByRole('link', { name: /Автомобиль вернулся в парк/ });
     notificationLink.addEventListener('click', (event) => event.preventDefault());
     await user.click(notificationLink);
     expect(screen.queryByRole('dialog', { name: 'Уведомления' })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
   });
 
   it('показывает русское пустое состояние', async () => {

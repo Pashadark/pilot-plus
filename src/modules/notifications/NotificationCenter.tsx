@@ -15,13 +15,28 @@ const toneLabels: Record<NotificationTone, string> = {
   info: 'Информация',
 };
 
-export function NotificationCenter({ notifications }: { notifications: PilotNotification[] }) {
+export function NotificationCenter({
+  notifications,
+}: {
+  notifications: readonly PilotNotification[];
+}) {
   const [open, setOpen] = useState(false);
   const [readIds, setReadIds] = useState<Set<string>>(() => new Set());
   const rootRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const wasOpenRef = useRef(false);
   const unreadCount = notifications.filter((notification) => !readIds.has(notification.id)).length;
   const triggerLabel =
     unreadCount > 0 ? `Уведомления: ${unreadCount} непрочитанных` : 'Уведомления: новых нет';
+
+  useEffect(() => {
+    if (open) {
+      dialogRef.current?.focus();
+    } else if (wasOpenRef.current) {
+      rootRef.current?.querySelector<HTMLButtonElement>('[aria-haspopup="dialog"]')?.focus();
+    }
+    wasOpenRef.current = open;
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -33,10 +48,10 @@ export function NotificationCenter({ notifications }: { notifications: PilotNoti
       if (event.key === 'Escape') setOpen(false);
     };
 
-    document.addEventListener('mousedown', closeOnOutsideClick);
+    document.addEventListener('click', closeOnOutsideClick);
     document.addEventListener('keydown', closeOnEscape);
     return () => {
-      document.removeEventListener('mousedown', closeOnOutsideClick);
+      document.removeEventListener('click', closeOnOutsideClick);
       document.removeEventListener('keydown', closeOnEscape);
     };
   }, [open]);
@@ -66,8 +81,10 @@ export function NotificationCenter({ notifications }: { notifications: PilotNoti
 
       {open && (
         <section
+          ref={dialogRef}
           role="dialog"
           aria-label="Уведомления"
+          tabIndex={-1}
           className="fixed top-[calc(var(--header-height)+0.5rem)] right-4 z-50 max-h-[calc(100dvh-var(--header-height)-1.5rem)] w-[calc(100vw-2rem)] max-w-sm overflow-y-auto rounded-[var(--radius-panel)] border bg-[var(--color-surface)] shadow-[var(--shadow-floating)]"
         >
           <div className="flex min-h-14 items-center justify-between gap-3 border-b px-4 py-2">

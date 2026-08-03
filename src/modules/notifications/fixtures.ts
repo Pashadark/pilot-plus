@@ -1,7 +1,7 @@
 import type { PilotNotification } from './types';
 
 // Демонстрационные уведомления до подключения серверной модели и пользовательских настроек.
-export const demoNotifications: PilotNotification[] = [
+export const demoNotifications: readonly PilotNotification[] = [
   {
     id: 'demo-event',
     title: 'Зафиксировано превышение скорости',
