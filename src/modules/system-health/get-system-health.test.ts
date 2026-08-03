@@ -23,6 +23,7 @@ describe('getSystemHealth', () => {
     vi.setSystemTime(new Date('2026-07-20T12:00:00.000Z'));
     const never = new Promise<typeof healthy>(() => undefined);
     const getSystemHealth = createSystemHealthChecker({
+      checkApplication: vi.fn(() => never),
       checkDatabase: vi.fn(() => never),
       checkTcp: vi.fn(() => never),
       environment: {
@@ -46,6 +47,7 @@ describe('getSystemHealth', () => {
     const services = await resultPromise;
 
     expect(services.map(({ key, status }) => ({ key, status }))).toEqual([
+      { key: 'api', status: 'unavailable' },
       { key: 'postgresql', status: 'unavailable' },
       { key: 'redis', status: 'unavailable' },
       { key: 'mqtt', status: 'unconfigured' },
@@ -55,16 +57,19 @@ describe('getSystemHealth', () => {
     vi.useRealTimers();
   });
 
-  it('запускает PostgreSQL, Redis и MQTT параллельно', async () => {
+  it('запускает API Pilot+, PostgreSQL, Redis и MQTT параллельно', async () => {
+    const application = deferred<typeof healthy>();
     const database = deferred<typeof healthy>();
     const redis = deferred<typeof healthy>();
     const mqtt = deferred<typeof healthy>();
     const checkDatabase = vi.fn(() => database.promise);
+    const checkApplication = vi.fn(() => application.promise);
     const checkTcp = vi
       .fn()
       .mockImplementationOnce(() => redis.promise)
       .mockImplementationOnce(() => mqtt.promise);
     const getSystemHealth = createSystemHealthChecker({
+      checkApplication,
       checkDatabase,
       checkTcp,
       environment: {
@@ -78,13 +83,15 @@ describe('getSystemHealth', () => {
 
     const resultPromise = getSystemHealth();
 
+    expect(checkApplication).toHaveBeenCalledOnce();
     expect(checkDatabase).toHaveBeenCalledOnce();
     expect(checkTcp).toHaveBeenCalledTimes(2);
+    application.resolve(healthy);
     database.resolve(healthy);
     redis.resolve(healthy);
     mqtt.resolve(healthy);
 
-    await expect(resultPromise).resolves.toHaveLength(3);
+    await expect(resultPromise).resolves.toHaveLength(4);
   });
 
   it('сохраняет безопасный результат при частичной недоступности', async () => {
@@ -94,6 +101,7 @@ describe('getSystemHealth', () => {
       .mockResolvedValueOnce(unavailable)
       .mockResolvedValueOnce({ ...healthy, status: 'unconfigured' as const });
     const getSystemHealth = createSystemHealthChecker({
+      checkApplication: vi.fn().mockResolvedValue(healthy),
       checkDatabase: vi.fn().mockResolvedValue(healthy),
       checkTcp,
       environment: {
@@ -106,11 +114,12 @@ describe('getSystemHealth', () => {
     const services = await getSystemHealth();
 
     expect(services).toEqual([
+      expect.objectContaining({ key: 'api', label: 'API Pilot+', status: 'healthy' }),
       expect.objectContaining({ key: 'postgresql', label: 'PostgreSQL', status: 'healthy' }),
       expect.objectContaining({ key: 'redis', label: 'Redis', status: 'unavailable' }),
       expect.objectContaining({ key: 'mqtt', label: 'MQTT', status: 'unconfigured' }),
     ]);
-    expect(services[1]?.message).toBe('Сервис временно недоступен.');
+    expect(services[2]?.message).toBe('Сервис временно недоступен.');
     expect(JSON.stringify(services)).not.toContain('internal');
     for (const service of services) {
       expect(Object.keys(service).sort()).toEqual(
@@ -119,9 +128,36 @@ describe('getSystemHealth', () => {
     }
   });
 
+  it('не скрывает остальные результаты при отказе application probe', async () => {
+    const getSystemHealth = createSystemHealthChecker({
+      checkApplication: vi.fn().mockRejectedValue(new Error('sensitive application failure')),
+      checkDatabase: vi.fn().mockResolvedValue(healthy),
+      checkTcp: vi.fn().mockResolvedValue(healthy),
+      environment: {
+        NODE_ENV: 'production',
+        DATABASE_URL: 'postgresql://internal',
+        REDIS_HOST: 'redis.internal',
+        REDIS_PORT: '6379',
+        MQTT_HOST: 'mqtt.internal',
+        MQTT_PORT: '1883',
+      },
+    });
+
+    const services = await getSystemHealth();
+
+    expect(services.map(({ key, status }) => ({ key, status }))).toEqual([
+      { key: 'api', status: 'unavailable' },
+      { key: 'postgresql', status: 'healthy' },
+      { key: 'redis', status: 'healthy' },
+      { key: 'mqtt', status: 'healthy' },
+    ]);
+    expect(JSON.stringify(services)).not.toContain('sensitive application failure');
+  });
+
   it('использует localhost defaults только в development', async () => {
     const checkTcp = vi.fn().mockResolvedValue(healthy);
     const developmentHealth = createSystemHealthChecker({
+      checkApplication: vi.fn().mockResolvedValue(healthy),
       checkDatabase: vi.fn().mockResolvedValue(healthy),
       checkTcp,
       environment: { NODE_ENV: 'development' },
@@ -144,6 +180,7 @@ describe('getSystemHealth', () => {
   it('в production без Redis/MQTT env передаёт пустую конфигурацию в реальную TCP-проверку', async () => {
     const checkTcp = vi.fn(checkTcpService);
     const productionHealth = createSystemHealthChecker({
+      checkApplication: vi.fn().mockResolvedValue(healthy),
       checkDatabase: vi.fn().mockResolvedValue(healthy),
       checkTcp,
       environment: { NODE_ENV: 'production' },
@@ -162,6 +199,7 @@ describe('getSystemHealth', () => {
       timeoutMs: 1_000,
     });
     expect(services.map(({ key, status, latencyMs }) => ({ key, status, latencyMs }))).toEqual([
+      { key: 'api', status: 'healthy', latencyMs: 4 },
       { key: 'postgresql', status: 'healthy', latencyMs: 4 },
       { key: 'redis', status: 'unconfigured', latencyMs: 0 },
       { key: 'mqtt', status: 'unconfigured', latencyMs: 0 },

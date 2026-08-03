@@ -1,6 +1,6 @@
-import { FiCheckCircle, FiDatabase, FiRadio, FiServer, FiSlash } from 'react-icons/fi';
+import { FiActivity, FiCheckCircle, FiDatabase, FiRadio, FiServer, FiSlash } from 'react-icons/fi';
 
-import { Badge, Card, CardContent, CardHeader } from '@/shared/ui';
+import { Badge, Card, CardContent, CardHeader, PageHeader } from '@/shared/ui';
 import type { BadgeTone } from '@/shared/ui/Badge';
 
 import type { ServiceHealth, ServiceHealthState } from './types';
@@ -15,6 +15,7 @@ const statusPresentation: Record<
 };
 
 const serviceIcons: Record<ServiceHealth['key'], typeof FiDatabase> = {
+  api: FiActivity,
   postgresql: FiDatabase,
   redis: FiServer,
   mqtt: FiRadio,
@@ -32,20 +33,17 @@ export function SystemHealthPage({ services }: { services: ServiceHealth[] }) {
       className="grid min-w-0 gap-5 p-4 sm:p-6"
       data-testid="system-health-page"
     >
-      <div className="min-w-0">
-        <p className="text-xs font-semibold tracking-[0.14em] text-[var(--color-primary)] uppercase">
-          Инфраструктура
-        </p>
-        <h1 id="system-health-title" className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-          Состояние системы
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-text-secondary)]">
-          Текущая доступность основных сервисов Pilot+. Результаты одной проверки не скрывают
-          состояние остальных сервисов.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Инфраструктура"
+        title="Состояние системы"
+        titleId="system-health-title"
+        description="Текущая доступность основных сервисов Pilot+. Результаты одной проверки не скрывают состояние остальных сервисов."
+      />
 
-      <section aria-label="Состояние сервисов" className="grid min-w-0 gap-4 lg:grid-cols-3">
+      <section
+        aria-label="Состояние сервисов"
+        className="grid min-w-0 gap-4 md:grid-cols-2 2xl:grid-cols-4"
+      >
         {services.map((service) => {
           const ServiceIcon = serviceIcons[service.key];
           const presentation = statusPresentation[service.status];
@@ -53,12 +51,12 @@ export function SystemHealthPage({ services }: { services: ServiceHealth[] }) {
 
           return (
             <Card key={service.key} className="min-w-0" data-testid="service-health-card">
-              <CardHeader className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
+              <CardHeader className="flex min-w-0 flex-wrap items-center gap-3">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
                   <span className="grid size-10 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]">
                     <ServiceIcon aria-hidden="true" className="size-5" />
                   </span>
-                  <h2 className="truncate text-base font-bold">{service.label}</h2>
+                  <h2 className="min-w-0 text-base font-bold break-words">{service.label}</h2>
                 </div>
                 <Badge
                   tone={presentation.tone}

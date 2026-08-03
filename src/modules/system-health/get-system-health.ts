@@ -17,6 +17,7 @@ interface HealthEnvironment {
 }
 
 interface SystemHealthDependencies {
+  checkApplication: () => Promise<ServiceHealthStatus>;
   checkDatabase: () => Promise<ServiceHealthStatus>;
   checkTcp: typeof checkTcpService;
   environment: HealthEnvironment;
@@ -102,7 +103,28 @@ async function checkPostgresql(): Promise<ServiceHealthStatus> {
   }
 }
 
+async function checkApplication(): Promise<ServiceHealthStatus> {
+  const startedAt = Date.now();
+
+  try {
+    const response = Response.json({ status: 'ok' });
+    if (!response.ok) throw new Error('Не удалось сформировать ответ API.');
+    return {
+      status: 'healthy',
+      latencyMs: Math.max(0, Date.now() - startedAt),
+      checkedAt: new Date().toISOString(),
+    };
+  } catch {
+    return {
+      status: 'unavailable',
+      latencyMs: Math.max(0, Date.now() - startedAt),
+      checkedAt: new Date().toISOString(),
+    };
+  }
+}
+
 export function createSystemHealthChecker({
+  checkApplication,
   checkDatabase,
   checkTcp,
   environment,
@@ -134,7 +156,8 @@ export function createSystemHealthChecker({
     };
 
     try {
-      const [postgresql, redis, mqtt] = await Promise.all([
+      const [api, postgresql, redis, mqtt] = await Promise.all([
+        settleProbe(checkApplication, 'unavailable'),
         settleProbe(checkDatabase, environment.DATABASE_URL ? 'unavailable' : 'unconfigured'),
         settleProbe(
           () => checkTcp(redisConfig),
@@ -147,6 +170,7 @@ export function createSystemHealthChecker({
       ]);
 
       return [
+        present('api', 'API Pilot+', api),
         present('postgresql', 'PostgreSQL', postgresql),
         present('redis', 'Redis', redis),
         present('mqtt', 'MQTT', mqtt),
@@ -158,6 +182,7 @@ export function createSystemHealthChecker({
 }
 
 export const getSystemHealth = createSystemHealthChecker({
+  checkApplication,
   checkDatabase: checkPostgresql,
   checkTcp: checkTcpService,
   environment: process.env,
