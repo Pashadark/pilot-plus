@@ -60,6 +60,7 @@ import {
   Input,
   ListItem,
   Modal,
+  PageHeader,
   Popover,
   Progress,
   Radio,
@@ -84,6 +85,8 @@ import {
   type ComponentSize,
 } from '@/shared/ui';
 import { ConnectionStatus, SpeedIndicator, VehicleMarker } from '@/shared/components/fleet';
+import { demoNotifications } from '@/modules/notifications/fixtures';
+import { NotificationCenter } from '@/modules/notifications/NotificationCenter';
 
 /* ==========================================================================
    Фото автомобиля
@@ -1520,6 +1523,39 @@ export function UiKitSections() {
           />
         </ExampleCard>
       </KitSection>
+
+      <KitSectionFull
+        id="product-contracts"
+        title="Контракты продуктового интерфейса"
+        description="Production-компоненты задают общую геометрию страниц, представление пользователя и доступ к уведомлениям."
+      >
+        <div className="grid gap-3 lg:grid-cols-2">
+          <Card className="p-4 lg:col-span-2">
+            <PageHeader
+              eyebrow="Пример раздела"
+              title="Заголовок страницы"
+              description="Единая композиция заголовка, пояснения и действий для продуктовых маршрутов."
+              actions={<Button>Основное действие</Button>}
+            />
+          </Card>
+          <ExampleCard title="Аватары и профиль">
+            <div className="flex flex-wrap items-center gap-3">
+              <Avatar name="Павел Седов" size="xs" />
+              <Avatar name="Павел Седов" size="sm" />
+              <Avatar name="Павел Седов" size="md" />
+              <Avatar name="Павел Седов" size="lg" />
+            </div>
+          </ExampleCard>
+          <ExampleCard title="Центр уведомлений">
+            <div className="flex min-h-14 items-center gap-3">
+              <NotificationCenter notifications={demoNotifications} />
+              <p className="text-sm text-[var(--color-text-secondary)]">
+                Демонстрационные события и локальное состояние прочтения.
+              </p>
+            </div>
+          </ExampleCard>
+        </div>
+      </KitSectionFull>
 
       {/* ================================================================ */}
       {/* 2. ПРОДВИНУТЫЕ АНИМАЦИИ */}
@@ -4244,12 +4280,7 @@ export function UiKitSections() {
                 />
               </div>
               <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] p-4">
-                <VehicleMarker
-                  name="Toyota Camry"
-                  plate="Е 789 НО 77"
-                  speedKph={0}
-                  status="idle"
-                />
+                <VehicleMarker name="Toyota Camry" plate="Е 789 НО 77" speedKph={0} status="idle" />
               </div>
               <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] p-4">
                 <VehicleMarker

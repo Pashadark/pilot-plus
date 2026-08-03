@@ -11,6 +11,14 @@ async function enableDarkTheme(page: Page) {
   await page.reload();
 }
 
+test('витрина показывает production-контракты заголовка, аватара и уведомлений', async ({
+  page,
+}) => {
+  await expect(page.getByRole('heading', { name: 'Заголовок страницы' })).toBeVisible();
+  await expect(page.getByText('Аватары и профиль')).toBeVisible();
+  await expect(page.getByText('Центр уведомлений')).toBeVisible();
+});
+
 test('витрина запускает четыре типа системных уведомлений', async ({ page }) => {
   for (const [button, title] of [
     ['Показать успех', 'Операция выполнена'],
