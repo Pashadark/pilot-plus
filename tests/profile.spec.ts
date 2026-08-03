@@ -12,9 +12,15 @@ test('профиль показывает реальные данные теку
   await expect(email).toHaveValue(process.env.PILOT_ADMIN_EMAIL ?? '');
   const currentName = await name.inputValue();
   const currentEmail = await email.inputValue();
+  const expectedInitials = currentName
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
   const profile = page.getByRole('region', { name: 'Профиль администратора' });
 
-  await expect(profile.getByRole('img', { name: currentName })).toContainText('ПС');
+  await expect(profile.getByRole('img', { name: currentName })).toContainText(expectedInitials);
   await expect(profile.getByText(currentEmail, { exact: true }).first()).toBeVisible();
   await expect(profile.getByText('Администратор', { exact: true })).toBeVisible();
 
