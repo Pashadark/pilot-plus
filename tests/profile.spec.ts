@@ -10,14 +10,17 @@ test('профиль показывает реальные данные теку
   const email = page.getByLabel('Email');
   await expect(name).not.toHaveValue('');
   await expect(email).toHaveValue(process.env.PILOT_ADMIN_EMAIL ?? '');
+  const currentName = await name.inputValue();
+  const currentEmail = await email.inputValue();
+  const profile = page.getByRole('region', { name: 'Профиль администратора' });
+
+  await expect(profile.getByRole('img', { name: currentName })).toContainText('ПС');
+  await expect(profile.getByText(currentEmail, { exact: true }).first()).toBeVisible();
+  await expect(profile.getByText('Администратор', { exact: true })).toBeVisible();
 
   if (await page.getByTestId('desktop-sidebar').isVisible()) {
-    await expect(
-      page.getByTestId('desktop-sidebar').getByText(await name.inputValue()),
-    ).toBeVisible();
-    await expect(
-      page.getByTestId('desktop-sidebar').getByText(await email.inputValue()),
-    ).toBeVisible();
+    await expect(page.getByTestId('desktop-sidebar').getByText(currentName)).toBeVisible();
+    await expect(page.getByTestId('desktop-sidebar').getByText(currentEmail)).toBeVisible();
   } else {
     await page.getByRole('button', { name: 'Открыть меню' }).click();
     await expect(page.getByRole('link', { name: 'Открыть профиль' })).toContainText(

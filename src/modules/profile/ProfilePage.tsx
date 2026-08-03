@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 
 import { getAuthenticatedSession } from '@/services/auth/session';
 import { AppShell } from '@/shared/components/app-shell/AppShell';
+import { Avatar, Badge, Card, PageHeader } from '@/shared/ui';
 
 import { ProfileForms } from './ProfileForms';
 
@@ -12,20 +13,24 @@ export async function ProfilePage() {
   return (
     <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Профиль' }]}>
       <section aria-labelledby="profile-page-title" className="grid min-w-0 gap-5 p-4 sm:p-6">
-        <header>
-          <p className="text-xs font-semibold tracking-[0.16em] text-[var(--color-primary)] uppercase">
-            Учётная запись
-          </p>
-          <h1
-            id="profile-page-title"
-            className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl"
-          >
-            Профиль администратора
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-[var(--color-text-secondary)] sm:text-base">
-            Управляйте личными данными и безопасностью учётной записи Pilot+.
-          </p>
-        </header>
+        <PageHeader
+          eyebrow="Учётная запись"
+          title="Профиль администратора"
+          titleId="profile-page-title"
+          description="Управляйте личными данными и безопасностью учётной записи Pilot+."
+        />
+        <Card className="flex min-w-0 items-center gap-4 p-4 sm:p-5">
+          <Avatar name={session.user.name} size="lg" />
+          <div className="min-w-0">
+            <p className="truncate font-bold text-[var(--color-text)]">{session.user.name}</p>
+            <p className="truncate text-sm text-[var(--color-text-secondary)]">
+              {session.user.email}
+            </p>
+            <Badge tone="primary" className="mt-2">
+              Администратор
+            </Badge>
+          </div>
+        </Card>
         <ProfileForms user={session.user} />
       </section>
     </AppShell>
