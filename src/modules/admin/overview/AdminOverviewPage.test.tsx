@@ -13,6 +13,7 @@ const overview = {
   users: 7,
   vehicles: 19,
   devices: 11,
+  companyProfiles: [],
   recentAudit: [
     {
       id: 'audit-1',
@@ -46,7 +47,9 @@ describe('AdminOverviewPage', () => {
       '/system',
     );
     expect(screen.getByText('Павел Седов')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /добавить компанию|добавить пользователя/i })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /добавить компанию|добавить пользователя/i }),
+    ).toBeNull();
   });
 
   it('показывает честное пустое состояние аудита', () => {
