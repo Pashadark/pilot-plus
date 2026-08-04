@@ -4,6 +4,7 @@ export interface SafeUser {
   name: string;
   role: 'SUPER_ADMIN' | 'MEMBER';
   canAccessAdmin: boolean;
+  capabilities?: readonly 'CLIENTS'[];
 }
 
 export interface LoginState {

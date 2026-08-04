@@ -36,6 +36,8 @@ type RawClient = {
   status: ClientCardDto['status'];
   createdAt: Date;
   updatedAt: Date;
+  photoPath: string | null;
+  telegramUsername: string | null;
 };
 
 const clientSelect = {
@@ -54,6 +56,8 @@ const clientSelect = {
   status: true,
   createdAt: true,
   updatedAt: true,
+  photoPath: true,
+  telegramUsername: true,
 } satisfies Prisma.ClientSelect;
 
 function tenantWhere(access: ClientAccess): Prisma.ClientWhereInput {
@@ -66,6 +70,10 @@ function queryWhere(access: ClientAccess, filters: ClientQueryFilters): Prisma.C
     ...tenantWhere(access),
     archivedAt: null,
     ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.documents === 'present' ? { passportEncrypted: { not: null } } : {}),
+    ...(filters.documents === 'missing' ? { passportEncrypted: null } : {}),
+    ...(filters.license === 'present' ? { driverLicenseEncrypted: { not: null } } : {}),
+    ...(filters.license === 'missing' ? { driverLicenseEncrypted: null } : {}),
     ...(query
       ? {
           OR: [
@@ -123,6 +131,11 @@ function mapCard(client: RawClient, encryptionKey: string): ClientCardDto {
     driverLicenseExpiresAt: client.driverLicenseExpiresAt?.toISOString() ?? null,
     status: client.status,
     updatedAt: client.updatedAt.toISOString(),
+    localPhotoUrl: client.photoPath?.startsWith('/') ? client.photoPath : null,
+    telegramUrl:
+      client.telegramUsername && /^[a-zA-Z0-9_]{5,32}$/.test(client.telegramUsername)
+        ? `https://t.me/${client.telegramUsername}`
+        : null,
   };
 }
 
@@ -198,3 +211,11 @@ const queries = createClientQueries(
 
 export const getClients = queries.getClients;
 export const getClientById = queries.getClientById;
+
+export async function getClientCompanyOptions(access: ClientAccess) {
+  return prisma.company.findMany({
+    where: access.scope === 'SYSTEM' ? {} : { id: { in: [...access.companyIds] } },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true },
+  });
+}

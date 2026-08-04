@@ -8,7 +8,7 @@ vi.mock('@/database/prisma/client', () => ({
   prisma: { companyMember: { findMany: membershipFindManyMock } },
 }));
 
-import { getClientAccess, requireClientAccess } from './access';
+import { canManageClient, getClientAccess, requireClientAccess } from './access';
 
 const superAdmin = {
   id: 'user-system',
@@ -91,5 +91,19 @@ describe('серверный доступ к клиентам компании',
     await expect(requireClientAccess('VIEW_CLIENTS')).rejects.toThrow(
       'Доступ к клиентам запрещён.',
     );
+  });
+
+  it('не даёт редактировать карточку viewer-компании при manage доступе к другой компании', async () => {
+    const dispatcher = { ...superAdmin, id: 'user-mixed', role: 'MEMBER' as const };
+    readSessionMock.mockResolvedValue(dispatcher);
+    membershipFindManyMock.mockResolvedValue([
+      { companyId: 'company-a', role: 'DISPATCHER', additionalPermissions: [] },
+      { companyId: 'company-b', role: 'VIEWER', additionalPermissions: [] },
+    ]);
+
+    const access = await getClientAccess('MANAGE_CLIENTS');
+    expect(access).not.toBeNull();
+    expect(canManageClient(access!, 'company-a')).toBe(true);
+    expect(canManageClient(access!, 'company-b')).toBe(false);
   });
 });

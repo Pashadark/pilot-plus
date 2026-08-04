@@ -17,6 +17,14 @@ export interface ClientAccess {
   canManage: boolean;
 }
 
+export function canManageClient(access: ClientAccess | null, companyId: string): boolean {
+  return Boolean(
+    access &&
+    access.canManage &&
+    (access.scope === 'SYSTEM' || access.companyIds.includes(companyId)),
+  );
+}
+
 export async function getClientAccess(permission: ClientPermission): Promise<ClientAccess | null> {
   const user = await readSession();
   if (!user) return null;

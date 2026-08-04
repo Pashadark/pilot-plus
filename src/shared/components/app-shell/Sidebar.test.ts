@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { FiDroplet, FiTool } from 'react-icons/fi';
+import { FiDroplet, FiTool, FiUsers } from 'react-icons/fi';
 import { describe, expect, it, vi } from 'vitest';
 
 const route = vi.hoisted(() => ({ pathname: '/' }));
@@ -31,6 +31,7 @@ describe('Sidebar health summary', () => {
       '/',
       '/map',
       '/vehicles',
+      '/clients',
       '/maintenance',
       '/wash',
       '/devices',
@@ -43,6 +44,7 @@ describe('Sidebar health summary', () => {
       expect.arrayContaining([
         { label: 'Техническое обслуживание', href: '/maintenance', icon: FiTool },
         { label: 'Мойка', href: '/wash', icon: FiDroplet },
+        { label: 'Клиенты', href: '/clients', icon: FiUsers, requiredCapability: 'CLIENTS' },
       ]),
     );
   });
@@ -68,6 +70,28 @@ describe('Sidebar health summary', () => {
 
     expect(markup).not.toContain('href="/admin"');
     expect(markup).not.toContain('Администрирование');
+  });
+
+  it('скрывает клиентов без безопасной capability, полученной layout на сервере', () => {
+    const markup = renderToStaticMarkup(
+      createElement(Sidebar, { expanded: true, user: member, systemHealthSummary: summary }),
+    );
+
+    expect(markup).not.toContain('href="/clients"');
+    expect(markup).not.toContain('Клиенты');
+  });
+
+  it('показывает клиентов, когда layout передал capability', () => {
+    const markup = renderToStaticMarkup(
+      createElement(Sidebar, {
+        expanded: true,
+        user: { ...member, capabilities: ['CLIENTS'] },
+        systemHealthSummary: summary,
+      }),
+    );
+
+    expect(markup).toContain('href="/clients"');
+    expect(markup).toContain('Клиенты');
   });
 
   it('даёт раскрытым подписям доступную ширину и перенос строк', () => {

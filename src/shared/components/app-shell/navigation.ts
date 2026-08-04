@@ -9,6 +9,7 @@ import {
   FiSettings,
   FiTool,
   FiTruck,
+  FiUsers,
 } from 'react-icons/fi';
 import type { IconType } from 'react-icons';
 
@@ -17,12 +18,14 @@ export interface NavigationItem {
   href: string;
   icon: IconType;
   adminOnly?: boolean;
+  requiredCapability?: 'CLIENTS';
 }
 
 export const navigation: readonly NavigationItem[] = [
   { label: 'Панель управления', href: '/', icon: FiHome },
   { label: 'Онлайн-карта', href: '/map', icon: FiMap },
   { label: 'Автопарк', href: '/vehicles', icon: FiTruck },
+  { label: 'Клиенты', href: '/clients', icon: FiUsers, requiredCapability: 'CLIENTS' },
   { label: 'Техническое обслуживание', href: '/maintenance', icon: FiTool },
   { label: 'Мойка', href: '/wash', icon: FiDroplet },
   { label: 'Устройства', href: '/devices', icon: FiCpu },

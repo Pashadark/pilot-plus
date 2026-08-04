@@ -31,6 +31,8 @@ export type ClientCardDto = {
   driverLicenseExpiresAt: string | null;
   status: ClientStatus;
   updatedAt: string;
+  localPhotoUrl: string | null;
+  telegramUrl: string | null;
 };
 
 export type ClientDetailDto = ClientCardDto & {
@@ -48,6 +50,8 @@ export type ClientDetailDto = ClientCardDto & {
 export type ClientQueryFilters = {
   q?: string;
   status?: ClientStatus;
+  documents?: 'present' | 'missing';
+  license?: 'present' | 'missing';
   page?: number;
   pageSize?: number;
 };

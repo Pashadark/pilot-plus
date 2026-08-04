@@ -33,7 +33,11 @@ export function Sidebar({
   user,
 }: SidebarProps) {
   const pathname = usePathname();
-  const visibleNavigation = navigation.filter((item) => !item.adminOnly || user.canAccessAdmin);
+  const visibleNavigation = navigation.filter(
+    (item) =>
+      (!item.adminOnly || user.canAccessAdmin) &&
+      (!item.requiredCapability || user.capabilities?.includes(item.requiredCapability)),
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
