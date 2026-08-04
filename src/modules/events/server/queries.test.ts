@@ -71,8 +71,7 @@ function applyVariantFilter(model: keyof SourceRows, rows: unknown[], args: unkn
     const record = row as Record<string, unknown>;
 
     if (model === 'trip') {
-      if (endedAtConstraints.some((value) => value === null) && record.endedAt !== null)
-        return false;
+      if (endedAtConstraints.some((value) => value === null) && record.endedAt !== null) return false;
       if (
         endedAtConstraints.some(
           (value) =>
@@ -132,7 +131,10 @@ function createFakeRepository(
         const filtered = applyVariantFilter(model, rows[model], args);
         const cursor = (args as { cursor?: { id?: string } }).cursor?.id;
         const start = cursor
-          ? Math.max(0, filtered.findIndex((item) => (item as { id: string }).id === cursor) + 1)
+          ? Math.max(
+              0,
+              filtered.findIndex((item) => (item as { id: string }).id === cursor) + 1,
+            )
           : 0;
         return filtered.slice(start, start + 50);
       },
@@ -161,7 +163,9 @@ function createFakeRepository(
               (value) => value && typeof value === 'object' && 'in' in value,
             ) as { in?: string[] } | undefined
           )?.in ?? [];
-        return readKeys.filter((key) => requested.includes(key)).map((eventKey) => ({ eventKey }));
+        return readKeys
+          .filter((key) => requested.includes(key))
+          .map((eventKey) => ({ eventKey }));
       },
     },
     vehicle: {
@@ -190,11 +194,7 @@ describe('tenant-safe event timeline queries', () => {
 
   it('adds an exact company boundary to every source and keeps vehicleId inside it', async () => {
     const fake = createFakeRepository();
-    const queries = createEventTimelineQueries(
-      fake.repository,
-      async () => context,
-      () => new Date('2026-07-28T12:00:00.000Z'),
-    );
+    const queries = createEventTimelineQueries(fake.repository, async () => context, () => new Date('2026-07-28T12:00:00.000Z'));
 
     await queries.getEventTimeline({ vehicleId: 'vehicle-1' });
 
@@ -337,11 +337,7 @@ describe('tenant-safe event timeline queries', () => {
         },
       ],
     });
-    const queries = createEventTimelineQueries(
-      fake.repository,
-      async () => context,
-      () => new Date('2026-07-28T12:00:00.000Z'),
-    );
+    const queries = createEventTimelineQueries(fake.repository, async () => context, () => new Date('2026-07-28T12:00:00.000Z'));
 
     const result = await queries.getEventTimeline({
       from: '2026-07-01T00:00:00.000Z',
@@ -363,7 +359,11 @@ describe('tenant-safe event timeline queries', () => {
         companyId: 'company-1',
         userId: 'user-1',
         eventKey: {
-          in: ['vehicle-event:event-new', 'trip:trip-same-time', 'manual-vehicle-event:manual-old'],
+          in: [
+            'vehicle-event:event-new',
+            'trip:trip-same-time',
+            'manual-vehicle-event:manual-old',
+          ],
         },
       },
       select: { eventKey: true },
@@ -381,13 +381,11 @@ describe('tenant-safe event timeline queries', () => {
       location: null,
       recordedAt: new Date(Date.UTC(2026, 6, 27, 12, 0, -index)),
     }));
-    const readKeys = events.slice(0, 50).map((event) => `vehicle-event:${event.id}`);
+    const readKeys = events
+      .slice(0, 50)
+      .map((event) => `vehicle-event:${event.id}`);
     const fake = createFakeRepository({ vehicleEvent: events }, readKeys);
-    const queries = createEventTimelineQueries(
-      fake.repository,
-      async () => context,
-      () => new Date('2026-07-28T12:00:00.000Z'),
-    );
+    const queries = createEventTimelineQueries(fake.repository, async () => context, () => new Date('2026-07-28T12:00:00.000Z'));
 
     const result = await queries.getEventTimeline({
       read: 'unread',
@@ -400,9 +398,7 @@ describe('tenant-safe event timeline queries', () => {
       'vehicle-event:event-50',
       'vehicle-event:event-51',
     ]);
-    expect(
-      fake.calls.vehicleEvent.filter((call) => 'take' in (call as object)).length,
-    ).toBeGreaterThan(1);
+    expect(fake.calls.vehicleEvent.filter((call) => 'take' in (call as object)).length).toBeGreaterThan(1);
     expect(fake.calls.eventReadReceipt.length).toBeGreaterThanOrEqual(2);
     for (const call of fake.calls.eventReadReceipt) {
       const keys = (
@@ -464,11 +460,7 @@ describe('tenant-safe event timeline queries', () => {
       },
       ['vehicle-event:event-matching'],
     );
-    const queries = createEventTimelineQueries(
-      fake.repository,
-      async () => context,
-      () => new Date('2026-07-28T12:00:00.000Z'),
-    );
+    const queries = createEventTimelineQueries(fake.repository, async () => context, () => new Date('2026-07-28T12:00:00.000Z'));
 
     const result = await queries.getEventTimeline({
       search: 'осмотр',
@@ -513,11 +505,7 @@ describe('tenant-safe event timeline queries', () => {
       },
       ['vehicle-event:danger-read'],
     );
-    const queries = createEventTimelineQueries(
-      fake.repository,
-      async () => context,
-      () => new Date('2026-07-28T12:00:00.000Z'),
-    );
+    const queries = createEventTimelineQueries(fake.repository, async () => context, () => new Date('2026-07-28T12:00:00.000Z'));
 
     const result = await queries.getEventTimeline({ read: 'read' });
 

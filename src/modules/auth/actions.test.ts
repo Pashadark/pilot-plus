@@ -94,6 +94,21 @@ describe('действия авторизации', () => {
     expect(redirectMock).toHaveBeenCalledWith('/?welcome=1');
   });
 
+  it('создаёт сессию активному участнику компании', async () => {
+    userFindUnique.mockResolvedValue({
+      id: 'u2',
+      isActive: true,
+      role: 'MEMBER',
+      passwordHash: 'hash',
+    });
+    authMocks.verifyPassword.mockResolvedValue(true);
+
+    await expect(
+      loginAction(idle, form('member@example.com', 'Надёжный пароль 2026')),
+    ).rejects.toThrow('REDIRECT:/?welcome=1');
+    expect(authMocks.createSession).toHaveBeenCalledWith('u2');
+  });
+
   it('отзывает сессию перед выходом', async () => {
     await expect(logoutAction()).rejects.toThrow('REDIRECT:/login?loggedOut=1');
     expect(authMocks.deleteSession).toHaveBeenCalledOnce();

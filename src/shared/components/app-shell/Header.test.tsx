@@ -15,6 +15,7 @@ const user = {
   name: 'Павел Седов',
   email: 'pavel@example.com',
   role: 'SUPER_ADMIN' as const,
+  canAccessAdmin: true,
 };
 
 afterEach(cleanup);

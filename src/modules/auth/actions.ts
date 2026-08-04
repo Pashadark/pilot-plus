@@ -38,7 +38,7 @@ export async function loginAction(
       user?.passwordHash ?? DUMMY_PASSWORD_HASH,
     );
 
-    if (!user || !user.isActive || user.role !== 'SUPER_ADMIN' || !passwordMatches) {
+    if (!user || !user.isActive || !passwordMatches) {
       await recordLoginFailure(input.email);
       return failedLoginState;
     }

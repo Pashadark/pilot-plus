@@ -73,7 +73,13 @@ export async function getAuthenticatedSession(): Promise<AuthenticatedSession | 
     const tokenHash = hashSessionToken(token);
     const session = await prisma.session.findUnique({
       where: { tokenHash },
-      include: { user: true },
+      include: {
+        user: {
+          include: {
+            memberships: { select: { role: true } },
+          },
+        },
+      },
     });
 
     if (!session || session.expiresAt <= new Date()) {
@@ -82,7 +88,7 @@ export async function getAuthenticatedSession(): Promise<AuthenticatedSession | 
       return null;
     }
 
-    if (!session.user.isActive || session.user.role !== 'SUPER_ADMIN') {
+    if (!session.user.isActive) {
       clearSessionCookie(cookieStore);
       return null;
     }
@@ -93,6 +99,9 @@ export async function getAuthenticatedSession(): Promise<AuthenticatedSession | 
         email: session.user.email,
         name: session.user.name,
         role: session.user.role,
+        canAccessAdmin:
+          session.user.role === 'SUPER_ADMIN' ||
+          session.user.memberships.some(({ role }) => role === 'COMPANY_ADMIN'),
       },
       currentSessionId: session.id,
       currentSessionTokenHash: session.tokenHash,

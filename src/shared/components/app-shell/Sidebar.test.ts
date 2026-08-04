@@ -13,6 +13,7 @@ const user = {
   name: 'Администратор',
   email: 'admin@pilot.local',
   role: 'SUPER_ADMIN' as const,
+  canAccessAdmin: true,
 };
 const summary = {
   state: 'degraded' as const,

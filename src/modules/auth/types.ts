@@ -3,6 +3,7 @@ export interface SafeUser {
   email: string;
   name: string;
   role: 'SUPER_ADMIN' | 'MEMBER';
+  canAccessAdmin: boolean;
 }
 
 export interface LoginState {
