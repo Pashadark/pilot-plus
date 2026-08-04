@@ -43,6 +43,12 @@ test('обзор администрирования помещается на м
 
   await expect(page.getByRole('heading', { name: 'Центр управления', level: 1 })).toBeVisible();
   await expect(page.getByTestId('admin-overview-kpi')).toHaveCount(4);
+  await page.getByRole('button', { name: 'Открыть меню' }).click();
+  const drawer = page.getByRole('dialog', { name: 'Мобильная навигация' });
+  await expect(drawer.getByRole('link', { name: 'Администрирование' })).toHaveAttribute(
+    'href',
+    '/admin',
+  );
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });
 

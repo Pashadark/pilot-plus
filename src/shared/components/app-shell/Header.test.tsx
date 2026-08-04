@@ -8,7 +8,9 @@ import { ThemeProvider } from '@/shared/providers/ThemeProvider';
 
 import { Header } from './Header';
 
-vi.mock('./MobileNavigation', () => ({ MobileNavigation: () => null }));
+const mobileNavigationMock = vi.hoisted(() => vi.fn(() => null));
+
+vi.mock('./MobileNavigation', () => ({ MobileNavigation: mobileNavigationMock }));
 
 const user = {
   id: 'user-1',
@@ -49,5 +51,9 @@ describe('шапка приложения', () => {
     expect(profileLink.tagName).toBe('A');
     expect(profileLink.getAttribute('href')).toBe('/profile');
     expect(screen.getByRole('img', { name: user.name })).toBeTruthy();
+    expect(mobileNavigationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ canAccessAdmin: true }) }),
+      undefined,
+    );
   });
 });

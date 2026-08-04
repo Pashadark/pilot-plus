@@ -33,6 +33,7 @@ export function Sidebar({
   user,
 }: SidebarProps) {
   const pathname = usePathname();
+  const visibleNavigation = navigation.filter((item) => !item.adminOnly || user.canAccessAdmin);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -54,7 +55,7 @@ export function Sidebar({
         </div>
       </div>
       <nav aria-label="Основная навигация" className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {navigation.map((item) => {
+        {visibleNavigation.map((item) => {
           const Icon = item.icon;
           const isCurrent = pathname === item.href;
 

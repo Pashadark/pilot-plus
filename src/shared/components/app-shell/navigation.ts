@@ -6,11 +6,20 @@ import {
   FiHome,
   FiLayers,
   FiMap,
+  FiSettings,
   FiTool,
   FiTruck,
 } from 'react-icons/fi';
+import type { IconType } from 'react-icons';
 
-export const navigation = [
+export interface NavigationItem {
+  label: string;
+  href: string;
+  icon: IconType;
+  adminOnly?: boolean;
+}
+
+export const navigation: readonly NavigationItem[] = [
   { label: 'Панель управления', href: '/', icon: FiHome },
   { label: 'Онлайн-карта', href: '/map', icon: FiMap },
   { label: 'Автопарк', href: '/vehicles', icon: FiTruck },
@@ -18,6 +27,7 @@ export const navigation = [
   { label: 'Мойка', href: '/wash', icon: FiDroplet },
   { label: 'Устройства', href: '/devices', icon: FiCpu },
   { label: 'События', href: '/events', icon: FiAlertTriangle },
+  { label: 'Администрирование', href: '/admin', icon: FiSettings, adminOnly: true },
   { label: 'Состояние системы', href: '/system', icon: FiActivity },
   { label: 'Дизайн-система', href: '/ui-kit', icon: FiLayers },
-] as const;
+];

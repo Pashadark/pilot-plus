@@ -21,8 +21,9 @@ describe('ProtectedLayout', () => {
     mocks.requireAdmin.mockResolvedValue({
       id: 'admin-1',
       name: 'Администратор',
-      email: 'admin@pilot.local',
-      role: 'SUPER_ADMIN',
+        email: 'admin@pilot.local',
+        role: 'SUPER_ADMIN',
+        canAccessAdmin: true,
     });
     mocks.getCachedSystemHealthSummary.mockResolvedValue({
       state: 'healthy',
@@ -45,6 +46,7 @@ describe('ProtectedLayout', () => {
         total: 4,
         checkedAt: '2026-07-20T12:00:00.000Z',
       },
+      user: expect.objectContaining({ canAccessAdmin: true }),
     });
   });
 

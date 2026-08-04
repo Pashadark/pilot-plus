@@ -3,7 +3,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { FiDroplet, FiTool } from 'react-icons/fi';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('next/navigation', () => ({ usePathname: () => '/' }));
+const route = vi.hoisted(() => ({ pathname: '/' }));
+
+vi.mock('next/navigation', () => ({ usePathname: () => route.pathname }));
 
 import { Sidebar } from './Sidebar';
 import { navigation } from './navigation';
@@ -21,6 +23,7 @@ const summary = {
   total: 4,
   checkedAt: '2026-07-20T12:00:00.000Z',
 };
+const member = { ...user, role: 'MEMBER' as const, canAccessAdmin: false };
 
 describe('Sidebar health summary', () => {
   it('показывает ТО и мойку в единой навигации с доменными иконками', () => {
@@ -32,6 +35,7 @@ describe('Sidebar health summary', () => {
       '/wash',
       '/devices',
       '/events',
+      '/admin',
       '/system',
       '/ui-kit',
     ]);
@@ -41,6 +45,29 @@ describe('Sidebar health summary', () => {
         { label: 'Мойка', href: '/wash', icon: FiDroplet },
       ]),
     );
+  });
+
+  it('показывает разрешённую административную ссылку и отмечает её текущей', () => {
+    route.pathname = '/admin';
+
+    const markup = renderToStaticMarkup(
+      createElement(Sidebar, { expanded: true, user, systemHealthSummary: summary }),
+    );
+
+    expect(markup).toContain('href="/admin"');
+    expect(markup).toContain('aria-current="page"');
+    expect(markup).toContain('Администрирование');
+  });
+
+  it('скрывает административную ссылку без административного разрешения', () => {
+    route.pathname = '/';
+
+    const markup = renderToStaticMarkup(
+      createElement(Sidebar, { expanded: true, user: member, systemHealthSummary: summary }),
+    );
+
+    expect(markup).not.toContain('href="/admin"');
+    expect(markup).not.toContain('Администрирование');
   });
 
   it('даёт раскрытым подписям доступную ширину и перенос строк', () => {
