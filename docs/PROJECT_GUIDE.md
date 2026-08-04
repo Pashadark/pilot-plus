@@ -348,6 +348,16 @@ permissions в DTO не передаются. В UI пока нет CRUD ком�
 назначения ролей и grants, а также управления автомобилями, документами и устройствами
 из админцентра. Эти сценарии остаются следующими вертикальными этапами.
 
+Клиентский workspace `/clients` реализует tenant-scoped список, подробности, создание и
+редактирование для `SUPER_ADMIN`, `COMPANY_ADMIN` и `DISPATCHER`; `VIEWER` имеет только чтение,
+а `DRIVER` не получает capability или доступ к данным. Контакты и документы в PostgreSQL
+шифруются серверным ключом, а уникальность номера проверяется blind-index внутри компании.
+`db:seed` идемпотентно создаёт ровно шесть явно тестовых карточек `demo-fixture` для `pilot-demo`:
+они не содержат реальных персональных данных, используют `example.test` и разные статусы,
+сроки водительских прав и Telegram/MAX fallback. Seed требует серверные
+`CLIENT_DATA_ENCRYPTION_KEY` и `CLIENT_SEARCH_KEY`, никогда не пишет их или зашифрованные поля
+в лог. Загрузка файлов, архивирование из UI и MAX-ссылка остаются следующими этапами.
+
 ## 6. Дизайн-система
 
 Текущее визуальное направление Pilot+ основано на утверждённом макете телематического dashboard-сервиса: холодный серый canvas, белые поверхности, синий основной акцент, широкая светлая боковая панель, шесть KPI и аналитическая сетка вокруг главной карты. Это оригинальная адаптация под Pilot+, а не перенос чужого бренда или бизнес-компонентов. Карта, телематика и продуктовые сценарии остаются собственными Pilot+.
@@ -444,7 +454,7 @@ npm run start
 npm run lint
 npm run typecheck
 npm run test:unit
-npx playwright test tests/auth.spec.ts tests/system-states.spec.ts tests/profile.spec.ts tests/system-health.spec.ts tests/dashboard.spec.ts tests/ui-kit.spec.ts tests/vehicles.spec.ts tests/maintenance.spec.ts tests/wash.spec.ts tests/devices.spec.ts --workers=1
+npx playwright test tests/auth.spec.ts tests/system-states.spec.ts tests/profile.spec.ts tests/system-health.spec.ts tests/dashboard.spec.ts tests/ui-kit.spec.ts tests/vehicles.spec.ts tests/maintenance.spec.ts tests/wash.spec.ts tests/devices.spec.ts tests/clients.spec.ts --workers=1
 npx prettier --check README.md docs/PROJECT_GUIDE.md
 npm run format:check
 npx prisma validate
