@@ -46,10 +46,20 @@ const idle = { status: 'idle' as const };
 const currentSessionExpiresAt = new Date('2026-07-27T12:00:00.000Z');
 const userUpdatedAt = new Date('2026-07-20T12:00:00.000Z');
 const session = {
-  user: { id: 'u1', email: 'old@example.com', name: 'Старое имя', role: 'SUPER_ADMIN' as const },
+  user: {
+    id: 'u1',
+    email: 'old@example.com',
+    name: 'Старое имя',
+    role: 'SUPER_ADMIN' as const,
+    canAccessAdmin: true,
+  },
   currentSessionId: 'session-current',
   currentSessionTokenHash: 'old-token-hash',
   currentSessionExpiresAt,
+};
+const memberSession = {
+  ...session,
+  user: { ...session.user, role: 'MEMBER' as const, canAccessAdmin: false },
 };
 const rotation = {
   token: 'new-bearer-token',
@@ -185,7 +195,6 @@ describe('действия профиля', () => {
         passwordHash: 'old-hash',
         updatedAt: userUpdatedAt,
         isActive: true,
-        role: 'SUPER_ADMIN',
       },
       data: { name: 'Новое имя', email: 'new@example.com' },
     });
@@ -194,6 +203,23 @@ describe('действия профиля', () => {
     });
     expect(revalidatePathMock).toHaveBeenCalledWith('/profile');
     expect(result).toEqual({ status: 'success', message: 'Профиль сохранён.' });
+  });
+
+  it('обновляет собственный профиль MEMBER без ограничения по системной роли', async () => {
+    authMocks.getAuthenticatedSession.mockResolvedValue(memberSession);
+
+    await expect(updateProfileAction(idle, profileForm())).resolves.toMatchObject({
+      status: 'success',
+    });
+    expect(prismaMocks.transactionUserUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'u1',
+        passwordHash: 'old-hash',
+        updatedAt: userUpdatedAt,
+        isActive: true,
+      },
+      data: { name: 'Новое имя', email: 'new@example.com' },
+    });
   });
 
   it('отклоняет commit, если текущая сессия исчезла во время проверки', async () => {
@@ -252,7 +278,6 @@ describe('действия профиля', () => {
         passwordHash: 'old-hash',
         updatedAt: userUpdatedAt,
         isActive: true,
-        role: 'SUPER_ADMIN',
       },
       data: { passwordHash: 'new-hash' },
     });
@@ -268,6 +293,23 @@ describe('действия профиля', () => {
     );
     expect(revalidatePathMock).toHaveBeenCalledWith('/profile');
     expect(result).toEqual({ status: 'success', message: 'Пароль изменён.' });
+  });
+
+  it('меняет пароль MEMBER без ограничения по системной роли', async () => {
+    authMocks.getAuthenticatedSession.mockResolvedValue(memberSession);
+
+    await expect(changePasswordAction(idle, passwordForm())).resolves.toMatchObject({
+      status: 'success',
+    });
+    expect(prismaMocks.transactionUserUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'u1',
+        passwordHash: 'old-hash',
+        updatedAt: userUpdatedAt,
+        isActive: true,
+      },
+      data: { passwordHash: 'new-hash' },
+    });
   });
 
   it('не выставляет новую cookie при откате транзакции', async () => {

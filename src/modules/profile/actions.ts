@@ -82,7 +82,6 @@ function verifiedUserWhere(authorization: VerifiedMutationAuthorization) {
     passwordHash: authorization.user.passwordHash,
     updatedAt: authorization.user.updatedAt,
     isActive: true,
-    role: 'SUPER_ADMIN' as const,
   };
 }
 
