@@ -1562,7 +1562,7 @@ export function UiKitSections() {
       <KitSectionFull
         id="admin-access"
         title="Административный доступ"
-        description="Единый production-контрак системной роли, ролей компании и их области действия."
+        description="Единый production-контракт системной роли, ролей компании и их области действия."
       >
         <Card className="p-4">
           <PageHeader

@@ -20,7 +20,7 @@ export const adminAccessRoles = [
   {
     label: 'Водитель',
     initials: 'В',
-    scope: 'Назначенные задачи',
+    scope: 'Нет базовых разрешений',
     tone: 'neutral',
   },
   {

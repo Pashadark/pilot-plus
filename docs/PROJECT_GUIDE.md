@@ -118,7 +118,7 @@ React Compiler включён в `next.config.ts`.
   `DRIVER`, `VIEWER` и дополнительные permission grants;
 - server-only policy административного доступа: суперадминистратор имеет системную
   область, а администратор компании — только tenant ids своих членств;
-- защищённый обзор `/admin` с loading, error и forbidden states; пунк
+- защищённый обзор `/admin` с loading, error и forbidden states; пункт
   «Администрирование» в desktop- и mobile-навигации виден только при разрешённом доступе;
 - tenant-scoped foundation `AuditLog` с безопасной сериализацией и стабильными снимками
   актора и сущности;
