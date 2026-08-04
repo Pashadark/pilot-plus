@@ -17,6 +17,10 @@ function createFleetDatabase() {
     create: Record<string, unknown>;
     update: Record<string, unknown>;
   }> = [];
+  const companyUpserts: Array<{
+    create: Record<string, unknown>;
+    update: Record<string, unknown>;
+  }> = [];
 
   return {
     companies,
@@ -24,13 +28,15 @@ function createFleetDatabase() {
     vehicles,
     vehicleImages,
     membershipUpserts,
+    companyUpserts,
     database: {
       company: {
         async upsert(args: {
           where: { slug: string };
-          create: { name: string; slug: string };
-          update: { name: string };
+          create: Record<string, unknown> & { slug: string };
+          update: Record<string, unknown>;
         }) {
+          companyUpserts.push(args);
           const company = companies.get(args.where.slug) ?? {
             id: 'pilot-demo-company',
             slug: args.create.slug,
@@ -105,6 +111,24 @@ describe('seed автопарка', () => {
     expect(fake.membershipUpserts[0]?.create.role).toBe('COMPANY_ADMIN');
     expect(fake.membershipUpserts[0]?.create.additionalPermissions).toEqual([]);
     expect(fake.membershipUpserts[0]?.update.role).toBe('COMPANY_ADMIN');
+    expect(fake.companyUpserts[0]?.create).toMatchObject({
+      name: 'ООО «Север Транс Мониторинг»',
+      slug: 'pilot-demo',
+      inn: '2465357184',
+      kpp: '246501001',
+      ogrn: '1242400017356',
+      directorName: 'Александр Сергеевич Лебедев',
+      legalAddress: '660049, Красноярский край, г. Красноярск, ул. Карла Маркса, д. 93, офис 412',
+      actualAddress: '660020, Красноярский край, г. Красноярск, ул. Шахтёров, д. 33, стр. 2',
+      phone: '+7 (391) 205-17-40',
+      email: 'office@sever-trans.demo',
+      isDemo: true,
+    });
+    expect(fake.companyUpserts[0]?.update).toMatchObject({
+      name: 'ООО «Север Транс Мониторинг»',
+      inn: '2465357184',
+      isDemo: true,
+    });
     expect(fake.vehicles.size).toBe(130);
     expect(fake.vehicles.get('fleet-001')).toMatchObject({
       companyId: 'pilot-demo-company',

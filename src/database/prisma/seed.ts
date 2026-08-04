@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
@@ -43,8 +44,8 @@ interface FleetSeedDatabase {
   company: {
     upsert(args: {
       where: { slug: string };
-      create: { name: string; slug: string };
-      update: { name: string };
+      create: DemoCompanyData;
+      update: Omit<DemoCompanyData, 'slug'>;
     }): Promise<{ id: string }>;
   };
   companyMember: {
@@ -71,6 +72,85 @@ interface FleetSeedDatabase {
       where: { vehicleId_position: { vehicleId: string; position: number } };
       create: VehicleImageSeedData;
       update: Omit<VehicleImageSeedData, 'vehicleId'>;
+    }): Promise<unknown>;
+  };
+}
+
+export const demoCompanyData = {
+  name: 'ООО «Север Транс Мониторинг»',
+  slug: 'pilot-demo',
+  inn: '2465357184',
+  kpp: '246501001',
+  ogrn: '1242400017356',
+  directorName: 'Александр Сергеевич Лебедев',
+  legalAddress: '660049, Красноярский край, г. Красноярск, ул. Карла Маркса, д. 93, офис 412',
+  actualAddress: '660020, Красноярский край, г. Красноярск, ул. Шахтёров, д. 33, стр. 2',
+  phone: '+7 (391) 205-17-40',
+  email: 'office@sever-trans.demo',
+  isDemo: true,
+} as const;
+
+type DemoCompanyData = typeof demoCompanyData;
+
+type DemoCompanyRole = 'COMPANY_ADMIN' | 'DISPATCHER' | 'DRIVER' | 'VIEWER';
+
+type DemoTeamProfile = {
+  readonly email: string;
+  readonly name: string;
+  readonly companyRole: DemoCompanyRole;
+};
+
+const demoTeamProfiles: readonly DemoTeamProfile[] = [
+  {
+    email: 'anna.vorontsova@sever-trans.demo',
+    name: 'Анна Воронцова',
+    companyRole: 'COMPANY_ADMIN',
+  },
+  {
+    email: 'maksim.orlov@sever-trans.demo',
+    name: 'Максим Орлов',
+    companyRole: 'DISPATCHER',
+  },
+  {
+    email: 'dmitry.sokolov@sever-trans.demo',
+    name: 'Дмитрий Соколов',
+    companyRole: 'DRIVER',
+  },
+  {
+    email: 'elena.mironova@sever-trans.demo',
+    name: 'Елена Миронова',
+    companyRole: 'VIEWER',
+  },
+];
+
+interface DemoTeamSeedDatabase {
+  user: {
+    upsert(args: {
+      where: { email: string };
+      create: {
+        email: string;
+        name: string;
+        passwordHash: string;
+        role: 'MEMBER';
+        isActive: false;
+      };
+      update: {
+        name: string;
+        role: 'MEMBER';
+        isActive: false;
+      };
+    }): Promise<{ id: string }>;
+  };
+  companyMember: {
+    upsert(args: {
+      where: { companyId_userId: { companyId: string; userId: string } };
+      create: {
+        companyId: string;
+        userId: string;
+        role: DemoCompanyRole;
+        additionalPermissions: [];
+      };
+      update: { role: DemoCompanyRole; additionalPermissions: [] };
     }): Promise<unknown>;
   };
 }
@@ -132,9 +212,20 @@ export async function seedFleet(
   imageRows: readonly VehicleImageManifestRow[] = [],
 ): Promise<{ companyId: string; vehicles: number; images: number }> {
   const company = await database.company.upsert({
-    where: { slug: 'pilot-demo' },
-    create: { name: 'Pilot+ Demo', slug: 'pilot-demo' },
-    update: { name: 'Pilot+ Demo' },
+    where: { slug: demoCompanyData.slug },
+    create: demoCompanyData,
+    update: {
+      name: demoCompanyData.name,
+      inn: demoCompanyData.inn,
+      kpp: demoCompanyData.kpp,
+      ogrn: demoCompanyData.ogrn,
+      directorName: demoCompanyData.directorName,
+      legalAddress: demoCompanyData.legalAddress,
+      actualAddress: demoCompanyData.actualAddress,
+      phone: demoCompanyData.phone,
+      email: demoCompanyData.email,
+      isDemo: demoCompanyData.isDemo,
+    },
   });
 
   await database.companyMember.upsert({
@@ -218,6 +309,44 @@ export async function seedFleet(
   return { companyId: company.id, vehicles: rows.length, images: imageCount };
 }
 
+export async function seedDemoTeam(
+  database: DemoTeamSeedDatabase,
+  companyId: string,
+): Promise<{ users: number; memberships: number }> {
+  const technicalPasswordHash = await hashPassword(randomBytes(32).toString('hex'));
+
+  for (const profile of demoTeamProfiles) {
+    const user = await database.user.upsert({
+      where: { email: profile.email },
+      create: {
+        email: profile.email,
+        name: profile.name,
+        passwordHash: technicalPasswordHash,
+        role: 'MEMBER',
+        isActive: false,
+      },
+      update: {
+        name: profile.name,
+        role: 'MEMBER',
+        isActive: false,
+      },
+    });
+
+    await database.companyMember.upsert({
+      where: { companyId_userId: { companyId, userId: user.id } },
+      create: {
+        companyId,
+        userId: user.id,
+        role: profile.companyRole,
+        additionalPermissions: [],
+      },
+      update: { role: profile.companyRole, additionalPermissions: [] },
+    });
+  }
+
+  return { users: demoTeamProfiles.length, memberships: demoTeamProfiles.length };
+}
+
 async function main() {
   try {
     const admin = await seedAdmin(process.env, prisma);
@@ -238,6 +367,9 @@ async function main() {
     console.info(
       `Импортировано автомобилей: ${fleet.vehicles}; фотографий: ${fleet.images}. Компания: ${fleet.companyId}.`,
     );
+
+    const demoTeam = await seedDemoTeam(prisma, fleet.companyId);
+    console.info(`Демо-команда: ${demoTeam.users} профиля, ${demoTeam.memberships} членства.`);
 
     const fleetVehicles = await prisma.vehicle.findMany({
       where: { companyId: fleet.companyId },

@@ -37,6 +37,22 @@ describe('доменная схема автопарка', () => {
     expect(schema).toMatch(/vin\s+String\?/);
   });
 
+  it('хранит реквизиты демонстрационной компании без обязательного заполнения старых записей', () => {
+    for (const field of [
+      'inn                 String?',
+      'kpp                 String?',
+      'ogrn                String?',
+      'directorName        String?',
+      'legalAddress        String?',
+      'actualAddress       String?',
+      'phone               String?',
+      'email               String?',
+      'isDemo              Boolean              @default(false)',
+    ]) {
+      expect(schema).toContain(field);
+    }
+  });
+
   it('подготавливает историю без создания демонстрационной телеметрии', () => {
     expect(schema).toContain('model VehiclePosition {');
     expect(schema).toContain('model Trip {');

@@ -191,6 +191,15 @@ model Company {
   id                  String               @id @default(cuid())
   name                String
   slug                String               @unique
+  inn                 String?
+  kpp                 String?
+  ogrn                String?
+  directorName        String?
+  legalAddress        String?
+  actualAddress       String?
+  phone               String?
+  email               String?
+  isDemo              Boolean              @default(false)
   members             CompanyMember[]
   vehicles            Vehicle[]
   devices             Device[]
