@@ -14,6 +14,10 @@ const maintenanceStatusPreflight = readFileSync(
   new URL('./preflight/maintenance_legacy_statuses.sql', import.meta.url),
   'utf8',
 );
+const clientsMigration = readFileSync(
+  new URL('./migrations/20260804171000_add_company_clients/migration.sql', import.meta.url),
+  'utf8',
+);
 
 describe('доменная схема автопарка', () => {
   it('описывает роли, точечные разрешения и журнал аудита центра администрирования', () => {
@@ -106,5 +110,23 @@ describe('доменная схема автопарка', () => {
     expect(maintenanceStatusPreflight).toContain('"scheduledAt" IS NULL');
     expect(maintenanceStatusPreflight).toContain('"scheduledAt" >= CURRENT_TIMESTAMP');
     expect(maintenanceStatusPreflight).toContain('требуют ручного сопоставления');
+  });
+
+  it('хранит клиентские персональные данные зашифрованными и tenant-scoped', () => {
+    expect(schema).toContain('enum ClientStatus {');
+    expect(schema).toContain('model Client {');
+    expect(schema).toMatch(/phoneEncrypted\s+String/);
+    expect(schema).toMatch(/phoneIndex\s+String/);
+    expect(schema).toMatch(/passportEncrypted\s+String\?/);
+    expect(schema).toMatch(/passportIndex\s+String\?/);
+    expect(schema).toMatch(/driverLicenseEncrypted\s+String\?/);
+    expect(schema).toMatch(/@@unique\(\[companyId, phoneIndex\]\)/);
+    expect(schema).toMatch(/@@index\(\[companyId, status, updatedAt\]\)/);
+    expect(schema).toMatch(/clients\s+Client\[\]/);
+    expect(schema).toMatch(/createdClients\s+Client\[\]/);
+    expect(schema).not.toMatch(/passport\s+String/);
+    expect(schema).not.toMatch(/driverLicense\s+String/);
+    expect(clientsMigration).toContain('CREATE TABLE "public"."Client"');
+    expect(clientsMigration).not.toMatch(/\bDROP\b/i);
   });
 });

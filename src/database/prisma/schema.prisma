@@ -34,6 +34,16 @@ enum CompanyPermission {
   VIEW_AUDIT
 }
 
+enum ClientStatus {
+  DRAFT
+  NEW
+  VERIFYING
+  VERIFIED
+  REGULAR
+  BLOCKED
+  ARCHIVED
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -166,6 +176,7 @@ model User {
   manualVehicleEvents ManualVehicleEvent[]
   eventReadReceipts   EventReadReceipt[]
   auditLogs           AuditLog[]
+  createdClients      Client[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 }
@@ -209,6 +220,7 @@ model Company {
   manualVehicleEvents ManualVehicleEvent[]
   eventReadReceipts   EventReadReceipt[]
   auditLogs           AuditLog[]
+  clients             Client[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 }
@@ -226,6 +238,48 @@ model CompanyMember {
 
   @@unique([companyId, userId])
   @@index([userId])
+}
+
+model Client {
+  id                           String       @id @default(cuid())
+  companyId                    String
+  company                      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  firstName                    String
+  middleName                   String?
+  lastName                     String
+  birthDate                    DateTime?
+  gender                       String?
+  phoneEncrypted               String
+  phoneIndex                   String
+  additionalPhoneEncrypted     String?
+  email                        String?
+  telegramUsername             String?
+  telegramUserId               String?
+  maxUserId                    String?
+  photoPath                    String?
+  registrationAddressEncrypted String?
+  actualAddressEncrypted       String?
+  passportEncrypted            String?
+  passportIndex                String?
+  driverLicenseEncrypted       String?
+  driverLicenseIndex           String?
+  driverCategories             String[]
+  driverLicenseIssuedAt        DateTime?
+  driverLicenseExpiresAt       DateTime?
+  drivingSince                 DateTime?
+  emergencyContactEncrypted    String?
+  source                       String?
+  note                         String?
+  status                       ClientStatus @default(NEW)
+  createdByUserId              String
+  createdBy                    User         @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt                    DateTime     @default(now())
+  updatedAt                    DateTime     @updatedAt
+  archivedAt                   DateTime?
+
+  @@unique([companyId, phoneIndex])
+  @@index([companyId, status, updatedAt])
+  @@index([companyId, lastName, firstName])
 }
 
 model AuditLog {
