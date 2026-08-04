@@ -20,7 +20,7 @@ describe('политика прав компании', () => {
   });
 
   it.each([
-    ['DISPATCHER', ['MANAGE_VEHICLES', 'MANAGE_DEVICES', 'MANAGE_MAINTENANCE', 'MANAGE_WASH', 'VIEW_REPORTS']],
+    ['DISPATCHER', ['MANAGE_MAINTENANCE', 'MANAGE_WASH', 'VIEW_REPORTS']],
     ['DRIVER', []],
     ['VIEWER', ['VIEW_REPORTS']],
   ] as const)('выдаёт роли %s только безопасный базовый набор', (role, expected) => {
@@ -30,6 +30,12 @@ describe('политика прав компании', () => {
   it('добавляет индивидуальное право без изменения базовой матрицы', () => {
     expect(hasCompanyPermission('VIEWER', [], 'MANAGE_VEHICLES')).toBe(false);
     expect(hasCompanyPermission('VIEWER', ['MANAGE_VEHICLES'], 'MANAGE_VEHICLES')).toBe(true);
+  });
+
+  it('выдаёт диспетчеру управление транспортом и устройствами только отдельными grants', () => {
+    expect(hasCompanyPermission('DISPATCHER', [], 'MANAGE_VEHICLES')).toBe(false);
+    expect(hasCompanyPermission('DISPATCHER', [], 'MANAGE_DEVICES')).toBe(false);
+    expect(hasCompanyPermission('DISPATCHER', ['MANAGE_VEHICLES'], 'MANAGE_VEHICLES')).toBe(true);
   });
 
   it('не моделирует системного суперадминистратора через права компании', () => {

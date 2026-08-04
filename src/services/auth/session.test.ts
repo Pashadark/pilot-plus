@@ -120,6 +120,48 @@ describe('серверная сессия', () => {
     expect(JSON.stringify(result)).not.toContain('secret-password-hash');
   });
 
+  it('открывает админцентр участнику с ролью администра компании', async () => {
+    cookieMock.value = 'session-token';
+    sessionRepository.findUnique.mockResolvedValue({
+      id: 'session-1',
+      expiresAt: new Date(Date.now() + 60_000),
+      user: {
+        id: 'user-2',
+        email: 'company@example.com',
+        name: 'Администратор компании',
+        role: 'MEMBER',
+        isActive: true,
+        memberships: [{ role: 'COMPANY_ADMIN' }],
+      },
+    });
+
+    await expect(readSession()).resolves.toMatchObject({
+      role: 'MEMBER',
+      canAccessAdmin: true,
+    });
+  });
+
+  it('не открывает админцентр обычному участнику', async () => {
+    cookieMock.value = 'session-token';
+    sessionRepository.findUnique.mockResolvedValue({
+      id: 'session-1',
+      expiresAt: new Date(Date.now() + 60_000),
+      user: {
+        id: 'user-3',
+        email: 'member@example.com',
+        name: 'Участник',
+        role: 'MEMBER',
+        isActive: true,
+        memberships: [{ role: 'VIEWER' }],
+      },
+    });
+
+    await expect(readSession()).resolves.toMatchObject({
+      role: 'MEMBER',
+      canAccessAdmin: false,
+    });
+  });
+
   it('готовит новый bearer и выставляет cookie только отдельным commit-шагом', async () => {
     const expiresAt = new Date('2026-07-27T12:00:00.000Z');
 

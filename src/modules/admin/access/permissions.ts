@@ -26,8 +26,6 @@ const allCompanyPermissions: readonly CompanyPermissionValue[] = [
 const permissionsByRole: Record<CompanyRole, readonly CompanyPermissionValue[]> = {
   COMPANY_ADMIN: allCompanyPermissions,
   DISPATCHER: [
-    'MANAGE_VEHICLES',
-    'MANAGE_DEVICES',
     'MANAGE_MAINTENANCE',
     'MANAGE_WASH',
     'VIEW_REPORTS',
