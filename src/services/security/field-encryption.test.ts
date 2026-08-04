@@ -49,7 +49,7 @@ describe('шифрование полей клиента', () => {
     expect(blindIndex('79991234567', searchKey, normalizeRussianPhone)).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it('остаётся server-only модулем', () => {
-    expect(encryptionSource).toContain("import 'server-only';");
+  it('остаётся чистым Node-модулем для standalone CLI seed', () => {
+    expect(encryptionSource).not.toContain("import 'server-only';");
   });
 });
