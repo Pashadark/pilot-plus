@@ -70,9 +70,12 @@ describe('getRecentAuditLog', () => {
   ])('нормализует limit $requested в диапазон 1–50', async ({ requested, expected }) => {
     await getRecentAuditLog(systemAccess, requested);
 
-    expect(auditLogFindManyMock).toHaveBeenCalledWith(
-      expect.objectContaining({ take: expected }),
-    );
+    expect(auditLogFindManyMock).toHaveBeenCalledWith(expect.objectContaining({ take: expected }));
+  });
+
+  it('заменяет NaN безопасным лимитом', async () => {
+    await getRecentAuditLog(systemAccess, Number.NaN);
+    expect(auditLogFindManyMock).toHaveBeenCalledWith(expect.objectContaining({ take: 8 }));
   });
 
   it('возвращает только сериализуемый DTO с безопасными labels', async () => {

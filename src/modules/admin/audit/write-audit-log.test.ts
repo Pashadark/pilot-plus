@@ -72,4 +72,11 @@ describe('writeAuditLog', () => {
     expect((error as Error).message).not.toContain('НЕ_РАСКРЫВАТЬ');
     expect(auditLogCreateMock).not.toHaveBeenCalled();
   });
+
+  it('проверяет нормализованный результат toJSON', async () => {
+    await expect(
+      writeAuditLog({ ...input, changes: { safe: { toJSON: () => ({ token: 'секрет' }) } } }),
+    ).rejects.toThrow('запрещённые поля');
+    expect(auditLogCreateMock).not.toHaveBeenCalled();
+  });
 });

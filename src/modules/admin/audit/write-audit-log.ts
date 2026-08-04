@@ -28,10 +28,6 @@ function containsForbiddenKey(value: unknown): boolean {
 
 function prepareChanges(changes: Readonly<Record<string, unknown>> | undefined) {
   if (!changes) return undefined;
-  if (containsForbiddenKey(changes)) {
-    throw new Error('Журнал аудита содержит запрещённые поля.');
-  }
-
   let serialized: string;
   try {
     serialized = JSON.stringify(changes);
@@ -39,10 +35,14 @@ function prepareChanges(changes: Readonly<Record<string, unknown>> | undefined) 
     throw new Error('Изменения для журнала аудита нельзя сериализовать.');
   }
   if (new TextEncoder().encode(serialized).byteLength > maxChangesBytes) {
-    throw new Error('Изменения для журнала аудита превышают допустимый размер.');
+    throw new Error('Изменения для журнала аудита превышают лимит 16 KiB.');
   }
 
-  return JSON.parse(serialized) as Prisma.InputJsonValue;
+  const normalized = JSON.parse(serialized) as Prisma.InputJsonValue;
+  if (containsForbiddenKey(normalized)) {
+    throw new Error('Журнал аудита содержит запрещённые поля.');
+  }
+  return normalized;
 }
 
 export async function writeAuditLog(input: WriteAuditLogInput): Promise<void> {
@@ -59,5 +59,6 @@ export async function writeAuditLog(input: WriteAuditLogInput): Promise<void> {
       ...(input.entityLabel ? { entityLabel: input.entityLabel } : {}),
       ...(changes === undefined ? {} : { changes }),
     },
+    select: { id: true },
   });
 }

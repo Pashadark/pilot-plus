@@ -9,7 +9,7 @@ export async function getRecentAuditLog(
   access: AdminCenterAccess,
   limit = 8,
 ): Promise<readonly AuditLogItem[]> {
-  const take = Math.min(50, Math.max(1, Math.trunc(limit)));
+  const take = Number.isFinite(limit) ? Math.min(50, Math.max(1, Math.trunc(limit))) : 8;
   const rows = await prisma.auditLog.findMany({
     ...(access.scope === 'COMPANY' ? { where: { companyId: { in: [...access.companyIds] } } } : {}),
     orderBy: { createdAt: 'desc' },
@@ -17,6 +17,7 @@ export async function getRecentAuditLog(
     select: {
       id: true,
       actorEmailSnapshot: true,
+      actorUser: { select: { name: true } },
       action: true,
       entityType: true,
       entityLabel: true,
@@ -27,7 +28,7 @@ export async function getRecentAuditLog(
 
   return rows.map((row) => ({
     id: row.id,
-    actorLabel: row.actorEmailSnapshot,
+    actorLabel: row.actorUser?.name ?? row.actorEmailSnapshot,
     action: row.action,
     entityType: row.entityType,
     entityLabel: row.entityLabel,
