@@ -166,6 +166,7 @@ type DemoClientFixture = {
   readonly email: string;
   readonly passport: string;
   readonly driverLicense: string | null;
+  readonly driverCategories: readonly string[];
   readonly driverLicenseIssuedAt: Date | null;
   readonly driverLicenseExpiresAt: Date | null;
   readonly status: DemoClientStatus;
@@ -193,6 +194,7 @@ type DemoClientCreateData = {
   passportIndex: string;
   driverLicenseEncrypted: string | null;
   driverLicenseIndex: string | null;
+  driverCategories: string[];
   driverLicenseIssuedAt: Date | null;
   driverLicenseExpiresAt: Date | null;
   source: 'demo-fixture';
@@ -219,6 +221,7 @@ const demoClientFixtures: readonly DemoClientFixture[] = [
     email: 'client-01@example.test',
     passport: 'DEMO-PASSPORT-01',
     driverLicense: null,
+    driverCategories: [],
     driverLicenseIssuedAt: null,
     driverLicenseExpiresAt: null,
     status: 'DRAFT',
@@ -232,6 +235,7 @@ const demoClientFixtures: readonly DemoClientFixture[] = [
     email: 'client-02@example.test',
     passport: 'DEMO-PASSPORT-02',
     driverLicense: 'DEMO-LICENSE-02',
+    driverCategories: ['B'],
     driverLicenseIssuedAt: new Date('2020-02-01T00:00:00.000Z'),
     driverLicenseExpiresAt: new Date('2030-02-01T00:00:00.000Z'),
     status: 'NEW',
@@ -245,6 +249,7 @@ const demoClientFixtures: readonly DemoClientFixture[] = [
     email: 'client-03@example.test',
     passport: 'DEMO-PASSPORT-03',
     driverLicense: 'DEMO-LICENSE-03',
+    driverCategories: ['B', 'C'],
     driverLicenseIssuedAt: new Date('2018-03-01T00:00:00.000Z'),
     driverLicenseExpiresAt: new Date('2028-03-01T00:00:00.000Z'),
     status: 'VERIFYING',
@@ -258,6 +263,7 @@ const demoClientFixtures: readonly DemoClientFixture[] = [
     email: 'client-04@example.test',
     passport: 'DEMO-PASSPORT-04',
     driverLicense: 'DEMO-LICENSE-04',
+    driverCategories: ['B'],
     driverLicenseIssuedAt: new Date('2017-04-01T00:00:00.000Z'),
     driverLicenseExpiresAt: new Date('2027-04-01T00:00:00.000Z'),
     status: 'VERIFIED',
@@ -271,6 +277,7 @@ const demoClientFixtures: readonly DemoClientFixture[] = [
     email: 'client-05@example.test',
     passport: 'DEMO-PASSPORT-05',
     driverLicense: 'DEMO-LICENSE-05',
+    driverCategories: ['B', 'BE'],
     driverLicenseIssuedAt: new Date('2016-05-01T00:00:00.000Z'),
     driverLicenseExpiresAt: new Date('2026-12-01T00:00:00.000Z'),
     status: 'REGULAR',
@@ -284,6 +291,7 @@ const demoClientFixtures: readonly DemoClientFixture[] = [
     email: 'client-06@example.test',
     passport: 'DEMO-PASSPORT-06',
     driverLicense: 'DEMO-LICENSE-06',
+    driverCategories: ['B'],
     driverLicenseIssuedAt: new Date('2015-06-01T00:00:00.000Z'),
     driverLicenseExpiresAt: new Date('2025-06-01T00:00:00.000Z'),
     status: 'BLOCKED',
@@ -324,6 +332,7 @@ function demoClientData(
     driverLicenseIndex: fixture.driverLicense
       ? blindIndex(fixture.driverLicense, keys.searchKey, (value) => value)
       : null,
+    driverCategories: [...fixture.driverCategories],
     driverLicenseIssuedAt: fixture.driverLicenseIssuedAt,
     driverLicenseExpiresAt: fixture.driverLicenseExpiresAt,
     source: 'demo-fixture',
@@ -350,6 +359,7 @@ function demoClientUpdateData(
     passportIndex: data.passportIndex,
     driverLicenseEncrypted: data.driverLicenseEncrypted,
     driverLicenseIndex: data.driverLicenseIndex,
+    driverCategories: data.driverCategories,
     driverLicenseIssuedAt: data.driverLicenseIssuedAt,
     driverLicenseExpiresAt: data.driverLicenseExpiresAt,
     source: data.source,

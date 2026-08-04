@@ -70,6 +70,12 @@ describe('seed демонстрационных клиентов', () => {
         (client) => !client.telegramUsername && typeof client.maxUserId === 'string',
       ),
     ).toBe(true);
+    expect(
+      fake.calls.every(
+        ({ create, update }) =>
+          Array.isArray(create.driverCategories) && Array.isArray(update.driverCategories),
+      ),
+    ).toBe(true);
   });
 
   it('сохраняет номера и документы только в зашифрованном виде', async () => {
