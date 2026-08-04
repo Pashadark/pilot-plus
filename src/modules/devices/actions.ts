@@ -99,7 +99,7 @@ async function getAuthorizedDeviceContext(): Promise<AuthorizedDeviceContext | n
   if (!session) return null;
 
   const membership = await prisma.companyMember.findFirst({
-    where: { userId: session.user.id, role: 'ADMIN' },
+    where: { userId: session.user.id, role: 'COMPANY_ADMIN' },
     select: { companyId: true },
     orderBy: { createdAt: 'asc' },
   });

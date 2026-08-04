@@ -46,7 +46,7 @@ const idle = { status: 'idle' as const };
 const currentSessionExpiresAt = new Date('2026-07-27T12:00:00.000Z');
 const userUpdatedAt = new Date('2026-07-20T12:00:00.000Z');
 const session = {
-  user: { id: 'u1', email: 'old@example.com', name: 'Старое имя', role: 'ADMIN' as const },
+  user: { id: 'u1', email: 'old@example.com', name: 'Старое имя', role: 'SUPER_ADMIN' as const },
   currentSessionId: 'session-current',
   currentSessionTokenHash: 'old-token-hash',
   currentSessionExpiresAt,
@@ -185,7 +185,7 @@ describe('действия профиля', () => {
         passwordHash: 'old-hash',
         updatedAt: userUpdatedAt,
         isActive: true,
-        role: 'ADMIN',
+        role: 'SUPER_ADMIN',
       },
       data: { name: 'Новое имя', email: 'new@example.com' },
     });
@@ -252,7 +252,7 @@ describe('действия профиля', () => {
         passwordHash: 'old-hash',
         updatedAt: userUpdatedAt,
         isActive: true,
-        role: 'ADMIN',
+        role: 'SUPER_ADMIN',
       },
       data: { passwordHash: 'new-hash' },
     });

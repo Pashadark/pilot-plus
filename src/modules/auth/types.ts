@@ -2,7 +2,7 @@ export interface SafeUser {
   id: string;
   email: string;
   name: string;
-  role: 'ADMIN';
+  role: 'SUPER_ADMIN' | 'MEMBER';
 }
 
 export interface LoginState {

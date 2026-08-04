@@ -82,7 +82,7 @@ export async function getAuthenticatedSession(): Promise<AuthenticatedSession | 
       return null;
     }
 
-    if (!session.user.isActive || session.user.role !== 'ADMIN') {
+    if (!session.user.isActive || session.user.role !== 'SUPER_ADMIN') {
       clearSessionCookie(cookieStore);
       return null;
     }
@@ -92,7 +92,7 @@ export async function getAuthenticatedSession(): Promise<AuthenticatedSession | 
         id: session.user.id,
         email: session.user.email,
         name: session.user.name,
-        role: 'ADMIN',
+        role: session.user.role,
       },
       currentSessionId: session.id,
       currentSessionTokenHash: session.tokenHash,

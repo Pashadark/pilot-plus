@@ -13,12 +13,17 @@ function createFleetDatabase() {
   const memberships = new Map<string, { companyId: string; userId: string }>();
   const vehicles = new Map<string, Record<string, unknown>>();
   const vehicleImages = new Map<string, Record<string, unknown>>();
+  const membershipUpserts: Array<{
+    create: Record<string, unknown>;
+    update: Record<string, unknown>;
+  }> = [];
 
   return {
     companies,
     memberships,
     vehicles,
     vehicleImages,
+    membershipUpserts,
     database: {
       company: {
         async upsert(args: {
@@ -37,10 +42,16 @@ function createFleetDatabase() {
       companyMember: {
         async upsert(args: {
           where: { companyId_userId: { companyId: string; userId: string } };
-          create: { companyId: string; userId: string; role: 'ADMIN' };
-          update: { role: 'ADMIN' };
+          create: {
+            companyId: string;
+            userId: string;
+            role: 'COMPANY_ADMIN';
+            additionalPermissions: [];
+          };
+          update: { role: 'COMPANY_ADMIN' };
         }) {
           const key = `${args.where.companyId_userId.companyId}:${args.where.companyId_userId.userId}`;
+          membershipUpserts.push(args);
           memberships.set(key, args.create);
           return { id: key };
         },
@@ -91,6 +102,9 @@ describe('seed автопарка', () => {
     expect(second).toEqual(first);
     expect(fake.companies.size).toBe(1);
     expect(fake.memberships.size).toBe(1);
+    expect(fake.membershipUpserts[0]?.create.role).toBe('COMPANY_ADMIN');
+    expect(fake.membershipUpserts[0]?.create.additionalPermissions).toEqual([]);
+    expect(fake.membershipUpserts[0]?.update.role).toBe('COMPANY_ADMIN');
     expect(fake.vehicles.size).toBe(130);
     expect(fake.vehicles.get('fleet-001')).toMatchObject({
       companyId: 'pilot-demo-company',

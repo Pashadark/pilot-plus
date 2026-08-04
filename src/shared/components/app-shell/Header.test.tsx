@@ -14,7 +14,7 @@ const user = {
   id: 'user-1',
   name: 'Павел Седов',
   email: 'pavel@example.com',
-  role: 'ADMIN' as const,
+  role: 'SUPER_ADMIN' as const,
 };
 
 afterEach(cleanup);

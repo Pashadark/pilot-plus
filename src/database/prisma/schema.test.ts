@@ -16,6 +16,16 @@ const maintenanceStatusPreflight = readFileSync(
 );
 
 describe('доменная схема автопарка', () => {
+  it('описывает роли, точечные разрешения и журнал аудита центра администрирования', () => {
+    expect(schema).toContain('SUPER_ADMIN');
+    expect(schema).toContain('MEMBER');
+    expect(schema).toContain('COMPANY_ADMIN');
+    expect(schema).toContain('additionalPermissions CompanyPermission[]');
+    expect(schema).toContain('model AuditLog {');
+    expect(schema).toContain('actorEmailSnapshot String');
+    expect(schema).toContain('@@index([companyId, createdAt])');
+  });
+
   it('связывает автомобили с компанией и защищает ключ импорта', () => {
     expect(schema).toContain('model Company {');
     expect(schema).toContain('model CompanyMember {');

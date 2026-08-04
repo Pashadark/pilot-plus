@@ -68,7 +68,7 @@ describe('серверная сессия', () => {
         id: 'user-1',
         email: 'admin@example.com',
         name: 'Администратор',
-        role: 'ADMIN',
+        role: 'SUPER_ADMIN',
         isActive: true,
         passwordHash: 'secret-hash',
       },
@@ -78,7 +78,7 @@ describe('серверная сессия', () => {
       id: 'user-1',
       email: 'admin@example.com',
       name: 'Администратор',
-      role: 'ADMIN',
+      role: 'SUPER_ADMIN',
     });
   });
 
@@ -93,7 +93,7 @@ describe('серверная сессия', () => {
         id: 'user-1',
         email: 'admin@example.com',
         name: 'Администратор',
-        role: 'ADMIN',
+        role: 'SUPER_ADMIN',
         isActive: true,
         passwordHash: 'secret-password-hash',
       },
@@ -106,7 +106,7 @@ describe('серверная сессия', () => {
         id: 'user-1',
         email: 'admin@example.com',
         name: 'Администратор',
-        role: 'ADMIN',
+        role: 'SUPER_ADMIN',
       },
       currentSessionId: 'session-1',
       currentSessionTokenHash: 'secret-token-hash',
@@ -151,8 +151,11 @@ describe('серверная сессия', () => {
   });
 
   it.each([
-    ['истёкшую', { expiresAt: new Date(0), isActive: true, role: 'ADMIN' }],
-    ['неактивную', { expiresAt: new Date(Date.now() + 60_000), isActive: false, role: 'ADMIN' }],
+    ['истёкшую', { expiresAt: new Date(0), isActive: true, role: 'SUPER_ADMIN' }],
+    [
+      'неактивную',
+      { expiresAt: new Date(Date.now() + 60_000), isActive: false, role: 'SUPER_ADMIN' },
+    ],
     [
       'не административную',
       { expiresAt: new Date(Date.now() + 60_000), isActive: true, role: 'USER' },

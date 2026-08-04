@@ -54,13 +54,13 @@ describe('действия авторизации', () => {
     ['неизвестный email', null, false, false],
     [
       'неверный пароль',
-      { id: 'u1', isActive: true, role: 'ADMIN', passwordHash: 'hash' },
+      { id: 'u1', isActive: true, role: 'SUPER_ADMIN', passwordHash: 'hash' },
       false,
       false,
     ],
     [
       'неактивный пользователь',
-      { id: 'u1', isActive: false, role: 'ADMIN', passwordHash: 'hash' },
+      { id: 'u1', isActive: false, role: 'SUPER_ADMIN', passwordHash: 'hash' },
       true,
       false,
     ],
@@ -81,7 +81,7 @@ describe('действия авторизации', () => {
     userFindUnique.mockResolvedValue({
       id: 'u1',
       isActive: true,
-      role: 'ADMIN',
+      role: 'SUPER_ADMIN',
       passwordHash: 'hash',
     });
     authMocks.verifyPassword.mockResolvedValue(true);

@@ -9,11 +9,46 @@ datasource db {
 }
 
 enum UserRole {
-  ADMIN
+  SUPER_ADMIN
+  MEMBER
 }
 
 enum CompanyRole {
-  ADMIN
+  COMPANY_ADMIN
+  DISPATCHER
+  DRIVER
+  VIEWER
+}
+
+enum CompanyPermission {
+  MANAGE_USERS
+  MANAGE_ROLES
+  MANAGE_VEHICLES
+  MANAGE_DEVICES
+  MANAGE_DOCUMENTS
+  MANAGE_MAINTENANCE
+  MANAGE_WASH
+  VIEW_REPORTS
+  VIEW_AUDIT
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  ASSIGN
+  BLOCK
+  ARCHIVE
+  DELETE
+}
+
+enum AuditEntityType {
+  COMPANY
+  USER
+  ROLE
+  VEHICLE
+  DEVICE
+  DOCUMENT
+  SYSTEM
 }
 
 enum VehicleStatus {
@@ -121,13 +156,14 @@ model User {
   email               String               @unique
   name                String
   passwordHash        String
-  role                UserRole             @default(ADMIN)
+  role                UserRole             @default(MEMBER)
   isActive            Boolean              @default(true)
   sessions            Session[]
   memberships         CompanyMember[]
   deviceCommands      DeviceCommand[]
   manualVehicleEvents ManualVehicleEvent[]
   eventReadReceipts   EventReadReceipt[]
+  auditLogs           AuditLog[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 }
@@ -161,22 +197,43 @@ model Company {
   deviceCommands      DeviceCommand[]
   manualVehicleEvents ManualVehicleEvent[]
   eventReadReceipts   EventReadReceipt[]
+  auditLogs           AuditLog[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 }
 
 model CompanyMember {
-  id        String      @id @default(cuid())
-  companyId String
-  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      CompanyRole @default(ADMIN)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  id                    String              @id @default(cuid())
+  companyId             String
+  company               Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId                String
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role                  CompanyRole         @default(VIEWER)
+  additionalPermissions CompanyPermission[] @default([])
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
   @@unique([companyId, userId])
   @@index([userId])
+}
+
+model AuditLog {
+  id                 String          @id @default(cuid())
+  companyId          String?
+  company            Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  actorUserId        String?
+  actorUser          User?           @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorEmailSnapshot String
+  action             AuditAction
+  entityType         AuditEntityType
+  entityId           String?
+  entityLabel        String?
+  changes            Json?
+  createdAt          DateTime        @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([entityType, entityId, createdAt])
 }
 
 model Vehicle {

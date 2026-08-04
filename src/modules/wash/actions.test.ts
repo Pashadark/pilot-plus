@@ -17,7 +17,12 @@ import { createWashAction, transitionWashAction } from './actions';
 
 const initialState = { status: 'idle' as const };
 const session = {
-  user: { id: 'user-1', email: 'admin@example.com', name: 'Администратор', role: 'ADMIN' as const },
+  user: {
+    id: 'user-1',
+    email: 'admin@example.com',
+    name: 'Администратор',
+    role: 'SUPER_ADMIN' as const,
+  },
   currentSessionId: 'session-1',
   currentSessionTokenHash: 'token-hash',
   currentSessionExpiresAt: new Date('2026-07-28T00:00:00.000Z'),

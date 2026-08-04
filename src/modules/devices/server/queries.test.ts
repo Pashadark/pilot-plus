@@ -5,7 +5,7 @@ import { createDeviceQueries } from './queries';
 const authenticatedContext = {
   userId: 'admin-1',
   companyId: 'company-1',
-  companyRole: 'ADMIN' as const,
+  companyRole: 'COMPANY_ADMIN' as const,
 };
 
 const firmwareReleases = [

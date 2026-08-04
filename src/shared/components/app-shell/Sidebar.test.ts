@@ -12,7 +12,7 @@ const user = {
   id: 'admin-1',
   name: 'Администратор',
   email: 'admin@pilot.local',
-  role: 'ADMIN' as const,
+  role: 'SUPER_ADMIN' as const,
 };
 const summary = {
   state: 'degraded' as const,

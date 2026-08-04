@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { Prisma } from '@/database/generated/prisma';
+import type { CompanyRole, Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 import { requireAdmin } from '@/modules/auth/dal';
 
@@ -40,7 +40,7 @@ export interface TimelineFilters {
 type AuthenticatedTimelineContext = {
   userId: string;
   companyId: string;
-  companyRole: 'ADMIN';
+  companyRole: CompanyRole;
 };
 
 interface SourceRepository {
@@ -519,9 +519,7 @@ function createSourceSpecs(
     (!filters.categories ||
       filters.categories.has('DEVICE') ||
       filters.categories.has('FIRMWARE')) &&
-    (!filters.severities ||
-      filters.severities.has('INFO') ||
-      filters.severities.has('WARNING'))
+    (!filters.severities || filters.severities.has('INFO') || filters.severities.has('WARNING'))
   ) {
     const common = {
       ...deviceScope(context, filters),
@@ -615,11 +613,7 @@ function matchesScope(event: TimelineEventDto, filters: NormalizedFilters, inclu
   ].some((value) => value?.toLocaleLowerCase('ru-RU').includes(filters.search ?? ''));
 }
 
-async function fillSource(
-  state: SourceState,
-  filters: NormalizedFilters,
-  includeSearch: boolean,
-) {
+async function fillSource(state: SourceState, filters: NormalizedFilters, includeSearch: boolean) {
   while (state.buffer.length === 0 && !state.exhausted) {
     const args = {
       where: state.spec.where,
@@ -708,7 +702,8 @@ async function loadPage(
   const events: TimelineEventDto[] = [];
 
   while (events.length < filters.limit) {
-    const candidateLimit = filters.read === 'all' ? filters.limit - events.length : SOURCE_BATCH_SIZE;
+    const candidateLimit =
+      filters.read === 'all' ? filters.limit - events.length : SOURCE_BATCH_SIZE;
     const candidates = await merged.take(candidateLimit);
     if (candidates.length === 0) break;
 
@@ -862,7 +857,7 @@ export function createEventTimelineQueries(
 async function getAuthenticatedTimelineContext(): Promise<AuthenticatedTimelineContext | null> {
   const user = await requireAdmin();
   const membership = await prisma.companyMember.findFirst({
-    where: { userId: user.id, role: 'ADMIN' },
+    where: { userId: user.id, role: 'COMPANY_ADMIN' },
     select: { companyId: true, role: true },
     orderBy: { createdAt: 'asc' },
   });
@@ -878,7 +873,8 @@ async function getAuthenticatedTimelineContext(): Promise<AuthenticatedTimelineC
 const queries = createEventTimelineQueries(
   {
     vehiclePosition: {
-      findMany: (args) => prisma.vehiclePosition.findMany(args as Prisma.VehiclePositionFindManyArgs),
+      findMany: (args) =>
+        prisma.vehiclePosition.findMany(args as Prisma.VehiclePositionFindManyArgs),
       count: (args) => prisma.vehiclePosition.count(args as Prisma.VehiclePositionCountArgs),
     },
     trip: {
@@ -896,8 +892,7 @@ const queries = createEventTimelineQueries(
     maintenanceRecord: {
       findMany: (args) =>
         prisma.maintenanceRecord.findMany(args as Prisma.MaintenanceRecordFindManyArgs),
-      count: (args) =>
-        prisma.maintenanceRecord.count(args as Prisma.MaintenanceRecordCountArgs),
+      count: (args) => prisma.maintenanceRecord.count(args as Prisma.MaintenanceRecordCountArgs),
     },
     washRecord: {
       findMany: (args) => prisma.washRecord.findMany(args as Prisma.WashRecordFindManyArgs),
@@ -910,8 +905,7 @@ const queries = createEventTimelineQueries(
     manualVehicleEvent: {
       findMany: (args) =>
         prisma.manualVehicleEvent.findMany(args as Prisma.ManualVehicleEventFindManyArgs),
-      count: (args) =>
-        prisma.manualVehicleEvent.count(args as Prisma.ManualVehicleEventCountArgs),
+      count: (args) => prisma.manualVehicleEvent.count(args as Prisma.ManualVehicleEventCountArgs),
     },
     eventReadReceipt: {
       findMany: (args) =>

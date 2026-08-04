@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { Prisma } from '@/database/generated/prisma';
+import type { CompanyRole, Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 import { requireAdmin } from '@/modules/auth/dal';
 
@@ -18,7 +18,7 @@ import type {
 type AuthenticatedDeviceContext = {
   userId: string;
   companyId: string;
-  companyRole: 'ADMIN';
+  companyRole: CompanyRole;
 };
 
 type DevicePageSummary = {
@@ -409,7 +409,7 @@ export function createDeviceQueries(
 async function getAuthenticatedDeviceContext(): Promise<AuthenticatedDeviceContext | null> {
   const user = await requireAdmin();
   const membership = await prisma.companyMember.findFirst({
-    where: { userId: user.id, role: 'ADMIN' },
+    where: { userId: user.id, role: 'COMPANY_ADMIN' },
     select: { companyId: true, role: true },
     orderBy: { createdAt: 'asc' },
   });

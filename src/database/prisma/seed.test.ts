@@ -80,12 +80,12 @@ describe('seedAdmin', () => {
     expect(call?.create).toMatchObject({
       email: 'admin@example.com',
       name: 'Администратор Pilot+',
-      role: 'ADMIN',
+      role: 'SUPER_ADMIN',
       isActive: true,
     });
     expect(call?.update).toMatchObject({
       name: 'Администратор Pilot+',
-      role: 'ADMIN',
+      role: 'SUPER_ADMIN',
       isActive: true,
     });
   });

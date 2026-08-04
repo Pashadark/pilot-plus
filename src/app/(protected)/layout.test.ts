@@ -22,7 +22,7 @@ describe('ProtectedLayout', () => {
       id: 'admin-1',
       name: 'Администратор',
       email: 'admin@pilot.local',
-      role: 'ADMIN',
+      role: 'SUPER_ADMIN',
     });
     mocks.getCachedSystemHealthSummary.mockResolvedValue({
       state: 'healthy',

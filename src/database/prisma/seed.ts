@@ -23,13 +23,13 @@ interface UserRepository {
       email: string;
       name: string;
       passwordHash: string;
-      role: 'ADMIN';
+      role: 'SUPER_ADMIN';
       isActive: true;
     };
     update: {
       name: string;
       passwordHash: string;
-      role: 'ADMIN';
+      role: 'SUPER_ADMIN';
       isActive: true;
     };
   }): Promise<{ id: string }>;
@@ -50,8 +50,13 @@ interface FleetSeedDatabase {
   companyMember: {
     upsert(args: {
       where: { companyId_userId: { companyId: string; userId: string } };
-      create: { companyId: string; userId: string; role: 'ADMIN' };
-      update: { role: 'ADMIN' };
+      create: {
+        companyId: string;
+        userId: string;
+        role: 'COMPANY_ADMIN';
+        additionalPermissions: [];
+      };
+      update: { role: 'COMPANY_ADMIN' };
     }): Promise<unknown>;
   };
   vehicle: {
@@ -113,8 +118,8 @@ export async function seedAdmin(
 
   const user = await database.user.upsert({
     where: { email },
-    create: { email, name, passwordHash, role: 'ADMIN', isActive: true },
-    update: { name, passwordHash, role: 'ADMIN', isActive: true },
+    create: { email, name, passwordHash, role: 'SUPER_ADMIN', isActive: true },
+    update: { name, passwordHash, role: 'SUPER_ADMIN', isActive: true },
   });
 
   return { email, created: existingUser === null, userId: user.id };
@@ -134,8 +139,13 @@ export async function seedFleet(
 
   await database.companyMember.upsert({
     where: { companyId_userId: { companyId: company.id, userId: adminUserId } },
-    create: { companyId: company.id, userId: adminUserId, role: 'ADMIN' },
-    update: { role: 'ADMIN' },
+    create: {
+      companyId: company.id,
+      userId: adminUserId,
+      role: 'COMPANY_ADMIN',
+      additionalPermissions: [],
+    },
+    update: { role: 'COMPANY_ADMIN' },
   });
 
   const imagesBySourceKey = new Map<string, VehicleImageManifestRow[]>();
