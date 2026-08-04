@@ -21,6 +21,8 @@ describe('доменная схема автопарка', () => {
     expect(schema).toContain('MEMBER');
     expect(schema).toContain('COMPANY_ADMIN');
     expect(schema).toContain('additionalPermissions CompanyPermission[]');
+    expect(schema).toContain('VIEW_CLIENTS');
+    expect(schema).toContain('MANAGE_CLIENTS');
     expect(schema).toContain('model AuditLog {');
     expect(schema).toContain('actorEmailSnapshot String');
     expect(schema).toContain('@@index([companyId, createdAt])');

@@ -8,6 +8,8 @@ describe('политика прав компании', () => {
       new Set([
         'MANAGE_USERS',
         'MANAGE_ROLES',
+        'VIEW_CLIENTS',
+        'MANAGE_CLIENTS',
         'MANAGE_VEHICLES',
         'MANAGE_DEVICES',
         'MANAGE_DOCUMENTS',
@@ -20,9 +22,12 @@ describe('политика прав компании', () => {
   });
 
   it.each([
-    ['DISPATCHER', ['MANAGE_MAINTENANCE', 'MANAGE_WASH', 'VIEW_REPORTS']],
+    [
+      'DISPATCHER',
+      ['MANAGE_CLIENTS', 'MANAGE_MAINTENANCE', 'MANAGE_WASH', 'VIEW_CLIENTS', 'VIEW_REPORTS'],
+    ],
     ['DRIVER', []],
-    ['VIEWER', ['VIEW_REPORTS']],
+    ['VIEWER', ['VIEW_CLIENTS', 'VIEW_REPORTS']],
   ] as const)('выдаёт роли %s только безопасный базовый набор', (role, expected) => {
     expect(resolveCompanyPermissions(role, [])).toEqual(new Set(expected));
   });
@@ -40,8 +45,14 @@ describe('политика прав компании', () => {
 
   it('не моделирует системного суперадминистратора через права компании', () => {
     expect(resolveCompanyPermissions('VIEWER', ['VIEW_AUDIT'])).toEqual(
-      new Set(['VIEW_REPORTS', 'VIEW_AUDIT']),
+      new Set(['VIEW_CLIENTS', 'VIEW_REPORTS', 'VIEW_AUDIT']),
     );
     expect([...resolveCompanyPermissions('DRIVER', [])]).not.toContain('SUPER_ADMIN');
+  });
+
+  it('выдаёт клиентские права только согласно ролевой матрице', () => {
+    expect(hasCompanyPermission('DISPATCHER', [], 'MANAGE_CLIENTS')).toBe(true);
+    expect(hasCompanyPermission('VIEWER', [], 'VIEW_CLIENTS')).toBe(true);
+    expect(hasCompanyPermission('DRIVER', [], 'VIEW_CLIENTS')).toBe(false);
   });
 });

@@ -1,0 +1,52 @@
+import 'server-only';
+
+import { prisma } from '@/database/prisma/client';
+import {
+  hasCompanyPermission,
+  type CompanyPermissionValue,
+} from '@/modules/admin/access/permissions';
+import type { SafeUser } from '@/modules/auth/types';
+import { readSession } from '@/services/auth/session';
+
+export type ClientPermission = Extract<CompanyPermissionValue, 'VIEW_CLIENTS' | 'MANAGE_CLIENTS'>;
+
+export interface ClientAccess {
+  user: SafeUser;
+  scope: 'SYSTEM' | 'COMPANY';
+  companyIds: readonly string[];
+  canManage: boolean;
+}
+
+export async function getClientAccess(permission: ClientPermission): Promise<ClientAccess | null> {
+  const user = await readSession();
+  if (!user) return null;
+
+  if (user.role === 'SUPER_ADMIN') {
+    return { user, scope: 'SYSTEM', companyIds: [], canManage: true };
+  }
+
+  const memberships = await prisma.companyMember.findMany({
+    where: { userId: user.id },
+    select: { companyId: true, role: true, additionalPermissions: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  const companyIds = memberships
+    .filter(({ role, additionalPermissions }) =>
+      hasCompanyPermission(role, additionalPermissions, permission),
+    )
+    .map(({ companyId }) => companyId);
+  if (companyIds.length === 0) return null;
+
+  return {
+    user,
+    scope: 'COMPANY',
+    companyIds,
+    canManage: permission === 'MANAGE_CLIENTS',
+  };
+}
+
+export async function requireClientAccess(permission: ClientPermission): Promise<ClientAccess> {
+  const access = await getClientAccess(permission);
+  if (!access) throw new Error('Доступ к клиентам запрещён.');
+  return access;
+}

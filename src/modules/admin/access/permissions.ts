@@ -3,6 +3,8 @@ import type { CompanyRole } from '@/database/generated/prisma';
 export type CompanyPermissionValue =
   | 'MANAGE_USERS'
   | 'MANAGE_ROLES'
+  | 'VIEW_CLIENTS'
+  | 'MANAGE_CLIENTS'
   | 'MANAGE_VEHICLES'
   | 'MANAGE_DEVICES'
   | 'MANAGE_DOCUMENTS'
@@ -14,6 +16,8 @@ export type CompanyPermissionValue =
 const allCompanyPermissions: readonly CompanyPermissionValue[] = [
   'MANAGE_USERS',
   'MANAGE_ROLES',
+  'VIEW_CLIENTS',
+  'MANAGE_CLIENTS',
   'MANAGE_VEHICLES',
   'MANAGE_DEVICES',
   'MANAGE_DOCUMENTS',
@@ -26,12 +30,14 @@ const allCompanyPermissions: readonly CompanyPermissionValue[] = [
 const permissionsByRole: Record<CompanyRole, readonly CompanyPermissionValue[]> = {
   COMPANY_ADMIN: allCompanyPermissions,
   DISPATCHER: [
+    'VIEW_CLIENTS',
+    'MANAGE_CLIENTS',
     'MANAGE_MAINTENANCE',
     'MANAGE_WASH',
     'VIEW_REPORTS',
   ],
   DRIVER: [],
-  VIEWER: ['VIEW_REPORTS'],
+  VIEWER: ['VIEW_CLIENTS', 'VIEW_REPORTS'],
 };
 
 export function resolveCompanyPermissions(
