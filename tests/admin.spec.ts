@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 
 import { prisma } from '../src/database/prisma/client';
-import { SESSION_COOKIE_NAME } from '../src/services/auth/session';
+import { SESSION_COOKIE_NAME } from '../src/services/auth/session-constants';
 import { hashSessionToken } from '../src/services/auth/session-token';
 
 import { openAuthenticatedRoute } from './helpers/auth';
@@ -31,9 +31,9 @@ test('обзор администрирования показывает реа�
     'href',
     '/system',
   );
-  await expect(page.getByRole('button', { name: /добавить компанию|добавить пользователя/i })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole('button', { name: /добавить компанию|добавить пользователя/i }),
+  ).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });
 
@@ -73,9 +73,11 @@ test('MEMBER без company-admin membership получает forbidden state', 
         expiresAt: new Date(Date.now() + 60_000),
       },
     });
-    await page.context().addCookies([
-      { name: SESSION_COOKIE_NAME, value: token, domain: '127.0.0.1', path: '/', httpOnly: true },
-    ]);
+    await page
+      .context()
+      .addCookies([
+        { name: SESSION_COOKIE_NAME, value: token, domain: '127.0.0.1', path: '/', httpOnly: true },
+      ]);
 
     await page.goto('/admin');
     await expect(page.getByRole('heading', { name: 'Доступ ограничен' })).toBeVisible();

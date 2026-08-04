@@ -2,6 +2,8 @@ import 'server-only';
 
 import { cookies } from 'next/headers';
 
+import { SESSION_COOKIE_NAME } from './session-constants';
+
 import { prisma } from '@/database/prisma/client';
 import type { SafeUser } from '@/modules/auth/types';
 
@@ -20,7 +22,7 @@ export interface PreparedSessionRotation {
   readonly expiresAt: Date;
 }
 
-export const SESSION_COOKIE_NAME = 'pilot-session';
+export { SESSION_COOKIE_NAME } from './session-constants';
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const cookieOptions = {
