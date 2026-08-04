@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   AdminOverviewPage: ({ overview }: { overview: { scope: string } }) => <div>{overview.scope}</div>,
-  AppShell: ({ children }: { children: React.ReactNode }) => <div data-testid="app-shell">{children}</div>,
+  AppShell: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="app-shell">{children}</div>
+  ),
   ForbiddenState: () => <div data-testid="forbidden-state" />,
   getAdminCenterAccess: vi.fn(),
   getAdminOverview: vi.fn(),

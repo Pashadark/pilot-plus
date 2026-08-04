@@ -1,6 +1,7 @@
 # Pilot+ Demo Company and Team Design
 
-**Статус:** утверждён к планированию 4 августа 2026 года.
+**Статус:** реализован и проверен 4 августа 2026 года; локальная миграция применена,
+идемпотентный seed и браузерные сценарии пройдены.
 
 ## Цель
 
@@ -45,12 +46,12 @@ Demo-компания получает фиксированные вымышле
 
 Seed создаёт пользователей с системной ролью `MEMBER` и `isActive: false`:
 
-| Имя | Email | Роль компании |
-| --- | --- | --- |
-| Анна Воронцова | `anna.vorontsova@sever-trans.demo` | `COMPANY_ADMIN` |
-| Максим Орлов | `maksim.orlov@sever-trans.demo` | `DISPATCHER` |
-| Дмитрий Соколов | `dmitry.sokolov@sever-trans.demo` | `DRIVER` |
-| Елена Миронова | `elena.mironova@sever-trans.demo` | `VIEWER` |
+| Имя             | Email                              | Роль компании   |
+| --------------- | ---------------------------------- | --------------- |
+| Анна Воронцова  | `anna.vorontsova@sever-trans.demo` | `COMPANY_ADMIN` |
+| Максим Орлов    | `maksim.orlov@sever-trans.demo`    | `DISPATCHER`    |
+| Дмитрий Соколов | `dmitry.sokolov@sever-trans.demo`  | `DRIVER`        |
+| Елена Миронова  | `elena.mironova@sever-trans.demo`  | `VIEWER`        |
 
 Профили не могут войти в систему. Для обязательного `passwordHash` seed записывает безопасный технический hash, который не выводится и не документируется как пароль. Дополнительные разрешения остаются пустыми.
 

@@ -16,6 +16,10 @@ test('обзор администрирования показывает реа�
 
   await expect(page.getByRole('heading', { name: 'Центр управления', level: 1 })).toBeVisible();
   await expect(page.getByTestId('admin-overview-kpi')).toHaveCount(4);
+  await expect(page.getByRole('heading', { name: 'Компании и команда', level: 2 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'ООО «Север Транс Мониторинг»' })).toBeVisible();
+  await expect(page.getByText('2465357184')).toBeVisible();
+  await expect(page.getByTestId('admin-team-list').getByRole('listitem')).toHaveCount(4);
   for (const card of await page.getByTestId('admin-overview-kpi').all()) {
     await expect(card.locator('dd')).toHaveText(/^\d+$/);
   }
@@ -43,6 +47,10 @@ test('обзор администрирования помещается на м
 
   await expect(page.getByRole('heading', { name: 'Центр управления', level: 1 })).toBeVisible();
   await expect(page.getByTestId('admin-overview-kpi')).toHaveCount(4);
+  await expect(page.getByRole('heading', { name: 'Компании и команда', level: 2 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'ООО «Север Транс Мониторинг»' })).toBeVisible();
+  await expect(page.getByText('2465357184')).toBeVisible();
+  await expect(page.getByTestId('admin-team-list').getByRole('listitem')).toHaveCount(4);
   await page.getByRole('button', { name: 'Открыть меню' }).click();
   const drawer = page.getByRole('dialog', { name: 'Мобильная навигация' });
   await expect(drawer.getByRole('link', { name: 'Администрирование' })).toHaveAttribute(

@@ -136,6 +136,7 @@ describe('getAdminOverview', () => {
         email: true,
         isDemo: true,
         members: {
+          where: { user: { role: 'MEMBER' } },
           orderBy: { user: { name: 'asc' } },
           select: {
             role: true,
@@ -213,6 +214,7 @@ describe('getAdminOverview', () => {
         email: true,
         isDemo: true,
         members: {
+          where: { user: { role: 'MEMBER' } },
           orderBy: { user: { name: 'asc' } },
           select: {
             role: true,

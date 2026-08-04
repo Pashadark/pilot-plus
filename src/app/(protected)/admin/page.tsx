@@ -8,7 +8,11 @@ export default async function AdminPage() {
 
   return (
     <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Администрирование' }]}>
-      {access ? <AdminOverviewPage overview={await getAdminOverview(access)} /> : <ForbiddenState />}
+      {access ? (
+        <AdminOverviewPage overview={await getAdminOverview(access)} />
+      ) : (
+        <ForbiddenState />
+      )}
     </AppShell>
   );
 }
