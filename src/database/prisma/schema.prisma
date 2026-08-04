@@ -55,6 +55,7 @@ enum AuditAction {
 
 enum AuditEntityType {
   COMPANY
+  CLIENT
   USER
   ROLE
   VEHICLE

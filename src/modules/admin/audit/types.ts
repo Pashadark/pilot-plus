@@ -10,6 +10,9 @@ export interface WriteAuditLogInput {
   changes?: Readonly<Record<string, unknown>>;
 }
 
+export type ClientAuditChanges =
+  { created: true; status: string } | { status: string } | { archived: true; status: 'ARCHIVED' };
+
 export interface AuditLogItem {
   id: string;
   actorLabel: string;

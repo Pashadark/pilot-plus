@@ -19,3 +19,46 @@ export type ClientInput = {
 
 export type ClientInputResult =
   { ok: true; data: ClientInput } | { ok: false; fieldErrors: Record<string, string> };
+
+export type ClientCardDto = {
+  id: string;
+  companyId: string;
+  fullName: string;
+  email: string | null;
+  phoneMasked: string;
+  passportMasked: string | null;
+  driverLicenseMasked: string | null;
+  driverLicenseExpiresAt: string | null;
+  status: ClientStatus;
+  updatedAt: string;
+};
+
+export type ClientDetailDto = ClientCardDto & {
+  firstName: string;
+  middleName: string | null;
+  lastName: string;
+  birthDate: string | null;
+  phone: string;
+  passport: string | null;
+  driverLicense: string | null;
+  driverLicenseIssuedAt: string | null;
+  createdAt: string;
+};
+
+export type ClientQueryFilters = {
+  q?: string;
+  status?: ClientStatus;
+  page?: number;
+  pageSize?: number;
+};
+
+export type ClientListResult = {
+  items: ClientCardDto[];
+  page: number;
+  pageSize: number;
+};
+
+export type ClientActionState =
+  | { status: 'idle' }
+  | { status: 'success'; message: string; clientId: string }
+  | { status: 'error'; message: string; fieldErrors?: Record<string, string> };
