@@ -19,6 +19,12 @@ test('витрина показывает production-контракты заго
   await expect(page.getByText('Центр уведомлений')).toBeVisible();
 });
 
+test('витрина публикует контракт административного доступа', async ({ page }) => {
+  await expect(page.getByRole('heading', { name: 'Административный доступ' })).toBeVisible();
+  await expect(page.getByText('Суперадминистратор', { exact: true })).toBeVisible();
+  await expect(page.getByText('Администратор компании', { exact: true })).toBeVisible();
+});
+
 test('витрина запускает четыре типа системных уведомлений', async ({ page }) => {
   for (const [button, title] of [
     ['Показать успех', 'Операция выполнена'],

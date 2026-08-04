@@ -88,6 +88,8 @@ import { ConnectionStatus, SpeedIndicator, VehicleMarker } from '@/shared/compon
 import { demoNotifications } from '@/modules/notifications/fixtures';
 import { NotificationCenter } from '@/modules/notifications/NotificationCenter';
 
+import { adminAccessRoles } from './admin-access-showcase';
+
 /* ==========================================================================
    Фото автомобиля
    ========================================================================== */
@@ -1555,6 +1557,36 @@ export function UiKitSections() {
             </div>
           </ExampleCard>
         </div>
+      </KitSectionFull>
+
+      <KitSectionFull
+        id="admin-access"
+        title="Административный доступ"
+        description="Единый production-контрак системной роли, ролей компании и их области действия."
+      >
+        <Card className="p-4">
+          <PageHeader
+            eyebrow="Центр администрирования"
+            title="Роли и области доступа"
+            description="Базовая роль задаёт безопасный набор прав, а отдельные разрешения могут его расширять."
+          />
+          <CardContent className="grid gap-2 p-0 pt-4 sm:grid-cols-2 xl:grid-cols-5">
+            {adminAccessRoles.map((role) => (
+              <div
+                key={role.label}
+                className="flex min-w-0 items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] p-3"
+              >
+                <Avatar name={role.initials} size="sm" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[var(--color-text)]">{role.label}</p>
+                  <Badge size="sm" tone={role.tone}>
+                    {role.scope}
+                  </Badge>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </KitSectionFull>
 
       {/* ================================================================ */}
