@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, symlink, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -12,6 +12,7 @@ type PrivateStorageForTest = {
   promote(uploadId: string, storageKey: string): Promise<void>;
   openPrivate(storageKey: string): Promise<Readable>;
   removePrivate(storageKey: string): Promise<void>;
+  removeStaleQuarantine(before: Date): Promise<number>;
   reserveQuarantine(uploadId: string): Promise<{
     open(): Promise<Readable>;
     promote(storageKey: string): Promise<void>;
@@ -92,6 +93,30 @@ describe('LocalPrivateStorage', () => {
     await expect(storage.openPrivate(finalKey)).rejects.toThrow();
     await expect(storage.removePrivate('../outside')).rejects.toThrow(
       'Ключ приватного хранилища недопустим.',
+    );
+  });
+
+  it('удаляет только age-expired regular quarantine files for crash recovery', async () => {
+    const { root, storage } = await createStorage();
+    await storage.putQuarantine('scan-old-upload', Buffer.from('old'));
+    await storage.putQuarantine('scan-fresh-upload', Buffer.from('fresh'));
+    await storage.putQuarantine('retained-error-upload', Buffer.from('retained'));
+    const old = new Date('2026-08-10T10:00:00.000Z');
+    const fresh = new Date('2026-08-10T10:30:00.000Z');
+    await utimes(join(root, 'quarantine', 'scan-old-upload'), old, old);
+    await utimes(join(root, 'quarantine', 'scan-fresh-upload'), fresh, fresh);
+    await utimes(join(root, 'quarantine', 'retained-error-upload'), old, old);
+
+    await expect(storage.removeStaleQuarantine(new Date('2026-08-10T10:15:00.000Z'))).resolves.toBe(
+      1,
+    );
+
+    await expect(storage.openQuarantine('scan-old-upload')).rejects.toThrow();
+    await expect(readAll(await storage.openQuarantine('scan-fresh-upload'))).resolves.toEqual(
+      Buffer.from('fresh'),
+    );
+    await expect(readAll(await storage.openQuarantine('retained-error-upload'))).resolves.toEqual(
+      Buffer.from('retained'),
     );
   });
 

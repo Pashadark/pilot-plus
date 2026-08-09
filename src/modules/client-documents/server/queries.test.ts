@@ -35,6 +35,7 @@ const cleanDocument = {
       verifiedMime: 'image/jpeg',
       bytes: 6,
       sha256: 'a'.repeat(64),
+      scanVerdict: 'CLEAN',
     },
   ],
 };
@@ -139,6 +140,18 @@ describe('tenant-scoped client document queries', () => {
 
   it.each(['PENDING', 'BLOCKED'] as const)('denies a %s document download', async (status) => {
     const fake = repositoryReturning({ ...cleanDocument, status });
+    const queries = createClientDocumentQueries(fake.repository);
+
+    await expect(
+      queries.getDownloadableClientDocument(viewerAccess, 'client-1', 'document-1'),
+    ).resolves.toBeNull();
+  });
+
+  it('denies download when the current version itself has no CLEAN scan verdict', async () => {
+    const fake = repositoryReturning({
+      ...cleanDocument,
+      versions: [{ ...cleanDocument.versions[0], scanVerdict: 'ERROR' }],
+    });
     const queries = createClientDocumentQueries(fake.repository);
 
     await expect(

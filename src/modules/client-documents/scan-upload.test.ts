@@ -27,6 +27,7 @@ function createStorage(bytes: Buffer) {
     promote: vi.fn(),
     openPrivate: vi.fn(),
     removePrivate: vi.fn(),
+    removeStaleQuarantine: vi.fn(),
     reserveQuarantine: vi.fn(async () => snapshot),
   };
   return { storage, snapshot };
@@ -114,6 +115,7 @@ describe('scanPendingUpload', () => {
       promote: vi.fn(),
       openPrivate: vi.fn(),
       removePrivate: vi.fn(),
+      removeStaleQuarantine: vi.fn(),
       reserveQuarantine: vi.fn(async () => snapshot),
     };
     const scanner = {
@@ -157,6 +159,7 @@ describe('scanPendingUpload', () => {
       promote: vi.fn(),
       openPrivate: vi.fn(),
       removePrivate: vi.fn(),
+      removeStaleQuarantine: vi.fn(),
       reserveQuarantine: vi.fn(async () => snapshot),
     };
     const scanner = new ClamAvClient({ host: '127.0.0.1', port: 1, timeoutMs: 50 });

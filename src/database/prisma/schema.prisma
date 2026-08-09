@@ -333,25 +333,27 @@ model ClientDocument {
 }
 
 model ClientDocumentVersion {
-  id               String         @id @default(cuid())
-  documentId       String
-  document         ClientDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  uploadId         String?        @unique
-  version          Int
-  storageKey       String         @unique
-  originalName     String
-  verifiedMime     String
-  bytes            Int
-  sha256           String
-  scanEngine       String?
-  signatureVersion String?
-  scanVerdict      String?
-  scannedAt        DateTime?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  id                 String         @id @default(cuid())
+  documentId         String
+  document           ClientDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploadId           String?        @unique
+  version            Int
+  storageKey         String         @unique
+  originalName       String
+  verifiedMime       String
+  bytes              Int
+  sha256             String
+  scanEngine         String?
+  signatureVersion   String?
+  scanVerdict        String?
+  scanLeaseExpiresAt DateTime?
+  scannedAt          DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
   @@unique([documentId, version])
   @@index([documentId, createdAt])
+  @@index([scanVerdict, scanLeaseExpiresAt])
 }
 
 model AuditLog {

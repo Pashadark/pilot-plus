@@ -15,6 +15,7 @@ import {
   type ScanPendingUploadResult,
 } from '@/modules/client-documents/scan-upload';
 import type { ClientDocumentActionState } from '@/modules/client-documents/types';
+import { newScanLeaseExpiresAt } from '@/modules/client-documents/server/recovery-policy';
 import { getClientAccess, type ClientAccess } from '@/modules/clients/access';
 import { ClamAvClient } from '@/services/malware-scanner/clamav-client';
 import { LocalPrivateStorage } from '@/services/storage/local-private-storage';
@@ -32,6 +33,8 @@ const documentCategories = new Set<ClientDocumentCategory>([
 const safeIdentifier = /^[a-zA-Z0-9_-]{1,128}$/u;
 const uploadIdentifier = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const maxActiveDocuments = 20;
+const serializableAttempts = 3;
+const cleanupRetryMs = 5 * 60_000;
 const safeFileErrors = new Set([
   'Выберите файл для загрузки.',
   'Размер файла не должен превышать 15 МБ.',
@@ -72,6 +75,23 @@ type UploadRecord = {
   uploadId: string;
   storageKey: string;
 };
+
+function hasPrismaCode(error: unknown, code: string) {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
+}
+
+async function runSerializableTransaction<T>(
+  operation: (transaction: Prisma.TransactionClient) => Promise<T>,
+) {
+  for (let attempt = 1; attempt <= serializableAttempts; attempt += 1) {
+    try {
+      return await prisma.$transaction(operation, { isolationLevel: 'Serializable' });
+    } catch (error) {
+      if (!hasPrismaCode(error, 'P2034') || attempt === serializableAttempts) throw error;
+    }
+  }
+  throw new Error('Транзакция не завершена.');
+}
 
 function formString(formData: FormData, field: string) {
   const value = formData.get(field);
@@ -240,65 +260,63 @@ async function createNewUpload(
   verified: { mime: string; extension: string; bytes: number },
   hash: string,
 ): Promise<UploadRecord | ClientDocumentActionState> {
-  return prisma.$transaction(
-    async (transaction) => {
-      const count = await transaction.clientDocument.count({
-        where: {
-          companyId: client.companyId,
-          clientId: client.id,
-          archivedAt: null,
-          status: { not: 'ARCHIVED' },
-        },
-      });
-      if (count >= maxActiveDocuments) {
-        return {
-          status: 'error',
-          message: 'У клиента уже есть 20 активных документов.',
-        } satisfies ClientDocumentActionState;
-      }
-
-      const document = await transaction.clientDocument.create({
-        data: {
-          companyId: client.companyId,
-          clientId: client.id,
-          category: metadata.category,
-          title: metadata.title,
-          numberEncrypted: metadata.numberEncrypted,
-          issuedAt: metadata.issuedAt,
-          expiresAt: metadata.expiresAt,
-          status: 'UPLOADING',
-          currentVersion: 1,
-          createdByUserId: access.user.id,
-        },
-        select: { id: true, companyId: true, currentVersion: true },
-      });
-      const storageKey = documentStorageKey(client, document.id, 1, verified.extension);
-      const version = await transaction.clientDocumentVersion.create({
-        data: {
-          documentId: document.id,
-          uploadId,
-          version: 1,
-          storageKey,
-          originalName: originalName(file),
-          verifiedMime: verified.mime,
-          bytes: verified.bytes,
-          sha256: hash,
-        },
-        select: { id: true },
-      });
-      return {
-        documentId: document.id,
+  return runSerializableTransaction(async (transaction) => {
+    const count = await transaction.clientDocument.count({
+      where: {
         companyId: client.companyId,
         clientId: client.id,
-        versionId: version.id,
-        version: 1,
-        previousVersion: null,
+        archivedAt: null,
+        status: { not: 'ARCHIVED' },
+      },
+    });
+    if (count >= maxActiveDocuments) {
+      return {
+        status: 'error',
+        message: 'У клиента уже есть 20 активных документов.',
+      } satisfies ClientDocumentActionState;
+    }
+
+    const document = await transaction.clientDocument.create({
+      data: {
+        companyId: client.companyId,
+        clientId: client.id,
+        category: metadata.category,
+        title: metadata.title,
+        numberEncrypted: metadata.numberEncrypted,
+        issuedAt: metadata.issuedAt,
+        expiresAt: metadata.expiresAt,
+        status: 'UPLOADING',
+        currentVersion: 1,
+        createdByUserId: access.user.id,
+      },
+      select: { id: true, companyId: true, currentVersion: true },
+    });
+    const storageKey = documentStorageKey(client, document.id, 1, verified.extension);
+    const version = await transaction.clientDocumentVersion.create({
+      data: {
+        documentId: document.id,
         uploadId,
+        version: 1,
         storageKey,
-      } satisfies UploadRecord;
-    },
-    { isolationLevel: 'Serializable' },
-  );
+        originalName: originalName(file),
+        verifiedMime: verified.mime,
+        bytes: verified.bytes,
+        sha256: hash,
+        scanLeaseExpiresAt: newScanLeaseExpiresAt(),
+      },
+      select: { id: true },
+    });
+    return {
+      documentId: document.id,
+      companyId: client.companyId,
+      clientId: client.id,
+      versionId: version.id,
+      version: 1,
+      previousVersion: null,
+      uploadId,
+      storageKey,
+    } satisfies UploadRecord;
+  });
 }
 
 async function createReplacementUpload(
@@ -311,28 +329,39 @@ async function createReplacementUpload(
   hash: string,
 ): Promise<UploadRecord | null> {
   if (!safeIdentifier.test(documentId)) return null;
-  const document = await prisma.clientDocument.findFirst({
-    where: {
-      id: documentId,
-      ...(allowedCompanyWhere(access) ? { companyId: allowedCompanyWhere(access) } : {}),
-      clientId: client.id,
-      archivedAt: null,
-      status: { not: 'ARCHIVED' },
-    },
-    select: {
-      id: true,
-      companyId: true,
-      clientId: true,
-      currentVersion: true,
-      status: true,
-      versions: { orderBy: { version: 'desc' }, take: 1, select: { version: true } },
-    },
-  });
-  if (!document || document.companyId !== client.companyId) return null;
-  const nextVersion = (document.versions[0]?.version ?? document.currentVersion) + 1;
-  const storageKey = documentStorageKey(client, document.id, nextVersion, verified.extension);
-
-  return prisma.$transaction(async (transaction) => {
+  return runSerializableTransaction(async (transaction) => {
+    const document = await transaction.clientDocument.findFirst({
+      where: {
+        id: documentId,
+        ...(allowedCompanyWhere(access) ? { companyId: allowedCompanyWhere(access) } : {}),
+        clientId: client.id,
+        archivedAt: null,
+        status: 'CLEAN',
+      },
+      select: {
+        id: true,
+        companyId: true,
+        clientId: true,
+        currentVersion: true,
+        status: true,
+        versions: {
+          orderBy: { version: 'desc' },
+          select: { version: true, scanVerdict: true },
+        },
+      },
+    });
+    if (!document || document.companyId !== client.companyId) return null;
+    const current = document.versions.find(
+      (version) => version.version === document.currentVersion,
+    );
+    if (
+      current?.scanVerdict !== 'CLEAN' ||
+      document.versions.some((version) => version.scanVerdict === null)
+    ) {
+      return null;
+    }
+    const nextVersion = (document.versions[0]?.version ?? document.currentVersion) + 1;
+    const storageKey = documentStorageKey(client, document.id, nextVersion, verified.extension);
     const version = await transaction.clientDocumentVersion.create({
       data: {
         documentId: document.id,
@@ -343,6 +372,7 @@ async function createReplacementUpload(
         verifiedMime: verified.mime,
         bytes: verified.bytes,
         sha256: hash,
+        scanLeaseExpiresAt: newScanLeaseExpiresAt(),
       },
       select: { id: true },
     });
@@ -366,12 +396,18 @@ async function finalizeUpload(
 ) {
   return prisma.$transaction(async (transaction) => {
     const version = await transaction.clientDocumentVersion.updateMany({
-      where: { id: upload.versionId, documentId: upload.documentId, uploadId: upload.uploadId },
+      where: {
+        id: upload.versionId,
+        documentId: upload.documentId,
+        uploadId: upload.uploadId,
+        scanVerdict: null,
+      },
       data: {
         sha256: result.audit.sha256,
         scanEngine: result.audit.engine ?? 'ClamAV',
         signatureVersion: result.audit.signatureVersion ?? null,
         scanVerdict: result.status,
+        scanLeaseExpiresAt: null,
         scannedAt: new Date(),
       },
     });
@@ -395,6 +431,7 @@ async function finalizeUpload(
           companyId: upload.companyId,
           clientId: upload.clientId,
           currentVersion: upload.previousVersion,
+          status: 'CLEAN',
           archivedAt: null,
         },
         data: { currentVersion: upload.version, status: 'CLEAN' },
@@ -430,36 +467,123 @@ async function compensateFailedFinalization(
   storage: PrivateStorage,
   upload: UploadRecord,
   result: ScanPendingUploadResult,
-) {
-  if (result.status === 'CLEAN') {
-    await storage.removePrivate(upload.storageKey).catch(() => undefined);
-  } else if (result.status === 'ERROR') {
-    await storage.removeQuarantine(upload.uploadId).catch(() => undefined);
-  }
-
-  await prisma
-    .$transaction(async (transaction) => {
-      if (upload.previousVersion === null) {
-        await transaction.clientDocument.deleteMany({
-          where: {
-            id: upload.documentId,
-            companyId: upload.companyId,
-            clientId: upload.clientId,
-            currentVersion: upload.version,
-          },
-        });
-        return;
-      }
-      await transaction.clientDocumentVersion.deleteMany({
+): Promise<ScanPendingUploadResult['status'] | null> {
+  const cleanupRetryAt = new Date(Date.now() + cleanupRetryMs);
+  let claimed: boolean;
+  try {
+    claimed = await prisma.$transaction(async (transaction) => {
+      const version = await transaction.clientDocumentVersion.updateMany({
         where: {
           id: upload.versionId,
           documentId: upload.documentId,
           uploadId: upload.uploadId,
           version: upload.version,
+          scanVerdict: null,
+          document: {
+            companyId: upload.companyId,
+            clientId: upload.clientId,
+            archivedAt: null,
+          },
+        },
+        data: {
+          scanVerdict: 'ERROR',
+          scannedAt: new Date(),
+          scanLeaseExpiresAt: cleanupRetryAt,
         },
       });
+      if (version.count !== 1) return false;
+
+      if (upload.previousVersion === null) {
+        const document = await transaction.clientDocument.updateMany({
+          where: {
+            id: upload.documentId,
+            companyId: upload.companyId,
+            clientId: upload.clientId,
+            currentVersion: upload.version,
+            status: { in: ['UPLOADING', 'PENDING'] },
+            archivedAt: null,
+          },
+          data: { status: 'ERROR' },
+        });
+        if (document.count !== 1) throw new Error('Состояние документа изменилось.');
+      }
+      return true;
+    });
+  } catch {
+    claimed = false;
+  }
+
+  if (!claimed) {
+    const committed = await prisma.clientDocumentVersion
+      .findFirst({
+        where: {
+          id: upload.versionId,
+          documentId: upload.documentId,
+          uploadId: upload.uploadId,
+          version: upload.version,
+          document: {
+            companyId: upload.companyId,
+            clientId: upload.clientId,
+            archivedAt: null,
+          },
+        },
+        select: {
+          scanVerdict: true,
+          document: { select: { currentVersion: true, status: true } },
+        },
+      })
+      .catch(() => null);
+    if (!committed) return null;
+    if (
+      committed.scanVerdict === 'CLEAN' &&
+      committed.document.currentVersion === upload.version &&
+      committed.document.status === 'CLEAN'
+    ) {
+      return 'CLEAN';
+    }
+    if (committed.scanVerdict === 'BLOCKED' || committed.scanVerdict === 'ERROR') {
+      const documentMatches =
+        upload.previousVersion === null
+          ? committed.document.currentVersion === upload.version &&
+            committed.document.status === committed.scanVerdict
+          : committed.document.currentVersion === upload.previousVersion &&
+            committed.document.status === 'CLEAN';
+      return documentMatches ? committed.scanVerdict : null;
+    }
+    return null;
+  }
+
+  let cleanupSucceeded = true;
+  if (result.status === 'CLEAN') {
+    cleanupSucceeded = await storage
+      .removePrivate(upload.storageKey)
+      .then(() => true)
+      .catch(() => false);
+  } else if (result.status === 'ERROR') {
+    cleanupSucceeded = await storage
+      .removeQuarantine(upload.uploadId)
+      .then(() => true)
+      .catch(() => false);
+  }
+
+  await prisma.clientDocumentVersion
+    .updateMany({
+      where: {
+        id: upload.versionId,
+        documentId: upload.documentId,
+        uploadId: upload.uploadId,
+        version: upload.version,
+        scanVerdict: 'ERROR',
+        document: {
+          companyId: upload.companyId,
+          clientId: upload.clientId,
+          archivedAt: null,
+        },
+      },
+      data: { scanLeaseExpiresAt: cleanupSucceeded ? null : cleanupRetryAt },
     })
     .catch(() => undefined);
+  return null;
 }
 
 function resultState(
@@ -480,7 +604,7 @@ function resultState(
 }
 
 function isUniqueConflict(error: unknown) {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
+  return hasPrismaCode(error, 'P2002');
 }
 
 function safeFileErrorState(error: unknown): ClientDocumentActionState | null {
@@ -533,24 +657,44 @@ export async function uploadClientDocumentAction(
       await storage.putQuarantine(uploadId, bytes);
     } catch {
       const failed = { status: 'ERROR', audit: { sha256: hash, verdict: 'ERROR' } } as const;
-      await finalizeUpload(access, upload, failed);
+      try {
+        await finalizeUpload(access, upload, failed);
+      } catch {
+        const committed = await compensateFailedFinalization(storage, upload, failed);
+        if (committed) return duplicateState(committed, upload.documentId);
+      }
       return uploadError;
     }
 
     let scanResult: ScanPendingUploadResult;
     try {
-      if (upload.previousVersion === null) {
-        const pending = await prisma.clientDocument.updateMany({
+      await prisma.$transaction(async (transaction) => {
+        const leased = await transaction.clientDocumentVersion.updateMany({
           where: {
-            id: upload.documentId,
-            companyId: upload.companyId,
-            currentVersion: upload.version,
-            status: 'UPLOADING',
+            id: upload.versionId,
+            documentId: upload.documentId,
+            uploadId: upload.uploadId,
+            scanVerdict: null,
           },
-          data: { status: 'PENDING' },
+          data: { scanLeaseExpiresAt: newScanLeaseExpiresAt() },
         });
-        if (pending.count !== 1) throw new Error('Состояние документа изменилось.');
-      }
+        if (leased.count !== 1) throw new Error('Состояние версии документа изменилось.');
+
+        if (upload.previousVersion === null) {
+          const pending = await transaction.clientDocument.updateMany({
+            where: {
+              id: upload.documentId,
+              companyId: upload.companyId,
+              clientId: upload.clientId,
+              currentVersion: upload.version,
+              status: 'UPLOADING',
+              archivedAt: null,
+            },
+            data: { status: 'PENDING' },
+          });
+          if (pending.count !== 1) throw new Error('Состояние документа изменилось.');
+        }
+      });
       scanResult = await scanPendingUpload({
         storage,
         scanner,
@@ -563,7 +707,8 @@ export async function uploadClientDocumentAction(
     try {
       await finalizeUpload(access, upload, scanResult);
     } catch {
-      await compensateFailedFinalization(storage, upload, scanResult);
+      const committed = await compensateFailedFinalization(storage, upload, scanResult);
+      if (committed) return duplicateState(committed, upload.documentId);
       return uploadError;
     }
     revalidatePath(`/clients/${client.id}`);
@@ -655,10 +800,10 @@ export async function uploadClientPhotoAction(
       uploadId,
       storageKey: sourceStorageKey,
     });
+    await prisma.$transaction((transaction) =>
+      auditPhotoScan(access, client, scanResult, transaction),
+    );
     if (scanResult.status !== 'CLEAN') {
-      await prisma.$transaction((transaction) =>
-        auditPhotoScan(access, client, scanResult, transaction),
-      );
       return resultState(scanResult, client.id);
     }
 
@@ -683,7 +828,6 @@ export async function uploadClientPhotoAction(
         data: { photoPath: finalStorageKey },
       });
       if (result.count !== 1) return false;
-      await auditPhotoScan(access, client, scanResult, transaction);
       return true;
     });
     if (!updated) {

@@ -164,9 +164,104 @@ exit 0
 - `uploadId` намеренно nullable для совместимости rolling deployment. После выката всех
   инстансов нужен отдельный контролируемый backfill, затем отдельная будущая миграция
   `SET NOT NULL`; эта Task 3 migration этого не делает.
-- Storage/DB compensation является best-effort при редком одновременном отказе обоих
-  слоёв. Долгосрочно полезен durable reconciliation worker/runbook для abandoned
-  quarantine/final objects.
+- Durable reconciliation реализован, но его периодический запуск остаётся обязанностью
+  внешнего production scheduler согласно runbook; встроенной cron-зависимости нет.
 - Build проходит, но сохраняет существующие предупреждения Next.js о нескольких
   lockfiles/workspace root и широком NFT trace. Prisma также предупреждает о будущем
   переносе package configuration в `prisma.config.ts`.
+
+## Исправления по external review — crash/race boundaries
+
+### RED
+
+До production-изменений добавлены regression-тесты на три Important и Minor boundaries:
+
+```text
+npx vitest run <actions, queries, reconciliation, storage, schema>
+Test Files  5 failed (5)
+Tests       9 failed | 40 passed (49)
+```
+
+Падения подтвердили:
+
+- replacement принимал исходный PENDING и мог создать v2 до CLEAN v1;
+- проигравшая finalization удаляла persistent idempotency row;
+- putQuarantine + audit/finalize failure оставляли незавершённое состояние;
+- P2034 не повторялся;
+- download не проверял verdict exact current version;
+- CLEAN photo audit терялся при ошибке Sharp;
+- отсутствовали scan lease migration, age-based storage cleanup и reconciliation module.
+
+Отдельный controlled RED для upper bound P2034 при временном лимите 4 дал ожидаемое
+`expected 3 calls, got 4`; после возврата production-лимита 3 тест стал GREEN.
+
+После первого исправления independent review нашёл ambiguous-COMMIT boundary. RED
+симулировал применённый final transaction с потерянным acknowledgement: action ошибочно
+возвращал generic error и мог удалить committed CLEAN object. Дополнительные RED отдельно
+подтвердили отсутствие SHA в recovery audit и безопасного actionable CLI formatter.
+
+### GREEN implementation
+
+- Replacement создаётся только внутри Serializable transaction, только для документа со
+  статусом CLEAN, exact current `scanVerdict=CLEAN` и без другой pending version.
+- Final document switch guard включает прежнюю CLEAN currentVersion и status CLEAN.
+- Compensation сначала transactionally claims только собственную `scanVerdict=null`
+  версию в ERROR под document/company/client guards. Storage удаляется только при
+  успешном claim. При `count=0` committed result перечитывается; committed CLEAN
+  сохраняется и возвращается как idempotent success.
+- putQuarantine failure проходит через тот же finalize/claim-before-cleanup protocol.
+- Serializable P2034 повторяется не более трёх раз до любого storage write.
+- `scanLeaseExpiresAt` добавлен nullable add-only migration. Новые UPLOADING/PENDING
+  версии получают configurable lease; legacy rolling rows без lease используют createdAt.
+- `npm run client-documents:reconcile` bounded batch переводит stale row fail-closed в
+  ERROR, не переключает CLEAN replacement, пишет tenant-scoped system SCAN audit с SHA и
+  повторяет неудавшуюся storage cleanup по retry lease.
+- Age sweep удаляет только внутренние orphan `scan-*`/`normalized-*`, не штатные ERROR
+  quarantine uploads. Runbook фиксирует запуск, порог 15 минут (границы 5 минут–24 часа)
+  и exit codes.
+- Download требует CLEAN и у документа, и у exact current version.
+- CLEAN photo scan аудируется до Sharp normalization/promotion.
+- CLI failure message содержит безопасные проверки `DATABASE_URL`,
+  `PRIVATE_STORAGE_ROOT`, прав storage и доступности БД, но не caught path/secret.
+
+Созданы дополнительно:
+
+- `src/database/prisma/migrations/20260810150000_add_client_document_scan_lease/migration.sql`
+- `src/modules/client-documents/server/recovery-policy.ts`
+- `src/modules/client-documents/server/recovery-policy.test.ts`
+- `src/modules/client-documents/server/reconcile-stale-uploads.ts`
+- `src/modules/client-documents/server/reconcile-stale-uploads.test.ts`
+- `scripts/reconcile-client-document-uploads.ts`
+- `docs/runbooks/client-document-upload-reconciliation.md`
+
+### Final verification after external review fixes
+
+```text
+npm run test:unit
+Test Files  116 passed (116)
+Tests       597 passed (597)
+```
+
+```text
+npm run typecheck
+exit 0
+
+npm run lint
+exit 0 — 0 errors; 2 existing no-img-element warnings outside Task 3
+
+npx prisma validate
+The schema ... is valid
+
+npm run build
+Next.js 16.2.10 — compiled, typechecked and generated successfully
+
+npx prettier --check <Task 3 files>
+All matched files use Prettier code style!
+
+git diff --check
+exit 0
+```
+
+Финальный независимый review: Critical 0, Important 0, Minor 0, verdict Ready.
+
+Миграции и seed к общей БД не применялись. Старые client-core migrations не изменялись.

@@ -120,7 +120,7 @@ describe('client document upload authorization and workflow', () => {
       clientId: 'client-1',
       currentVersion: 1,
       status: 'CLEAN',
-      versions: [{ version: 1 }],
+      versions: [{ version: 1, scanVerdict: 'CLEAN' }],
     });
     mocks.repository.clientDocument.count.mockResolvedValue(0);
     mocks.repository.clientDocument.create.mockResolvedValue({
@@ -141,6 +141,7 @@ describe('client document upload authorization and workflow', () => {
     mocks.storageCreate.mockResolvedValue(mocks.storage);
     mocks.storage.putQuarantine.mockResolvedValue(undefined);
     mocks.storage.promote.mockResolvedValue(undefined);
+    mocks.storage.removeQuarantine.mockResolvedValue(undefined);
     mocks.storage.removePrivate.mockResolvedValue(undefined);
     mocks.scannerFromEnvironment.mockReturnValue({ scanStream: vi.fn() });
     mocks.scanPendingUpload.mockResolvedValue({
@@ -245,7 +246,7 @@ describe('client document upload authorization and workflow', () => {
         companyId: { in: ['company-1'] },
         clientId: 'client-1',
         archivedAt: null,
-        status: { not: 'ARCHIVED' },
+        status: 'CLEAN',
       },
       select: expect.objectContaining({ currentVersion: true }),
     });
@@ -255,6 +256,7 @@ describe('client document upload authorization and workflow', () => {
         companyId: 'company-1',
         clientId: 'client-1',
         currentVersion: 1,
+        status: 'CLEAN',
         archivedAt: null,
       },
       data: { currentVersion: 2, status: 'CLEAN' },
@@ -267,6 +269,126 @@ describe('client document upload authorization and workflow', () => {
       }),
       select: { id: true },
     });
+    expect(mocks.repository.clientDocumentVersion.updateMany).toHaveBeenLastCalledWith({
+      where: {
+        id: 'version-1',
+        documentId: 'document-1',
+        uploadId: '223e4567-e89b-42d3-a456-426614174000',
+        scanVerdict: null,
+      },
+      data: expect.objectContaining({ scanVerdict: 'CLEAN', scanLeaseExpiresAt: null }),
+    });
+  });
+
+  it('denies a replacement racing an initial PENDING upload before creating version 2', async () => {
+    mocks.repository.clientDocument.findFirst.mockResolvedValue({
+      id: 'document-1',
+      companyId: 'company-1',
+      clientId: 'client-1',
+      currentVersion: 1,
+      status: 'PENDING',
+      versions: [{ version: 1, scanVerdict: null }],
+    });
+
+    await expect(
+      uploadClientDocumentAction(
+        initialState,
+        uploadForm({ documentId: 'document-1', uploadId: '223e4567-e89b-42d3-a456-426614174000' }),
+      ),
+    ).resolves.toEqual({
+      status: 'error',
+      message: 'Документ недоступен для замены.',
+    });
+
+    expect(mocks.repository.clientDocumentVersion.create).not.toHaveBeenCalled();
+    expect(mocks.storage.putQuarantine).not.toHaveBeenCalled();
+  });
+
+  it('marks only its losing replacement ERROR while preserving current CLEAN and idempotency', async () => {
+    mocks.repository.clientDocument.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      uploadClientDocumentAction(
+        initialState,
+        uploadForm({ documentId: 'document-1', uploadId: '223e4567-e89b-42d3-a456-426614174000' }),
+      ),
+    ).resolves.toEqual({
+      status: 'error',
+      message: 'Не удалось загрузить файл. Попробуйте позже.',
+    });
+
+    expect(mocks.storage.removePrivate).toHaveBeenCalledWith(
+      'companies/company-1/clients/client-1/documents/document-1/2.jpg',
+    );
+    expect(mocks.repository.clientDocumentVersion.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.repository.clientDocumentVersion.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'version-1',
+        documentId: 'document-1',
+        uploadId: '223e4567-e89b-42d3-a456-426614174000',
+        version: 2,
+        scanVerdict: null,
+        document: {
+          companyId: 'company-1',
+          clientId: 'client-1',
+          archivedAt: null,
+        },
+      },
+      data: expect.objectContaining({
+        scanVerdict: 'ERROR',
+        scanLeaseExpiresAt: expect.any(Date),
+      }),
+    });
+  });
+
+  it('preserves a committed CLEAN replacement when the transaction acknowledgement is lost', async () => {
+    let transactionNumber = 0;
+    mocks.repository.$transaction.mockImplementation(
+      async (operation: (transaction: typeof mocks.repository) => unknown) => {
+        transactionNumber += 1;
+        const result = await operation(mocks.repository);
+        if (transactionNumber === 3) throw new Error('commit acknowledgement lost');
+        return result;
+      },
+    );
+    mocks.repository.clientDocumentVersion.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 });
+    mocks.repository.clientDocumentVersion.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        scanVerdict: 'CLEAN',
+        document: { currentVersion: 2, status: 'CLEAN' },
+      });
+
+    await expect(
+      uploadClientDocumentAction(
+        initialState,
+        uploadForm({ documentId: 'document-1', uploadId: '223e4567-e89b-42d3-a456-426614174000' }),
+      ),
+    ).resolves.toEqual({
+      status: 'success',
+      message: 'Файл уже загружен.',
+      documentId: 'document-1',
+    });
+
+    expect(mocks.repository.clientDocumentVersion.updateMany).toHaveBeenLastCalledWith({
+      where: {
+        id: 'version-1',
+        documentId: 'document-1',
+        uploadId: '223e4567-e89b-42d3-a456-426614174000',
+        version: 2,
+        scanVerdict: null,
+        document: {
+          companyId: 'company-1',
+          clientId: 'client-1',
+          archivedAt: null,
+        },
+      },
+      data: expect.objectContaining({ scanVerdict: 'ERROR' }),
+    });
+    expect(mocks.storage.removePrivate).not.toHaveBeenCalled();
   });
 
   it('returns a safe Russian error without exposing a storage path', async () => {
@@ -282,6 +404,67 @@ describe('client document upload authorization and workflow', () => {
     });
     expect(JSON.stringify(result)).not.toContain('private');
     expect(JSON.stringify(result)).not.toContain('secret.jpg');
+  });
+
+  it('compensates its durable row when quarantine write and ERROR audit finalization both fail', async () => {
+    mocks.storage.putQuarantine.mockRejectedValueOnce(new Error('disk unavailable'));
+    mocks.writeAuditLog.mockRejectedValueOnce(new Error('audit unavailable'));
+
+    await expect(uploadClientDocumentAction(initialState, uploadForm())).resolves.toEqual({
+      status: 'error',
+      message: 'Не удалось загрузить файл. Попробуйте позже.',
+    });
+
+    expect(mocks.storage.removeQuarantine).toHaveBeenCalledWith(
+      '123e4567-e89b-42d3-a456-426614174000',
+    );
+    expect(mocks.repository.clientDocument.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.repository.clientDocumentVersion.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'version-1',
+        documentId: 'document-1',
+        uploadId: '123e4567-e89b-42d3-a456-426614174000',
+        version: 1,
+        scanVerdict: null,
+        document: {
+          companyId: 'company-1',
+          clientId: 'client-1',
+          archivedAt: null,
+        },
+      },
+      data: expect.objectContaining({
+        scanVerdict: 'ERROR',
+        scanLeaseExpiresAt: expect.any(Date),
+      }),
+    });
+  });
+
+  it('retries a bounded Serializable P2034 conflict before writing storage', async () => {
+    mocks.repository.$transaction.mockRejectedValueOnce(
+      Object.assign(new Error('serialization conflict'), { code: 'P2034' }),
+    );
+
+    await expect(uploadClientDocumentAction(initialState, uploadForm())).resolves.toMatchObject({
+      status: 'success',
+      documentId: 'document-1',
+    });
+
+    expect(mocks.repository.clientDocument.create).toHaveBeenCalledOnce();
+    expect(mocks.storage.putQuarantine).toHaveBeenCalledOnce();
+  });
+
+  it('stops after three Serializable P2034 conflicts without writing storage', async () => {
+    mocks.repository.$transaction.mockRejectedValue(
+      Object.assign(new Error('serialization conflict'), { code: 'P2034' }),
+    );
+
+    await expect(uploadClientDocumentAction(initialState, uploadForm())).resolves.toEqual({
+      status: 'error',
+      message: 'Не удалось загрузить файл. Попробуйте позже.',
+    });
+
+    expect(mocks.repository.$transaction).toHaveBeenCalledTimes(3);
+    expect(mocks.storage.putQuarantine).not.toHaveBeenCalled();
   });
 
   it('returns the safe magic-byte validation reason to the user', async () => {
@@ -372,18 +555,29 @@ describe('client document upload authorization and workflow', () => {
     expect(mocks.storage.removePrivate).toHaveBeenCalledWith(
       'companies/company-1/clients/client-1/documents/document-1/1.jpg',
     );
-    expect(mocks.repository.clientDocument.deleteMany).toHaveBeenCalledWith({
+    expect(mocks.repository.clientDocument.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.repository.clientDocumentVersion.updateMany).toHaveBeenCalledWith({
       where: {
-        id: 'document-1',
-        companyId: 'company-1',
-        clientId: 'client-1',
-        currentVersion: 1,
+        id: 'version-1',
+        documentId: 'document-1',
+        uploadId: '123e4567-e89b-42d3-a456-426614174000',
+        version: 1,
+        scanVerdict: null,
+        document: {
+          companyId: 'company-1',
+          clientId: 'client-1',
+          archivedAt: null,
+        },
       },
+      data: expect.objectContaining({
+        scanVerdict: 'ERROR',
+        scanLeaseExpiresAt: expect.any(Date),
+      }),
     });
   });
 
   it('removes a promoted normalized photo when the client/audit transaction throws', async () => {
-    mocks.writeAuditLog.mockRejectedValueOnce(new Error('audit unavailable'));
+    mocks.repository.client.updateMany.mockRejectedValueOnce(new Error('database unavailable'));
 
     await expect(uploadClientPhotoAction(initialState, uploadForm())).resolves.toEqual({
       status: 'error',
@@ -392,6 +586,28 @@ describe('client document upload authorization and workflow', () => {
 
     expect(mocks.storage.removePrivate).toHaveBeenCalledWith(
       'companies/company-1/clients/client-1/photos/123e4567-e89b-42d3-a456-426614174000.webp',
+    );
+  });
+
+  it('audits a CLEAN photo scan before Sharp normalization can fail', async () => {
+    mocks.sharpPipeline.toBuffer.mockRejectedValueOnce(new Error('sharp failed'));
+
+    await expect(uploadClientPhotoAction(initialState, uploadForm())).resolves.toEqual({
+      status: 'error',
+      message: 'Не удалось загрузить файл. Попробуйте позже.',
+    });
+
+    expect(mocks.writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'SCAN',
+        entityType: 'CLIENT',
+        changes: expect.objectContaining({ verdict: 'CLEAN', signatureVersion: '27692' }),
+      }),
+      mocks.repository,
+    );
+    expect(mocks.storage.promote).not.toHaveBeenCalledWith(
+      expect.stringContaining('normalized-'),
+      expect.any(String),
     );
   });
 

@@ -22,5 +22,6 @@ export interface PrivateStorage {
   promote(uploadId: string, storageKey: string): Promise<void>;
   openPrivate(storageKey: string): Promise<Readable>;
   removePrivate(storageKey: string): Promise<void>;
+  removeStaleQuarantine(before: Date): Promise<number>;
   reserveQuarantine(uploadId: string): Promise<QuarantineSnapshot>;
 }

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { chmod, lstat, mkdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 import type { PrivateStorage, QuarantineSnapshot } from './private-storage';
@@ -102,6 +102,34 @@ export class LocalPrivateStorage implements PrivateStorage {
       await this.assertRegularFile(path);
       await this.assertCriticalFile(path);
       await rm(path);
+    });
+  }
+
+  async removeStaleQuarantine(before: Date) {
+    return this.runExclusive(async () => {
+      await this.ensureDirectory(this.quarantineRoot);
+      const entries = await readdir(this.quarantineRoot, { withFileTypes: true });
+      let removed = 0;
+
+      for (const entry of entries) {
+        if (
+          !entry.isFile() ||
+          entry.isSymbolicLink() ||
+          (!entry.name.startsWith('scan-') && !entry.name.startsWith('normalized-'))
+        ) {
+          continue;
+        }
+        const path = resolve(this.quarantineRoot, entry.name);
+        this.assertInsideTrustedRoot(path);
+        await this.assertNoSymlinkInPath(path);
+        const info = await lstat(path);
+        if (!info.isFile() || info.isSymbolicLink() || info.mtime > before) continue;
+        await this.assertCriticalFile(path);
+        await rm(path, { force: true });
+        removed += 1;
+      }
+
+      return removed;
     });
   }
 

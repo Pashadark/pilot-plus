@@ -20,6 +20,7 @@ type RawVersion = {
   verifiedMime: string;
   bytes: number;
   sha256: string;
+  scanVerdict: string | null;
 };
 
 type RawDocument = {
@@ -42,6 +43,7 @@ const versionSelect = {
   verifiedMime: true,
   bytes: true,
   sha256: true,
+  scanVerdict: true,
 } satisfies Prisma.ClientDocumentVersionSelect;
 
 function tenantCompanyWhere(access: ClientAccess) {
@@ -134,7 +136,7 @@ export function createClientDocumentQueries(repository: ClientDocumentRepository
 
       if (!document || document.status !== 'CLEAN') return null;
       const version = currentVersion(document);
-      if (!version) return null;
+      if (!version || version.scanVerdict !== 'CLEAN') return null;
 
       return {
         documentId: document.id,
