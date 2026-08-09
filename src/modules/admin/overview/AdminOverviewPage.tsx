@@ -22,6 +22,9 @@ const auditActionLabel = {
   BLOCK: 'Блокировка',
   ARCHIVE: 'Архивирование',
   DELETE: 'Удаление',
+  VIEW: 'Просмотр',
+  DOWNLOAD: 'Скачивание',
+  SCAN: 'Проверка',
 } as const;
 
 export function AdminOverviewPage({ overview }: { overview: AdminOverview }) {

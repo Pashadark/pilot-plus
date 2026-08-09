@@ -44,6 +44,24 @@ enum ClientStatus {
   ARCHIVED
 }
 
+enum ClientDocumentCategory {
+  PASSPORT
+  DRIVER_LICENSE
+  CONTRACT
+  POWER_OF_ATTORNEY
+  MEDICAL
+  OTHER
+}
+
+enum DocumentScanStatus {
+  UPLOADING
+  PENDING
+  CLEAN
+  BLOCKED
+  ERROR
+  ARCHIVED
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -51,6 +69,9 @@ enum AuditAction {
   BLOCK
   ARCHIVE
   DELETE
+  VIEW
+  DOWNLOAD
+  SCAN
 }
 
 enum AuditEntityType {
@@ -61,6 +82,7 @@ enum AuditEntityType {
   VEHICLE
   DEVICE
   DOCUMENT
+  CLIENT_DOCUMENT
   SYSTEM
 }
 
@@ -165,21 +187,22 @@ enum DeviceCommandStatus {
 }
 
 model User {
-  id                  String               @id @default(cuid())
-  email               String               @unique
-  name                String
-  passwordHash        String
-  role                UserRole             @default(MEMBER)
-  isActive            Boolean              @default(true)
-  sessions            Session[]
-  memberships         CompanyMember[]
-  deviceCommands      DeviceCommand[]
-  manualVehicleEvents ManualVehicleEvent[]
-  eventReadReceipts   EventReadReceipt[]
-  auditLogs           AuditLog[]
-  createdClients      Client[]
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  id                     String               @id @default(cuid())
+  email                  String               @unique
+  name                   String
+  passwordHash           String
+  role                   UserRole             @default(MEMBER)
+  isActive               Boolean              @default(true)
+  sessions               Session[]
+  memberships            CompanyMember[]
+  deviceCommands         DeviceCommand[]
+  manualVehicleEvents    ManualVehicleEvent[]
+  eventReadReceipts      EventReadReceipt[]
+  auditLogs              AuditLog[]
+  createdClients         Client[]
+  createdClientDocuments ClientDocument[]
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
 }
 
 model Session {
@@ -222,6 +245,7 @@ model Company {
   eventReadReceipts   EventReadReceipt[]
   auditLogs           AuditLog[]
   clients             Client[]
+  clientDocuments     ClientDocument[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 }
@@ -242,9 +266,9 @@ model CompanyMember {
 }
 
 model Client {
-  id                           String       @id @default(cuid())
+  id                           String           @id @default(cuid())
   companyId                    String
-  company                      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company                      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   firstName                    String
   middleName                   String?
   lastName                     String
@@ -271,16 +295,61 @@ model Client {
   emergencyContactEncrypted    String?
   source                       String?
   note                         String?
-  status                       ClientStatus @default(NEW)
+  status                       ClientStatus     @default(NEW)
   createdByUserId              String
-  createdBy                    User         @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
-  createdAt                    DateTime     @default(now())
-  updatedAt                    DateTime     @updatedAt
+  createdBy                    User             @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt                    DateTime         @default(now())
+  updatedAt                    DateTime         @updatedAt
   archivedAt                   DateTime?
+  documents                    ClientDocument[]
 
   @@unique([companyId, phoneIndex])
   @@index([companyId, status, updatedAt])
   @@index([companyId, lastName, firstName])
+}
+
+model ClientDocument {
+  id              String                  @id @default(cuid())
+  companyId       String
+  company         Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  clientId        String
+  client          Client                  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  category        ClientDocumentCategory
+  title           String
+  numberEncrypted String?
+  issuedAt        DateTime?
+  expiresAt       DateTime?
+  status          DocumentScanStatus      @default(UPLOADING)
+  currentVersion  Int                     @default(1)
+  createdByUserId String
+  createdBy       User                    @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  archivedAt      DateTime?
+  versions        ClientDocumentVersion[]
+
+  @@index([companyId, clientId, status])
+}
+
+model ClientDocumentVersion {
+  id               String         @id @default(cuid())
+  documentId       String
+  document         ClientDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  version          Int
+  storageKey       String         @unique
+  originalName     String
+  verifiedMime     String
+  bytes            Int
+  sha256           String
+  scanEngine       String?
+  signatureVersion String?
+  scanVerdict      String?
+  scannedAt        DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([documentId, version])
+  @@index([documentId, createdAt])
 }
 
 model AuditLog {

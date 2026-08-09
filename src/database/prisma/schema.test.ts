@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
@@ -17,6 +17,10 @@ const maintenanceStatusPreflight = readFileSync(
 const clientsMigration = readFileSync(
   new URL('./migrations/20260804171000_add_company_clients/migration.sql', import.meta.url),
   'utf8',
+);
+const clientDocumentsMigrationPath = new URL(
+  './migrations/20260804180000_add_client_documents/migration.sql',
+  import.meta.url,
 );
 
 describe('доменная схема автопарка', () => {
@@ -128,5 +132,31 @@ describe('доменная схема автопарка', () => {
     expect(schema).not.toMatch(/driverLicense\s+String/);
     expect(clientsMigration).toContain('CREATE TABLE "public"."Client"');
     expect(clientsMigration).not.toMatch(/\bDROP\b/i);
+  });
+
+  it('описывает приватные версии документов клиентов без публичных адресов', () => {
+    expect(existsSync(clientDocumentsMigrationPath)).toBe(true);
+    if (!existsSync(clientDocumentsMigrationPath)) return;
+
+    const clientDocumentsMigration = readFileSync(clientDocumentsMigrationPath, 'utf8');
+
+    expect(schema).toContain('enum ClientDocumentCategory {');
+    expect(schema).toContain('enum DocumentScanStatus {');
+    expect(schema).toContain('model ClientDocument {');
+    expect(schema).toContain('model ClientDocumentVersion {');
+    expect(schema).toMatch(/companyId\s+String/);
+    expect(schema).toMatch(/clientId\s+String/);
+    expect(schema).toMatch(/status\s+DocumentScanStatus\s+@default\(UPLOADING\)/);
+    expect(schema).toMatch(/storageKey\s+String\s+@unique/);
+    expect(schema).toMatch(/originalName\s+String/);
+    expect(schema).toMatch(/verifiedMime\s+String/);
+    expect(schema).toMatch(/sha256\s+String/);
+    expect(schema).toMatch(/@@index\(\[companyId, clientId, status\]\)/);
+    expect(schema).not.toMatch(/publicUrl\s+String/);
+    expect(clientDocumentsMigration).toContain("'VIEW'");
+    expect(clientDocumentsMigration).toContain("'DOWNLOAD'");
+    expect(clientDocumentsMigration).toContain("'SCAN'");
+    expect(clientDocumentsMigration).toContain("'CLIENT_DOCUMENT'");
+    expect(clientDocumentsMigration).not.toMatch(/\bDROP\b/i);
   });
 });
