@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getCachedSystemHealthSummary: vi.fn(),
+  getClientAccess: vi.fn(),
   requireAdmin: vi.fn(),
 }));
 
@@ -9,6 +10,7 @@ vi.mock('@/modules/auth/dal', () => ({ requireAdmin: mocks.requireAdmin }));
 vi.mock('@/modules/system-health/get-system-health-summary', () => ({
   getCachedSystemHealthSummary: mocks.getCachedSystemHealthSummary,
 }));
+vi.mock('@/modules/clients/access', () => ({ getClientAccess: mocks.getClientAccess }));
 
 import ProtectedLayout from './layout';
 
@@ -21,10 +23,11 @@ describe('ProtectedLayout', () => {
     mocks.requireAdmin.mockResolvedValue({
       id: 'admin-1',
       name: 'Администратор',
-        email: 'admin@pilot.local',
-        role: 'SUPER_ADMIN',
-        canAccessAdmin: true,
+      email: 'admin@pilot.local',
+      role: 'SUPER_ADMIN',
+      canAccessAdmin: true,
     });
+    mocks.getClientAccess.mockResolvedValue({ scope: 'SYSTEM' });
     mocks.getCachedSystemHealthSummary.mockResolvedValue({
       state: 'healthy',
       count: 3,

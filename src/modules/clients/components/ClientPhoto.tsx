@@ -9,7 +9,6 @@ export function isApprovedClientPhotoPath(value: string | null | undefined): val
 export function ClientPhoto({
   name,
   localPhotoUrl,
-  confirmedMessengerAvatarUrl: _confirmedMessengerAvatarUrl,
 }: {
   name: string;
   localPhotoUrl?: string | null;

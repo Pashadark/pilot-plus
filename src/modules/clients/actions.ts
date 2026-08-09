@@ -84,6 +84,7 @@ function encryptedCreateData(input: ClientInput, userId: string) {
     driverLicenseIndex: input.driverLicense
       ? blindIndex(input.driverLicense, searchKey, normalizedDocument)
       : null,
+    driverCategories: [],
     driverLicenseIssuedAt: input.driverLicenseIssuedAt,
     driverLicenseExpiresAt: input.driverLicenseExpiresAt,
     status: input.status,

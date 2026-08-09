@@ -157,19 +157,20 @@ async function createClientThroughForm(page: Page, lastName: string, companyName
   const phone = e2ePhone();
   await page.getByRole('button', { name: 'Добавить клиента' }).click();
   await expect(page.getByRole('heading', { name: 'Новый клиент', level: 2 })).toBeVisible();
-  if (companyName) await page.getByLabel('Компания').selectOption({ label: companyName });
+  if (companyName)
+    await page.locator('select[name="companyId"]').selectOption({ label: companyName });
   await page.getByLabel('Имя').fill('E2E');
   await page.getByLabel('Фамилия').fill(lastName);
   await page.getByLabel('Телефон').fill(phone);
   await page.getByLabel('Email').fill(`${lastName.toLowerCase()}@example.test`);
-  await page.getByRole('button', { name: 'Далее' }).click();
-  await page.getByLabel('Паспорт').fill('E2E-PASSPORT');
-  await page.getByLabel('Водительское удостоверение').fill('E2E-LICENSE');
+  await page.getByRole('button', { name: 'Далее', exact: true }).first().click();
+  await page.locator('input[name="passport"]').fill('E2E-PASSPORT');
+  await page.locator('input[name="driverLicense"]').fill('E2E-LICENSE');
   await page.getByLabel('Дата выдачи ВУ').fill('2020-01-01');
   await page.getByLabel('Срок действия ВУ').fill('2030-01-01');
-  await page.getByRole('button', { name: 'Далее' }).click();
-  await page.getByRole('button', { name: 'Далее' }).click();
-  await page.getByRole('button', { name: 'Создать клиента' }).click();
+  await page.getByRole('button', { name: 'Далее', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Далее', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Создать клиента' }).click({ force: true });
   await expect(page).toHaveURL(/\/clients\/[a-z0-9]+$/);
   return page.url().split('/').at(-1) as string;
 }
@@ -179,10 +180,10 @@ async function editClientThroughForm(page: Page, clientId: string, editedLastNam
     .getByRole('heading', { name: 'Редактировать клиента', level: 2 })
     .scrollIntoViewIfNeeded();
   await page.getByLabel('Фамилия').fill(editedLastName);
-  await page.getByRole('button', { name: 'Далее' }).click();
-  await page.getByRole('button', { name: 'Далее' }).click();
-  await page.getByRole('button', { name: 'Далее' }).click();
-  await page.getByRole('button', { name: 'Сохранить' }).click();
+  await page.getByRole('button', { name: 'Далее', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Далее', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Далее', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Сохранить' }).click({ force: true });
   await expect(page).toHaveURL(new RegExp(`/clients/${clientId}$`));
   await expect(page.getByRole('heading', { name: new RegExp(editedLastName) })).toBeVisible();
 }

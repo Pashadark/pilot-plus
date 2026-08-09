@@ -90,6 +90,7 @@ describe('client mutations', () => {
         phoneIndex: expect.any(String),
         passportEncrypted: expect.any(String),
         driverLicenseEncrypted: expect.any(String),
+        driverCategories: [],
       }),
       select: { id: true },
     });
