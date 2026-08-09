@@ -32,6 +32,12 @@ describe('проверка загружаемого файла', () => {
     );
   });
 
+  it.each(['pdf', 'jpg', 'png', 'webp'])('не считает имя без точки расширением: %s', (name) => {
+    expect(() => validateUploadedFile({ name, bytes: Buffer.from('%PDF-1.7') })).toThrow(
+      'Расширение файла не соответствует его содержимому.',
+    );
+  });
+
   it('не принимает файл больше 15 МБ', () => {
     const bytes = Buffer.alloc(maxUploadedFileBytes + 1);
     bytes.set(Buffer.from('%PDF-'));

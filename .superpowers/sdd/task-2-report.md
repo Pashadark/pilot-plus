@@ -74,3 +74,36 @@
 
 - `npx vitest run src/services/malware-scanner/clamav-client.test.ts src/modules/client-documents/file-validation.test.ts src/modules/client-documents/scan-upload.test.ts src/services/storage/local-private-storage.test.ts` — 4 test files, 31/31 tests успешно.
 - `npm run typecheck` — успешно.
+
+## Вторая волна исправлений review
+
+### Причина и RED
+
+- При ошибке соединения scanner возвращал `unavailable`, не закрывая входной `Readable`; на Windows
+  это могло оставить handle snapshot открытым до `release`. Кроме того, возврат `false` из
+  `socket.write(zero frame)` означал backpressure после принятия байтов в буфер, но считался
+  неотправленным terminal frame. `getExtension` принимал bare имя `pdf` как расширение.
+- RED: `npx vitest run src/services/malware-scanner/clamav-client.test.ts src/modules/client-documents/file-validation.test.ts src/modules/client-documents/scan-upload.test.ts` завершился с кодом 1: bare `pdf` проходил validation, `release` получал ещё открытый stream после connect failure, а valid `CLEAN` после принятого zero frame переходил в `unavailable`.
+
+### Реализация
+
+- `scanStream` теперь во всех exit paths уничтожает входной stream и ожидает его `close` до
+  возврата verdict. Поэтому `scanPendingUpload` освобождает snapshot только после снятия handle.
+- Terminal zero frame помечается отправленным сразу после `socket.write`, затем `socket.end`
+  ставится в очередь независимо от return value backpressure; valid daemon response остаётся
+  `CLEAN`.
+- Расширение принимается только как непустой фактический suffix после точки, а не как bare name.
+
+### GREEN и проверки
+
+- `npx vitest run src/services/malware-scanner/clamav-client.test.ts src/modules/client-documents/file-validation.test.ts src/modules/client-documents/scan-upload.test.ts` — 3 test files, 28/28 tests успешно.
+- Финальный focused-набор с `src/services/storage/local-private-storage.test.ts` — 4 test files, 37/37 tests успешно.
+- `npm run typecheck` — успешно.
+- Контроллер отдельно проверил доступный локальный ClamAV: safe fixture `CLEAN`, EICAR `infected` — 2/2.
+
+### Operational concern
+
+- In-memory reservation намеренно не пытается автоматически восстановить stale `scan-*` после
+  crash/restart: имя snapshot не содержит исходный ключ, а эвристическая очистка может удалить
+  проверяемый файл. Для безопасного recovery нужен отдельный durable reservation record и
+  согласованный worker/runbook; это выходит за scope Task 2 и не добавляется без миграции.

@@ -35,7 +35,11 @@ export function detectAllowedFile(bytes: Uint8Array): AllowedFile {
 }
 
 function getExtension(name: string) {
-  const extension = name.trim().toLocaleLowerCase('en-US').split('.').pop();
+  const normalized = name.trim().toLocaleLowerCase('en-US');
+  const separator = normalized.lastIndexOf('.');
+  if (separator <= 0 || separator === normalized.length - 1) return undefined;
+
+  const extension = normalized.slice(separator + 1);
   return extension === 'jpeg' ? 'jpg' : extension;
 }
 

@@ -3,6 +3,7 @@ import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { PrivateStorage, QuarantineSnapshot } from '@/services/storage/private-storage';
+import { ClamAvClient } from '@/services/malware-scanner/clamav-client';
 
 import { scanPendingUpload } from './scan-upload';
 
@@ -110,5 +111,35 @@ describe('scanPendingUpload', () => {
     });
     expect(storage.openQuarantine).not.toHaveBeenCalled();
     expect(snapshot.open).toHaveBeenCalledTimes(2);
+  });
+
+  it('дожидается close scanner stream до release snapshot при connect failure', async () => {
+    let scannerStream: Readable | undefined;
+    const snapshot: QuarantineSnapshot = {
+      open: vi.fn(async () => {
+        scannerStream = Readable.from([Buffer.from('safe')]);
+        return scannerStream;
+      }),
+      promote: vi.fn(),
+      remove: vi.fn(),
+      release: vi.fn(async () => {
+        if (!scannerStream?.closed)
+          throw new Error('Windows не позволяет освободить открытый файл.');
+      }),
+    };
+    const storage: PrivateStorage = {
+      putQuarantine: vi.fn(),
+      openQuarantine: vi.fn(),
+      removeQuarantine: vi.fn(),
+      promote: vi.fn(),
+      openPrivate: vi.fn(),
+      reserveQuarantine: vi.fn(async () => snapshot),
+    };
+    const scanner = new ClamAvClient({ host: '127.0.0.1', port: 1, timeoutMs: 50 });
+
+    await expect(
+      scanPendingUpload({ storage, scanner, uploadId: 'upload-5', storageKey: 'private/key' }),
+    ).resolves.toMatchObject({ status: 'ERROR' });
+    expect(snapshot.release).toHaveBeenCalledOnce();
   });
 });
