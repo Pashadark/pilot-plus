@@ -8,9 +8,12 @@
 
 **Tech Stack:** Next.js 16.2, React 19.2, Prisma 6.16, PostgreSQL 17, Node streams/crypto, Docker Compose, ClamAV, Sharp, React Icons, Vitest, Playwright.
 
+**Approved specification:** `docs/superpowers/specs/2026-08-09-client-documents-clamav-design.md`.
+
 ## Global Constraints
 
 - Выполнять после `2026-08-04-company-clients-core.md`.
+- Клиентское ядро уже объединено в `main`; существующие миграции `20260804170000`–`20260804172000` не изменять.
 - Разрешённые файлы: JPG, PNG, WebP, PDF; максимум 15 МБ и 20 активных документов на клиента.
 - Пользовательские SVG, HTML, архивы и executable запрещены.
 - `SUPER_ADMIN`, `COMPANY_ADMIN`, `DISPATCHER` загружают/заменяют; `VIEWER` только читает; `DRIVER` не имеет доступа.
@@ -155,7 +158,9 @@ git commit -m "feat: scan client documents with clamav"
 - Create: `src/modules/client-documents/server/queries.test.ts`
 - Create: `src/app/(protected)/clients/[id]/documents/[documentId]/download/route.ts`
 - Create: `src/app/(protected)/clients/[id]/documents/[documentId]/download/route.test.ts`
-- Modify: `src/database/prisma/schema.prisma` and audit migration for `CLIENT_DOCUMENT`.
+
+`CLIENT_DOCUMENT` и действия `VIEW`, `DOWNLOAD`, `SCAN` добавляются только новой миграцией Task 1.
+Уже применённые миграции клиентского ядра не редактируются.
 
 - [ ] **Step 1: Написать authorization RED tests**
 
