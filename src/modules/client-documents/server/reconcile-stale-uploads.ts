@@ -52,6 +52,7 @@ export type StaleUploadReconciliationResult = {
   recovered: number;
   cleanupPending: number;
   staleFilesRemoved: number;
+  hasMore: boolean;
 };
 
 const defaultCleanupRetryMs = 5 * 60_000;
@@ -130,7 +131,8 @@ export async function reconcileStaleClientDocumentUploads(
   const database = options.database ?? prismaReconciliationDatabase();
   const storage = options.storage ?? (await LocalPrivateStorage.create(privateStorageRoot()));
 
-  const candidates = await database.clientDocumentVersion.findMany({
+  const batchSize = boundedBatchSize(options.batchSize ?? defaultBatchSize);
+  const page = await database.clientDocumentVersion.findMany({
     where: {
       uploadId: { not: null },
       document: { archivedAt: null },
@@ -166,8 +168,10 @@ export async function reconcileStaleClientDocumentUploads(
       },
     },
     orderBy: [{ scanLeaseExpiresAt: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
-    take: boundedBatchSize(options.batchSize ?? defaultBatchSize),
+    take: batchSize + 1,
   });
+  const hasMore = page.length > batchSize;
+  const candidates = page.slice(0, batchSize);
 
   let recovered = 0;
   let cleanupPending = 0;
@@ -268,5 +272,5 @@ export async function reconcileStaleClientDocumentUploads(
   }
 
   const staleFilesRemoved = await storage.removeStaleQuarantine(cutoff);
-  return { recovered, cleanupPending, staleFilesRemoved };
+  return { recovered, cleanupPending, staleFilesRemoved, hasMore };
 }

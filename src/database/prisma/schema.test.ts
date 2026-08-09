@@ -30,6 +30,10 @@ const clientDocumentScanLeaseMigrationPath = new URL(
   './migrations/20260810150000_add_client_document_scan_lease/migration.sql',
   import.meta.url,
 );
+const clientPhotoUploadLeaseMigrationPath = new URL(
+  './migrations/20260810170000_add_client_photo_upload_leases/migration.sql',
+  import.meta.url,
+);
 
 describe('доменная схема автопарка', () => {
   it('описывает роли, точечные разрешения и журнал аудита центра администрирования', () => {
@@ -191,7 +195,7 @@ describe('доменная схема автопарка', () => {
     );
     expect(migration).not.toMatch(/\bDROP\b/i);
     expect(migration).not.toContain('SET NOT NULL');
-    expect(migration).not.toMatch(/\bUPDATE\b/i);
+    expect(migration).not.toMatch(/^\s*UPDATE\b/im);
     expect(migration).not.toContain('20260804180000_add_client_documents');
   });
 
@@ -209,5 +213,21 @@ describe('доменная схема автопарка', () => {
     expect(migration).not.toMatch(/\bDROP\b/i);
     expect(migration).not.toMatch(/\bUPDATE\b/i);
     expect(migration).not.toContain('SET NOT NULL');
+  });
+
+  it('добавляет durable lease для crash-safe загрузки фото отдельной add-only миграцией', () => {
+    expect(existsSync(clientPhotoUploadLeaseMigrationPath)).toBe(true);
+    if (!existsSync(clientPhotoUploadLeaseMigrationPath)) return;
+
+    const migration = readFileSync(clientPhotoUploadLeaseMigrationPath, 'utf8');
+    expect(schema).toContain('model ClientPhotoUpload');
+    expect(schema).toMatch(/uploadId\s+String\s+@unique/);
+    expect(schema).toMatch(/leaseExpiresAt\s+DateTime\?/);
+    expect(schema).toMatch(/committedAt\s+DateTime\?/);
+    expect(migration).toContain('CREATE TABLE "public"."ClientPhotoUpload"');
+    expect(migration).toContain('ClientPhotoUpload_companyId_clientId_fkey');
+    expect(migration).toContain('"committedAt" TIMESTAMP(3)');
+    expect(migration).not.toMatch(/\bDROP\b/i);
+    expect(migration).not.toMatch(/^\s*UPDATE\b/im);
   });
 });

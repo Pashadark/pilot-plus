@@ -6,6 +6,11 @@ const mocks = vi.hoisted(() => {
   const repository = {
     $transaction: vi.fn(),
     client: { findFirst: vi.fn(), updateMany: vi.fn() },
+    clientPhotoUpload: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      updateMany: vi.fn(),
+    },
     clientDocument: {
       count: vi.fn(),
       create: vi.fn(),
@@ -134,6 +139,9 @@ describe('client document upload authorization and workflow', () => {
     mocks.repository.clientDocumentVersion.deleteMany.mockResolvedValue({ count: 1 });
     mocks.repository.clientDocumentVersion.updateMany.mockResolvedValue({ count: 1 });
     mocks.repository.client.updateMany.mockResolvedValue({ count: 1 });
+    mocks.repository.clientPhotoUpload.create.mockResolvedValue({ id: 'photo-upload-1' });
+    mocks.repository.clientPhotoUpload.findFirst.mockResolvedValue(null);
+    mocks.repository.clientPhotoUpload.updateMany.mockResolvedValue({ count: 1 });
     mocks.repository.$transaction.mockImplementation(
       async (operation: (transaction: typeof mocks.repository) => unknown) =>
         operation(mocks.repository),
@@ -389,6 +397,7 @@ describe('client document upload authorization and workflow', () => {
       data: expect.objectContaining({ scanVerdict: 'ERROR' }),
     });
     expect(mocks.storage.removePrivate).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/clients/client-1');
   });
 
   it('returns a safe Russian error without exposing a storage path', async () => {
@@ -529,6 +538,16 @@ describe('client document upload authorization and workflow', () => {
       expect.stringContaining('normalized-'),
       expect.stringMatching(/^companies\/company-1\/clients\/client-1\/photos\/.+\.webp$/),
     );
+    expect(mocks.repository.clientPhotoUpload.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'photo-upload-1',
+        uploadId: '123e4567-e89b-42d3-a456-426614174000',
+        companyId: 'company-1',
+        clientId: 'client-1',
+        status: 'PENDING',
+      },
+      data: { leaseExpiresAt: expect.any(Date) },
+    });
     expect(mocks.repository.client.updateMany).toHaveBeenCalledWith({
       where: {
         id: 'client-1',
@@ -537,6 +556,29 @@ describe('client document upload authorization and workflow', () => {
         archivedAt: null,
       },
       data: { photoPath: expect.stringMatching(/\.webp$/) },
+    });
+    expect(mocks.repository.clientPhotoUpload.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        uploadId: '123e4567-e89b-42d3-a456-426614174000',
+        companyId: 'company-1',
+        clientId: 'client-1',
+        status: 'PENDING',
+        leaseExpiresAt: expect.any(Date),
+      }),
+      select: { id: true },
+    });
+    expect(mocks.repository.clientPhotoUpload.updateMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        id: 'photo-upload-1',
+        companyId: 'company-1',
+        clientId: 'client-1',
+        status: 'CLEANUP_PENDING',
+      }),
+      data: expect.objectContaining({
+        status: 'COMMITTED',
+        leaseExpiresAt: null,
+        committedAt: expect.any(Date),
+      }),
     });
     expect(mocks.writeAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'SCAN', entityType: 'CLIENT', entityId: 'client-1' }),
@@ -576,16 +618,54 @@ describe('client document upload authorization and workflow', () => {
     });
   });
 
-  it('removes a promoted normalized photo when the client/audit transaction throws', async () => {
+  it('preserves a committed normalized photo when transaction acknowledgement is lost', async () => {
+    let committedPhotoPath: string | null = null;
+    mocks.repository.client.updateMany.mockImplementationOnce(async (args) => {
+      committedPhotoPath = args.data.photoPath;
+      return { count: 1 };
+    });
+    mocks.repository.$transaction.mockImplementation(
+      async (operation: (transaction: typeof mocks.repository) => unknown) => {
+        const result = await operation(mocks.repository);
+        if (committedPhotoPath) throw new Error('commit acknowledgement lost');
+        return result;
+      },
+    );
+    mocks.repository.client.findFirst
+      .mockResolvedValueOnce({ id: 'client-1', companyId: 'company-1', photoPath: null })
+      .mockResolvedValueOnce({
+        id: 'client-1',
+        companyId: 'company-1',
+        photoPath:
+          'companies/company-1/clients/client-1/photos/123e4567-e89b-42d3-a456-426614174000.webp',
+      });
+
+    await expect(uploadClientPhotoAction(initialState, uploadForm())).resolves.toEqual({
+      status: 'success',
+      message: 'Фотография клиента обновлена.',
+      clientId: 'client-1',
+    });
+
+    expect(mocks.storage.removePrivate).not.toHaveBeenCalledWith(
+      expect.stringMatching(/photos\/123e4567.*\.webp$/),
+    );
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/clients/client-1');
+  });
+
+  it('не удаляет final photo при недоступной DB reread и оставляет durable lease', async () => {
     mocks.repository.client.updateMany.mockRejectedValueOnce(new Error('database unavailable'));
+    mocks.repository.client.findFirst
+      .mockResolvedValueOnce({ id: 'client-1', companyId: 'company-1', photoPath: null })
+      .mockRejectedValueOnce(new Error('database still unavailable'));
 
     await expect(uploadClientPhotoAction(initialState, uploadForm())).resolves.toEqual({
       status: 'error',
       message: 'Не удалось загрузить файл. Попробуйте позже.',
     });
 
-    expect(mocks.storage.removePrivate).toHaveBeenCalledWith(
-      'companies/company-1/clients/client-1/photos/123e4567-e89b-42d3-a456-426614174000.webp',
+    expect(mocks.repository.clientPhotoUpload.create).toHaveBeenCalledOnce();
+    expect(mocks.storage.removePrivate).not.toHaveBeenCalledWith(
+      expect.stringMatching(/photos\/123e4567.*\.webp$/),
     );
   });
 

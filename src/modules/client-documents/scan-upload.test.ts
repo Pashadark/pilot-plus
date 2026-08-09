@@ -62,6 +62,29 @@ describe('scanPendingUpload', () => {
     expect(snapshot.remove).not.toHaveBeenCalled();
   });
 
+  it('не продвигает CLEAN snapshot, если lease ownership утрачен', async () => {
+    const { storage, snapshot } = createStorage(Buffer.from('safe-document'));
+    const scanner = {
+      getMetadata: vi.fn(async () => scannerMetadata),
+      scanStream: vi.fn(async () => ({ kind: 'clean' as const })),
+    };
+    const renewPromotionLease = vi.fn(async () => false);
+
+    await expect(
+      scanPendingUpload({
+        storage,
+        scanner,
+        uploadId: 'upload-lost-lease',
+        storageKey: 'private/key',
+        renewPromotionLease,
+      }),
+    ).resolves.toMatchObject({ status: 'ERROR', audit: { verdict: 'ERROR' } });
+
+    expect(renewPromotionLease).toHaveBeenCalledOnce();
+    expect(snapshot.promote).not.toHaveBeenCalled();
+    expect(snapshot.remove).toHaveBeenCalledOnce();
+  });
+
   it('удаляет заражённый карантинный файл и блокирует документ', async () => {
     const { storage, snapshot } = createStorage(Buffer.from('eicar'));
     const scanner = {

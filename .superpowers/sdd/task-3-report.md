@@ -8,6 +8,107 @@ quarantine → ClamAV → promotion pipeline; фото дополнительн�
 после CLEAN verdict.
 
 Миграции и seed к общей БД не применялись. Старые client-core migrations не изменялись.
+
+## Third external fix-wave: lease/promotion and photo acknowledgement races
+
+### RED evidence
+
+Focused RED до реализации: `9 failed, 22 passed` в 3 файлах. Тесты
+воспроизвели:
+
+- CLEAN promotion после утраты scan lease;
+- потерю acknowledgement после committed photo transaction;
+- недоступную tenant-scoped DB reread при уже promoted final photo;
+- отсутствие durable photo upload lease;
+- отсутствие `hasMore` и обработку за пределами bounded page;
+- отсутствие `revalidatePath` для recovered idempotent document success.
+
+### GREEN implementation
+
+- `scanPendingUpload` запрашивает conditional DB heartbeat непосредственно перед
+  CLEAN promotion. Потеря ownership оставляет файл fail-closed и не продвигает его.
+- Defensive document compensation при уже committed ERROR удаляет свой
+  проигравший promoted key, а storage failure сохраняет retry lease.
+- `ClientPhotoUpload` добавлен отдельной add-only migration как durable
+  upload/cleanup lease. Строка создаётся до storage write.
+- Photo final transaction атомарно меняет `Client.photoPath` и durable status.
+  При acknowledgement loss action делает tenant-scoped reread: exact committed final
+  сохраняется и возвращает success. Если reread недоступен, final не
+  удаляется; его судьбу решает expired durable lease.
+- Photo reconciliation сначала conditional-claims expired row, затем повторно
+  читает tenant-scoped current photo. Committed final никогда не удаляется;
+  source/normalized/previous artifacts очищаются. Незакоммиченный
+  final удаляется. Ошибка storage оставляет bounded retry lease.
+- Document и photo reconciliation читают `batchSize + 1`, обрабатывают только
+  bounded page и возвращают `hasMore`. CLI выходит с code 2 и безопасным
+  русским указанием повторить запуск.
+- Recovery audit содержит только SHA/verdict/reason и не содержит path,
+  filename, bytes или PII.
+
+Новые файлы:
+
+- `src/database/prisma/migrations/20260810170000_add_client_photo_upload_leases/migration.sql`
+- `src/modules/client-documents/server/reconcile-stale-photo-uploads.ts`
+- `src/modules/client-documents/server/reconcile-stale-photo-uploads.test.ts`
+
+### Verification third wave
+
+```text
+focused Vitest
+Test Files  5 passed (5)
+Tests       46 passed (46)
+
+npm run test:unit -- --pool=forks --maxWorkers=1
+Test Files  117 passed (117)
+Tests       603 passed (603)
+
+npm run typecheck
+exit 0
+
+npm run lint
+exit 0 — 0 errors; 2 existing no-img-element warnings outside this fix-wave
+
+npx prisma format --schema src/database/prisma/schema.prisma
+formatted successfully
+
+npx prisma generate --schema src/database/prisma/schema.prisma
+generated successfully
+
+git diff --check
+exit 0
+```
+
+`prettier --check`, `prisma validate` и production build были переданы controller для
+отдельного запуска: два tool-run с этими командами были прерваны без output и
+не дали доказательств PASS/FAIL. Миграции и seed к общей БД не применялись;
+старые migrations и `.superpowers/sdd/task-1-report.md` не изменялись этой задачей.
+
+### Final internal review fixes
+
+Независимый review нашёл `Critical 0 / Important 2 / Minor 1` до commit:
+
+- Sharp мог пережить lease между source scan и normalized final promotion;
+- исторически committed cleanup row после новой замены нельзя было
+  отличить от uncommitted final;
+- архивация клиента могла исключить artifacts из будущей cleanup-выборки.
+
+Исправлено: добавлен второй tenant/status-guarded heartbeat непосредственно
+перед normalized promotion; nullable `committedAt` записывается атомарно с
+`Client.photoPath`; cleanup работает и для архивных tenant-scoped клиентов.
+Исторически committed final не помечается ERROR; если он больше не current, он и
+его previous/source artifacts очищаются без риска удалить текущее фото.
+
+```text
+post-review focused Vitest
+Test Files  3 passed (3)
+Tests       38 passed (38)
+
+post-review npm run typecheck
+exit 0
+
+post-review git diff --check
+exit 0
+```
 Незакоммиченный пользовательский `.superpowers/sdd/task-1-report.md` сохранён и не входит
 в Task 3 commit.
 

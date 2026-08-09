@@ -548,7 +548,31 @@ async function compensateFailedFinalization(
             committed.document.status === committed.scanVerdict
           : committed.document.currentVersion === upload.previousVersion &&
             committed.document.status === 'CLEAN';
-      return documentMatches ? committed.scanVerdict : null;
+      if (!documentMatches) return null;
+      if (committed.scanVerdict === 'ERROR' && result.status === 'CLEAN') {
+        const cleaned = await storage
+          .removePrivate(upload.storageKey)
+          .then(() => true)
+          .catch(() => false);
+        await prisma.clientDocumentVersion
+          .updateMany({
+            where: {
+              id: upload.versionId,
+              documentId: upload.documentId,
+              uploadId: upload.uploadId,
+              version: upload.version,
+              scanVerdict: 'ERROR',
+              document: {
+                companyId: upload.companyId,
+                clientId: upload.clientId,
+                archivedAt: null,
+              },
+            },
+            data: { scanLeaseExpiresAt: cleaned ? null : cleanupRetryAt },
+          })
+          .catch(() => undefined);
+      }
+      return committed.scanVerdict;
     }
     return null;
   }
@@ -700,6 +724,24 @@ export async function uploadClientDocumentAction(
         scanner,
         uploadId,
         storageKey: upload.storageKey,
+        renewPromotionLease: async () => {
+          const renewed = await prisma.clientDocumentVersion.updateMany({
+            where: {
+              id: upload.versionId,
+              documentId: upload.documentId,
+              uploadId: upload.uploadId,
+              version: upload.version,
+              scanVerdict: null,
+              document: {
+                companyId: upload.companyId,
+                clientId: upload.clientId,
+                archivedAt: null,
+              },
+            },
+            data: { scanLeaseExpiresAt: newScanLeaseExpiresAt() },
+          });
+          return renewed.count === 1;
+        },
       });
     } catch {
       scanResult = { status: 'ERROR', audit: { sha256: hash, verdict: 'ERROR' } };
@@ -708,7 +750,10 @@ export async function uploadClientDocumentAction(
       await finalizeUpload(access, upload, scanResult);
     } catch {
       const committed = await compensateFailedFinalization(storage, upload, scanResult);
-      if (committed) return duplicateState(committed, upload.documentId);
+      if (committed) {
+        revalidatePath(`/clients/${client.id}`);
+        return duplicateState(committed, upload.documentId);
+      }
       return uploadError;
     }
     revalidatePath(`/clients/${client.id}`);
@@ -735,12 +780,37 @@ async function removePrivateQuietly(storage: PrivateStorage, storageKey: string 
   await storage.removePrivate(storageKey).catch(() => undefined);
 }
 
+async function removePrivateTracked(storage: PrivateStorage, storageKey: string | null) {
+  if (!storageKey?.startsWith('companies/')) return true;
+  return storage
+    .removePrivate(storageKey)
+    .then(() => true)
+    .catch((error: unknown) =>
+      typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT',
+    );
+}
+
 async function auditPhotoScan(
   access: ClientAccess,
   client: AccessibleClient,
   scanResult: ScanPendingUploadResult,
+  photoUploadId: string,
   transaction: Prisma.TransactionClient,
 ) {
+  const upload = await transaction.clientPhotoUpload.updateMany({
+    where: {
+      id: photoUploadId,
+      companyId: client.companyId,
+      clientId: client.id,
+      status: 'PENDING',
+    },
+    data: {
+      scanVerdict: scanResult.status,
+      sha256: scanResult.audit.sha256,
+      leaseExpiresAt: newScanLeaseExpiresAt(),
+    },
+  });
+  if (upload.count !== 1) throw new Error('Состояние загрузки фото изменилось.');
   await writeAuditLog(
     {
       actor: { id: access.user.id, email: access.user.email },
@@ -781,10 +851,29 @@ export async function uploadClientPhotoAction(
     return { status: 'success', message: 'Фотография уже загружена.', clientId: client.id };
   }
 
+  const existingUpload = await prisma.clientPhotoUpload.findFirst({
+    where: {
+      uploadId,
+      companyId: client.companyId,
+      clientId: client.id,
+      client: { archivedAt: null },
+    },
+    select: { status: true, finalStorageKey: true },
+  });
+  if (existingUpload) {
+    if (existingUpload.status === 'COMMITTED' && client.photoPath === existingUpload.finalStorageKey) {
+      revalidatePath('/clients');
+      revalidatePath(`/clients/${client.id}`);
+      return { status: 'success', message: 'Фотография уже загружена.', clientId: client.id };
+    }
+    return { status: 'error', message: 'Эта загрузка фотографии уже обрабатывается.' };
+  }
+
   let storage: PrivateStorage | undefined;
   let sourceStorageKey: string | undefined;
   let finalStoragePromoted = false;
   let databaseCommitted = false;
+  let photoUploadId: string | undefined;
   try {
     const { bytes, validated } = await fileBytes(formData);
     if (!validated.mime.startsWith('image/')) {
@@ -793,17 +882,49 @@ export async function uploadClientPhotoAction(
     storage = await LocalPrivateStorage.create(privateStorageRoot());
     const scanner = ClamAvClient.fromEnvironment();
     sourceStorageKey = `companies/${client.companyId}/clients/${client.id}/photos/source/${uploadId}.${validated.extension}`;
+    const durableUpload = await prisma.clientPhotoUpload.create({
+      data: {
+        uploadId,
+        companyId: client.companyId,
+        clientId: client.id,
+        sourceStorageKey,
+        finalStorageKey,
+        previousPhotoPath: client.photoPath,
+        status: 'PENDING',
+        leaseExpiresAt: newScanLeaseExpiresAt(),
+      },
+      select: { id: true },
+    });
+    photoUploadId = durableUpload.id;
     await storage.putQuarantine(uploadId, bytes);
     const scanResult = await scanPendingUpload({
       storage,
       scanner,
       uploadId,
       storageKey: sourceStorageKey,
+      renewPromotionLease: async () => {
+        if (!photoUploadId) return false;
+        const renewed = await prisma.clientPhotoUpload.updateMany({
+          where: {
+            id: photoUploadId,
+            uploadId,
+            companyId: client.companyId,
+            clientId: client.id,
+            status: 'PENDING',
+          },
+          data: { leaseExpiresAt: newScanLeaseExpiresAt() },
+        });
+        return renewed.count === 1;
+      },
     });
     await prisma.$transaction((transaction) =>
-      auditPhotoScan(access, client, scanResult, transaction),
+      auditPhotoScan(access, client, scanResult, photoUploadId!, transaction),
     );
     if (scanResult.status !== 'CLEAN') {
+      await prisma.clientPhotoUpload.updateMany({
+        where: { id: photoUploadId, companyId: client.companyId, clientId: client.id },
+        data: { status: 'CLEANUP_PENDING', leaseExpiresAt: new Date() },
+      });
       return resultState(scanResult, client.id);
     }
 
@@ -814,6 +935,19 @@ export async function uploadClientPhotoAction(
       .toBuffer();
     const normalizedUploadId = `normalized-${uploadId}`;
     await storage.putQuarantine(normalizedUploadId, normalized);
+    const promotionLease = await prisma.clientPhotoUpload.updateMany({
+      where: {
+        id: photoUploadId,
+        uploadId,
+        companyId: client.companyId,
+        clientId: client.id,
+        status: 'PENDING',
+      },
+      data: { leaseExpiresAt: newScanLeaseExpiresAt() },
+    });
+    if (promotionLease.count !== 1) {
+      throw new Error('Срок обработки загрузки фото истёк.');
+    }
     await storage.promote(normalizedUploadId, finalStorageKey);
     finalStoragePromoted = true;
 
@@ -828,6 +962,21 @@ export async function uploadClientPhotoAction(
         data: { photoPath: finalStorageKey },
       });
       if (result.count !== 1) return false;
+      const upload = await transaction.clientPhotoUpload.updateMany({
+        where: {
+          id: photoUploadId,
+          uploadId,
+          companyId: client.companyId,
+          clientId: client.id,
+          status: 'PENDING',
+        },
+        data: {
+          status: 'CLEANUP_PENDING',
+          leaseExpiresAt: new Date(),
+          committedAt: new Date(),
+        },
+      });
+      if (upload.count !== 1) throw new Error('Состояние загрузки фото изменилось.');
       return true;
     });
     if (!updated) {
@@ -835,7 +984,23 @@ export async function uploadClientPhotoAction(
     }
     databaseCommitted = true;
 
-    await removePrivateQuietly(storage, client.photoPath);
+    const [sourceRemoved, previousRemoved] = await Promise.all([
+      removePrivateTracked(storage, sourceStorageKey),
+      removePrivateTracked(storage, client.photoPath),
+    ]);
+    await prisma.clientPhotoUpload.updateMany({
+      where: {
+        id: photoUploadId,
+        companyId: client.companyId,
+        clientId: client.id,
+        status: 'CLEANUP_PENDING',
+      },
+      data: {
+        status: sourceRemoved && previousRemoved ? 'COMMITTED' : 'CLEANUP_PENDING',
+        leaseExpiresAt: sourceRemoved && previousRemoved ? null : newScanLeaseExpiresAt(),
+        committedAt: new Date(),
+      },
+    });
     revalidatePath('/clients');
     revalidatePath(`/clients/${client.id}`);
     return {
@@ -844,13 +1009,77 @@ export async function uploadClientPhotoAction(
       clientId: client.id,
     };
   } catch (error) {
+    if (storage && finalStoragePromoted && photoUploadId) {
+      const reread = await prisma.client
+        .findFirst({
+          where: {
+            id: client.id,
+            companyId: client.companyId,
+          },
+          select: { photoPath: true },
+        })
+        .then((value) => ({ available: true as const, value }))
+        .catch(() => ({ available: false as const, value: null }));
+
+      if (reread.available && reread.value?.photoPath === finalStorageKey) {
+        databaseCommitted = true;
+        const [sourceRemoved, previousRemoved] = await Promise.all([
+          removePrivateTracked(storage, sourceStorageKey ?? null),
+          removePrivateTracked(storage, client.photoPath),
+        ]);
+        await prisma.clientPhotoUpload
+          .updateMany({
+            where: { id: photoUploadId, companyId: client.companyId, clientId: client.id },
+            data: {
+              status: sourceRemoved && previousRemoved ? 'COMMITTED' : 'CLEANUP_PENDING',
+              leaseExpiresAt:
+                sourceRemoved && previousRemoved ? null : newScanLeaseExpiresAt(),
+              committedAt: new Date(),
+            },
+          })
+          .catch(() => undefined);
+        revalidatePath('/clients');
+        revalidatePath(`/clients/${client.id}`);
+        return {
+          status: 'success',
+          message: 'Фотография клиента обновлена.',
+          clientId: client.id,
+        };
+      }
+
+      if (reread.available) {
+        const claimed = await prisma.clientPhotoUpload
+          .updateMany({
+            where: {
+              id: photoUploadId,
+              companyId: client.companyId,
+              clientId: client.id,
+              status: { in: ['PENDING', 'CLEANUP_PENDING'] },
+            },
+            data: { status: 'CLEANUP_PENDING', leaseExpiresAt: new Date() },
+          })
+          .catch(() => ({ count: 0 }));
+        if (claimed.count === 1) {
+          const finalRemoved = await removePrivateTracked(storage, finalStorageKey);
+          await prisma.clientPhotoUpload
+            .updateMany({
+              where: { id: photoUploadId, companyId: client.companyId, clientId: client.id },
+              data: {
+                status: finalRemoved ? 'ERROR' : 'CLEANUP_PENDING',
+                leaseExpiresAt: finalRemoved ? null : newScanLeaseExpiresAt(),
+              },
+            })
+            .catch(() => undefined);
+        }
+      }
+      // An unavailable tenant-scoped reread is ambiguous: the durable lease owns cleanup.
+    }
     const fileError = safeFileErrorState(error);
     if (fileError) return fileError;
     return uploadError;
   } finally {
-    if (storage && finalStoragePromoted && !databaseCommitted) {
-      await removePrivateQuietly(storage, finalStorageKey);
+    if (storage && sourceStorageKey && databaseCommitted) {
+      await removePrivateQuietly(storage, sourceStorageKey);
     }
-    if (storage && sourceStorageKey) await removePrivateQuietly(storage, sourceStorageKey);
   }
 }

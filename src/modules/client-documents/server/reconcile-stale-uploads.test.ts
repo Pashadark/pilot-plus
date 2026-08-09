@@ -61,11 +61,11 @@ describe('stale client document upload reconciliation', () => {
         cleanupRetryMs: 5 * 60_000,
         batchSize: 50,
       }),
-    ).resolves.toEqual({ recovered: 1, cleanupPending: 0, staleFilesRemoved: 2 });
+    ).resolves.toEqual({ recovered: 1, cleanupPending: 0, staleFilesRemoved: 2, hasMore: false });
 
     expect(database.clientDocumentVersion.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        take: 50,
+        take: 51,
         where: expect.objectContaining({ document: { archivedAt: null } }),
       }),
     );
@@ -125,7 +125,7 @@ describe('stale client document upload reconciliation', () => {
         staleAfterMs: 15 * 60_000,
         cleanupRetryMs: 5 * 60_000,
       }),
-    ).resolves.toEqual({ recovered: 1, cleanupPending: 1, staleFilesRemoved: 2 });
+    ).resolves.toEqual({ recovered: 1, cleanupPending: 1, staleFilesRemoved: 2, hasMore: false });
 
     expect(database.clientDocument.updateMany).not.toHaveBeenCalled();
     expect(database.clientDocumentVersion.updateMany).toHaveBeenLastCalledWith({
@@ -142,5 +142,24 @@ describe('stale client document upload reconciliation', () => {
       },
       data: { scanLeaseExpiresAt: new Date('2026-08-10T12:05:00.000Z') },
     });
+  });
+
+  it('обрабатывает только bounded page и сигнализирует hasMore', async () => {
+    const second = {
+      ...staleInitial,
+      id: 'version-2',
+      uploadId: '223e4567-e89b-42d3-a456-426614174000',
+      storageKey: 'companies/company-1/clients/client-1/documents/document-2/1.jpg',
+      document: { ...staleInitial.document, id: 'document-2' },
+    };
+    const { database, storage } = dependencies();
+    database.clientDocumentVersion.findMany.mockResolvedValue([staleInitial, second]);
+
+    await expect(
+      reconcileStaleClientDocumentUploads({ database, storage, now, batchSize: 1 }),
+    ).resolves.toEqual({ recovered: 1, cleanupPending: 0, staleFilesRemoved: 2, hasMore: true });
+
+    expect(storage.removePrivate).toHaveBeenCalledOnce();
+    expect(storage.removePrivate).toHaveBeenCalledWith(staleInitial.storageKey);
   });
 });

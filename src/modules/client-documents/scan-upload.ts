@@ -15,6 +15,7 @@ type ScanPendingUploadInput = {
   scanner: MalwareScanner;
   uploadId: string;
   storageKey: string;
+  renewPromotionLease?: () => Promise<boolean>;
 };
 
 type ScanAudit = {
@@ -52,6 +53,7 @@ export async function scanPendingUpload({
   scanner,
   uploadId,
   storageKey,
+  renewPromotionLease,
 }: ScanPendingUploadInput): Promise<ScanPendingUploadResult> {
   const snapshot = await storage.reserveQuarantine(uploadId);
   let settled = false;
@@ -73,6 +75,18 @@ export async function scanPendingUpload({
     }
 
     if (verdict.kind === 'clean') {
+      if (renewPromotionLease) {
+        const ownsPromotion = await renewPromotionLease().catch(() => false);
+        if (!ownsPromotion) {
+          try {
+            await snapshot.remove();
+            settled = true;
+          } catch {
+            // Recovery owns the expired upload and will retry durable cleanup.
+          }
+          return errorResult(sha256, metadata);
+        }
+      }
       try {
         await snapshot.promote(storageKey);
         settled = true;
@@ -105,6 +119,12 @@ export async function scanPendingUpload({
 
     return errorResult(sha256, metadata);
   } finally {
-    if (!settled) await snapshot.release();
+    if (!settled) {
+      try {
+        await snapshot.release();
+      } catch {
+        // Recovery can concurrently remove an expired snapshot.
+      }
+    }
   }
 }
