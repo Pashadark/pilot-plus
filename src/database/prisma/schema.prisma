@@ -304,6 +304,7 @@ model Client {
   documents                    ClientDocument[]
 
   @@unique([companyId, phoneIndex])
+  @@unique([companyId, id])
   @@index([companyId, status, updatedAt])
   @@index([companyId, lastName, firstName])
 }
@@ -313,7 +314,7 @@ model ClientDocument {
   companyId       String
   company         Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
   clientId        String
-  client          Client                  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client          Client                  @relation(fields: [companyId, clientId], references: [companyId, id], onDelete: Cascade)
   category        ClientDocumentCategory
   title           String
   numberEncrypted String?

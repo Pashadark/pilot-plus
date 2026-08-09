@@ -13,7 +13,9 @@ type PrivateStorageForTest = {
   openPrivate(storageKey: string): Promise<Readable>;
 };
 
-type LocalPrivateStorageConstructor = new (root: string) => PrivateStorageForTest;
+type LocalPrivateStorageFactory = {
+  create(root: string): Promise<PrivateStorageForTest>;
+};
 
 const temporaryRoots: string[] = [];
 
@@ -35,11 +37,14 @@ async function createStorage() {
     throw new Error('Адаптер приватного хранилища не найден.');
   }
 
-  const LocalPrivateStorage = (imported as { LocalPrivateStorage: LocalPrivateStorageConstructor })
+  const LocalPrivateStorage = (imported as { LocalPrivateStorage: LocalPrivateStorageFactory })
     .LocalPrivateStorage;
 
   expect(LocalPrivateStorage).toBeTypeOf('function');
-  return { root, storage: new LocalPrivateStorage(root) };
+  const factory = LocalPrivateStorage as unknown as LocalPrivateStorageFactory;
+
+  expect(factory.create).toBeTypeOf('function');
+  return { root, storage: await factory.create(root) };
 }
 
 async function readAll(stream: Readable) {
@@ -98,5 +103,21 @@ describe('LocalPrivateStorage', () => {
     await expect(
       storage.promote('upload-1', 'companies/c1/clients/u1/documents/d1/v1'),
     ).rejects.toThrow('Путь приватного хранилища выходит за пределы root.');
+  });
+
+  it('отклоняет trusted root, который является junction или символьной ссылкой', async () => {
+    const actualRoot = await mkdtemp(join(tmpdir(), 'pilot-private-storage-actual-'));
+    const linkedRoot = join(tmpdir(), `pilot-private-storage-link-${Date.now()}`);
+    temporaryRoots.push(actualRoot, linkedRoot);
+    await symlink(actualRoot, linkedRoot, 'junction');
+
+    const modulePath = './local-private-storage';
+    const imported = await import(modulePath);
+    const factory = (imported as { LocalPrivateStorage: LocalPrivateStorageFactory })
+      .LocalPrivateStorage;
+
+    await expect(factory.create(linkedRoot)).rejects.toThrow(
+      'Корень приватного хранилища должен быть доверенной директорией.',
+    );
   });
 });

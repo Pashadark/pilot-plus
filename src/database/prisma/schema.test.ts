@@ -151,12 +151,22 @@ describe('доменная схема автопарка', () => {
     expect(schema).toMatch(/originalName\s+String/);
     expect(schema).toMatch(/verifiedMime\s+String/);
     expect(schema).toMatch(/sha256\s+String/);
+    expect(schema).toContain('@@unique([companyId, id])');
+    expect(schema).toMatch(
+      /client\s+Client\s+@relation\(fields: \[companyId, clientId\], references: \[companyId, id\], onDelete: Cascade\)/,
+    );
     expect(schema).toMatch(/@@index\(\[companyId, clientId, status\]\)/);
     expect(schema).not.toMatch(/publicUrl\s+String/);
     expect(clientDocumentsMigration).toContain("'VIEW'");
     expect(clientDocumentsMigration).toContain("'DOWNLOAD'");
     expect(clientDocumentsMigration).toContain("'SCAN'");
     expect(clientDocumentsMigration).toContain("'CLIENT_DOCUMENT'");
+    expect(clientDocumentsMigration).toContain(
+      'CREATE UNIQUE INDEX "Client_companyId_id_key" ON "public"."Client"("companyId", "id")',
+    );
+    expect(clientDocumentsMigration).toContain(
+      'FOREIGN KEY ("companyId", "clientId") REFERENCES "public"."Client"("companyId", "id") ON DELETE CASCADE ON UPDATE CASCADE',
+    );
     expect(clientDocumentsMigration).not.toMatch(/\bDROP\b/i);
   });
 });
