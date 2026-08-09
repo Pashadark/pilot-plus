@@ -93,4 +93,10 @@ describe('parseClientInput', () => {
       );
     }
   });
+
+  it('не позволяет форме напрямую установить архивный статус', () => {
+    const result = parseClientInput(validFormData({ status: 'ARCHIVED' }));
+
+    expect(result).toMatchObject({ ok: false });
+  });
 });

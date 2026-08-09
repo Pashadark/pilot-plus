@@ -5,6 +5,8 @@ import { prisma } from '@/database/prisma/client';
 
 import type { WriteAuditLogInput } from './types';
 
+type AuditDatabase = Pick<Prisma.TransactionClient, 'auditLog'>;
+
 const forbiddenKeys = new Set([
   'password',
   'passwordhash',
@@ -45,10 +47,13 @@ function prepareChanges(changes: Readonly<Record<string, unknown>> | undefined) 
   return normalized;
 }
 
-export async function writeAuditLog(input: WriteAuditLogInput): Promise<void> {
+export async function writeAuditLog(
+  input: WriteAuditLogInput,
+  database: AuditDatabase = prisma,
+): Promise<void> {
   const changes = prepareChanges(input.changes);
 
-  await prisma.auditLog.create({
+  await database.auditLog.create({
     data: {
       actorUserId: input.actor.id,
       actorEmailSnapshot: input.actor.email,

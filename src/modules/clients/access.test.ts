@@ -55,12 +55,12 @@ describe('серверный доступ к клиентам компании',
     });
     expect(membershipFindManyMock).toHaveBeenCalledWith({
       where: { userId: 'user-company' },
-      select: { companyId: true, role: true, additionalPermissions: true },
+      select: { companyId: true, role: true },
       orderBy: { createdAt: 'asc' },
     });
   });
 
-  it('учитывает индивидуальный grant при выборе компаний', async () => {
+  it('не позволяет индивидуальным grant открыть клиентские данные водителю', async () => {
     readSessionMock.mockResolvedValue({ ...superAdmin, id: 'user-grant', role: 'MEMBER' as const });
     membershipFindManyMock.mockResolvedValue([
       {
@@ -70,11 +70,24 @@ describe('серверный доступ к клиентам компании',
       },
     ]);
 
-    await expect(getClientAccess('VIEW_CLIENTS')).resolves.toMatchObject({
-      scope: 'COMPANY',
-      companyIds: ['c1'],
-      canManage: false,
+    await expect(getClientAccess('VIEW_CLIENTS')).resolves.toBeNull();
+  });
+
+  it('не позволяет индивидуальным grant дать viewer управление клиентами', async () => {
+    readSessionMock.mockResolvedValue({
+      ...superAdmin,
+      id: 'user-viewer',
+      role: 'MEMBER' as const,
     });
+    membershipFindManyMock.mockResolvedValue([
+      {
+        companyId: 'c1',
+        role: 'VIEWER',
+        additionalPermissions: ['MANAGE_CLIENTS'],
+      },
+    ]);
+
+    await expect(getClientAccess('MANAGE_CLIENTS')).resolves.toBeNull();
   });
 
   it('не выдаёт доступ водителю без клиентских разрешений', async () => {

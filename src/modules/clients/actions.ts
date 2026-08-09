@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 
+import type { Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 import { writeAuditLog, type ClientAuditChanges } from '@/modules/admin/audit';
 import { getClientAccess, type ClientAccess } from '@/modules/clients/access';
@@ -141,27 +142,26 @@ function invalidInputState(fieldErrors: Record<string, string>): ClientActionSta
   return { status: 'error', message: 'Проверьте заполнение полей.', fieldErrors };
 }
 
-function labelFor(input: Pick<ClientInput, 'lastName' | 'firstName' | 'middleName'>): string {
-  return [input.lastName, input.firstName, input.middleName].filter(Boolean).join(' ');
-}
-
 async function audit(
   access: ClientAccess,
   companyId: string,
   action: 'CREATE' | 'UPDATE' | 'ARCHIVE',
   clientId: string,
-  label: string,
   changes: ClientAuditChanges,
+  transaction: Prisma.TransactionClient,
 ): Promise<void> {
-  await writeAuditLog({
-    actor: { id: access.user.id, email: access.user.email },
-    companyId,
-    action,
-    entityType: 'CLIENT',
-    entityId: clientId,
-    entityLabel: label,
-    changes,
-  });
+  await writeAuditLog(
+    {
+      actor: { id: access.user.id, email: access.user.email },
+      companyId,
+      action,
+      entityType: 'CLIENT',
+      entityId: clientId,
+      entityLabel: 'Клиент',
+      changes,
+    },
+    transaction,
+  );
 }
 
 function revalidateClient(clientId: string): void {
@@ -181,13 +181,23 @@ export async function createClientAction(
   if (!includesCompany(access, parsed.data.companyId)) return COMPANY_ACCESS_ERROR;
 
   try {
-    const client = await prisma.client.create({
-      data: encryptedCreateData(parsed.data, access.user.id),
-      select: { id: true },
-    });
-    await audit(access, parsed.data.companyId, 'CREATE', client.id, labelFor(parsed.data), {
-      created: true,
-      status: parsed.data.status,
+    const client = await prisma.$transaction(async (transaction) => {
+      const created = await transaction.client.create({
+        data: encryptedCreateData(parsed.data, access.user.id),
+        select: { id: true },
+      });
+      await audit(
+        access,
+        parsed.data.companyId,
+        'CREATE',
+        created.id,
+        {
+          created: true,
+          status: parsed.data.status,
+        },
+        transaction,
+      );
+      return created;
     });
     revalidateClient(client.id);
     return { status: 'success', message: 'Клиент создан.', clientId: client.id };
@@ -212,22 +222,32 @@ export async function updateClientAction(
 
   try {
     const companyIds = scopedCompanyIds(access);
-    const updated = await prisma.client.updateMany({
-      where: {
-        id: clientId,
-        ...(companyIds ? { companyId: { in: companyIds } } : {}),
-        AND: { companyId: parsed.data.companyId },
-        updatedAt: expectedUpdatedAt,
-        archivedAt: null,
-      },
-      data: encryptedUpdateData(parsed.data),
+    const updated = await prisma.$transaction(async (transaction) => {
+      const result = await transaction.client.updateMany({
+        where: {
+          id: clientId,
+          ...(companyIds ? { companyId: { in: companyIds } } : {}),
+          AND: { companyId: parsed.data.companyId },
+          updatedAt: expectedUpdatedAt,
+          archivedAt: null,
+        },
+        data: encryptedUpdateData(parsed.data),
+      });
+      if (result.count !== 1) return result;
+      await audit(
+        access,
+        parsed.data.companyId,
+        'UPDATE',
+        clientId,
+        {
+          status: parsed.data.status,
+        },
+        transaction,
+      );
+      return result;
     });
     if (updated.count !== 1) return CONFLICT_ERROR;
 
-    const companyId = parsed.data.companyId;
-    await audit(access, companyId, 'UPDATE', clientId, labelFor(parsed.data), {
-      status: parsed.data.status,
-    });
     revalidateClient(clientId);
     return { status: 'success', message: 'Карточка клиента обновлена.', clientId };
   } catch (error) {
@@ -262,31 +282,41 @@ export async function archiveClientAction(
           ).map(({ companyId }) => companyId);
     if (archiveCompanyIds?.length === 0) return ARCHIVE_ACCESS_ERROR;
 
-    const client = await prisma.client.findFirst({
-      where: {
-        id: clientId,
-        ...(archiveCompanyIds ? { companyId: { in: archiveCompanyIds } } : {}),
-        archivedAt: null,
-      },
-      select: { companyId: true },
-    });
-    if (!client) return CONFLICT_ERROR;
+    const archived = await prisma.$transaction(async (transaction) => {
+      const client = await transaction.client.findFirst({
+        where: {
+          id: clientId,
+          ...(archiveCompanyIds ? { companyId: { in: archiveCompanyIds } } : {}),
+          archivedAt: null,
+        },
+        select: { companyId: true },
+      });
+      if (!client) return false;
 
-    const updated = await prisma.client.updateMany({
-      where: {
-        id: clientId,
-        companyId: { in: [client.companyId] },
-        updatedAt: expectedUpdatedAt,
-        archivedAt: null,
-      },
-      data: { status: 'ARCHIVED', archivedAt: new Date() },
+      const updated = await transaction.client.updateMany({
+        where: {
+          id: clientId,
+          companyId: { in: [client.companyId] },
+          updatedAt: expectedUpdatedAt,
+          archivedAt: null,
+        },
+        data: { status: 'ARCHIVED', archivedAt: new Date() },
+      });
+      if (updated.count !== 1) return false;
+      await audit(
+        access,
+        client.companyId,
+        'ARCHIVE',
+        clientId,
+        {
+          archived: true,
+          status: 'ARCHIVED',
+        },
+        transaction,
+      );
+      return true;
     });
-    if (updated.count !== 1) return CONFLICT_ERROR;
-
-    await audit(access, client.companyId, 'ARCHIVE', clientId, 'Клиент', {
-      archived: true,
-      status: 'ARCHIVED',
-    });
+    if (!archived) return CONFLICT_ERROR;
     revalidateClient(clientId);
     return { status: 'success', message: 'Клиент архивирован.', clientId };
   } catch {

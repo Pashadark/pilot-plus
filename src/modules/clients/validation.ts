@@ -11,7 +11,6 @@ const CLIENT_STATUSES = [
   'VERIFIED',
   'REGULAR',
   'BLOCKED',
-  'ARCHIVED',
 ] as const satisfies readonly ClientStatus[];
 const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const MAX_DOCUMENT_LENGTH = 64;

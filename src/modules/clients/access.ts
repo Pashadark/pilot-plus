@@ -1,10 +1,7 @@
 import 'server-only';
 
 import { prisma } from '@/database/prisma/client';
-import {
-  hasCompanyPermission,
-  type CompanyPermissionValue,
-} from '@/modules/admin/access/permissions';
+import type { CompanyPermissionValue } from '@/modules/admin/access/permissions';
 import type { SafeUser } from '@/modules/auth/types';
 import { readSession } from '@/services/auth/session';
 
@@ -15,6 +12,16 @@ export interface ClientAccess {
   scope: 'SYSTEM' | 'COMPANY';
   companyIds: readonly string[];
   canManage: boolean;
+}
+
+function roleAllowsClientPermission(
+  role: 'COMPANY_ADMIN' | 'DISPATCHER' | 'DRIVER' | 'VIEWER',
+  permission: ClientPermission,
+): boolean {
+  if (permission === 'MANAGE_CLIENTS') {
+    return role === 'COMPANY_ADMIN' || role === 'DISPATCHER';
+  }
+  return role !== 'DRIVER';
 }
 
 export function canManageClient(access: ClientAccess | null, companyId: string): boolean {
@@ -35,13 +42,11 @@ export async function getClientAccess(permission: ClientPermission): Promise<Cli
 
   const memberships = await prisma.companyMember.findMany({
     where: { userId: user.id },
-    select: { companyId: true, role: true, additionalPermissions: true },
+    select: { companyId: true, role: true },
     orderBy: { createdAt: 'asc' },
   });
   const companyIds = memberships
-    .filter(({ role, additionalPermissions }) =>
-      hasCompanyPermission(role, additionalPermissions, permission),
-    )
+    .filter(({ role }) => roleAllowsClientPermission(role, permission))
     .map(({ companyId }) => companyId);
   if (companyIds.length === 0) return null;
 

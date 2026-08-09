@@ -4,6 +4,7 @@ const revalidatePathMock = vi.hoisted(() => vi.fn());
 const getClientAccessMock = vi.hoisted(() => vi.fn());
 const writeAuditLogMock = vi.hoisted(() => vi.fn());
 const repository = vi.hoisted(() => ({
+  $transaction: vi.fn(),
   client: { create: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() },
   companyMember: { findMany: vi.fn() },
 }));
@@ -73,6 +74,9 @@ describe('client mutations', () => {
     repository.companyMember.findMany.mockResolvedValue([]);
     repository.client.findFirst.mockResolvedValue({ companyId: 'c1' });
     writeAuditLogMock.mockResolvedValue(undefined);
+    repository.$transaction.mockImplementation(
+      async (operation: (transaction: typeof repository) => unknown) => operation(repository),
+    );
   });
 
   it('allows a dispatcher to create only inside an authorized company and records safe audit metadata', async () => {
@@ -98,11 +102,19 @@ describe('client mutations', () => {
       '4510 123456',
     );
     expect(writeAuditLogMock).toHaveBeenCalledWith(
-      expect.objectContaining({ entityType: 'CLIENT', action: 'CREATE', entityId: 'client-1' }),
+      expect.objectContaining({
+        entityType: 'CLIENT',
+        action: 'CREATE',
+        entityId: 'client-1',
+        entityLabel: 'Клиент',
+      }),
+      repository,
     );
     expect(JSON.stringify(writeAuditLogMock.mock.calls[0]?.[0])).not.toContain('4510 123456');
+    expect(JSON.stringify(writeAuditLogMock.mock.calls[0]?.[0])).not.toContain('Воронова');
     expect(revalidatePathMock).toHaveBeenCalledWith('/clients');
     expect(revalidatePathMock).toHaveBeenCalledWith('/clients/client-1');
+    expect(repository.$transaction).toHaveBeenCalledOnce();
   });
 
   it('rejects a submitted company outside the dispatcher tenant scope before writing', async () => {
@@ -154,6 +166,7 @@ describe('client mutations', () => {
     });
     expect(writeAuditLogMock).toHaveBeenCalledWith(
       expect.objectContaining({ entityType: 'CLIENT', action: 'UPDATE', entityId: 'client-1' }),
+      repository,
     );
   });
 
@@ -187,6 +200,7 @@ describe('client mutations', () => {
     });
     expect(writeAuditLogMock).toHaveBeenCalledWith(
       expect.objectContaining({ entityType: 'CLIENT', action: 'ARCHIVE', companyId: 'c1' }),
+      repository,
     );
   });
 });
