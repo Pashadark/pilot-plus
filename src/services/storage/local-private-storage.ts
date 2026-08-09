@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { chmod, lstat, mkdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
-import { Readable } from 'node:stream';
 
 import type { PrivateStorage, QuarantineSnapshot } from './private-storage';
 
@@ -94,6 +93,15 @@ export class LocalPrivateStorage implements PrivateStorage {
       await this.assertRegularFile(path);
       await this.assertCriticalFile(path);
       return createReadStream(path);
+    });
+  }
+
+  async removePrivate(storageKey: string) {
+    return this.runExclusive(async () => {
+      const path = await this.resolvePrivatePath(storageKey);
+      await this.assertRegularFile(path);
+      await this.assertCriticalFile(path);
+      await rm(path);
     });
   }
 

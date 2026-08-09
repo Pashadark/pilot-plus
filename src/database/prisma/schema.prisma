@@ -336,6 +336,7 @@ model ClientDocumentVersion {
   id               String         @id @default(cuid())
   documentId       String
   document         ClientDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploadId         String?        @unique
   version          Int
   storageKey       String         @unique
   originalName     String

@@ -22,6 +22,10 @@ const clientDocumentsMigrationPath = new URL(
   './migrations/20260804180000_add_client_documents/migration.sql',
   import.meta.url,
 );
+const clientDocumentUploadIdMigrationPath = new URL(
+  './migrations/20260810120000_add_client_document_upload_id/migration.sql',
+  import.meta.url,
+);
 
 describe('доменная схема автопарка', () => {
   it('описывает роли, точечные разрешения и журнал аудита центра администрирования', () => {
@@ -168,5 +172,22 @@ describe('доменная схема автопарка', () => {
       'FOREIGN KEY ("companyId", "clientId") REFERENCES "public"."Client"("companyId", "id") ON DELETE CASCADE ON UPDATE CASCADE',
     );
     expect(clientDocumentsMigration).not.toMatch(/\bDROP\b/i);
+  });
+
+  it('хранит persistent upload id в отдельной add-only миграции Task 3', () => {
+    expect(existsSync(clientDocumentUploadIdMigrationPath)).toBe(true);
+    if (!existsSync(clientDocumentUploadIdMigrationPath)) return;
+
+    const migration = readFileSync(clientDocumentUploadIdMigrationPath, 'utf8');
+
+    expect(schema).toMatch(/uploadId\s+String\?\s+@unique/);
+    expect(migration).toContain('ADD COLUMN "uploadId" TEXT');
+    expect(migration).toContain(
+      'CREATE UNIQUE INDEX "ClientDocumentVersion_uploadId_key" ON "public"."ClientDocumentVersion"("uploadId")',
+    );
+    expect(migration).not.toMatch(/\bDROP\b/i);
+    expect(migration).not.toContain('SET NOT NULL');
+    expect(migration).not.toMatch(/\bUPDATE\b/i);
+    expect(migration).not.toContain('20260804180000_add_client_documents');
   });
 });

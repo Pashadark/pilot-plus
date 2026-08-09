@@ -7,6 +7,12 @@ import { ClamAvClient } from '@/services/malware-scanner/clamav-client';
 
 import { scanPendingUpload } from './scan-upload';
 
+const scannerMetadata = {
+  engine: 'ClamAV' as const,
+  engineVersion: '1.4.3',
+  signatureVersion: '27692',
+};
+
 function createStorage(bytes: Buffer) {
   const snapshot: QuarantineSnapshot = {
     open: vi.fn(async () => Readable.from([bytes])),
@@ -20,6 +26,7 @@ function createStorage(bytes: Buffer) {
     removeQuarantine: vi.fn(),
     promote: vi.fn(),
     openPrivate: vi.fn(),
+    removePrivate: vi.fn(),
     reserveQuarantine: vi.fn(async () => snapshot),
   };
   return { storage, snapshot };
@@ -28,7 +35,10 @@ function createStorage(bytes: Buffer) {
 describe('scanPendingUpload', () => {
   it('переносит чистый файл в закрытое хранилище и возвращает безопасный аудит', async () => {
     const { storage, snapshot } = createStorage(Buffer.from('safe-document'));
-    const scanner = { scanStream: vi.fn(async () => ({ kind: 'clean' as const })) };
+    const scanner = {
+      getMetadata: vi.fn(async () => scannerMetadata),
+      scanStream: vi.fn(async () => ({ kind: 'clean' as const })),
+    };
 
     await expect(
       scanPendingUpload({
@@ -42,6 +52,8 @@ describe('scanPendingUpload', () => {
       audit: {
         verdict: 'CLEAN',
         sha256: '6f99f13c6e0f234ec7823144f5edd7b36f26a6ba9c1747c3dd3a5aeebd560ab5',
+        engine: 'ClamAV',
+        signatureVersion: '27692',
       },
     });
 
@@ -52,6 +64,7 @@ describe('scanPendingUpload', () => {
   it('удаляет заражённый карантинный файл и блокирует документ', async () => {
     const { storage, snapshot } = createStorage(Buffer.from('eicar'));
     const scanner = {
+      getMetadata: vi.fn(async () => scannerMetadata),
       scanStream: vi.fn(async () => ({ kind: 'infected' as const, threat: 'Eicar-Signature' })),
     };
 
@@ -59,7 +72,12 @@ describe('scanPendingUpload', () => {
       scanPendingUpload({ storage, scanner, uploadId: 'upload-2', storageKey: 'private/key' }),
     ).resolves.toMatchObject({
       status: 'BLOCKED',
-      audit: { verdict: 'BLOCKED', signature: 'Eicar-Signature', sha256: expect.any(String) },
+      audit: {
+        verdict: 'BLOCKED',
+        signature: 'Eicar-Signature',
+        signatureVersion: '27692',
+        sha256: expect.any(String),
+      },
     });
     expect(snapshot.remove).toHaveBeenCalledOnce();
     expect(snapshot.promote).not.toHaveBeenCalled();
@@ -67,7 +85,10 @@ describe('scanPendingUpload', () => {
 
   it('оставляет карантинный файл недоступным при недоступном scanner', async () => {
     const { storage, snapshot } = createStorage(Buffer.from('safe-document'));
-    const scanner = { scanStream: vi.fn(async () => ({ kind: 'unavailable' as const })) };
+    const scanner = {
+      getMetadata: vi.fn(async () => scannerMetadata),
+      scanStream: vi.fn(async () => ({ kind: 'unavailable' as const })),
+    };
 
     await expect(
       scanPendingUpload({ storage, scanner, uploadId: 'upload-3', storageKey: 'private/key' }),
@@ -92,9 +113,11 @@ describe('scanPendingUpload', () => {
       removeQuarantine: vi.fn(),
       promote: vi.fn(),
       openPrivate: vi.fn(),
+      removePrivate: vi.fn(),
       reserveQuarantine: vi.fn(async () => snapshot),
     };
     const scanner = {
+      getMetadata: vi.fn(async () => scannerMetadata),
       scanStream: vi.fn(async (stream: Readable) => {
         const chunks: Buffer[] = [];
         for await (const chunk of stream) chunks.push(Buffer.from(chunk));
@@ -133,6 +156,7 @@ describe('scanPendingUpload', () => {
       removeQuarantine: vi.fn(),
       promote: vi.fn(),
       openPrivate: vi.fn(),
+      removePrivate: vi.fn(),
       reserveQuarantine: vi.fn(async () => snapshot),
     };
     const scanner = new ClamAvClient({ host: '127.0.0.1', port: 1, timeoutMs: 50 });

@@ -11,6 +11,7 @@ type PrivateStorageForTest = {
   removeQuarantine(uploadId: string): Promise<void>;
   promote(uploadId: string, storageKey: string): Promise<void>;
   openPrivate(storageKey: string): Promise<Readable>;
+  removePrivate(storageKey: string): Promise<void>;
   reserveQuarantine(uploadId: string): Promise<{
     open(): Promise<Readable>;
     promote(storageKey: string): Promise<void>;
@@ -78,6 +79,20 @@ describe('LocalPrivateStorage', () => {
     expect(await readAll(await storage.openPrivate(finalKey))).toEqual(bytes);
     await expect(storage.openQuarantine('upload-1')).rejects.toThrow();
     await expect(readFile(join(root, 'private', finalKey))).resolves.toEqual(bytes);
+  });
+
+  it('удаляет только приватный файл внутри trusted root', async () => {
+    const { storage } = await createStorage();
+    const finalKey = 'companies/c1/clients/u1/photos/source/upload-1';
+    await storage.putQuarantine('upload-1', Buffer.from('clean-photo'));
+    await storage.promote('upload-1', finalKey);
+
+    await storage.removePrivate(finalKey);
+
+    await expect(storage.openPrivate(finalKey)).rejects.toThrow();
+    await expect(storage.removePrivate('../outside')).rejects.toThrow(
+      'Ключ приватного хранилища недопустим.',
+    );
   });
 
   it.each([
