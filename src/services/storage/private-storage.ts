@@ -1,5 +1,13 @@
 import type { Readable } from 'node:stream';
 
+/** Неизменяемый snapshot карантинного файла на время проверки. */
+export interface QuarantineSnapshot {
+  open(): Promise<Readable>;
+  promote(storageKey: string): Promise<void>;
+  remove(): Promise<void>;
+  release(): Promise<void>;
+}
+
 /**
  * Закрытое хранилище файлов, недоступное браузеру напрямую.
  *
@@ -13,4 +21,5 @@ export interface PrivateStorage {
   removeQuarantine(uploadId: string): Promise<void>;
   promote(uploadId: string, storageKey: string): Promise<void>;
   openPrivate(storageKey: string): Promise<Readable>;
+  reserveQuarantine(uploadId: string): Promise<QuarantineSnapshot>;
 }

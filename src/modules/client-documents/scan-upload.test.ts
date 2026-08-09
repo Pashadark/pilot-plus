@@ -2,24 +2,31 @@ import { Readable } from 'node:stream';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import type { PrivateStorage } from '@/services/storage/private-storage';
+import type { PrivateStorage, QuarantineSnapshot } from '@/services/storage/private-storage';
 
 import { scanPendingUpload } from './scan-upload';
 
 function createStorage(bytes: Buffer) {
+  const snapshot: QuarantineSnapshot = {
+    open: vi.fn(async () => Readable.from([bytes])),
+    promote: vi.fn(),
+    remove: vi.fn(),
+    release: vi.fn(),
+  };
   const storage: PrivateStorage = {
     putQuarantine: vi.fn(),
     openQuarantine: vi.fn(async () => Readable.from([bytes])),
     removeQuarantine: vi.fn(),
     promote: vi.fn(),
     openPrivate: vi.fn(),
+    reserveQuarantine: vi.fn(async () => snapshot),
   };
-  return storage;
+  return { storage, snapshot };
 }
 
 describe('scanPendingUpload', () => {
   it('переносит чистый файл в закрытое хранилище и возвращает безопасный аудит', async () => {
-    const storage = createStorage(Buffer.from('safe-document'));
+    const { storage, snapshot } = createStorage(Buffer.from('safe-document'));
     const scanner = { scanStream: vi.fn(async () => ({ kind: 'clean' as const })) };
 
     await expect(
@@ -37,15 +44,12 @@ describe('scanPendingUpload', () => {
       },
     });
 
-    expect(storage.promote).toHaveBeenCalledWith(
-      'upload-1',
-      'companies/c1/clients/u1/documents/d1/v1',
-    );
-    expect(storage.removeQuarantine).not.toHaveBeenCalled();
+    expect(snapshot.promote).toHaveBeenCalledWith('companies/c1/clients/u1/documents/d1/v1');
+    expect(snapshot.remove).not.toHaveBeenCalled();
   });
 
   it('удаляет заражённый карантинный файл и блокирует документ', async () => {
-    const storage = createStorage(Buffer.from('eicar'));
+    const { storage, snapshot } = createStorage(Buffer.from('eicar'));
     const scanner = {
       scanStream: vi.fn(async () => ({ kind: 'infected' as const, threat: 'Eicar-Signature' })),
     };
@@ -56,18 +60,55 @@ describe('scanPendingUpload', () => {
       status: 'BLOCKED',
       audit: { verdict: 'BLOCKED', signature: 'Eicar-Signature', sha256: expect.any(String) },
     });
-    expect(storage.removeQuarantine).toHaveBeenCalledWith('upload-2');
-    expect(storage.promote).not.toHaveBeenCalled();
+    expect(snapshot.remove).toHaveBeenCalledOnce();
+    expect(snapshot.promote).not.toHaveBeenCalled();
   });
 
   it('оставляет карантинный файл недоступным при недоступном scanner', async () => {
-    const storage = createStorage(Buffer.from('safe-document'));
+    const { storage, snapshot } = createStorage(Buffer.from('safe-document'));
     const scanner = { scanStream: vi.fn(async () => ({ kind: 'unavailable' as const })) };
 
     await expect(
       scanPendingUpload({ storage, scanner, uploadId: 'upload-3', storageKey: 'private/key' }),
     ).resolves.toMatchObject({ status: 'ERROR', audit: { verdict: 'ERROR' } });
-    expect(storage.promote).not.toHaveBeenCalled();
-    expect(storage.removeQuarantine).not.toHaveBeenCalled();
+    expect(snapshot.promote).not.toHaveBeenCalled();
+    expect(snapshot.remove).not.toHaveBeenCalled();
+    expect(snapshot.release).toHaveBeenCalledOnce();
+  });
+
+  it('использует один зарезервированный snapshot при попытке подменить uploadId', async () => {
+    const original = Buffer.from('проверенный snapshot');
+    const replacement = Buffer.from('подмена после SHA');
+    const snapshot: QuarantineSnapshot = {
+      open: vi.fn(async () => Readable.from([original])),
+      promote: vi.fn(),
+      remove: vi.fn(),
+      release: vi.fn(),
+    };
+    const storage: PrivateStorage = {
+      putQuarantine: vi.fn(),
+      openQuarantine: vi.fn(async () => Readable.from([replacement])),
+      removeQuarantine: vi.fn(),
+      promote: vi.fn(),
+      openPrivate: vi.fn(),
+      reserveQuarantine: vi.fn(async () => snapshot),
+    };
+    const scanner = {
+      scanStream: vi.fn(async (stream: Readable) => {
+        const chunks: Buffer[] = [];
+        for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+        expect(Buffer.concat(chunks)).toEqual(original);
+        return { kind: 'clean' as const };
+      }),
+    };
+
+    await expect(
+      scanPendingUpload({ storage, scanner, uploadId: 'upload-4', storageKey: 'private/key' }),
+    ).resolves.toMatchObject({
+      status: 'CLEAN',
+      audit: { sha256: '1b02c72a15063e10b2266a8a7b3dd7ed3164ec959958b8bda0adb5478cb98cef' },
+    });
+    expect(storage.openQuarantine).not.toHaveBeenCalled();
+    expect(snapshot.open).toHaveBeenCalledTimes(2);
   });
 });

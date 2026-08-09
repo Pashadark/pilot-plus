@@ -40,35 +40,43 @@ export async function scanPendingUpload({
   uploadId,
   storageKey,
 }: ScanPendingUploadInput): Promise<ScanPendingUploadResult> {
-  const sha256 = await calculateSha256(await storage.openQuarantine(uploadId));
-  let verdict: ScanVerdict;
-
+  const snapshot = await storage.reserveQuarantine(uploadId);
+  let settled = false;
   try {
-    verdict = await scanner.scanStream(await storage.openQuarantine(uploadId));
-  } catch {
+    const sha256 = await calculateSha256(await snapshot.open());
+    let verdict: ScanVerdict;
+
+    try {
+      verdict = await scanner.scanStream(await snapshot.open());
+    } catch {
+      return errorResult(sha256);
+    }
+
+    if (verdict.kind === 'clean') {
+      try {
+        await snapshot.promote(storageKey);
+        settled = true;
+        return { status: 'CLEAN', audit: { sha256, verdict: 'CLEAN' } };
+      } catch {
+        return errorResult(sha256);
+      }
+    }
+
+    if (verdict.kind === 'infected') {
+      try {
+        await snapshot.remove();
+        settled = true;
+        return {
+          status: 'BLOCKED',
+          audit: { sha256, verdict: 'BLOCKED', signature: verdict.threat },
+        };
+      } catch {
+        return errorResult(sha256);
+      }
+    }
+
     return errorResult(sha256);
+  } finally {
+    if (!settled) await snapshot.release();
   }
-
-  if (verdict.kind === 'clean') {
-    try {
-      await storage.promote(uploadId, storageKey);
-      return { status: 'CLEAN', audit: { sha256, verdict: 'CLEAN' } };
-    } catch {
-      return errorResult(sha256);
-    }
-  }
-
-  if (verdict.kind === 'infected') {
-    try {
-      await storage.removeQuarantine(uploadId);
-      return {
-        status: 'BLOCKED',
-        audit: { sha256, verdict: 'BLOCKED', signature: verdict.threat },
-      };
-    } catch {
-      return errorResult(sha256);
-    }
-  }
-
-  return errorResult(sha256);
 }

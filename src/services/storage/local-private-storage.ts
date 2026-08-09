@@ -4,7 +4,7 @@ import { chmod, lstat, mkdir, realpath, rename, rm, writeFile } from 'node:fs/pr
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 
-import type { PrivateStorage } from './private-storage';
+import type { PrivateStorage, QuarantineSnapshot } from './private-storage';
 
 const unsafeStorageKeyMessage = 'Ключ приватного хранилища недопустим.';
 const outsideStorageRootMessage = 'Путь приватного хранилища выходит за пределы root.';
@@ -14,6 +14,7 @@ const untrustedStorageRootMessage =
 /** Локальное хранилище с инициализацией доверенного server-owned root. */
 export class LocalPrivateStorage implements PrivateStorage {
   private operations: Promise<void> = Promise.resolve();
+  private readonly reservations = new Map<string, string>();
 
   private constructor(
     private readonly root: string,
@@ -45,6 +46,7 @@ export class LocalPrivateStorage implements PrivateStorage {
 
   async putQuarantine(uploadId: string, bytes: Uint8Array) {
     return this.runExclusive(async () => {
+      this.assertNotReserved(uploadId);
       const path = await this.resolveQuarantinePath(uploadId);
       await this.writeAtomically(path, bytes);
     });
@@ -52,6 +54,7 @@ export class LocalPrivateStorage implements PrivateStorage {
 
   async openQuarantine(uploadId: string) {
     return this.runExclusive(async () => {
+      this.assertNotReserved(uploadId);
       const path = await this.resolveQuarantinePath(uploadId);
       await this.assertRegularFile(path);
       await this.assertCriticalFile(path);
@@ -61,6 +64,7 @@ export class LocalPrivateStorage implements PrivateStorage {
 
   async removeQuarantine(uploadId: string) {
     return this.runExclusive(async () => {
+      this.assertNotReserved(uploadId);
       const path = await this.resolveQuarantinePath(uploadId);
       await this.assertNoSymlinkInPath(path);
       await rm(path, { force: true });
@@ -69,6 +73,7 @@ export class LocalPrivateStorage implements PrivateStorage {
 
   async promote(uploadId: string, storageKey: string) {
     return this.runExclusive(async () => {
+      this.assertNotReserved(uploadId);
       const sourcePath = await this.resolveQuarantinePath(uploadId);
       const destinationPath = await this.resolvePrivatePath(storageKey);
 
@@ -92,6 +97,28 @@ export class LocalPrivateStorage implements PrivateStorage {
     });
   }
 
+  async reserveQuarantine(uploadId: string): Promise<QuarantineSnapshot> {
+    return this.runExclusive(async () => {
+      this.assertNotReserved(uploadId);
+      const sourcePath = await this.resolveQuarantinePath(uploadId);
+      const reservedPath = await this.resolveQuarantinePath(`scan-${randomUUID()}`);
+
+      await this.assertRegularFile(sourcePath);
+      await this.assertMissing(reservedPath);
+      await this.assertCriticalFile(sourcePath);
+      await this.assertCriticalParent(reservedPath);
+      await rename(sourcePath, reservedPath);
+      this.reservations.set(uploadId, reservedPath);
+
+      return {
+        open: () => this.openReserved(uploadId, reservedPath),
+        promote: (storageKey) => this.promoteReserved(uploadId, reservedPath, storageKey),
+        remove: () => this.removeReserved(uploadId, reservedPath),
+        release: () => this.releaseReserved(uploadId, reservedPath),
+      };
+    });
+  }
+
   private async runExclusive<T>(operation: () => Promise<T>) {
     let release: (() => void) | undefined;
     const next = new Promise<void>((resolveNext) => {
@@ -111,6 +138,51 @@ export class LocalPrivateStorage implements PrivateStorage {
 
   private async resolveQuarantinePath(uploadId: string) {
     return this.resolveStoragePath(this.quarantineRoot, uploadId);
+  }
+
+  private async openReserved(uploadId: string, reservedPath: string) {
+    return this.runExclusive(async () => {
+      this.assertReserved(uploadId, reservedPath);
+      await this.assertRegularFile(reservedPath);
+      await this.assertCriticalFile(reservedPath);
+      return createReadStream(reservedPath);
+    });
+  }
+
+  private async promoteReserved(uploadId: string, reservedPath: string, storageKey: string) {
+    return this.runExclusive(async () => {
+      this.assertReserved(uploadId, reservedPath);
+      const destinationPath = await this.resolvePrivatePath(storageKey);
+      await this.assertRegularFile(reservedPath);
+      await this.ensureDirectory(resolve(destinationPath, '..'));
+      await this.assertMissing(destinationPath);
+      await this.assertCriticalFile(reservedPath);
+      await this.assertCriticalParent(destinationPath);
+      await rename(reservedPath, destinationPath);
+      this.reservations.delete(uploadId);
+    });
+  }
+
+  private async removeReserved(uploadId: string, reservedPath: string) {
+    return this.runExclusive(async () => {
+      this.assertReserved(uploadId, reservedPath);
+      await this.assertRegularFile(reservedPath);
+      await rm(reservedPath, { force: true });
+      this.reservations.delete(uploadId);
+    });
+  }
+
+  private async releaseReserved(uploadId: string, reservedPath: string) {
+    return this.runExclusive(async () => {
+      this.assertReserved(uploadId, reservedPath);
+      const quarantinePath = await this.resolveQuarantinePath(uploadId);
+      await this.assertRegularFile(reservedPath);
+      await this.assertMissing(quarantinePath);
+      await this.assertCriticalFile(reservedPath);
+      await this.assertCriticalParent(quarantinePath);
+      await rename(reservedPath, quarantinePath);
+      this.reservations.delete(uploadId);
+    });
   }
 
   private async resolvePrivatePath(storageKey: string) {
@@ -144,6 +216,16 @@ export class LocalPrivateStorage implements PrivateStorage {
       throw new Error(unsafeStorageKeyMessage);
     }
     return segments;
+  }
+
+  private assertNotReserved(uploadId: string) {
+    if (this.reservations.has(uploadId)) throw new Error('Карантинный файл уже проверяется.');
+  }
+
+  private assertReserved(uploadId: string, reservedPath: string) {
+    if (this.reservations.get(uploadId) !== reservedPath) {
+      throw new Error('Карантинный файл недоступен для проверки.');
+    }
   }
 
   private async assertTrustedRoot() {

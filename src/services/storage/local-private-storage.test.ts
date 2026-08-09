@@ -11,6 +11,12 @@ type PrivateStorageForTest = {
   removeQuarantine(uploadId: string): Promise<void>;
   promote(uploadId: string, storageKey: string): Promise<void>;
   openPrivate(storageKey: string): Promise<Readable>;
+  reserveQuarantine(uploadId: string): Promise<{
+    open(): Promise<Readable>;
+    promote(storageKey: string): Promise<void>;
+    remove(): Promise<void>;
+    release(): Promise<void>;
+  }>;
 };
 
 type LocalPrivateStorageFactory = {
@@ -103,6 +109,24 @@ describe('LocalPrivateStorage', () => {
     await expect(
       storage.promote('upload-1', 'companies/c1/clients/u1/documents/d1/v1'),
     ).rejects.toThrow('Путь приватного хранилища выходит за пределы root.');
+  });
+
+  it('резервирует неизменяемый snapshot и запрещает подмену uploadId до release', async () => {
+    const { storage } = await createStorage();
+    await storage.putQuarantine('upload-1', Buffer.from('оригинал'));
+
+    const snapshot = await storage.reserveQuarantine('upload-1');
+
+    await expect(storage.putQuarantine('upload-1', Buffer.from('подмена'))).rejects.toThrow(
+      'Карантинный файл уже проверяется.',
+    );
+    expect(await readAll(await snapshot.open())).toEqual(Buffer.from('оригинал'));
+
+    await snapshot.release();
+
+    expect(await readAll(await storage.openQuarantine('upload-1'))).toEqual(
+      Buffer.from('оригинал'),
+    );
   });
 
   it('отклоняет trusted root, который является junction или символьной ссылкой', async () => {

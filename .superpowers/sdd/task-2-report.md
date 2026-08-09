@@ -47,3 +47,30 @@
 - Docker image pull оборвался во внешней сети, поэтому живой EICAR тест нужно повторить после успешной загрузки `clamav/clamav:1.4`.
 - Стандартный Prettier не поддерживает `.env.example`; файл проверен визуально вместе с diff, а исходники и Compose прошли явную Prettier-проверку.
 - `.superpowers/sdd/task-1-report.md` уже был изменён до начала Task 2 и намеренно не включается в этот commit.
+
+## Исправление финального review
+
+### Причина и RED
+
+- `ClamAvClient` создавал независимые ожидания `drain` и response: `close` во время backpressure
+  не завершал writer, а ранний ответ daemon не отменял чтение input stream. `scan-upload` открывал
+  quarantine-файл отдельно для SHA-256 и scan, поэтому между этими операциями был возможен swap.
+- RED: `npx vitest run src/services/malware-scanner/clamav-client.test.ts src/modules/client-documents/scan-upload.test.ts src/services/storage/local-private-storage.test.ts` завершился с кодом 1: отсутствовал `reserveQuarantine`, pipeline не использовал snapshot, ранний verdict продолжал запрашивать второй chunk, а timeout оставлял TCP-соединение открытым.
+
+### Реализация
+
+- Клиент ClamAV теперь использует один наблюдаемый lifecycle response/timeout/close/error. Response
+  сразу отменяет input stream; `close` и `error` завершают pending backpressure. Ранний `CLEAN`
+  считается protocol error и не может разрешить файл до полной отправки.
+- `PrivateStorage` получил `reserveQuarantine`, возвращающий `QuarantineSnapshot`. Локальный adapter
+  атомарно перемещает quarantine-файл под внутренний случайный ключ и не допускает подмену того же
+  `uploadId` до `release`, `remove` или `promote`, сохраняя прежние проверки trusted root и path.
+- Pipeline хеширует и сканирует только два открытия одного зарезервированного immutable snapshot,
+  затем либо promote/remove, либо release обратно в quarantine.
+- Для `npm run dev` `.env.example` использует `CLAMAV_HOST=127.0.0.1`; в комментарии указано
+  контейнерное `CLAMAV_HOST=clamav` без публикации порта base Compose.
+
+### GREEN и проверки
+
+- `npx vitest run src/services/malware-scanner/clamav-client.test.ts src/modules/client-documents/file-validation.test.ts src/modules/client-documents/scan-upload.test.ts src/services/storage/local-private-storage.test.ts` — 4 test files, 31/31 tests успешно.
+- `npm run typecheck` — успешно.
