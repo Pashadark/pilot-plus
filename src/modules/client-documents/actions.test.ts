@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => {
     promote: vi.fn(),
     openPrivate: vi.fn(),
     removePrivate: vi.fn(),
+    removeUploadArtifacts: vi.fn(),
     reserveQuarantine: vi.fn(),
   };
   const sharpPipeline = {
@@ -548,6 +549,17 @@ describe('client document upload authorization and workflow', () => {
       },
       data: { leaseExpiresAt: expect.any(Date) },
     });
+    const normalizedPutOrder = mocks.storage.putQuarantine.mock.invocationCallOrder.at(-1);
+    const heartbeatIndex = mocks.repository.clientPhotoUpload.updateMany.mock.calls.findLastIndex(
+      ([args]) =>
+        'uploadId' in args.where &&
+        args.where.uploadId === '123e4567-e89b-42d3-a456-426614174000' &&
+        Object.keys(args.data).length === 1 &&
+        'leaseExpiresAt' in args.data,
+    );
+    expect(
+      mocks.repository.clientPhotoUpload.updateMany.mock.invocationCallOrder[heartbeatIndex],
+    ).toBeLessThan(normalizedPutOrder!);
     expect(mocks.repository.client.updateMany).toHaveBeenCalledWith({
       where: {
         id: 'client-1',

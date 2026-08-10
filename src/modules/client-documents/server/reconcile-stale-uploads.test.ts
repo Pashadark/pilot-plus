@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mkdtemp, readdir, rm, utimes } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
+import { LocalPrivateStorage } from '@/services/storage/local-private-storage';
+
+import { scanPendingUpload } from '../scan-upload';
 import { reconcileStaleClientDocumentUploads } from './reconcile-stale-uploads';
 
 const now = new Date('2026-08-10T12:00:00.000Z');
@@ -43,12 +49,60 @@ function dependencies(candidate = staleInitial) {
     openPrivate: vi.fn(),
     removePrivate: vi.fn().mockResolvedValue(undefined),
     reserveQuarantine: vi.fn(),
-    removeStaleQuarantine: vi.fn().mockResolvedValue(2),
+    removeUploadArtifacts: vi.fn().mockResolvedValue(2),
   };
   return { database, storage };
 }
 
 describe('stale client document upload reconciliation', () => {
+  it('не удаляет expired-mtime snapshot, если promotion heartbeat сохранил ownership', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'pilot-reconcile-race-'));
+    try {
+      const storage = await LocalPrivateStorage.create(root);
+      const uploadId = '123e4567-e89b-42d3-a456-426614174000';
+      const finalKey = 'companies/company-1/clients/client-1/documents/document-1/1.jpg';
+      await storage.putQuarantine(uploadId, Buffer.from('clean'));
+      const empty = dependencies();
+      empty.database.clientDocumentVersion.findMany.mockResolvedValue([]);
+
+      const scanner = {
+        getMetadata: vi.fn(async () => ({
+          engine: 'ClamAV' as const,
+          engineVersion: '1.4.3',
+          signatureVersion: '27692',
+        })),
+        scanStream: vi.fn(async () => {
+          const [snapshotName] = await readdir(join(root, 'quarantine'));
+          const expired = new Date('2026-08-10T10:00:00.000Z');
+          await utimes(join(root, 'quarantine', snapshotName), expired, expired);
+          return { kind: 'clean' as const };
+        }),
+      };
+      const renewPromotionLease = vi.fn(async () => {
+        await reconcileStaleClientDocumentUploads({
+          database: empty.database,
+          storage,
+          now,
+          staleAfterMs: 15 * 60_000,
+        });
+        return true;
+      });
+
+      await expect(
+        scanPendingUpload({
+          storage,
+          scanner,
+          uploadId,
+          storageKey: finalKey,
+          renewPromotionLease,
+        }),
+      ).resolves.toMatchObject({ status: 'CLEAN' });
+      await expect(storage.openPrivate(finalKey)).resolves.toBeDefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('fails an expired initial lease closed, audits it and removes stale storage', async () => {
     const { database, storage } = dependencies();
 
@@ -97,11 +151,8 @@ describe('stale client document upload reconciliation', () => {
       }),
       select: { id: true },
     });
-    expect(storage.removeQuarantine).toHaveBeenCalledWith(staleInitial.uploadId);
+    expect(storage.removeUploadArtifacts).toHaveBeenCalledWith(staleInitial.uploadId);
     expect(storage.removePrivate).toHaveBeenCalledWith(staleInitial.storageKey);
-    expect(storage.removeStaleQuarantine).toHaveBeenCalledWith(
-      new Date('2026-08-10T11:45:00.000Z'),
-    );
   });
 
   it('keeps a CLEAN current version and schedules bounded cleanup retry for a stale replacement', async () => {

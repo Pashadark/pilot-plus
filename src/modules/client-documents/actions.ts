@@ -938,7 +938,6 @@ export async function uploadClientPhotoAction(
       .webp({ quality: 82 })
       .toBuffer();
     const normalizedUploadId = `normalized-${uploadId}`;
-    await storage.putQuarantine(normalizedUploadId, normalized);
     const promotionLease = await prisma.clientPhotoUpload.updateMany({
       where: {
         id: photoUploadId,
@@ -952,6 +951,7 @@ export async function uploadClientPhotoAction(
     if (promotionLease.count !== 1) {
       throw new Error('Срок обработки загрузки фото истёк.');
     }
+    await storage.putQuarantine(normalizedUploadId, normalized);
     await storage.promote(normalizedUploadId, finalStorageKey);
     finalStoragePromoted = true;
 

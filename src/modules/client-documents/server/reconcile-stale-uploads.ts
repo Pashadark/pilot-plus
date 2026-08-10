@@ -175,6 +175,7 @@ export async function reconcileStaleClientDocumentUploads(
 
   let recovered = 0;
   let cleanupPending = 0;
+  let staleFilesRemoved = 0;
 
   for (const candidate of candidates) {
     if (!candidate.uploadId) continue;
@@ -249,9 +250,10 @@ export async function reconcileStaleClientDocumentUploads(
 
     if (!claimed) continue;
     const cleanup = await Promise.allSettled([
-      storage.removeQuarantine(candidate.uploadId),
+      storage.removeUploadArtifacts(candidate.uploadId),
       removePrivateIfPresent(storage, candidate.storageKey),
     ]);
+    if (cleanup[0]?.status === 'fulfilled') staleFilesRemoved += cleanup[0].value;
     const cleaned = cleanup.every((result) => result.status === 'fulfilled');
     if (!cleaned) cleanupPending += 1;
 
@@ -271,6 +273,5 @@ export async function reconcileStaleClientDocumentUploads(
     });
   }
 
-  const staleFilesRemoved = await storage.removeStaleQuarantine(cutoff);
   return { recovered, cleanupPending, staleFilesRemoved, hasMore };
 }

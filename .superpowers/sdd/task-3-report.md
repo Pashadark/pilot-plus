@@ -109,6 +109,41 @@ exit 0
 post-review git diff --check
 exit 0
 ```
+
+### Final age-sweep race fix
+
+RED integration с реальным `LocalPrivateStorage` создал reserved snapshot,
+принудительно состарил его mtime и запустил reconciliation внутри успешного
+promotion heartbeat. До фикса global sweep удалял активный snapshot, и тест
+получал `ERROR` вместо ожидаемого `CLEAN` (`1 failed, 3 passed`).
+
+Исправлено:
+
+- reserved filename теперь безопасно содержит durable `uploadId`;
+- online reconciliation больше не делает глобальный mtime sweep;
+- после conditional DB claim worker удаляет только exact original/reserved/
+  normalized artifacts этого `uploadId` через `removeUploadArtifacts`;
+- crash orphan cleanup не ослаблена: каждый document/photo upload создаёт durable
+  row до storage write, и именно эта row приводит cleanup после lease expiry;
+- photo normalized heartbeat перенесён до `putQuarantine`, поэтому action не
+  может создать новый normalized artifact после проигранного cleanup claim.
+
+```text
+focused Vitest
+Test Files  5 passed (5)
+Tests       46 passed (46)
+
+npm run typecheck
+exit 0
+
+npx prettier --check <final race-fix files>
+All matched files use Prettier code style!
+
+git diff --check
+exit 0
+```
+
+Миграции и seed к общей БД не применялись.
 Незакоммиченный пользовательский `.superpowers/sdd/task-1-report.md` сохранён и не входит
 в Task 3 commit.
 

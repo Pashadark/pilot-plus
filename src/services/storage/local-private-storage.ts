@@ -105,30 +105,29 @@ export class LocalPrivateStorage implements PrivateStorage {
     });
   }
 
-  async removeStaleQuarantine(before: Date) {
+  async removeUploadArtifacts(uploadId: string) {
     return this.runExclusive(async () => {
-      await this.ensureDirectory(this.quarantineRoot);
+      await this.resolveQuarantinePath(uploadId);
       const entries = await readdir(this.quarantineRoot, { withFileTypes: true });
+      const reservedPrefix = `scan-${uploadId}-`;
       let removed = 0;
 
       for (const entry of entries) {
         if (
           !entry.isFile() ||
           entry.isSymbolicLink() ||
-          (!entry.name.startsWith('scan-') && !entry.name.startsWith('normalized-'))
+          (entry.name !== uploadId && !entry.name.startsWith(reservedPrefix))
         ) {
           continue;
         }
         const path = resolve(this.quarantineRoot, entry.name);
         this.assertInsideTrustedRoot(path);
         await this.assertNoSymlinkInPath(path);
-        const info = await lstat(path);
-        if (!info.isFile() || info.isSymbolicLink() || info.mtime > before) continue;
         await this.assertCriticalFile(path);
         await rm(path, { force: true });
+        if (this.reservations.get(uploadId) === path) this.reservations.delete(uploadId);
         removed += 1;
       }
-
       return removed;
     });
   }
@@ -137,7 +136,7 @@ export class LocalPrivateStorage implements PrivateStorage {
     return this.runExclusive(async () => {
       this.assertNotReserved(uploadId);
       const sourcePath = await this.resolveQuarantinePath(uploadId);
-      const reservedPath = await this.resolveQuarantinePath(`scan-${randomUUID()}`);
+      const reservedPath = await this.resolveQuarantinePath(`scan-${uploadId}-${randomUUID()}`);
 
       await this.assertRegularFile(sourcePath);
       await this.assertMissing(reservedPath);

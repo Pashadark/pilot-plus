@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, symlink, utimes } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -12,7 +12,7 @@ type PrivateStorageForTest = {
   promote(uploadId: string, storageKey: string): Promise<void>;
   openPrivate(storageKey: string): Promise<Readable>;
   removePrivate(storageKey: string): Promise<void>;
-  removeStaleQuarantine(before: Date): Promise<number>;
+  removeUploadArtifacts(uploadId: string): Promise<number>;
   reserveQuarantine(uploadId: string): Promise<{
     open(): Promise<Readable>;
     promote(storageKey: string): Promise<void>;
@@ -96,30 +96,6 @@ describe('LocalPrivateStorage', () => {
     );
   });
 
-  it('удаляет только age-expired regular quarantine files for crash recovery', async () => {
-    const { root, storage } = await createStorage();
-    await storage.putQuarantine('scan-old-upload', Buffer.from('old'));
-    await storage.putQuarantine('scan-fresh-upload', Buffer.from('fresh'));
-    await storage.putQuarantine('retained-error-upload', Buffer.from('retained'));
-    const old = new Date('2026-08-10T10:00:00.000Z');
-    const fresh = new Date('2026-08-10T10:30:00.000Z');
-    await utimes(join(root, 'quarantine', 'scan-old-upload'), old, old);
-    await utimes(join(root, 'quarantine', 'scan-fresh-upload'), fresh, fresh);
-    await utimes(join(root, 'quarantine', 'retained-error-upload'), old, old);
-
-    await expect(storage.removeStaleQuarantine(new Date('2026-08-10T10:15:00.000Z'))).resolves.toBe(
-      1,
-    );
-
-    await expect(storage.openQuarantine('scan-old-upload')).rejects.toThrow();
-    await expect(readAll(await storage.openQuarantine('scan-fresh-upload'))).resolves.toEqual(
-      Buffer.from('fresh'),
-    );
-    await expect(readAll(await storage.openQuarantine('retained-error-upload'))).resolves.toEqual(
-      Buffer.from('retained'),
-    );
-  });
-
   it.each([
     '../outside',
     'companies/../../outside',
@@ -166,6 +142,21 @@ describe('LocalPrivateStorage', () => {
 
     expect(await readAll(await storage.openQuarantine('upload-1'))).toEqual(
       Buffer.from('оригинал'),
+    );
+  });
+
+  it('удаляет artifacts только claimed durable uploadId', async () => {
+    const { storage } = await createStorage();
+    await storage.putQuarantine('upload-1', Buffer.from('stale'));
+    await storage.putQuarantine('upload-2', Buffer.from('active'));
+    const stale = await storage.reserveQuarantine('upload-1');
+    const active = await storage.reserveQuarantine('upload-2');
+
+    await expect(storage.removeUploadArtifacts('upload-1')).resolves.toBe(1);
+    await expect(stale.open()).rejects.toThrow();
+    await active.release();
+    await expect(readAll(await storage.openQuarantine('upload-2'))).resolves.toEqual(
+      Buffer.from('active'),
     );
   });
 

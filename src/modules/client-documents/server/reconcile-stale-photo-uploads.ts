@@ -213,14 +213,14 @@ export async function reconcileStaleClientPhotoUploads(
           removePrivateIfPresent(storage, candidate.sourceStorageKey),
           removePrivateIfPresent(storage, candidate.previousPhotoPath),
           ...(isCurrent ? [] : [removePrivateIfPresent(storage, candidate.finalStorageKey)]),
-          storage.removeQuarantine(candidate.uploadId),
-          storage.removeQuarantine(`normalized-${candidate.uploadId}`),
+          storage.removeUploadArtifacts(candidate.uploadId),
+          storage.removeUploadArtifacts(`normalized-${candidate.uploadId}`),
         ])
       : await Promise.allSettled([
           removePrivateIfPresent(storage, candidate.sourceStorageKey),
           removePrivateIfPresent(storage, candidate.finalStorageKey),
-          storage.removeQuarantine(candidate.uploadId),
-          storage.removeQuarantine(`normalized-${candidate.uploadId}`),
+          storage.removeUploadArtifacts(candidate.uploadId),
+          storage.removeUploadArtifacts(`normalized-${candidate.uploadId}`),
         ]);
     const cleaned = cleanup.every((result) => result.status === 'fulfilled');
     if (!cleaned) cleanupPending += 1;

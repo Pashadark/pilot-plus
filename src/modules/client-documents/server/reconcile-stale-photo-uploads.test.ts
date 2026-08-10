@@ -41,7 +41,7 @@ function dependencies(overrides = {}) {
     openPrivate: vi.fn(),
     removePrivate: vi.fn().mockResolvedValue(undefined),
     reserveQuarantine: vi.fn(),
-    removeStaleQuarantine: vi.fn(),
+    removeUploadArtifacts: vi.fn().mockResolvedValue(1),
   };
   return { database, storage };
 }
