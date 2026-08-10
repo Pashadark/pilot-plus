@@ -44,4 +44,5 @@ export interface DownloadableClientPhoto {
   companyId: string;
   clientId: string;
   storageKey: string;
+  revision: string;
 }

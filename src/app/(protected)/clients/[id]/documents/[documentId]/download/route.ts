@@ -44,8 +44,19 @@ export async function GET(request: Request, context: DownloadContext) {
   }
 
   const { id: clientId, documentId } = await context.params;
-  const preview = new URL(request.url).searchParams.get('preview') === '1';
-  const initial = await getDownloadableClientDocument(access, clientId, documentId);
+  const searchParams = new URL(request.url).searchParams;
+  const preview = searchParams.get('preview') === '1';
+  const rawVersion = searchParams.get('v');
+  if (preview && (!rawVersion || !/^[1-9]\d{0,8}$/u.test(rawVersion))) {
+    return unavailable();
+  }
+  const expectedVersion = preview ? Number(rawVersion) : undefined;
+  const initial = await getDownloadableClientDocument(
+    access,
+    clientId,
+    documentId,
+    expectedVersion,
+  );
   if (!initial) return unavailable();
 
   let stream: Readable;
@@ -62,6 +73,7 @@ export async function GET(request: Request, context: DownloadContext) {
         access,
         clientId,
         documentId,
+        expectedVersion,
         transaction,
       );
       if (

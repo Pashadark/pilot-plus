@@ -162,7 +162,7 @@ export function DocumentCard({
   const isImage = Boolean(document.verifiedMime?.startsWith('image/'));
   const isPdf = document.verifiedMime === 'application/pdf';
   const downloadUrl = `/clients/${clientId}/documents/${document.id}/download`;
-  const previewUrl = `${downloadUrl}?preview=1`;
+  const previewUrl = `${downloadUrl}?preview=1&v=${document.currentVersion}`;
 
   return (
     <article
@@ -206,6 +206,7 @@ export function DocumentCard({
           {/* Защищённый preview route требует session cookie текущего браузера. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            key={previewUrl}
             src={previewUrl}
             alt={`Предпросмотр документа «${document.title}»`}
             width={640}
@@ -219,7 +220,7 @@ export function DocumentCard({
       <dl className="grid min-w-0 gap-2 text-sm sm:grid-cols-3">
         <div className="min-w-0">
           <dt className="text-[var(--color-text-secondary)]">Файл</dt>
-          <dd className="truncate" title={document.originalName ?? undefined}>
+          <dd className="min-w-0 break-all" title={document.originalName ?? undefined}>
             {document.originalName ?? 'Имя уточняется'}
           </dd>
         </div>

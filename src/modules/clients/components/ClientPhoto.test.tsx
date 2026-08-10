@@ -24,14 +24,16 @@ describe('ClientPhoto', () => {
   });
 
   it('accepts only the protected same-origin client photo route', () => {
-    render(<ClientPhoto name="Анна Воронова" localPhotoUrl="/clients/client-1/photo" />);
+    render(<ClientPhoto name="Анна Воронова" localPhotoUrl="/clients/client-1/photo?v=m1abc" />);
 
     expect(screen.getByTestId('client-photo').getAttribute('data-source')).toBe('local');
-    expect(screen.getByRole('img').getAttribute('src')).toBe('/clients/client-1/photo');
+    expect(screen.getByRole('img').getAttribute('src')).toBe('/clients/client-1/photo?v=m1abc');
   });
 
-  it('replaces a failed protected photo with the SVG placeholder', () => {
-    render(<ClientPhoto name="Анна Воронова" localPhotoUrl="/clients/client-1/photo" />);
+  it('recovers from a failed protected photo when its opaque revision changes', () => {
+    const { rerender } = render(
+      <ClientPhoto name="Анна Воронова" localPhotoUrl="/clients/client-1/photo?v=revision1" />,
+    );
 
     fireEvent.error(screen.getByRole('img'));
 
@@ -41,22 +43,31 @@ describe('ClientPhoto', () => {
     expect(
       screen.getByRole('img', { name: 'Фото клиента Анна Воронова пока не добавлено' }),
     ).not.toBeNull();
+
+    rerender(
+      <ClientPhoto name="Анна Воронова" localPhotoUrl="/clients/client-1/photo?v=revision2" />,
+    );
+    expect(photo.getAttribute('data-source')).toBe('local');
+    expect(photo.querySelector('img')?.getAttribute('src')).toBe(
+      '/clients/client-1/photo?v=revision2',
+    );
   });
 
-  it.each(['//evil.example/avatar.webp', 'https://evil.example/avatar.webp'])(
-    'rejects an unapproved local path and never renders a remote messenger avatar: %s',
-    (url) => {
-      render(
-        <ClientPhoto
-          name="Анна Воронова"
-          localPhotoUrl={url}
-          confirmedMessengerAvatarUrl="https://messenger.example/avatar.webp"
-        />,
-      );
+  it.each([
+    '//evil.example/avatar.webp',
+    'https://evil.example/avatar.webp',
+    '/clients/client-1/photo?v=unsafe%2Fpath',
+  ])('rejects an unapproved local path and never renders a remote messenger avatar: %s', (url) => {
+    render(
+      <ClientPhoto
+        name="Анна Воронова"
+        localPhotoUrl={url}
+        confirmedMessengerAvatarUrl="https://messenger.example/avatar.webp"
+      />,
+    );
 
-      expect(screen.getByTestId('client-photo').getAttribute('data-source')).toBe('placeholder');
-      expect(document.body.innerHTML).not.toContain('messenger.example');
-      expect(document.body.innerHTML).not.toContain('evil.example');
-    },
-  );
+    expect(screen.getByTestId('client-photo').getAttribute('data-source')).toBe('placeholder');
+    expect(document.body.innerHTML).not.toContain('messenger.example');
+    expect(document.body.innerHTML).not.toContain('evil.example');
+  });
 });

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ClientAccess } from '@/modules/clients/access';
 
-import { createClientDocumentQueries } from './queries';
+import { createClientDocumentQueries, getDownloadableClientPhoto } from './queries';
 
 const viewerAccess: ClientAccess = {
   user: {
@@ -119,6 +119,7 @@ describe('tenant-scoped client document queries', () => {
           ...cleanDocument.versions[0],
           version: 2,
           storageKey: 'companies/company-1/clients/client-1/documents/document-1/2',
+          scanVerdict: null,
         },
         {
           ...cleanDocument.versions[0],
@@ -131,11 +132,22 @@ describe('tenant-scoped client document queries', () => {
     const queries = createClientDocumentQueries(fake.repository);
 
     await expect(
-      queries.getDownloadableClientDocument(viewerAccess, 'client-1', 'document-1'),
+      queries.getDownloadableClientDocument(viewerAccess, 'client-1', 'document-1', 1),
     ).resolves.toMatchObject({
       version: 1,
       storageKey: 'companies/company-1/clients/client-1/documents/document-1/1',
     });
+    expect(fake.calls[0]).toMatchObject({ where: { currentVersion: 1 } });
+  });
+
+  it('rejects a stale preview revision after a replacement becomes current', async () => {
+    const fake = repositoryReturning(cleanDocument);
+    const queries = createClientDocumentQueries(fake.repository);
+
+    await expect(
+      queries.getDownloadableClientDocument(viewerAccess, 'client-1', 'document-1', 1),
+    ).resolves.toBeNull();
+    expect(fake.calls[0]).toMatchObject({ where: { currentVersion: 1 } });
   });
 
   it.each(['PENDING', 'BLOCKED'] as const)('denies a %s document download', async (status) => {
@@ -165,6 +177,55 @@ describe('tenant-scoped client document queries', () => {
 
     await expect(
       queries.getDownloadableClientDocument(viewerAccess, 'foreign-client', 'foreign-document'),
+    ).resolves.toBeNull();
+  });
+});
+
+describe('revisioned client photo query', () => {
+  const updatedAt = new Date('2026-08-10T11:00:00.000Z');
+  const revision = updatedAt.getTime().toString(36);
+
+  function photoDatabase() {
+    const calls: unknown[] = [];
+    return {
+      calls,
+      database: {
+        client: {
+          async findFirst(args: unknown) {
+            calls.push(args);
+            return {
+              id: 'client-1',
+              companyId: 'company-1',
+              photoPath: 'companies/company-1/clients/client-1/photos/clean.webp',
+              updatedAt,
+            };
+          },
+        },
+      },
+    };
+  }
+
+  it('returns the private photo only for its current opaque revision', async () => {
+    const fake = photoDatabase();
+
+    await expect(
+      getDownloadableClientPhoto(viewerAccess, 'client-1', revision, fake.database),
+    ).resolves.toEqual({
+      companyId: 'company-1',
+      clientId: 'client-1',
+      storageKey: 'companies/company-1/clients/client-1/photos/clean.webp',
+      revision,
+    });
+    expect(fake.calls[0]).toMatchObject({
+      where: { id: 'client-1', companyId: { in: ['company-1'] }, archivedAt: null },
+    });
+  });
+
+  it('rejects a stale photo revision after a committed replacement', async () => {
+    const fake = photoDatabase();
+
+    await expect(
+      getDownloadableClientPhoto(viewerAccess, 'client-1', 'stale', fake.database),
     ).resolves.toBeNull();
   });
 });

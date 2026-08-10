@@ -3,6 +3,7 @@ import 'server-only';
 import type { Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 import type { ClientAccess } from '@/modules/clients/access';
+import { clientPhotoRevision } from '@/modules/clients/photo-revision';
 import type {
   ClientCardDto,
   ClientDetailDto,
@@ -131,7 +132,9 @@ function mapCard(client: RawClient, encryptionKey: string): ClientCardDto {
     driverLicenseExpiresAt: client.driverLicenseExpiresAt?.toISOString() ?? null,
     status: client.status,
     updatedAt: client.updatedAt.toISOString(),
-    localPhotoUrl: client.photoPath ? `/clients/${client.id}/photo` : null,
+    localPhotoUrl: client.photoPath
+      ? `/clients/${client.id}/photo?v=${clientPhotoRevision(client.updatedAt)}`
+      : null,
     telegramUrl:
       client.telegramUsername && /^[a-zA-Z0-9_]{5,32}$/.test(client.telegramUsername)
         ? `https://t.me/${client.telegramUsername}`

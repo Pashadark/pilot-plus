@@ -2,6 +2,7 @@ import { Readable } from 'node:stream';
 
 import { getDownloadableClientPhoto } from '@/modules/client-documents/server/queries';
 import { getClientAccess } from '@/modules/clients/access';
+import { isClientPhotoRevision } from '@/modules/clients/photo-revision';
 import { LocalPrivateStorage } from '@/services/storage/local-private-storage';
 
 type PhotoContext = { params: Promise<{ id: string }> };
@@ -19,7 +20,7 @@ function unavailable() {
   });
 }
 
-export async function GET(_request: Request, context: PhotoContext) {
+export async function GET(request: Request, context: PhotoContext) {
   const access = await getClientAccess('VIEW_CLIENTS');
   if (!access) {
     return new Response('Доступ к фотографиям клиентов запрещён.', {
@@ -29,7 +30,10 @@ export async function GET(_request: Request, context: PhotoContext) {
   }
 
   const { id } = await context.params;
-  const photo = await getDownloadableClientPhoto(access, id);
+  const revision = new URL(request.url).searchParams.get('v');
+  if (!isClientPhotoRevision(revision)) return unavailable();
+
+  const photo = await getDownloadableClientPhoto(access, id, revision);
   if (!photo) return unavailable();
 
   try {

@@ -119,7 +119,7 @@ describe('protected client document download route', () => {
   });
 
   it('uses inline disposition only for an explicitly requested CLEAN preview', async () => {
-    const response = await GET(new Request('http://localhost/download?preview=1'), context);
+    const response = await GET(new Request('http://localhost/download?preview=1&v=2'), context);
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-disposition')).toContain('inline');
@@ -133,6 +133,48 @@ describe('protected client document download route', () => {
       }),
       expect.any(Object),
     );
+    expect(mocks.getDownloadableClientDocument).toHaveBeenNthCalledWith(
+      1,
+      viewerAccess,
+      'client-1',
+      'document-1',
+      2,
+    );
+    expect(mocks.getDownloadableClientDocument).toHaveBeenNthCalledWith(
+      2,
+      viewerAccess,
+      'client-1',
+      'document-1',
+      2,
+      expect.any(Object),
+    );
+  });
+
+  it.each([
+    'http://localhost/download?preview=1',
+    'http://localhost/download?preview=1&v=unsafe%2Fpath',
+    'http://localhost/download?preview=1&v=0',
+  ])('rejects an invalid preview revision before storage access: %s', async (url) => {
+    const response = await GET(new Request(url), context);
+
+    expect(response.status).toBe(404);
+    expect(mocks.getDownloadableClientDocument).not.toHaveBeenCalled();
+    expect(mocks.openPrivate).not.toHaveBeenCalled();
+  });
+
+  it('does not open storage for a stale preview revision', async () => {
+    mocks.getDownloadableClientDocument.mockResolvedValue(null);
+
+    const response = await GET(new Request('http://localhost/download?preview=1&v=1'), context);
+
+    expect(response.status).toBe(404);
+    expect(mocks.getDownloadableClientDocument).toHaveBeenCalledWith(
+      viewerAccess,
+      'client-1',
+      'document-1',
+      1,
+    );
+    expect(mocks.openPrivate).not.toHaveBeenCalled();
   });
 
   it('returns a safe Russian error when private storage fails', async () => {

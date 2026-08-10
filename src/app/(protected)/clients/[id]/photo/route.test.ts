@@ -34,6 +34,9 @@ const access = {
   canManage: false,
 };
 const context = { params: Promise.resolve({ id: 'client-1' }) };
+const currentRevision = 'm1abc';
+const photoRequest = (revision = currentRevision) =>
+  new Request(`http://localhost/photo?v=${revision}`);
 
 describe('protected client photo route', () => {
   beforeEach(() => {
@@ -43,6 +46,7 @@ describe('protected client photo route', () => {
       companyId: 'company-1',
       clientId: 'client-1',
       storageKey: 'companies/company-1/clients/client-1/photos/clean.webp',
+      revision: currentRevision,
     });
     mocks.storageCreate.mockResolvedValue({ openPrivate: mocks.openPrivate });
     mocks.openPrivate.mockResolvedValue(Readable.from([Buffer.from('safe-webp')]));
@@ -51,16 +55,27 @@ describe('protected client photo route', () => {
   it('denies DRIVER before reading private metadata', async () => {
     mocks.getClientAccess.mockResolvedValue(null);
 
-    const response = await GET(new Request('http://localhost/photo'), context);
+    const response = await GET(photoRequest(), context);
 
     expect(response.status).toBe(403);
     expect(mocks.getDownloadableClientPhoto).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['missing', new Request('http://localhost/photo')],
+    ['unsafe', new Request('http://localhost/photo?v=unsafe%2Fpath')],
+  ])('rejects a %s revision before reading private metadata', async (_label, request) => {
+    const response = await GET(request, context);
+
+    expect(response.status).toBe(404);
+    expect(mocks.getDownloadableClientPhoto).not.toHaveBeenCalled();
+    expect(mocks.openPrivate).not.toHaveBeenCalled();
+  });
+
   it('hides cross-tenant and missing photos behind the same 404', async () => {
     mocks.getDownloadableClientPhoto.mockResolvedValue(null);
 
-    const response = await GET(new Request('http://localhost/photo'), context);
+    const response = await GET(photoRequest(), context);
 
     expect(response.status).toBe(404);
     await expect(response.text()).resolves.toBe('Фотография недоступна.');
@@ -68,7 +83,7 @@ describe('protected client photo route', () => {
   });
 
   it('streams a tenant photo without exposing its storage key', async () => {
-    const response = await GET(new Request('http://localhost/photo'), context);
+    const response = await GET(photoRequest(), context);
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('image/webp');
@@ -77,5 +92,20 @@ describe('protected client photo route', () => {
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
     expect([...response.headers.values()].join(' ')).not.toContain('companies/company-1');
     await expect(response.text()).resolves.toBe('safe-webp');
+    expect(mocks.getDownloadableClientPhoto).toHaveBeenCalledWith(
+      access,
+      'client-1',
+      currentRevision,
+    );
+  });
+
+  it('does not open storage for a stale but well-formed revision', async () => {
+    mocks.getDownloadableClientPhoto.mockResolvedValue(null);
+
+    const response = await GET(photoRequest('stale1'), context);
+
+    expect(response.status).toBe(404);
+    expect(mocks.getDownloadableClientPhoto).toHaveBeenCalledWith(access, 'client-1', 'stale1');
+    expect(mocks.openPrivate).not.toHaveBeenCalled();
   });
 });

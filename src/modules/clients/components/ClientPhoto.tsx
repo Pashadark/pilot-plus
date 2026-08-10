@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { ClientPlaceholder } from './ClientPlaceholder';
 
 const APPROVED_LOCAL_PHOTO_PREFIX = '/uploads/clients/';
-const PROTECTED_CLIENT_PHOTO = /^\/clients\/[a-zA-Z0-9_-]{1,128}\/photo$/u;
+const PROTECTED_CLIENT_PHOTO = /^\/clients\/[a-zA-Z0-9_-]{1,128}\/photo\?v=[a-z0-9]{1,16}$/u;
 
 export function isApprovedClientPhotoPath(value: string | null | undefined): value is string {
   return Boolean(

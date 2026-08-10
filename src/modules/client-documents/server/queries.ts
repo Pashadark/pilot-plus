@@ -8,6 +8,7 @@ import type {
   DownloadableClientPhoto,
 } from '@/modules/client-documents/types';
 import type { ClientAccess } from '@/modules/clients/access';
+import { clientPhotoRevision } from '@/modules/clients/photo-revision';
 
 type ClientDocumentRepository = {
   findMany(args: unknown): Promise<unknown[]>;
@@ -108,11 +109,13 @@ export function createClientDocumentQueries(repository: ClientDocumentRepository
       access: ClientAccess,
       clientId: string,
       documentId: string,
+      expectedVersion?: number,
     ): Promise<DownloadableClientDocument | null> {
       const document = (await repository.findFirst({
         where: {
           id: documentId,
           clientId,
+          ...(expectedVersion === undefined ? {} : { currentVersion: expectedVersion }),
           ...(tenantCompanyWhere(access) ? { companyId: tenantCompanyWhere(access) } : {}),
           client: { archivedAt: null },
           status: 'CLEAN',
@@ -135,7 +138,13 @@ export function createClientDocumentQueries(repository: ClientDocumentRepository
         },
       })) as RawDocument | null;
 
-      if (!document || document.status !== 'CLEAN') return null;
+      if (
+        !document ||
+        document.status !== 'CLEAN' ||
+        (expectedVersion !== undefined && document.currentVersion !== expectedVersion)
+      ) {
+        return null;
+      }
       const version = currentVersion(document);
       if (!version || version.scanVerdict !== 'CLEAN') return null;
 
@@ -174,17 +183,44 @@ export async function getDownloadableClientDocument(
   access: ClientAccess,
   clientId: string,
   documentId: string,
+  expectedVersion?: number,
   database: DocumentDatabase = prisma,
 ) {
-  return queriesFor(database).getDownloadableClientDocument(access, clientId, documentId);
+  return queriesFor(database).getDownloadableClientDocument(
+    access,
+    clientId,
+    documentId,
+    expectedVersion,
+  );
 }
 
-type ClientPhotoDatabase = Pick<Prisma.TransactionClient, 'client'>;
+type RawClientPhoto = {
+  id: string;
+  companyId: string;
+  photoPath: string | null;
+  updatedAt: Date;
+};
+
+type ClientPhotoDatabase = {
+  client: { findFirst(args: unknown): Promise<RawClientPhoto | null> };
+};
+
+function clientPhotoDatabase(): ClientPhotoDatabase {
+  return {
+    client: {
+      findFirst: (args) =>
+        prisma.client.findFirst(
+          args as Prisma.ClientFindFirstArgs,
+        ) as Promise<RawClientPhoto | null>,
+    },
+  };
+}
 
 export async function getDownloadableClientPhoto(
   access: ClientAccess,
   clientId: string,
-  database: ClientPhotoDatabase = prisma,
+  expectedRevision: string,
+  database: ClientPhotoDatabase = clientPhotoDatabase(),
 ): Promise<DownloadableClientPhoto | null> {
   const client = await database.client.findFirst({
     where: {
@@ -193,9 +229,12 @@ export async function getDownloadableClientPhoto(
       archivedAt: null,
       photoPath: { not: null },
     },
-    select: { id: true, companyId: true, photoPath: true },
+    select: { id: true, companyId: true, photoPath: true, updatedAt: true },
   });
   if (!client?.photoPath) return null;
+
+  const revision = clientPhotoRevision(client.updatedAt);
+  if (revision !== expectedRevision) return null;
 
   const expectedPrefix = `companies/${client.companyId}/clients/${client.id}/photos/`;
   if (!client.photoPath.startsWith(expectedPrefix) || !client.photoPath.endsWith('.webp')) {
@@ -206,5 +245,6 @@ export async function getDownloadableClientPhoto(
     companyId: client.companyId,
     clientId: client.id,
     storageKey: client.photoPath,
+    revision,
   };
 }

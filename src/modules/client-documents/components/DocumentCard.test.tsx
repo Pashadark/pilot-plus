@@ -31,17 +31,36 @@ const cleanImage: ClientDocumentListItem = {
 describe('DocumentCard', () => {
   afterEach(cleanup);
 
-  it('shows image format text, CLEAN preview and all permitted actions', () => {
-    render(<DocumentCard clientId="client-1" document={cleanImage} canManage canArchive />);
+  it('shows image format text, revisioned CLEAN preview and all permitted actions', () => {
+    const { rerender } = render(
+      <DocumentCard clientId="client-1" document={cleanImage} canManage canArchive />,
+    );
 
     expect(screen.getByText(/Изображение/u)).toBeTruthy();
     expect(screen.getByText('Проверен')).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Предпросмотр документа «Паспорт»' })).toBeTruthy();
+    const firstPreview = screen.getByRole('img', {
+      name: 'Предпросмотр документа «Паспорт»',
+    });
+    expect(firstPreview.getAttribute('src')).toContain('preview=1&v=2');
     expect(screen.getByRole('link', { name: 'Скачать' }).getAttribute('href')).toContain(
       '/clients/client-1/documents/document-1/download',
     );
     expect(screen.getByRole('button', { name: 'Заменить документ «Паспорт»' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Архивировать документ «Паспорт»' })).toBeTruthy();
+
+    rerender(
+      <DocumentCard
+        clientId="client-1"
+        document={{ ...cleanImage, currentVersion: 3 }}
+        canManage
+        canArchive
+      />,
+    );
+    const replacedPreview = screen.getByRole('img', {
+      name: 'Предпросмотр документа «Паспорт»',
+    });
+    expect(replacedPreview.getAttribute('src')).toContain('preview=1&v=3');
+    expect(replacedPreview).not.toBe(firstPreview);
   });
 
   it('shows PDF text and an explicit preview link', () => {
@@ -62,10 +81,26 @@ describe('DocumentCard', () => {
 
     expect(screen.getByText(/PDF/u)).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Предпросмотр' }).getAttribute('href')).toContain(
-      'preview=1',
+      'preview=1&v=2',
     );
     expect(screen.queryByRole('button', { name: /Заменить документ/u })).toBeNull();
     expect(screen.queryByRole('button', { name: /Архивировать документ/u })).toBeNull();
+  });
+
+  it('breaks a long filename instead of widening the document card', () => {
+    const longName = `${'длинное-имя-без-пробелов'.repeat(20)}.pdf`;
+    render(
+      <DocumentCard
+        clientId="client-1"
+        document={{ ...cleanImage, originalName: longName }}
+        canManage={false}
+        canArchive={false}
+      />,
+    );
+
+    const filename = screen.getByText(longName);
+    expect(filename.className).toContain('min-w-0');
+    expect(filename.className).toContain('break-all');
   });
 
   it.each([

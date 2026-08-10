@@ -56,7 +56,7 @@ URL, `canArchiveClient`, панель документов на странице
 npm run test:unit
 ```
 
-Результат: `122` файла, `627` тестов, код `0`.
+Результат: `122` файла, `639` тестов, код `0`.
 
 ## Playwright-набор
 
@@ -112,13 +112,35 @@ Read-only review выявил три Important-риска. Для каждого
 Повторный review подтвердил: прежние замечания закрыты, новых Critical/Important в этих участках
 нет.
 
+## Исправления после внешнего review
+
+Внешний review выявил stale-image риск и два слабых места E2E. RED-прогон дал `19 failed` в шести
+suites; после исправлений тот же focused-набор завершился `6 passed`, `42 passed`:
+
+1. `DocumentCard` добавляет `currentVersion` в preview URL и React key. Route принимает только
+   положительную числовую ревизию, а оба tenant/CLEAN чтения требуют именно эту текущую версию.
+   Устаревший URL после replacement получает 404 и не открывает storage.
+2. DTO клиента строит `/clients/{id}/photo?v={revision}` из base36 `updatedAt`. Токен не содержит
+   storage key, путь или hash. Photo route валидирует его и отдаёт файл только при совпадении с
+   текущей ревизией; смена URL сбрасывает зафиксированную в `ClientPhoto` ошибку источника.
+3. Длинное исходное имя переносится через `break-all` и `min-w-0`; mobile fixture использует имя
+   без пробелов и по-прежнему проверяет отсутствие overflow на 390 px.
+4. CLEAN fixtures cross-tenant/DRIVER E2E теперь действительно записывают PDF-байты через
+   `LocalPrivateStorage` и атомарно promote в private storage. Поэтому 404/403 не может случайно
+   пройти из-за отсутствующего файла; cleanup удаляет только
+   `<PRIVATE_STORAGE_ROOT>/private/companies/{test-company-id}` после проверки границы root.
+
+`npx playwright test tests/client-documents.spec.ts --list` успешно обнаруживает восемь
+project-сценариев. Полный browser runtime не повторялся после зафиксированной инфраструктурной
+остановки. Повторный read-only review новых исправлений: approved, Critical/Important не найдено.
+
 ## Полная проверка
 
 | Команда                                                          | Результат                                                                |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | `npm run lint`                                                   | PASS, 0 ошибок; 1 существующее warning в `src/shared/ui/DataDisplay.tsx` |
 | `npm run typecheck`                                              | PASS, код `0`                                                            |
-| `npm run test:unit`                                              | PASS: 122 файла, 627 тестов                                              |
+| `npm run test:unit`                                              | PASS: 122 файла, 639 тестов                                              |
 | `npm run build`                                                  | PASS, Next.js 16.2.10, 17/17 static pages                                |
 | `npx playwright test tests/client-documents.spec.ts --workers=1` | INFRA BLOCKED: ~842 s, нет output/artifacts/runtime                      |
 | `npx prettier --check <файлы Task 4>`                            | PASS, код `0`                                                            |

@@ -8,6 +8,7 @@ import sharp from 'sharp';
 import { prisma } from '../src/database/prisma/client';
 import { SESSION_COOKIE_NAME } from '../src/services/auth/session-constants';
 import { hashSessionToken } from '../src/services/auth/session-token';
+import { LocalPrivateStorage } from '../src/services/storage/local-private-storage';
 
 import { openAuthenticatedRoute } from './helpers/auth';
 
@@ -135,15 +136,19 @@ async function createDocumentFixture({
   createdByUserId,
   status,
   title,
+  originalName,
 }: {
   companyId: string;
   clientId: string;
   createdByUserId: string;
   status: 'CLEAN' | 'PENDING';
   title: string;
+  originalName?: string;
 }) {
   const id = randomUUID();
-  return prisma.clientDocument.create({
+  const versionUploadId = randomUUID();
+  const storageKey = `companies/${companyId}/clients/${clientId}/documents/${id}/1.pdf`;
+  const document = await prisma.clientDocument.create({
     data: {
       id,
       companyId,
@@ -155,10 +160,10 @@ async function createDocumentFixture({
       createdByUserId,
       versions: {
         create: {
-          uploadId: randomUUID(),
+          uploadId: versionUploadId,
           version: 1,
-          storageKey: `companies/${companyId}/clients/${clientId}/documents/${id}/1.pdf`,
-          originalName: `${title}.pdf`,
+          storageKey,
+          originalName: originalName ?? `${title}.pdf`,
           verifiedMime: 'application/pdf',
           bytes: safePdf.byteLength,
           sha256: 'a'.repeat(64),
@@ -169,6 +174,16 @@ async function createDocumentFixture({
     },
     select: { id: true },
   });
+
+  if (status === 'CLEAN') {
+    const root = process.env.PRIVATE_STORAGE_ROOT?.trim();
+    if (!root) throw new Error('Для CLEAN E2E fixture нужен PRIVATE_STORAGE_ROOT.');
+    const storage = await LocalPrivateStorage.create(root);
+    await storage.putQuarantine(versionUploadId, safePdf);
+    await storage.promote(versionUploadId, storageKey);
+  }
+
+  return document;
 }
 
 async function removeStorageCompanies(companyIds: readonly string[]) {
@@ -177,7 +192,7 @@ async function removeStorageCompanies(companyIds: readonly string[]) {
   const root = resolve(configuredRoot);
   await Promise.all(
     companyIds.map(async (companyId) => {
-      const target = resolve(root, 'companies', companyId);
+      const target = resolve(root, 'private', 'companies', companyId);
       const fromRoot = relative(root, target);
       if (!fromRoot || fromRoot.startsWith('..') || isAbsolute(fromRoot)) {
         throw new Error('E2E cleanup вышел за пределы PRIVATE_STORAGE_ROOT.');
@@ -249,7 +264,9 @@ test('safe JPG/PDF, photo, replacement, download and EICAR denial', async ({ pag
     await page.getByRole('button', { name: 'Загрузить документ' }).click();
     const jpgCard = documentCard(page, 'Паспорт E2E');
     await expect(jpgCard).toContainText('Проверен');
-    await expect(jpgCard.getByRole('img', { name: /Предпросмотр документа/u })).toBeVisible();
+    const firstPreview = jpgCard.getByRole('img', { name: /Предпросмотр документа/u });
+    await expect(firstPreview).toBeVisible();
+    await expect(firstPreview).toHaveAttribute('src', /[?&]v=1(?:&|$)/u);
 
     await page.getByLabel(/Категория документа/u).selectOption('CONTRACT');
     await page.getByLabel(/Название документа/u).fill('Договор E2E');
@@ -277,7 +294,7 @@ test('safe JPG/PDF, photo, replacement, download and EICAR denial', async ({ pag
     await expect(page.getByText('Фотография клиента обновлена.')).toBeVisible();
     await expect(page.getByTestId('client-photo').locator('img')).toHaveAttribute(
       'src',
-      `/clients/${client.id}/photo`,
+      new RegExp(`/clients/${client.id}/photo\\?v=[a-z0-9]+$`, 'u'),
     );
 
     await jpgCard.getByRole('button', { name: /Заменить документ/u }).click();
@@ -286,6 +303,10 @@ test('safe JPG/PDF, photo, replacement, download and EICAR denial', async ({ pag
       .setInputFiles({ name: 'passport-replaced.jpg', mimeType: 'image/jpeg', buffer: safeJpeg });
     await jpgCard.getByRole('button', { name: 'Загрузить замену' }).click();
     await expect(jpgCard).toContainText('passport-replaced.jpg');
+    await expect(jpgCard.getByRole('img', { name: /Предпросмотр документа/u })).toHaveAttribute(
+      'src',
+      /[?&]v=2(?:&|$)/u,
+    );
 
     await page.getByLabel(/Категория документа/u).selectOption('OTHER');
     await page.getByLabel(/Название документа/u).fill('EICAR E2E');
@@ -378,6 +399,7 @@ test('mobile 390 px has no horizontal overflow and keeps 44 px controls', async 
       createdByUserId: adminId,
       status: 'PENDING',
       title: 'Mobile pending',
+      originalName: `${'оченьдлинноеимяфайлабезпробелов'.repeat(18)}.pdf`,
     });
 
     await page.setViewportSize({ width: 390, height: 844 });
