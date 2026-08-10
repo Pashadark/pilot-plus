@@ -71,7 +71,9 @@ export function DocumentDropzone({
             className="mt-0.5 size-6 shrink-0 text-[var(--color-primary)]"
           />
           <div className="min-w-0">
-            <p className="font-medium">{selectedFile?.name ?? 'Файл не выбран'}</p>
+            <p className="max-w-full min-w-0 font-medium break-all">
+              {selectedFile?.name ?? 'Файл не выбран'}
+            </p>
             <p id={descriptionId} className="mt-1 text-sm text-[var(--color-text-secondary)]">
               {hint}
             </p>

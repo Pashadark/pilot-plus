@@ -47,6 +47,24 @@ describe('DocumentDropzone', () => {
     expect(screen.getByText('паспорт.jpg')).toBeTruthy();
   });
 
+  it('wraps a selected long filename inside the mobile dropzone width', () => {
+    const longName = `${'очень-длинное-имя-без-пробелов'.repeat(12)}.pdf`;
+    render(
+      <DocumentDropzone
+        id="document-file"
+        label="Файл документа"
+        accept=".pdf"
+        file={new File(['safe'], longName, { type: 'application/pdf' })}
+        onFileSelect={vi.fn()}
+      />,
+    );
+
+    const selectedName = screen.getByText(longName);
+    expect(selectedName.classList.contains('min-w-0')).toBe(true);
+    expect(selectedName.classList.contains('max-w-full')).toBe(true);
+    expect(selectedName.classList.contains('break-all')).toBe(true);
+  });
+
   it('shows indeterminate upload progress and a Russian inline error', () => {
     render(
       <DocumentDropzone

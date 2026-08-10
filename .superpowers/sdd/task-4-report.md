@@ -56,7 +56,7 @@ URL, `canArchiveClient`, панель документов на странице
 npm run test:unit
 ```
 
-Результат: `122` файла, `639` тестов, код `0`.
+Результат: `122` файла, `640` тестов, код `0`.
 
 ## Playwright-набор
 
@@ -134,13 +134,20 @@ suites; после исправлений тот же focused-набор зав�
 project-сценариев. Полный browser runtime не повторялся после зафиксированной инфраструктурной
 остановки. Повторный read-only review новых исправлений: approved, Critical/Important не найдено.
 
+## Финальная mobile-корректировка
+
+Имя выбранного в `DocumentDropzone` файла теперь само ограничено `min-w-0 max-w-full` и
+переносится через `break-all`, поэтому валидное длинное имя без пробелов не расширяет dropzone до
+загрузки. Targeted-тест сначала дал ожидаемый RED (`1 failed`, остальные `3 passed`), после
+минимального исправления тот же файл завершился `4 passed`; полный unit-набор — `640 passed`.
+
 ## Полная проверка
 
 | Команда                                                          | Результат                                                                |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | `npm run lint`                                                   | PASS, 0 ошибок; 1 существующее warning в `src/shared/ui/DataDisplay.tsx` |
 | `npm run typecheck`                                              | PASS, код `0`                                                            |
-| `npm run test:unit`                                              | PASS: 122 файла, 639 тестов                                              |
+| `npm run test:unit`                                              | PASS: 122 файла, 640 тестов                                              |
 | `npm run build`                                                  | PASS, Next.js 16.2.10, 17/17 static pages                                |
 | `npx playwright test tests/client-documents.spec.ts --workers=1` | INFRA BLOCKED: ~842 s, нет output/artifacts/runtime                      |
 | `npx prettier --check <файлы Task 4>`                            | PASS, код `0`                                                            |
