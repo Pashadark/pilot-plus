@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => {
   const repository = {
     $transaction: vi.fn(),
     client: { findFirst: vi.fn(), updateMany: vi.fn() },
+    companyMember: { findFirst: vi.fn() },
     clientPhotoUpload: {
       create: vi.fn(),
       findFirst: vi.fn(),
@@ -68,7 +69,11 @@ vi.mock('@/services/malware-scanner/clamav-client', () => ({
 vi.mock('./scan-upload', () => ({ scanPendingUpload: mocks.scanPendingUpload }));
 vi.mock('sharp', () => ({ default: mocks.sharp }));
 
-import { uploadClientDocumentAction, uploadClientPhotoAction } from './actions';
+import {
+  archiveClientDocumentAction,
+  uploadClientDocumentAction,
+  uploadClientPhotoAction,
+} from './actions';
 
 process.env.PRIVATE_STORAGE_ROOT = 'C:\\pilot-private-test';
 
@@ -140,6 +145,7 @@ describe('client document upload authorization and workflow', () => {
     mocks.repository.clientDocumentVersion.deleteMany.mockResolvedValue({ count: 1 });
     mocks.repository.clientDocumentVersion.updateMany.mockResolvedValue({ count: 1 });
     mocks.repository.client.updateMany.mockResolvedValue({ count: 1 });
+    mocks.repository.companyMember.findFirst.mockResolvedValue(null);
     mocks.repository.clientPhotoUpload.create.mockResolvedValue({ id: 'photo-upload-1' });
     mocks.repository.clientPhotoUpload.findFirst.mockResolvedValue(null);
     mocks.repository.clientPhotoUpload.updateMany.mockResolvedValue({ count: 1 });
@@ -181,6 +187,58 @@ describe('client document upload authorization and workflow', () => {
 
     expect(mocks.repository.client.findFirst).not.toHaveBeenCalled();
     expect(mocks.storage.putQuarantine).not.toHaveBeenCalled();
+  });
+
+  it('denies document archive to a dispatcher before the document mutation', async () => {
+    const form = new FormData();
+    form.set('clientId', 'client-1');
+    form.set('documentId', 'document-1');
+
+    await expect(archiveClientDocumentAction(initialState, form)).resolves.toEqual({
+      status: 'error',
+      message: 'Архивировать документы может только администратор компании.',
+    });
+    expect(mocks.repository.clientDocument.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('archives a tenant document for COMPANY_ADMIN and writes an ARCHIVE audit', async () => {
+    mocks.repository.companyMember.findFirst.mockResolvedValue({ companyId: 'company-1' });
+    const form = new FormData();
+    form.set('clientId', 'client-1');
+    form.set('documentId', 'document-1');
+
+    await expect(archiveClientDocumentAction(initialState, form)).resolves.toEqual({
+      status: 'success',
+      message: 'Документ архивирован.',
+      documentId: 'document-1',
+    });
+    expect(mocks.repository.clientDocument.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'document-1',
+        clientId: 'client-1',
+        companyId: 'company-1',
+        archivedAt: null,
+        status: { not: 'ARCHIVED' },
+        versions: {
+          none: {
+            OR: [{ scanVerdict: null }, { scanLeaseExpiresAt: { not: null } }],
+          },
+        },
+      },
+      data: { status: 'ARCHIVED', archivedAt: expect.any(Date) },
+    });
+    expect(mocks.repository.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: 'Serializable',
+    });
+    expect(mocks.writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'ARCHIVE',
+        entityType: 'CLIENT_DOCUMENT',
+        entityId: 'document-1',
+      }),
+      mocks.repository,
+    );
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/clients/client-1');
   });
 
   it('denies a cross-company upload on the server', async () => {

@@ -35,6 +35,8 @@ const rawClient = {
   status: 'VERIFIED' as const,
   createdAt: new Date('2026-08-01T10:00:00.000Z'),
   updatedAt: new Date('2026-08-02T10:00:00.000Z'),
+  photoPath: 'companies/c1/clients/client-1/photos/clean.webp',
+  telegramUsername: 'anna_demo',
 };
 
 function createRepository() {
@@ -89,7 +91,9 @@ describe('tenant-scoped client queries', () => {
       passport: '4510 123456',
       driverLicense: '9910 654321',
       birthDate: '1990-04-12T00:00:00.000Z',
+      localPhotoUrl: '/clients/client-1/photo',
     });
+    expect(JSON.stringify(result)).not.toContain('companies/c1');
     expect(result).not.toHaveProperty('passportEncrypted');
   });
 

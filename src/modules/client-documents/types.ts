@@ -39,3 +39,9 @@ export interface DownloadableClientDocument {
   verifiedMime: string;
   sha256: string;
 }
+
+export interface DownloadableClientPhoto {
+  companyId: string;
+  clientId: string;
+  storageKey: string;
+}

@@ -769,6 +769,85 @@ export async function uploadClientDocumentAction(
   }
 }
 
+export async function archiveClientDocumentAction(
+  _previousState: ClientDocumentActionState,
+  formData: FormData,
+): Promise<ClientDocumentActionState> {
+  const access = await getClientAccess('MANAGE_CLIENTS');
+  if (!access) return accessError;
+
+  const clientId = formString(formData, 'clientId');
+  const documentId = formString(formData, 'documentId');
+  if (!safeIdentifier.test(clientId) || !safeIdentifier.test(documentId)) {
+    return { status: 'error', message: 'Документ недоступен для архивирования.' };
+  }
+
+  const client = await findAccessibleClient(access, clientId);
+  if (!client) return clientError;
+
+  try {
+    const archived = await runSerializableTransaction(async (transaction) => {
+      if (access.scope !== 'SYSTEM') {
+        const membership = await transaction.companyMember.findFirst({
+          where: {
+            userId: access.user.id,
+            companyId: client.companyId,
+            role: 'COMPANY_ADMIN',
+          },
+          select: { companyId: true },
+        });
+        if (!membership) return 'forbidden' as const;
+      }
+
+      const updated = await transaction.clientDocument.updateMany({
+        where: {
+          id: documentId,
+          clientId: client.id,
+          companyId: client.companyId,
+          archivedAt: null,
+          status: { not: 'ARCHIVED' },
+          versions: {
+            none: {
+              OR: [{ scanVerdict: null }, { scanLeaseExpiresAt: { not: null } }],
+            },
+          },
+        },
+        data: { status: 'ARCHIVED', archivedAt: new Date() },
+      });
+      if (updated.count !== 1) return 'missing' as const;
+
+      await writeAuditLog(
+        {
+          actor: { id: access.user.id, email: access.user.email },
+          companyId: client.companyId,
+          action: 'ARCHIVE',
+          entityType: 'CLIENT_DOCUMENT',
+          entityId: documentId,
+          entityLabel: 'Документ клиента',
+          changes: { archived: true, status: 'ARCHIVED' },
+        },
+        transaction,
+      );
+      return 'archived' as const;
+    });
+
+    if (archived === 'forbidden') {
+      return {
+        status: 'error',
+        message: 'Архивировать документы может только администратор компании.',
+      };
+    }
+    if (archived === 'missing') {
+      return { status: 'error', message: 'Документ недоступен для архивирования.' };
+    }
+
+    revalidatePath(`/clients/${client.id}`);
+    return { status: 'success', message: 'Документ архивирован.', documentId };
+  } catch {
+    return { status: 'error', message: 'Не удалось архивировать документ. Попробуйте позже.' };
+  }
+}
+
 async function readStream(stream: Readable) {
   const chunks: Buffer[] = [];
   for await (const chunk of stream) chunks.push(Buffer.from(chunk as Uint8Array));

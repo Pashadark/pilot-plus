@@ -34,7 +34,7 @@ function encodedFilename(value: string) {
   );
 }
 
-export async function GET(_request: Request, context: DownloadContext) {
+export async function GET(request: Request, context: DownloadContext) {
   const access = await getClientAccess('VIEW_CLIENTS');
   if (!access) {
     return new Response('Доступ к документам клиентов запрещён.', {
@@ -44,6 +44,7 @@ export async function GET(_request: Request, context: DownloadContext) {
   }
 
   const { id: clientId, documentId } = await context.params;
+  const preview = new URL(request.url).searchParams.get('preview') === '1';
   const initial = await getDownloadableClientDocument(access, clientId, documentId);
   if (!initial) return unavailable();
 
@@ -80,8 +81,7 @@ export async function GET(_request: Request, context: DownloadContext) {
         entityLabel: 'Документ клиента',
         changes: { sha256: current.sha256, version: current.version },
       };
-      await writeAuditLog({ ...auditBase, action: 'VIEW' }, transaction);
-      await writeAuditLog({ ...auditBase, action: 'DOWNLOAD' }, transaction);
+      await writeAuditLog({ ...auditBase, action: preview ? 'VIEW' : 'DOWNLOAD' }, transaction);
       return current;
     });
 
@@ -93,7 +93,7 @@ export async function GET(_request: Request, context: DownloadContext) {
     return new Response(Readable.toWeb(stream) as ReadableStream<Uint8Array>, {
       headers: {
         'Cache-Control': 'private, no-store',
-        'Content-Disposition': `attachment; filename*=UTF-8''${encodedFilename(authorized.originalName)}`,
+        'Content-Disposition': `${preview ? 'inline' : 'attachment'}; filename*=UTF-8''${encodedFilename(authorized.originalName)}`,
         'Content-Type': authorized.verifiedMime,
         'X-Content-Type-Options': 'nosniff',
       },

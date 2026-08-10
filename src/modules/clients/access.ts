@@ -32,6 +32,24 @@ export function canManageClient(access: ClientAccess | null, companyId: string):
   );
 }
 
+export async function canArchiveClient(
+  access: ClientAccess | null,
+  companyId: string,
+): Promise<boolean> {
+  if (!canManageClient(access, companyId) || !access) return false;
+  if (access.scope === 'SYSTEM') return true;
+
+  const membership = await prisma.companyMember.findFirst({
+    where: {
+      userId: access.user.id,
+      companyId,
+      role: 'COMPANY_ADMIN',
+    },
+    select: { id: true },
+  });
+  return Boolean(membership);
+}
+
 export async function getClientAccess(permission: ClientPermission): Promise<ClientAccess | null> {
   const user = await readSession();
   if (!user) return null;

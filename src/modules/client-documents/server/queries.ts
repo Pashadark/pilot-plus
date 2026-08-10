@@ -5,6 +5,7 @@ import { prisma } from '@/database/prisma/client';
 import type {
   ClientDocumentListItem,
   DownloadableClientDocument,
+  DownloadableClientPhoto,
 } from '@/modules/client-documents/types';
 import type { ClientAccess } from '@/modules/clients/access';
 
@@ -176,4 +177,34 @@ export async function getDownloadableClientDocument(
   database: DocumentDatabase = prisma,
 ) {
   return queriesFor(database).getDownloadableClientDocument(access, clientId, documentId);
+}
+
+type ClientPhotoDatabase = Pick<Prisma.TransactionClient, 'client'>;
+
+export async function getDownloadableClientPhoto(
+  access: ClientAccess,
+  clientId: string,
+  database: ClientPhotoDatabase = prisma,
+): Promise<DownloadableClientPhoto | null> {
+  const client = await database.client.findFirst({
+    where: {
+      id: clientId,
+      ...(tenantCompanyWhere(access) ? { companyId: tenantCompanyWhere(access) } : {}),
+      archivedAt: null,
+      photoPath: { not: null },
+    },
+    select: { id: true, companyId: true, photoPath: true },
+  });
+  if (!client?.photoPath) return null;
+
+  const expectedPrefix = `companies/${client.companyId}/clients/${client.id}/photos/`;
+  if (!client.photoPath.startsWith(expectedPrefix) || !client.photoPath.endsWith('.webp')) {
+    return null;
+  }
+
+  return {
+    companyId: client.companyId,
+    clientId: client.id,
+    storageKey: client.photoPath,
+  };
 }

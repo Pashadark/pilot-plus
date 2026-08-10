@@ -92,7 +92,7 @@ describe('protected client document download route', () => {
     expect(mocks.openPrivate).not.toHaveBeenCalled();
   });
 
-  it('streams a CLEAN document with safe headers and atomic VIEW/DOWNLOAD audit', async () => {
+  it('streams a CLEAN download with safe headers and atomic DOWNLOAD audit', async () => {
     const response = await GET(new Request('http://localhost/download'), context);
 
     expect(response.status).toBe(200);
@@ -103,14 +103,8 @@ describe('protected client document download route', () => {
     await expect(response.text()).resolves.toBe('%PDF-safe');
     expect(mocks.getDownloadableClientDocument).toHaveBeenCalledTimes(2);
     expect(mocks.transaction).toHaveBeenCalledOnce();
-    expect(mocks.writeAuditLog).toHaveBeenCalledTimes(2);
-    expect(mocks.writeAuditLog).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ action: 'VIEW', entityType: 'CLIENT_DOCUMENT' }),
-      expect.any(Object),
-    );
-    expect(mocks.writeAuditLog).toHaveBeenNthCalledWith(
-      2,
+    expect(mocks.writeAuditLog).toHaveBeenCalledOnce();
+    expect(mocks.writeAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'DOWNLOAD',
         entityType: 'CLIENT_DOCUMENT',
@@ -122,6 +116,23 @@ describe('protected client document download route', () => {
     expect(audit).not.toContain('storageKey');
     expect(audit).not.toContain('договор.pdf');
     expect(audit).not.toContain('bytes');
+  });
+
+  it('uses inline disposition only for an explicitly requested CLEAN preview', async () => {
+    const response = await GET(new Request('http://localhost/download?preview=1'), context);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-disposition')).toContain('inline');
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(mocks.writeAuditLog).toHaveBeenCalledOnce();
+    expect(mocks.writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'VIEW',
+        entityType: 'CLIENT_DOCUMENT',
+        changes: { sha256: 'a'.repeat(64), version: 2 },
+      }),
+      expect.any(Object),
+    );
   });
 
   it('returns a safe Russian error when private storage fails', async () => {

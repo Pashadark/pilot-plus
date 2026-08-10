@@ -131,7 +131,7 @@ function mapCard(client: RawClient, encryptionKey: string): ClientCardDto {
     driverLicenseExpiresAt: client.driverLicenseExpiresAt?.toISOString() ?? null,
     status: client.status,
     updatedAt: client.updatedAt.toISOString(),
-    localPhotoUrl: client.photoPath?.startsWith('/') ? client.photoPath : null,
+    localPhotoUrl: client.photoPath ? `/clients/${client.id}/photo` : null,
     telegramUrl:
       client.telegramUsername && /^[a-zA-Z0-9_]{5,32}$/.test(client.telegramUsername)
         ? `https://t.me/${client.telegramUsername}`
