@@ -72,9 +72,11 @@ describe('stale client photo upload reconciliation', () => {
   it('удаляет незакоммиченный final и аудитит fail-closed без path/PII', async () => {
     const { database, storage } = dependencies();
 
-    await expect(
-      reconcileStaleClientPhotoUploads({ database, storage, now }),
-    ).resolves.toEqual({ reconciled: 1, cleanupPending: 0, hasMore: false });
+    await expect(reconcileStaleClientPhotoUploads({ database, storage, now })).resolves.toEqual({
+      reconciled: 1,
+      cleanupPending: 0,
+      hasMore: false,
+    });
 
     expect(storage.removePrivate).toHaveBeenCalledWith(candidate.finalStorageKey);
     expect(database.auditLog.create).toHaveBeenCalledWith({

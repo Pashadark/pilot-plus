@@ -127,10 +127,7 @@ export async function reconcileStaleClientPhotoUploads(
   const page = await database.clientPhotoUpload.findMany({
     where: {
       status: { in: ['PENDING', 'CLEANUP_PENDING', 'RECONCILING'] },
-      OR: [
-        { leaseExpiresAt: { lte: now } },
-        { leaseExpiresAt: null, createdAt: { lte: cutoff } },
-      ],
+      OR: [{ leaseExpiresAt: { lte: now } }, { leaseExpiresAt: null, createdAt: { lte: cutoff } }],
     },
     select: {
       id: true,
@@ -215,9 +212,7 @@ export async function reconcileStaleClientPhotoUploads(
       ? await Promise.allSettled([
           removePrivateIfPresent(storage, candidate.sourceStorageKey),
           removePrivateIfPresent(storage, candidate.previousPhotoPath),
-          ...(isCurrent
-            ? []
-            : [removePrivateIfPresent(storage, candidate.finalStorageKey)]),
+          ...(isCurrent ? [] : [removePrivateIfPresent(storage, candidate.finalStorageKey)]),
           storage.removeQuarantine(candidate.uploadId),
           storage.removeQuarantine(`normalized-${candidate.uploadId}`),
         ])

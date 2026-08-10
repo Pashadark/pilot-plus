@@ -785,8 +785,9 @@ async function removePrivateTracked(storage: PrivateStorage, storageKey: string 
   return storage
     .removePrivate(storageKey)
     .then(() => true)
-    .catch((error: unknown) =>
-      typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT',
+    .catch(
+      (error: unknown) =>
+        typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT',
     );
 }
 
@@ -861,7 +862,10 @@ export async function uploadClientPhotoAction(
     select: { status: true, finalStorageKey: true },
   });
   if (existingUpload) {
-    if (existingUpload.status === 'COMMITTED' && client.photoPath === existingUpload.finalStorageKey) {
+    if (
+      existingUpload.status === 'COMMITTED' &&
+      client.photoPath === existingUpload.finalStorageKey
+    ) {
       revalidatePath('/clients');
       revalidatePath(`/clients/${client.id}`);
       return { status: 'success', message: 'Фотография уже загружена.', clientId: client.id };
@@ -1032,8 +1036,7 @@ export async function uploadClientPhotoAction(
             where: { id: photoUploadId, companyId: client.companyId, clientId: client.id },
             data: {
               status: sourceRemoved && previousRemoved ? 'COMMITTED' : 'CLEANUP_PENDING',
-              leaseExpiresAt:
-                sourceRemoved && previousRemoved ? null : newScanLeaseExpiresAt(),
+              leaseExpiresAt: sourceRemoved && previousRemoved ? null : newScanLeaseExpiresAt(),
               committedAt: new Date(),
             },
           })
