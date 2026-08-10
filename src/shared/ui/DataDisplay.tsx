@@ -31,7 +31,12 @@ export function Avatar({ name, src, size = 'md', className }: AvatarProps) {
       className={`grid place-items-center overflow-hidden rounded-full bg-[var(--color-primary-soft)] font-semibold text-[var(--color-primary)] ${avatarSizes[size]} ${className ?? ''}`}
     >
       {src && !hasImageError ? (
-        <img className="size-full object-cover" src={src} alt="" onError={() => setHasImageError(true)} />
+        <img
+          className="size-full object-cover"
+          src={src}
+          alt=""
+          onError={() => setHasImageError(true)}
+        />
       ) : (
         initials
       )}

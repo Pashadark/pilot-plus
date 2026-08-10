@@ -17,9 +17,7 @@ export interface ToastState {
   toasts: ToastRecord[];
 }
 
-export type ToastAction =
-  | { type: 'add'; toast: ToastRecord }
-  | { type: 'dismiss'; id: string };
+export type ToastAction = { type: 'add'; toast: ToastRecord } | { type: 'dismiss'; id: string };
 
 export const initialToastState: ToastState = { toasts: [] };
 

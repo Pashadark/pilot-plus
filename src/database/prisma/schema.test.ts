@@ -34,6 +34,10 @@ const clientPhotoUploadLeaseMigrationPath = new URL(
   './migrations/20260810170000_add_client_photo_upload_leases/migration.sql',
   import.meta.url,
 );
+const clientUploadHardeningMigrationPath = new URL(
+  './migrations/20260810190000_harden_client_upload_lifecycle/migration.sql',
+  import.meta.url,
+);
 
 describe('доменная схема автопарка', () => {
   it('описывает роли, точечные разрешения и журнал аудита центра администрирования', () => {
@@ -228,6 +232,27 @@ describe('доменная схема автопарка', () => {
     expect(migration).toContain('ClientPhotoUpload_companyId_clientId_fkey');
     expect(migration).toContain('"committedAt" TIMESTAMP(3)');
     expect(migration).not.toMatch(/\bDROP\b/i);
+    expect(migration).not.toMatch(/^\s*UPDATE\b/im);
+  });
+
+  it('добавляет durable permits, bounded quarantine и archive cleanup новой rolling-safe миграцией', () => {
+    expect(existsSync(clientUploadHardeningMigrationPath)).toBe(true);
+    if (!existsSync(clientUploadHardeningMigrationPath)) return;
+
+    const migration = readFileSync(clientUploadHardeningMigrationPath, 'utf8');
+    expect(schema).toContain('model ClientUploadPermit {');
+    expect(schema).toMatch(/reservedBytes\s+Int/);
+    expect(schema).toMatch(/leaseExpiresAt\s+DateTime/);
+    expect(schema).toMatch(/scanRetryCount\s+Int\s+@default\(0\)/);
+    expect(schema).toMatch(/quarantineExpiresAt\s+DateTime\?/);
+    expect(schema).toMatch(/cleanupPending\s+Boolean\s+@default\(false\)/);
+    expect(schema).toMatch(/cleanupLeaseExpiresAt\s+DateTime\?/);
+    expect(schema).toMatch(/storageDeletedAt\s+DateTime\?/);
+    expect(migration).toContain('CREATE TABLE "public"."ClientUploadPermit"');
+    expect(migration).toContain('ClientUploadPermit_companyId_status_leaseExpiresAt_idx');
+    expect(migration).toContain('ClientUploadPermit_userId_createdAt_idx');
+    expect(migration).toContain('DROP CONSTRAINT IF EXISTS "ClientDocument_clientId_fkey"');
+    expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
     expect(migration).not.toMatch(/^\s*UPDATE\b/im);
   });
 });

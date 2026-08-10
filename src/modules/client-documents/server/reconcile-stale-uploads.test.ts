@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { mkdtemp, readdir, rm, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 
 import { LocalPrivateStorage } from '@/services/storage/local-private-storage';
 
@@ -15,16 +16,20 @@ const staleInitial = {
   version: 1,
   storageKey: 'companies/company-1/clients/client-1/documents/document-1/1.jpg',
   sha256: 'a'.repeat(64),
-  scanVerdict: null,
-  scanLeaseExpiresAt: new Date('2026-08-10T11:59:00.000Z'),
+  scanVerdict: null as string | null,
+  scanLeaseExpiresAt: new Date('2026-08-10T11:59:00.000Z') as Date | null,
+  scanRetryCount: 0,
+  quarantineExpiresAt: new Date('2026-08-11T12:00:00.000Z'),
+  cleanupPending: false,
+  cleanupLeaseExpiresAt: null as Date | null,
   createdAt: new Date('2026-08-10T11:30:00.000Z'),
   document: {
     id: 'document-1',
     companyId: 'company-1',
     clientId: 'client-1',
     currentVersion: 1,
-    status: 'PENDING',
-    archivedAt: null,
+    status: 'PENDING' as string,
+    archivedAt: null as Date | null,
   },
 };
 
@@ -35,6 +40,7 @@ function dependencies(candidate = staleInitial) {
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     clientDocument: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    clientUploadPermit: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
     $transaction: vi.fn(),
   };
@@ -50,6 +56,7 @@ function dependencies(candidate = staleInitial) {
     removePrivate: vi.fn().mockResolvedValue(undefined),
     reserveQuarantine: vi.fn(),
     removeUploadArtifacts: vi.fn().mockResolvedValue(2),
+    privateUsageBytes: vi.fn(),
   };
   return { database, storage };
 }
@@ -115,12 +122,17 @@ describe('stale client document upload reconciliation', () => {
         cleanupRetryMs: 5 * 60_000,
         batchSize: 50,
       }),
-    ).resolves.toEqual({ recovered: 1, cleanupPending: 0, staleFilesRemoved: 2, hasMore: false });
+    ).resolves.toMatchObject({
+      recovered: 1,
+      cleanupPending: 0,
+      staleFilesRemoved: 2,
+      hasMore: false,
+    });
 
     expect(database.clientDocumentVersion.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         take: 51,
-        where: expect.objectContaining({ document: { archivedAt: null } }),
+        where: expect.objectContaining({ OR: expect.any(Array) }),
       }),
     );
     expect(database.clientDocument.updateMany).toHaveBeenCalledWith({
@@ -176,7 +188,12 @@ describe('stale client document upload reconciliation', () => {
         staleAfterMs: 15 * 60_000,
         cleanupRetryMs: 5 * 60_000,
       }),
-    ).resolves.toEqual({ recovered: 1, cleanupPending: 1, staleFilesRemoved: 2, hasMore: false });
+    ).resolves.toMatchObject({
+      recovered: 1,
+      cleanupPending: 1,
+      staleFilesRemoved: 2,
+      hasMore: false,
+    });
 
     expect(database.clientDocument.updateMany).not.toHaveBeenCalled();
     expect(database.clientDocumentVersion.updateMany).toHaveBeenLastCalledWith({
@@ -190,6 +207,7 @@ describe('stale client document upload reconciliation', () => {
           archivedAt: null,
         },
         scanVerdict: 'ERROR',
+        scanLeaseExpiresAt: new Date('2026-08-10T12:05:00.000Z'),
       },
       data: { scanLeaseExpiresAt: new Date('2026-08-10T12:05:00.000Z') },
     });
@@ -208,9 +226,130 @@ describe('stale client document upload reconciliation', () => {
 
     await expect(
       reconcileStaleClientDocumentUploads({ database, storage, now, batchSize: 1 }),
-    ).resolves.toEqual({ recovered: 1, cleanupPending: 0, staleFilesRemoved: 2, hasMore: true });
+    ).resolves.toMatchObject({
+      recovered: 1,
+      cleanupPending: 0,
+      staleFilesRemoved: 2,
+      hasMore: true,
+    });
 
     expect(storage.removePrivate).toHaveBeenCalledOnce();
     expect(storage.removePrivate).toHaveBeenCalledWith(staleInitial.storageKey);
+  });
+
+  it('повторно сканирует ERROR до expiry, продвигает CLEAN и завершает durable permit', async () => {
+    const errorCandidate = {
+      ...staleInitial,
+      scanVerdict: 'ERROR',
+      scanRetryCount: 1,
+      document: { ...staleInitial.document, status: 'ERROR' },
+    };
+    const { database, storage } = dependencies(errorCandidate);
+    const snapshot = {
+      open: vi.fn().mockResolvedValue(Readable.from([Buffer.from('clean')])),
+      promote: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn(),
+      release: vi.fn(),
+    };
+    storage.reserveQuarantine.mockResolvedValue(snapshot);
+    const scanner = {
+      getMetadata: vi.fn().mockResolvedValue({
+        engine: 'ClamAV' as const,
+        engineVersion: '1.4.3',
+        signatureVersion: '27692',
+      }),
+      scanStream: vi.fn().mockResolvedValue({ kind: 'clean' as const }),
+    };
+
+    const result = await reconcileStaleClientDocumentUploads({
+      database,
+      storage,
+      scanner,
+      now,
+    });
+
+    expect(result.retried).toBe(1);
+    expect(snapshot.promote).toHaveBeenCalledWith(errorCandidate.storageKey);
+    expect(database.clientDocumentVersion.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'version-1', scanVerdict: 'ERROR' }),
+        data: expect.objectContaining({ scanVerdict: 'CLEAN', quarantineExpiresAt: null }),
+      }),
+    );
+    expect(database.clientUploadPermit.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ uploadId: errorCandidate.uploadId, status: 'ACTIVE' }),
+        data: expect.objectContaining({ status: 'COMPLETED' }),
+      }),
+    );
+  });
+
+  it('securely removes ERROR quarantine after bounded expiry and releases permit', async () => {
+    const expired = {
+      ...staleInitial,
+      scanVerdict: 'ERROR',
+      scanLeaseExpiresAt: null,
+      scanRetryCount: 3,
+      quarantineExpiresAt: new Date('2026-08-10T11:00:00.000Z'),
+      document: { ...staleInitial.document, status: 'ERROR' },
+    };
+    const { database, storage } = dependencies(expired);
+
+    const result = await reconcileStaleClientDocumentUploads({ database, storage, now });
+
+    expect(result.expired).toBe(1);
+    expect(storage.removeUploadArtifacts).toHaveBeenCalledWith(expired.uploadId);
+    expect(database.clientUploadPermit.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'RELEASED' }) }),
+    );
+  });
+
+  it('удаляет obsolete ERROR replacement, не откатывая более новую CLEAN-версию', async () => {
+    const obsolete = {
+      ...staleInitial,
+      version: 2,
+      scanVerdict: 'ERROR',
+      scanRetryCount: 1,
+      document: { ...staleInitial.document, currentVersion: 3, status: 'CLEAN' },
+    };
+    const { database, storage } = dependencies(obsolete);
+    const scanner = {
+      getMetadata: vi.fn(),
+      scanStream: vi.fn(),
+    };
+
+    const result = await reconcileStaleClientDocumentUploads({
+      database,
+      storage,
+      scanner,
+      now,
+    });
+
+    expect(result.expired).toBe(1);
+    expect(scanner.scanStream).not.toHaveBeenCalled();
+    expect(storage.removeUploadArtifacts).toHaveBeenCalledWith(obsolete.uploadId);
+    expect(database.clientDocument.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('очищает все archive artifacts по durable cleanup lease', async () => {
+    const archived = {
+      ...staleInitial,
+      scanVerdict: 'CLEAN',
+      cleanupPending: true,
+      cleanupLeaseExpiresAt: new Date('2026-08-10T11:59:00.000Z'),
+      document: { ...staleInitial.document, status: 'ARCHIVED', archivedAt: now },
+    };
+    const { database, storage } = dependencies(archived);
+
+    const result = await reconcileStaleClientDocumentUploads({ database, storage, now });
+
+    expect(result.archivedCleaned).toBe(1);
+    expect(storage.removePrivate).toHaveBeenCalledWith(archived.storageKey);
+    expect(database.clientDocumentVersion.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ cleanupPending: true }),
+        data: expect.objectContaining({ cleanupPending: false, cleanupLeaseExpiresAt: null }),
+      }),
+    );
   });
 });

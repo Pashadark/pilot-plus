@@ -22,7 +22,10 @@ type PrivateStorageForTest = {
 };
 
 type LocalPrivateStorageFactory = {
-  create(root: string): Promise<PrivateStorageForTest>;
+  create(
+    root: string,
+    options?: { projectRoot?: string; production?: boolean; allowRepoRoot?: boolean },
+  ): Promise<PrivateStorageForTest>;
 };
 
 const temporaryRoots: string[] = [];
@@ -174,5 +177,71 @@ describe('LocalPrivateStorage', () => {
     await expect(factory.create(linkedRoot)).rejects.toThrow(
       'Корень приватного хранилища должен быть доверенной директорией.',
     );
+  });
+
+  it.each(['public/client-files', 'PUBLIC/client-files', '.next/private', '.git/documents', '.'])(
+    'отклоняет storage root внутри публикуемой или служебной директории: %s',
+    async (relativeRoot) => {
+      const projectRoot = await mkdtemp(join(tmpdir(), 'pilot-project-'));
+      temporaryRoots.push(projectRoot);
+      const modulePath = './local-private-storage';
+      const imported = await import(modulePath);
+      const factory = (imported as { LocalPrivateStorage: LocalPrivateStorageFactory })
+        .LocalPrivateStorage;
+
+      await expect(
+        factory.create(join(projectRoot, relativeRoot), { projectRoot, production: false }),
+      ).rejects.toThrow('Корень приватного хранилища выбран небезопасно.');
+    },
+  );
+
+  it('в production требует явного override для repo-local root, но не ломает approved dev root', async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), 'pilot-project-'));
+    temporaryRoots.push(projectRoot);
+    const root = join(projectRoot, '.pilot-private-storage');
+    const modulePath = './local-private-storage';
+    const imported = await import(modulePath);
+    const factory = (imported as { LocalPrivateStorage: LocalPrivateStorageFactory })
+      .LocalPrivateStorage;
+
+    await expect(factory.create(root, { projectRoot, production: true })).rejects.toThrow(
+      'Production-хранилище должно находиться вне каталога исходного кода.',
+    );
+    await expect(factory.create(root, { projectRoot, production: false })).resolves.toBeDefined();
+    await expect(
+      factory.create(root, { projectRoot, production: true, allowRepoRoot: true }),
+    ).resolves.toBeDefined();
+  });
+
+  it('считает tenant private bytes для quota без чтения содержимого в память', async () => {
+    const { storage } = await createStorage();
+    const quotaStorage = storage as PrivateStorageForTest & {
+      privateUsageBytes(prefix: string): Promise<number>;
+    };
+    await storage.putQuarantine('upload-1', Buffer.alloc(7));
+    await storage.promote('upload-1', 'companies/company-1/clients/client-1/documents/d1/1.pdf');
+    await storage.putQuarantine('upload-2', Buffer.alloc(11));
+    await storage.promote('upload-2', 'companies/company-2/clients/client-2/documents/d2/1.pdf');
+
+    await expect(quotaStorage.privateUsageBytes('companies/company-1')).resolves.toBe(7);
+  });
+
+  it('два adapter instance не могут одновременно зарезервировать один quarantine-файл', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'pilot-private-storage-'));
+    temporaryRoots.push(root);
+    const modulePath = './local-private-storage';
+    const imported = await import(modulePath);
+    const factory = (imported as { LocalPrivateStorage: LocalPrivateStorageFactory })
+      .LocalPrivateStorage;
+    const first = await factory.create(root);
+    const second = await factory.create(root);
+    await first.putQuarantine('upload-1', Buffer.from('immutable'));
+
+    const results = await Promise.allSettled([
+      first.reserveQuarantine('upload-1'),
+      second.reserveQuarantine('upload-1'),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import {
   FiAlertCircle,
   FiArchive,
@@ -70,14 +70,17 @@ function resultError(state: ClientDocumentActionState) {
 }
 
 function ReplacementForm({
+  id,
   clientId,
   document,
   onDone,
 }: {
+  id: string;
   clientId: string;
   document: ClientDocumentListItem;
   onDone: () => void;
 }) {
+  const formRef = useRef<HTMLFormElement>(null);
   const { showToast } = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [state, action, pending] = useActionState(
@@ -100,8 +103,18 @@ function ReplacementForm({
     idle,
   );
 
+  useEffect(() => {
+    formRef.current
+      ?.querySelector<HTMLElement>('input[type="file"], button:not([disabled])')
+      ?.focus();
+  }, []);
+
   return (
     <form
+      id={id}
+      ref={formRef}
+      role="region"
+      aria-label={`Замена документа «${document.title}»`}
       action={action}
       className="grid gap-3 rounded-[var(--radius-md)] bg-[var(--color-elevated)] p-3"
     >
@@ -163,6 +176,7 @@ export function DocumentCard({
   const isPdf = document.verifiedMime === 'application/pdf';
   const downloadUrl = `/clients/${clientId}/documents/${document.id}/download`;
   const previewUrl = `${downloadUrl}?preview=1&v=${document.currentVersion}`;
+  const replacementId = `document-replacement-${document.id}`;
 
   return (
     <article
@@ -190,10 +204,12 @@ export function DocumentCard({
             </p>
           </div>
         </div>
-        <Badge tone={view.tone} className="gap-1.5">
-          <StatusIcon aria-hidden="true" className="size-3.5" />
-          {view.label}
-        </Badge>
+        <span role="status" aria-live="polite" aria-label={`Статус документа: ${view.label}`}>
+          <Badge tone={view.tone} className="gap-1.5">
+            <StatusIcon aria-hidden="true" className="size-3.5" />
+            {view.label}
+          </Badge>
+        </span>
       </div>
 
       {isClean && isImage ? (
@@ -278,6 +294,7 @@ export function DocumentCard({
             size="sm"
             variant="soft"
             aria-expanded={replacing}
+            aria-controls={replacementId}
             aria-label={`Заменить документ «${document.title}»`}
             leadingIcon={<FiRefreshCw aria-hidden="true" />}
             onClick={() => setReplacing((current) => !current)}
@@ -311,6 +328,7 @@ export function DocumentCard({
       </div>
       {replacing ? (
         <ReplacementForm
+          id={replacementId}
           clientId={clientId}
           document={document}
           onDone={() => setReplacing(false)}

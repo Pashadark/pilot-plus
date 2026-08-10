@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   getDownloadableClientPhoto: vi.fn(),
   storageCreate: vi.fn(),
   openPrivate: vi.fn(),
+  transaction: vi.fn(),
+  writeAuditLog: vi.fn(),
 }));
 
 vi.mock('@/modules/clients/access', () => ({ getClientAccess: mocks.getClientAccess }));
@@ -16,6 +18,10 @@ vi.mock('@/modules/client-documents/server/queries', () => ({
 vi.mock('@/services/storage/local-private-storage', () => ({
   LocalPrivateStorage: { create: mocks.storageCreate },
 }));
+vi.mock('@/database/prisma/client', () => ({
+  prisma: { $transaction: mocks.transaction },
+}));
+vi.mock('@/modules/admin/audit', () => ({ writeAuditLog: mocks.writeAuditLog }));
 
 import { GET } from './route';
 
@@ -50,6 +56,10 @@ describe('protected client photo route', () => {
     });
     mocks.storageCreate.mockResolvedValue({ openPrivate: mocks.openPrivate });
     mocks.openPrivate.mockResolvedValue(Readable.from([Buffer.from('safe-webp')]));
+    mocks.transaction.mockImplementation(async (operation: (transaction: object) => unknown) =>
+      operation({ client: { findFirst: vi.fn() }, auditLog: { create: vi.fn() } }),
+    );
+    mocks.writeAuditLog.mockResolvedValue(undefined);
   });
 
   it('denies DRIVER before reading private metadata', async () => {
@@ -96,6 +106,16 @@ describe('protected client photo route', () => {
       access,
       'client-1',
       currentRevision,
+    );
+    expect(mocks.getDownloadableClientPhoto).toHaveBeenCalledTimes(2);
+    expect(mocks.writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'VIEW',
+        entityType: 'CLIENT',
+        entityId: 'client-1',
+        changes: { revision: currentRevision },
+      }),
+      expect.any(Object),
     );
   });
 

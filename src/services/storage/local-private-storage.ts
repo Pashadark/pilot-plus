@@ -1,6 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { chmod, lstat, mkdir, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 import type { PrivateStorage, QuarantineSnapshot } from './private-storage';
@@ -9,6 +19,16 @@ const unsafeStorageKeyMessage = 'Ключ приватного хранилищ�
 const outsideStorageRootMessage = 'Путь приватного хранилища выходит за пределы root.';
 const untrustedStorageRootMessage =
   'Корень приватного хранилища должен быть доверенной директорией.';
+const unsafeStorageRootMessage = 'Корень приватного хранилища выбран небезопасно.';
+const repoStorageRootMessage =
+  'Production-хранилище должно находиться вне каталога исходного кода.';
+const forbiddenProjectDirectories = new Set(['public', '.next', '.git', 'node_modules', 'src']);
+
+type LocalPrivateStorageOptions = {
+  projectRoot?: string;
+  production?: boolean;
+  allowRepoRoot?: boolean;
+};
 
 /** Локальное хранилище с инициализацией доверенного server-owned root. */
 export class LocalPrivateStorage implements PrivateStorage {
@@ -21,8 +41,32 @@ export class LocalPrivateStorage implements PrivateStorage {
     private readonly privateRoot: string,
   ) {}
 
-  static async create(root: string) {
-    const configuredRoot = resolve(root);
+  static async create(root: string, options: LocalPrivateStorageOptions = {}) {
+    const configuredRoot = resolve(/* turbopackIgnore: true */ root);
+    const projectRoot = resolve(/* turbopackIgnore: true */ options.projectRoot ?? process.cwd());
+    const relativeToProject = relative(projectRoot, configuredRoot);
+    const insideProject =
+      relativeToProject === '' ||
+      (!relativeToProject.startsWith(`..${sep}`) &&
+        relativeToProject !== '..' &&
+        !isAbsolute(relativeToProject));
+    const projectSegments = relativeToProject
+      .split(/[\\/]+/u)
+      .filter(Boolean)
+      .map((segment) => segment.toLocaleLowerCase('en-US'));
+    if (
+      insideProject &&
+      (relativeToProject === '' ||
+        projectSegments.some((segment) => forbiddenProjectDirectories.has(segment)))
+    ) {
+      throw new Error(unsafeStorageRootMessage);
+    }
+    const production = options.production ?? process.env.NODE_ENV === 'production';
+    const allowRepoRoot =
+      options.allowRepoRoot ?? process.env.PRIVATE_STORAGE_ALLOW_REPO_ROOT === 'true';
+    if (production && insideProject && !allowRepoRoot) {
+      throw new Error(repoStorageRootMessage);
+    }
     await mkdir(configuredRoot, { recursive: true, mode: 0o700 });
     const info = await lstat(configuredRoot);
 
@@ -110,13 +154,16 @@ export class LocalPrivateStorage implements PrivateStorage {
       await this.resolveQuarantinePath(uploadId);
       const entries = await readdir(this.quarantineRoot, { withFileTypes: true });
       const reservedPrefix = `scan-${uploadId}-`;
+      const lockName = `lock-${uploadId}`;
       let removed = 0;
 
       for (const entry of entries) {
         if (
           !entry.isFile() ||
           entry.isSymbolicLink() ||
-          (entry.name !== uploadId && !entry.name.startsWith(reservedPrefix))
+          (entry.name !== uploadId &&
+            entry.name !== lockName &&
+            !entry.name.startsWith(reservedPrefix))
         ) {
           continue;
         }
@@ -126,7 +173,7 @@ export class LocalPrivateStorage implements PrivateStorage {
         await this.assertCriticalFile(path);
         await rm(path, { force: true });
         if (this.reservations.get(uploadId) === path) this.reservations.delete(uploadId);
-        removed += 1;
+        if (entry.name !== lockName) removed += 1;
       }
       return removed;
     });
@@ -137,21 +184,72 @@ export class LocalPrivateStorage implements PrivateStorage {
       this.assertNotReserved(uploadId);
       const sourcePath = await this.resolveQuarantinePath(uploadId);
       const reservedPath = await this.resolveQuarantinePath(`scan-${uploadId}-${randomUUID()}`);
+      const lockPath = await this.resolveQuarantinePath(`lock-${uploadId}`);
 
-      await this.assertRegularFile(sourcePath);
-      await this.assertMissing(reservedPath);
-      await this.assertCriticalFile(sourcePath);
-      await this.assertCriticalParent(reservedPath);
-      await rename(sourcePath, reservedPath);
-      this.reservations.set(uploadId, reservedPath);
+      await this.ensureDirectory(this.quarantineRoot);
+      const lock = await open(lockPath, 'wx', 0o600).catch(() => null);
+      if (!lock) throw new Error('Карантинный файл уже проверяется.');
+      await lock.close();
+
+      try {
+        await this.assertRegularFile(sourcePath);
+        await this.assertMissing(reservedPath);
+        await this.assertCriticalFile(sourcePath);
+        await this.assertCriticalParent(reservedPath);
+        await rename(sourcePath, reservedPath);
+        this.reservations.set(uploadId, reservedPath);
+      } catch (error) {
+        await rm(lockPath, { force: true });
+        throw error;
+      }
 
       return {
         open: () => this.openReserved(uploadId, reservedPath),
-        promote: (storageKey) => this.promoteReserved(uploadId, reservedPath, storageKey),
-        remove: () => this.removeReserved(uploadId, reservedPath),
-        release: () => this.releaseReserved(uploadId, reservedPath),
+        promote: (storageKey) =>
+          this.promoteReserved(uploadId, reservedPath, storageKey).finally(() =>
+            rm(lockPath, { force: true }),
+          ),
+        remove: () =>
+          this.removeReserved(uploadId, reservedPath).finally(() => rm(lockPath, { force: true })),
+        release: () =>
+          this.releaseReserved(uploadId, reservedPath).finally(() => rm(lockPath, { force: true })),
       };
     });
+  }
+
+  async privateUsageBytes(prefix: string) {
+    return this.runExclusive(async () => {
+      const prefixPath = await this.resolvePrivatePath(prefix);
+      try {
+        await this.assertNoSymlinkInPath(prefixPath);
+        return await this.directoryUsageBytes(prefixPath);
+      } catch (error) {
+        if (
+          typeof error === 'object' &&
+          error !== null &&
+          'code' in error &&
+          error.code === 'ENOENT'
+        ) {
+          return 0;
+        }
+        throw error;
+      }
+    });
+  }
+
+  private async directoryUsageBytes(path: string): Promise<number> {
+    const info = await lstat(path);
+    if (info.isSymbolicLink()) throw new Error(outsideStorageRootMessage);
+    if (info.isFile()) return info.size;
+    if (!info.isDirectory()) return 0;
+    let bytes = 0;
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      if (entry.isSymbolicLink()) throw new Error(outsideStorageRootMessage);
+      const child = resolve(path, entry.name);
+      this.assertInsideTrustedRoot(child);
+      bytes += await this.directoryUsageBytes(child);
+    }
+    return bytes;
   }
 
   private async runExclusive<T>(operation: () => Promise<T>) {

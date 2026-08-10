@@ -201,6 +201,7 @@ model User {
   auditLogs              AuditLog[]
   createdClients         Client[]
   createdClientDocuments ClientDocument[]
+  clientUploadPermits    ClientUploadPermit[]
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
 }
@@ -246,6 +247,7 @@ model Company {
   auditLogs           AuditLog[]
   clients             Client[]
   clientDocuments     ClientDocument[]
+  clientUploadPermits ClientUploadPermit[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 }
@@ -355,27 +357,54 @@ model ClientDocument {
 }
 
 model ClientDocumentVersion {
-  id                 String         @id @default(cuid())
-  documentId         String
-  document           ClientDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  uploadId           String?        @unique
-  version            Int
-  storageKey         String         @unique
-  originalName       String
-  verifiedMime       String
-  bytes              Int
-  sha256             String
-  scanEngine         String?
-  signatureVersion   String?
-  scanVerdict        String?
-  scanLeaseExpiresAt DateTime?
-  scannedAt          DateTime?
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  id                    String         @id @default(cuid())
+  documentId            String
+  document              ClientDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploadId              String?        @unique
+  version               Int
+  storageKey            String         @unique
+  originalName          String
+  verifiedMime          String
+  bytes                 Int
+  sha256                String
+  scanEngine            String?
+  signatureVersion      String?
+  scanVerdict           String?
+  scanLeaseExpiresAt    DateTime?
+  scanRetryCount        Int            @default(0)
+  quarantineExpiresAt   DateTime?
+  cleanupPending        Boolean        @default(false)
+  cleanupLeaseExpiresAt DateTime?
+  storageDeletedAt      DateTime?
+  scannedAt             DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
 
   @@unique([documentId, version])
   @@index([documentId, createdAt])
   @@index([scanVerdict, scanLeaseExpiresAt])
+  @@index([cleanupPending, cleanupLeaseExpiresAt])
+}
+
+model ClientUploadPermit {
+  id             String    @id @default(cuid())
+  uploadId       String    @unique
+  companyId      String
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind           String
+  status         String    @default("ACTIVE")
+  reservedBytes  Int
+  leaseExpiresAt DateTime
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([companyId, status, leaseExpiresAt])
+  @@index([userId, status, leaseExpiresAt])
+  @@index([companyId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model AuditLog {

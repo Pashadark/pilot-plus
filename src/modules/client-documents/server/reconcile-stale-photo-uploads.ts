@@ -23,6 +23,7 @@ type PhotoUpload = {
 
 type PhotoReconciliationTransaction = {
   clientPhotoUpload: { updateMany(args: unknown): Promise<Count> };
+  clientUploadPermit: { updateMany(args: unknown): Promise<Count> };
   auditLog: { create(args: unknown): Promise<unknown> };
 };
 
@@ -72,6 +73,10 @@ function databaseAdapter(): PhotoReconciliationDatabase {
         } | null>,
     },
     auditLog: { create: (args) => prisma.auditLog.create(args as Prisma.AuditLogCreateArgs) },
+    clientUploadPermit: {
+      updateMany: (args) =>
+        prisma.clientUploadPermit.updateMany(args as Prisma.ClientUploadPermitUpdateManyArgs),
+    },
     $transaction: (operation) =>
       prisma.$transaction((transaction) =>
         operation({
@@ -83,6 +88,12 @@ function databaseAdapter(): PhotoReconciliationDatabase {
           },
           auditLog: {
             create: (args) => transaction.auditLog.create(args as Prisma.AuditLogCreateArgs),
+          },
+          clientUploadPermit: {
+            updateMany: (args) =>
+              transaction.clientUploadPermit.updateMany(
+                args as Prisma.ClientUploadPermitUpdateManyArgs,
+              ),
           },
         }),
       ),
@@ -237,6 +248,16 @@ export async function reconcileStaleClientPhotoUploads(
         ...(committed ? { committedAt: candidate.committedAt ?? now } : {}),
       },
     });
+    if (cleaned) {
+      await database.clientUploadPermit.updateMany({
+        where: { uploadId: candidate.uploadId, companyId: candidate.companyId, status: 'ACTIVE' },
+        data: {
+          status: committed ? 'COMPLETED' : 'RELEASED',
+          completedAt: now,
+          leaseExpiresAt: now,
+        },
+      });
+    }
     reconciled += 1;
   }
 

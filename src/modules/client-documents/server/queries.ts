@@ -13,6 +13,7 @@ import { clientPhotoRevision } from '@/modules/clients/photo-revision';
 type ClientDocumentRepository = {
   findMany(args: unknown): Promise<unknown[]>;
   findFirst(args: unknown): Promise<unknown | null>;
+  findVersionFirst(args: unknown): Promise<unknown | null>;
 };
 
 type RawVersion = {
@@ -35,7 +36,6 @@ type RawDocument = {
   currentVersion: number;
   createdAt: Date;
   updatedAt: Date;
-  versions: RawVersion[];
 };
 
 const versionSelect = {
@@ -50,10 +50,6 @@ const versionSelect = {
 
 function tenantCompanyWhere(access: ClientAccess) {
   return access.scope === 'SYSTEM' ? undefined : { in: [...access.companyIds] };
-}
-
-function currentVersion(document: RawDocument): RawVersion | null {
-  return document.versions.find((version) => version.version === document.currentVersion) ?? null;
 }
 
 export function createClientDocumentQueries(repository: ClientDocumentRepository) {
@@ -80,29 +76,30 @@ export function createClientDocumentQueries(repository: ClientDocumentRepository
           currentVersion: true,
           createdAt: true,
           updatedAt: true,
-          versions: {
-            orderBy: { version: 'desc' },
-            select: versionSelect,
-          },
         },
         orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
       })) as RawDocument[];
 
-      return documents.map((document) => {
-        const version = currentVersion(document);
-        return {
-          id: document.id,
-          category: document.category,
-          title: document.title,
-          status: document.status,
-          currentVersion: document.currentVersion,
-          originalName: version?.originalName ?? null,
-          verifiedMime: version?.verifiedMime ?? null,
-          bytes: version?.bytes ?? null,
-          createdAt: document.createdAt.toISOString(),
-          updatedAt: document.updatedAt.toISOString(),
-        };
-      });
+      return Promise.all(
+        documents.map(async (document) => {
+          const version = (await repository.findVersionFirst({
+            where: { documentId: document.id, version: document.currentVersion },
+            select: versionSelect,
+          })) as RawVersion | null;
+          return {
+            id: document.id,
+            category: document.category,
+            title: document.title,
+            status: document.status,
+            currentVersion: document.currentVersion,
+            originalName: version?.originalName ?? null,
+            verifiedMime: version?.verifiedMime ?? null,
+            bytes: version?.bytes ?? null,
+            createdAt: document.createdAt.toISOString(),
+            updatedAt: document.updatedAt.toISOString(),
+          };
+        }),
+      );
     },
 
     async getDownloadableClientDocument(
@@ -131,10 +128,6 @@ export function createClientDocumentQueries(repository: ClientDocumentRepository
           currentVersion: true,
           createdAt: true,
           updatedAt: true,
-          versions: {
-            orderBy: { version: 'desc' },
-            select: versionSelect,
-          },
         },
       })) as RawDocument | null;
 
@@ -145,8 +138,15 @@ export function createClientDocumentQueries(repository: ClientDocumentRepository
       ) {
         return null;
       }
-      const version = currentVersion(document);
-      if (!version || version.scanVerdict !== 'CLEAN') return null;
+      const version = (await repository.findVersionFirst({
+        where: {
+          documentId: document.id,
+          version: document.currentVersion,
+          scanVerdict: 'CLEAN',
+        },
+        select: versionSelect,
+      })) as RawVersion | null;
+      if (!version) return null;
 
       return {
         documentId: document.id,
@@ -161,13 +161,15 @@ export function createClientDocumentQueries(repository: ClientDocumentRepository
   };
 }
 
-type DocumentDatabase = Pick<Prisma.TransactionClient, 'clientDocument'>;
+type DocumentDatabase = Pick<Prisma.TransactionClient, 'clientDocument' | 'clientDocumentVersion'>;
 
 function queriesFor(database: DocumentDatabase) {
   return createClientDocumentQueries({
     findMany: (args) => database.clientDocument.findMany(args as Prisma.ClientDocumentFindManyArgs),
     findFirst: (args) =>
       database.clientDocument.findFirst(args as Prisma.ClientDocumentFindFirstArgs),
+    findVersionFirst: (args) =>
+      database.clientDocumentVersion.findFirst(args as Prisma.ClientDocumentVersionFindFirstArgs),
   });
 }
 

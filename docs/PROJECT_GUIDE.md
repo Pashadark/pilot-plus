@@ -452,9 +452,9 @@ GPS/IoT device
 npm install
 
 # инфраструктура
-docker compose up -d
-docker compose ps
-docker compose down
+docker compose -f compose.yaml -f compose.dev.yaml up -d
+docker compose -f compose.yaml -f compose.dev.yaml ps
+docker compose -f compose.yaml -f compose.dev.yaml down
 
 # приложение
 npm run dev
@@ -471,11 +471,39 @@ npm run format:check
 npx prisma validate
 npm run db:preflight:maintenance
 npx prisma migrate deploy
+npm run db:migrate:fresh:verify
 npm run db:seed
 
 # только при обновлении разрешённого исходного фотокаталога
 npm run vehicles:sync-images
 ```
+
+Для host development всегда используются оба Compose-файла: только `compose.dev.yaml` публикует
+ClamAV на loopback `127.0.0.1:3310`. Base `compose.yaml` не публикует clamd; production app должен
+находиться в `pilot-network` и обращаться к `clamav:3310`. Не открывайте этот порт во внешний ingress.
+
+Локальный `PRIVATE_STORAGE_ROOT=./.pilot-private-storage` допустим только в development. Production
+root должен быть абсолютным server-owned каталогом вне исходников, `public`, `.next` и `.git`, с ACL
+только для процесса приложения, резервным копированием и disk monitoring. Repo-local production root
+fail closed; `PRIVATE_STORAGE_ALLOW_REPO_ROOT=true` — только документированное security exception.
+
+Документы, replacement и фото используют PostgreSQL `ClientUploadPermit`: rate limit на пользователя
+и компанию, bounded concurrent scans и tenant quota проверяются до `arrayBuffer` и ClamAV. Default:
+20/100 попыток за 10 минут, 2/6 одновременных операций, quota 1 GiB; один файл — максимум 15 MiB,
+один клиент — 20 активных документов. Quota включает private usage и активные quarantine reservations;
+фото резервирует место для исходника и нормализованного WebP. Настройки находятся в `.env.example`.
+
+ERROR остаётся fail closed в quarantine: worker повторяет scan до трёх раз, но не дольше 24 часов,
+после чего удаляет artifact. Archive помечает все версии на cleanup и пытается удалить их сразу;
+lease worker повторяет неудачную очистку. Запускайте `npm run client-documents:reconcile` внешним
+scheduler каждые 5–10 минут и алертите отсутствие `CLIENT_DOCUMENT_RECONCILIATION_OK` более 20 минут.
+Полная процедура и monitoring приведены в
+[`docs/runbooks/client-document-upload-reconciliation.md`](runbooks/client-document-upload-reconciliation.md).
+
+Fresh-deploy всей цепочки миграций проверяется на заранее созданной одноразовой PostgreSQL/PostGIS БД:
+задайте отличный от основной БД `FRESH_MIGRATION_DATABASE_URL`, установите
+`FRESH_MIGRATION_CONFIRM=DISPOSABLE` и выполните `npm run db:migrate:fresh:verify`. Скрипт не делает
+reset. Live ClamAV integration test включается только явным `RUN_CLAMAV_INTEGRATION=1`.
 
 `npm run build` в Next.js 16 не заменяет ESLint. Для полной локальной регрессии после изменений выполняются `npm run lint`, `npm run typecheck`, `npm run test:unit`, указанный последовательный Playwright-набор и `npm run build`; credentialed-проверка `tests/auth.spec.ts` входит в этот набор и не должна пропускаться. `npm run format:check` проверяет исходники, тесты и корневые файлы; вложенные Markdown-документы проверяются явной командой выше. В CI эти проверки должны выполняться отдельными шагами.
 

@@ -1,5 +1,7 @@
 import { Readable } from 'node:stream';
 
+import { prisma } from '@/database/prisma/client';
+import { writeAuditLog } from '@/modules/admin/audit';
 import { getDownloadableClientPhoto } from '@/modules/client-documents/server/queries';
 import { getClientAccess } from '@/modules/clients/access';
 import { isClientPhotoRevision } from '@/modules/clients/photo-revision';
@@ -33,12 +35,50 @@ export async function GET(request: Request, context: PhotoContext) {
   const revision = new URL(request.url).searchParams.get('v');
   if (!isClientPhotoRevision(revision)) return unavailable();
 
-  const photo = await getDownloadableClientPhoto(access, id, revision);
-  if (!photo) return unavailable();
+  const initial = await getDownloadableClientPhoto(access, id, revision);
+  if (!initial) return unavailable();
 
+  let stream: Readable;
   try {
     const storage = await LocalPrivateStorage.create(privateStorageRoot());
-    const stream = await storage.openPrivate(photo.storageKey);
+    stream = await storage.openPrivate(initial.storageKey);
+  } catch {
+    return unavailable();
+  }
+
+  try {
+    const authorized = await prisma.$transaction(async (transaction) => {
+      const current = await getDownloadableClientPhoto(access, id, revision, transaction);
+      if (
+        !current ||
+        current.companyId !== initial.companyId ||
+        current.clientId !== initial.clientId ||
+        current.storageKey !== initial.storageKey ||
+        current.revision !== initial.revision
+      ) {
+        return null;
+      }
+
+      await writeAuditLog(
+        {
+          actor: { id: access.user.id, email: access.user.email },
+          action: 'VIEW',
+          companyId: current.companyId,
+          entityType: 'CLIENT',
+          entityId: current.clientId,
+          entityLabel: 'Фотография клиента',
+          changes: { revision: current.revision },
+        },
+        transaction,
+      );
+      return current;
+    });
+
+    if (!authorized) {
+      stream.destroy();
+      return unavailable();
+    }
+
     return new Response(Readable.toWeb(stream) as ReadableStream<Uint8Array>, {
       headers: {
         'Cache-Control': 'private, no-store',
@@ -48,6 +88,7 @@ export async function GET(request: Request, context: PhotoContext) {
       },
     });
   } catch {
+    stream.destroy();
     return unavailable();
   }
 }

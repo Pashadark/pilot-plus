@@ -13,6 +13,7 @@
 # testing
 /coverage
 /artifacts/
+/.pilot-private-storage/
 
 # next.js
 /.next/

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientDocumentListItem } from '../types';
@@ -101,6 +102,20 @@ describe('DocumentCard', () => {
     const filename = screen.getByText(longName);
     expect(filename.className).toContain('min-w-0');
     expect(filename.className).toContain('break-all');
+  });
+
+  it('связывает replacement disclosure, объявляет статус и переводит фокус в форму', async () => {
+    const user = userEvent.setup();
+    render(<DocumentCard clientId="client-1" document={cleanImage} canManage canArchive />);
+
+    const status = screen.getByRole('status', { name: 'Статус документа: Проверен' });
+    expect(status).toBeTruthy();
+    const trigger = screen.getByRole('button', { name: 'Заменить документ «Паспорт»' });
+    await user.click(trigger);
+
+    const region = screen.getByRole('region', { name: 'Замена документа «Паспорт»' });
+    expect(trigger.getAttribute('aria-controls')).toBe(region.id);
+    expect(region.contains(document.activeElement)).toBe(true);
   });
 
   it.each([

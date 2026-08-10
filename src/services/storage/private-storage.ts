@@ -12,7 +12,7 @@ export interface QuarantineSnapshot {
  * Закрытое хранилище файлов, недоступное браузеру напрямую.
  *
  * Корень хранилища принадлежит серверу и не доступен на запись внешним процессам. Адаптер
- * защищает ключи, символьные ссылки и конкуренцию внутри процесса, но Node.js на Windows не
+ * защищает ключи, символьные ссылки и reservation lock между процессами, но Node.js на Windows не
  * даёт переносимый эквивалент openat/O_NOFOLLOW для защиты от внешнего write-доступа к root.
  */
 export interface PrivateStorage {
@@ -24,4 +24,5 @@ export interface PrivateStorage {
   removePrivate(storageKey: string): Promise<void>;
   removeUploadArtifacts(uploadId: string): Promise<number>;
   reserveQuarantine(uploadId: string): Promise<QuarantineSnapshot>;
+  privateUsageBytes(prefix: string): Promise<number>;
 }

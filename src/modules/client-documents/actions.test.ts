@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
       findFirst: vi.fn(),
       updateMany: vi.fn(),
     },
+    clientUploadPermit: { updateMany: vi.fn() },
     clientDocument: {
       count: vi.fn(),
       create: vi.fn(),
@@ -23,6 +24,7 @@ const mocks = vi.hoisted(() => {
       create: vi.fn(),
       deleteMany: vi.fn(),
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       updateMany: vi.fn(),
     },
   };
@@ -35,6 +37,7 @@ const mocks = vi.hoisted(() => {
     removePrivate: vi.fn(),
     removeUploadArtifacts: vi.fn(),
     reserveQuarantine: vi.fn(),
+    privateUsageBytes: vi.fn(),
   };
   const sharpPipeline = {
     rotate: vi.fn(),
@@ -52,6 +55,10 @@ const mocks = vi.hoisted(() => {
     storageCreate: vi.fn(),
     scannerFromEnvironment: vi.fn(),
     scanPendingUpload: vi.fn(),
+    acquireClientUploadPermit: vi.fn(),
+    renewClientUploadPermit: vi.fn(),
+    releaseClientUploadPermit: vi.fn(),
+    clientUploadLimitsFromEnvironment: vi.fn(),
     sharp: vi.fn(),
   };
 });
@@ -67,6 +74,12 @@ vi.mock('@/services/malware-scanner/clamav-client', () => ({
   ClamAvClient: { fromEnvironment: mocks.scannerFromEnvironment },
 }));
 vi.mock('./scan-upload', () => ({ scanPendingUpload: mocks.scanPendingUpload }));
+vi.mock('./server/upload-resource-controls', () => ({
+  acquireClientUploadPermit: mocks.acquireClientUploadPermit,
+  renewClientUploadPermit: mocks.renewClientUploadPermit,
+  releaseClientUploadPermit: mocks.releaseClientUploadPermit,
+  clientUploadLimitsFromEnvironment: mocks.clientUploadLimitsFromEnvironment,
+}));
 vi.mock('sharp', () => ({ default: mocks.sharp }));
 
 import {
@@ -125,6 +138,18 @@ describe('client document upload authorization and workflow', () => {
       photoPath: null,
     });
     mocks.repository.clientDocumentVersion.findFirst.mockResolvedValue(null);
+    mocks.repository.clientDocumentVersion.findMany.mockResolvedValue([
+      {
+        id: 'version-1',
+        uploadId: '123e4567-e89b-42d3-a456-426614174000',
+        storageKey: 'companies/company-1/clients/client-1/documents/document-1/1.jpg',
+      },
+      {
+        id: 'version-2',
+        uploadId: '223e4567-e89b-42d3-a456-426614174000',
+        storageKey: 'companies/company-1/clients/client-1/documents/document-1/2.pdf',
+      },
+    ]);
     mocks.repository.clientDocument.findFirst.mockResolvedValue({
       id: 'document-1',
       companyId: 'company-1',
@@ -149,6 +174,7 @@ describe('client document upload authorization and workflow', () => {
     mocks.repository.clientPhotoUpload.create.mockResolvedValue({ id: 'photo-upload-1' });
     mocks.repository.clientPhotoUpload.findFirst.mockResolvedValue(null);
     mocks.repository.clientPhotoUpload.updateMany.mockResolvedValue({ count: 1 });
+    mocks.repository.clientUploadPermit.updateMany.mockResolvedValue({ count: 1 });
     mocks.repository.$transaction.mockImplementation(
       async (operation: (transaction: typeof mocks.repository) => unknown) =>
         operation(mocks.repository),
@@ -158,6 +184,8 @@ describe('client document upload authorization and workflow', () => {
     mocks.storage.promote.mockResolvedValue(undefined);
     mocks.storage.removeQuarantine.mockResolvedValue(undefined);
     mocks.storage.removePrivate.mockResolvedValue(undefined);
+    mocks.storage.removeUploadArtifacts.mockResolvedValue(0);
+    mocks.storage.privateUsageBytes.mockResolvedValue(0);
     mocks.scannerFromEnvironment.mockReturnValue({ scanStream: vi.fn() });
     mocks.scanPendingUpload.mockResolvedValue({
       status: 'CLEAN',
@@ -169,6 +197,22 @@ describe('client document upload authorization and workflow', () => {
       },
     });
     mocks.writeAuditLog.mockResolvedValue(undefined);
+    mocks.acquireClientUploadPermit.mockResolvedValue({
+      ok: true,
+      permitId: 'permit-1',
+      leaseExpiresAt: new Date('2026-08-10T12:15:00.000Z'),
+    });
+    mocks.renewClientUploadPermit.mockResolvedValue(true);
+    mocks.releaseClientUploadPermit.mockResolvedValue(true);
+    mocks.clientUploadLimitsFromEnvironment.mockReturnValue({
+      windowMs: 10 * 60_000,
+      userRate: 20,
+      companyRate: 100,
+      userConcurrent: 2,
+      companyConcurrent: 6,
+      companyQuotaBytes: 1024 * 1024 * 1024,
+      leaseMs: 15 * 60_000,
+    });
     mocks.storage.openPrivate.mockResolvedValue(Readable.from([Buffer.from('clean-image')]));
     mocks.sharpPipeline.rotate.mockReturnValue(mocks.sharpPipeline);
     mocks.sharpPipeline.resize.mockReturnValue(mocks.sharpPipeline);
@@ -187,6 +231,46 @@ describe('client document upload authorization and workflow', () => {
 
     expect(mocks.repository.client.findFirst).not.toHaveBeenCalled();
     expect(mocks.storage.putQuarantine).not.toHaveBeenCalled();
+  });
+
+  it('acquires a durable permit before arrayBuffer and returns a Russian retry error on rate limit', async () => {
+    const file = jpegFile();
+    const arrayBuffer = vi.spyOn(file, 'arrayBuffer');
+    mocks.acquireClientUploadPermit.mockResolvedValue({
+      ok: false,
+      reason: 'USER_RATE',
+      message: 'Слишком много загрузок. Повторите через несколько минут.',
+    });
+
+    await expect(uploadClientDocumentAction(initialState, uploadForm({ file }))).resolves.toEqual({
+      status: 'error',
+      message: 'Слишком много загрузок. Повторите через несколько минут.',
+    });
+
+    expect(mocks.storage.privateUsageBytes).toHaveBeenCalledWith('companies/company-1');
+    expect(mocks.acquireClientUploadPermit).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'DOCUMENT', requestedBytes: file.size, privateBytes: 0 }),
+    );
+    expect(arrayBuffer).not.toHaveBeenCalled();
+    expect(mocks.storage.putQuarantine).not.toHaveBeenCalled();
+  });
+
+  it('applies the same durable capacity control to replacements and photo attempts', async () => {
+    await uploadClientDocumentAction(
+      initialState,
+      uploadForm({ documentId: 'document-1', uploadId: '223e4567-e89b-42d3-a456-426614174000' }),
+    );
+    await uploadClientPhotoAction(
+      initialState,
+      uploadForm({ uploadId: '323e4567-e89b-42d3-a456-426614174000' }),
+    );
+
+    expect(mocks.acquireClientUploadPermit).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'DOCUMENT' }),
+    );
+    expect(mocks.acquireClientUploadPermit).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'PHOTO' }),
+    );
   });
 
   it('denies document archive to a dispatcher before the document mutation', async () => {
@@ -219,11 +303,6 @@ describe('client document upload authorization and workflow', () => {
         companyId: 'company-1',
         archivedAt: null,
         status: { not: 'ARCHIVED' },
-        versions: {
-          none: {
-            OR: [{ scanVerdict: null }, { scanLeaseExpiresAt: { not: null } }],
-          },
-        },
       },
       data: { status: 'ARCHIVED', archivedAt: expect.any(Date) },
     });
@@ -239,6 +318,20 @@ describe('client document upload authorization and workflow', () => {
       mocks.repository,
     );
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/clients/client-1');
+    expect(mocks.storage.removePrivate).toHaveBeenCalledWith(
+      'companies/company-1/clients/client-1/documents/document-1/1.jpg',
+    );
+    expect(mocks.storage.removePrivate).toHaveBeenCalledWith(
+      'companies/company-1/clients/client-1/documents/document-1/2.pdf',
+    );
+    expect(mocks.storage.removeUploadArtifacts).toHaveBeenCalledTimes(2);
+    expect(mocks.repository.clientDocumentVersion.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { in: ['version-1', 'version-2'] } }),
+        data: expect.objectContaining({ cleanupPending: false, cleanupLeaseExpiresAt: null }),
+      }),
+    );
+    expect(mocks.releaseClientUploadPermit).toHaveBeenCalledTimes(2);
   });
 
   it('denies a cross-company upload on the server', async () => {

@@ -7,7 +7,9 @@ export async function openAuthenticatedRoute(page: Page, route: string) {
   const email = process.env.PILOT_ADMIN_EMAIL;
   const password = process.env.PILOT_ADMIN_PASSWORD;
   if (!email || !password) {
-    throw new Error('Для защищённых browser-тестов нужны PILOT_ADMIN_EMAIL и PILOT_ADMIN_PASSWORD.');
+    throw new Error(
+      'Для защищённых browser-тестов нужны PILOT_ADMIN_EMAIL и PILOT_ADMIN_PASSWORD.',
+    );
   }
 
   await page.getByLabel('Email').fill(email);

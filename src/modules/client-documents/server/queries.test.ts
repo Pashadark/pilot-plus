@@ -42,8 +42,10 @@ const cleanDocument = {
 
 function repositoryReturning(result: unknown) {
   const calls: unknown[] = [];
+  const versionCalls: unknown[] = [];
   return {
     calls,
+    versionCalls,
     repository: {
       async findMany(args: unknown) {
         calls.push(args);
@@ -52,6 +54,19 @@ function repositoryReturning(result: unknown) {
       async findFirst(args: unknown) {
         calls.push(args);
         return result;
+      },
+      async findVersionFirst(args: unknown) {
+        versionCalls.push(args);
+        const document = result as typeof cleanDocument | null;
+        if (!document) return null;
+        const where = (args as { where?: { version?: number; scanVerdict?: string } }).where;
+        return (
+          document.versions.find(
+            (version) =>
+              version.version === where?.version &&
+              (where.scanVerdict === undefined || version.scanVerdict === where.scanVerdict),
+          ) ?? null
+        );
       },
     },
   };
@@ -82,6 +97,10 @@ describe('tenant-scoped client document queries', () => {
     });
     expect(result[0]).not.toHaveProperty('storageKey');
     expect(result[0]).not.toHaveProperty('sha256');
+    expect(fake.calls[0]).not.toHaveProperty('select.versions');
+    expect(fake.versionCalls[0]).toMatchObject({
+      where: { documentId: 'document-1', version: 2 },
+    });
   });
 
   it('selects a CLEAN current version through client, company and document guards', async () => {
@@ -107,6 +126,9 @@ describe('tenant-scoped client document queries', () => {
         status: 'CLEAN',
         archivedAt: null,
       },
+    });
+    expect(fake.versionCalls[0]).toMatchObject({
+      where: { documentId: 'document-1', version: 2, scanVerdict: 'CLEAN' },
     });
   });
 

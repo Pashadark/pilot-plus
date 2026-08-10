@@ -38,7 +38,7 @@ Pilot+ — веб-платформа для управления коммерч�
 
 ```powershell
 npm install
-docker compose up -d
+docker compose -f compose.yaml -f compose.dev.yaml up -d
 npm run db:preflight:maintenance
 npx prisma migrate deploy
 npm run db:seed
@@ -51,7 +51,18 @@ npm run dev
 
 Перед seed скопируйте `.env.example` в `.env` и задайте собственные `PILOT_ADMIN_EMAIL`, `PILOT_ADMIN_PASSWORD` (минимум 12 символов) и `PILOT_ADMIN_NAME`. Для явной проверки Redis и MQTT на `/system` используйте `REDIS_HOST`, `REDIS_PORT`, `MQTT_HOST` и `MQTT_PORT`; в production все четыре переменные должны быть заданы. `.env` нельзя добавлять в Git или выводить в логи.
 
-Приложение доступно по адресу <http://localhost:3000>. PostgreSQL/PostGIS слушает `127.0.0.1:5433`, Redis — `127.0.0.1:6379`, MQTT — `127.0.0.1:1883`, MQTT WebSocket — `127.0.0.1:9001`.
+Приложение доступно по адресу <http://localhost:3000>. PostgreSQL/PostGIS слушает `127.0.0.1:5433`, Redis — `127.0.0.1:6379`, MQTT — `127.0.0.1:1883`, MQTT WebSocket — `127.0.0.1:9001`, а development override публикует ClamAV только на `127.0.0.1:3310`.
+
+Base-файл `compose.yaml` намеренно не публикует порт ClamAV. Production-приложение должно быть
+подключено к той же внутренней сети `pilot-network` и использовать `CLAMAV_HOST=clamav` и
+`CLAMAV_PORT=3310`; внешний ingress к clamd запрещён. При host development всегда указывайте оба
+Compose-файла, иначе `npm run dev` не сможет обратиться к clamd по loopback.
+
+`PRIVATE_STORAGE_ROOT=./.pilot-private-storage` разрешён только для локальной разработки и
+игнорируется Git от корня репозитория. В production задайте абсолютный server-owned каталог вне
+репозитория, `public`, `.next` и `.git`, ограничьте ACL пользователем приложения и включите backup,
+disk-usage monitoring и lifecycle worker. Исключительный `PRIVATE_STORAGE_ALLOW_REPO_ROOT=true`
+требует отдельного security review и не является production default.
 
 ## Команды
 
@@ -70,13 +81,29 @@ npx playwright test tests/auth.spec.ts tests/system-states.spec.ts tests/profile
 npx prisma validate
 npm run db:preflight:maintenance
 npx prisma migrate deploy
+npm run db:migrate:fresh:verify
 npm run db:seed
 npm run vehicles:sync-images
-docker compose ps
-docker compose down
+docker compose -f compose.yaml -f compose.dev.yaml ps
+docker compose -f compose.yaml -f compose.dev.yaml down
 ```
 
 Playwright использует Chromium и уже запущенный сервер на порту `3000`, если он доступен. Для полного e2e-набора требуется тестовый администратор и подготовка auth-состояния; проверка `tests/auth.spec.ts` обязательна и не должна пропускаться. Для Prisma требуется `DATABASE_URL`.
+
+Перед production deploy выполните `prisma migrate deploy` на staging и отдельно проверьте всю
+цепочку на пустой одноразовой PostgreSQL/PostGIS БД: задайте отличный от `DATABASE_URL`
+`FRESH_MIGRATION_DATABASE_URL`, подтвердите `FRESH_MIGRATION_CONFIRM=DISPOSABLE` и запустите
+`npm run db:migrate:fresh:verify`. Скрипт не очищает БД и предназначен только для заранее созданной
+одноразовой базы. Для live ClamAV contract задайте `$env:RUN_CLAMAV_INTEGRATION="1"`, затем выполните
+`npx vitest run src/services/malware-scanner/clamav-live.integration.test.ts`;
+без флага этот тест корректно пропускается.
+
+Загрузки документов, replacement и фото получают durable PostgreSQL permit до чтения file bytes:
+по умолчанию 20 попыток на пользователя и 100 на компанию за 10 минут, 2/6 одновременных scan и
+1 GiB tenant quota. Документ ограничен 15 MiB, у клиента остаётся максимум 20 активных документов.
+Quota учитывает private files и активные reservations карантина; для фото резерв покрывает также
+одновременную нормализацию WebP. Параметры перечислены в `.env.example`, а lifecycle, алерты и
+capacity monitoring — в runbook reconciliation.
 
 ## Правила интерфейса и данных
 

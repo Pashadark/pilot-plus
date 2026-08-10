@@ -27,6 +27,7 @@ function dependencies(overrides = {}) {
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     client: { findFirst: vi.fn().mockResolvedValue(value.client) },
+    clientUploadPermit: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
     $transaction: vi.fn(),
   };
@@ -42,6 +43,7 @@ function dependencies(overrides = {}) {
     removePrivate: vi.fn().mockResolvedValue(undefined),
     reserveQuarantine: vi.fn(),
     removeUploadArtifacts: vi.fn().mockResolvedValue(1),
+    privateUsageBytes: vi.fn().mockResolvedValue(0),
   };
   return { database, storage };
 }

@@ -9,13 +9,27 @@ import sharp from 'sharp';
 import type { ClientDocumentCategory, Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 import { writeAuditLog } from '@/modules/admin/audit';
-import { validateUploadedFile } from '@/modules/client-documents/file-validation';
+import {
+  maxUploadedFileBytes,
+  validateUploadedFile,
+} from '@/modules/client-documents/file-validation';
 import {
   scanPendingUpload,
   type ScanPendingUploadResult,
 } from '@/modules/client-documents/scan-upload';
 import type { ClientDocumentActionState } from '@/modules/client-documents/types';
-import { newScanLeaseExpiresAt } from '@/modules/client-documents/server/recovery-policy';
+import {
+  newQuarantineExpiresAt,
+  newScanLeaseExpiresAt,
+  scanRetryDelayMs,
+} from '@/modules/client-documents/server/recovery-policy';
+import {
+  acquireClientUploadPermit,
+  clientUploadLimitsFromEnvironment,
+  releaseClientUploadPermit,
+  renewClientUploadPermit,
+  type UploadPermitDatabase,
+} from '@/modules/client-documents/server/upload-resource-controls';
 import { getClientAccess, type ClientAccess } from '@/modules/clients/access';
 import { ClamAvClient } from '@/services/malware-scanner/clamav-client';
 import { LocalPrivateStorage } from '@/services/storage/local-private-storage';
@@ -168,9 +182,16 @@ function originalName(file: File) {
   return basename ? basename.slice(0, 180) : 'document';
 }
 
-async function fileBytes(formData: FormData) {
+function uploadedFile(formData: FormData) {
   const file = formData.get('file');
   if (!(file instanceof File)) throw new Error('Выберите файл для загрузки.');
+  if (file.size > maxUploadedFileBytes) {
+    throw new Error('Размер файла не должен превышать 15 МБ.');
+  }
+  return file;
+}
+
+async function fileBytes(file: File) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const validated = validateUploadedFile({ name: file.name, bytes });
   return { file, bytes, validated };
@@ -184,6 +205,48 @@ function privateStorageRoot() {
   const root = process.env.PRIVATE_STORAGE_ROOT?.trim();
   if (!root) throw new Error('Приватное хранилище не настроено.');
   return root;
+}
+
+function uploadPermitDatabase() {
+  return prisma as unknown as UploadPermitDatabase;
+}
+
+async function acquirePermit(
+  storage: PrivateStorage,
+  access: ClientAccess,
+  client: AccessibleClient,
+  uploadId: string,
+  file: File,
+  kind: 'DOCUMENT' | 'PHOTO',
+) {
+  const limits = clientUploadLimitsFromEnvironment();
+  const privateBytes = await storage.privateUsageBytes(`companies/${client.companyId}`);
+  const result = await acquireClientUploadPermit({
+    database: uploadPermitDatabase(),
+    now: new Date(),
+    uploadId,
+    companyId: client.companyId,
+    userId: access.user.id,
+    kind,
+    // Во время нормализации фото одновременно существуют исходник и новый WebP.
+    requestedBytes: kind === 'PHOTO' ? maxUploadedFileBytes * 2 : file.size,
+    privateBytes,
+    limits,
+  });
+  return { result, limits };
+}
+
+async function releasePermit(
+  uploadId: string,
+  companyId: string,
+  status: 'COMPLETED' | 'RELEASED',
+) {
+  await releaseClientUploadPermit(uploadPermitDatabase(), {
+    uploadId,
+    companyId,
+    now: new Date(),
+    status,
+  }).catch(() => false);
 }
 
 function documentStorageKey(
@@ -259,8 +322,20 @@ async function createNewUpload(
   file: File,
   verified: { mime: string; extension: string; bytes: number },
   hash: string,
+  permitLeaseMs: number,
 ): Promise<UploadRecord | ClientDocumentActionState> {
   return runSerializableTransaction(async (transaction) => {
+    const permit = await transaction.clientUploadPermit.updateMany({
+      where: {
+        uploadId,
+        companyId: client.companyId,
+        userId: access.user.id,
+        status: 'ACTIVE',
+        leaseExpiresAt: { gt: new Date() },
+      },
+      data: { leaseExpiresAt: new Date(Date.now() + permitLeaseMs) },
+    });
+    if (permit.count !== 1) throw new Error('Резервирование ресурсов загрузки истекло.');
     const count = await transaction.clientDocument.count({
       where: {
         companyId: client.companyId,
@@ -303,6 +378,7 @@ async function createNewUpload(
         bytes: verified.bytes,
         sha256: hash,
         scanLeaseExpiresAt: newScanLeaseExpiresAt(),
+        quarantineExpiresAt: newQuarantineExpiresAt(),
       },
       select: { id: true },
     });
@@ -327,9 +403,21 @@ async function createReplacementUpload(
   file: File,
   verified: { mime: string; extension: string; bytes: number },
   hash: string,
+  permitLeaseMs: number,
 ): Promise<UploadRecord | null> {
   if (!safeIdentifier.test(documentId)) return null;
   return runSerializableTransaction(async (transaction) => {
+    const permit = await transaction.clientUploadPermit.updateMany({
+      where: {
+        uploadId,
+        companyId: client.companyId,
+        userId: access.user.id,
+        status: 'ACTIVE',
+        leaseExpiresAt: { gt: new Date() },
+      },
+      data: { leaseExpiresAt: new Date(Date.now() + permitLeaseMs) },
+    });
+    if (permit.count !== 1) throw new Error('Резервирование ресурсов загрузки истекло.');
     const document = await transaction.clientDocument.findFirst({
       where: {
         id: documentId,
@@ -373,6 +461,7 @@ async function createReplacementUpload(
         bytes: verified.bytes,
         sha256: hash,
         scanLeaseExpiresAt: newScanLeaseExpiresAt(),
+        quarantineExpiresAt: newQuarantineExpiresAt(),
       },
       select: { id: true },
     });
@@ -407,7 +496,9 @@ async function finalizeUpload(
         scanEngine: result.audit.engine ?? 'ClamAV',
         signatureVersion: result.audit.signatureVersion ?? null,
         scanVerdict: result.status,
-        scanLeaseExpiresAt: null,
+        scanLeaseExpiresAt:
+          result.status === 'ERROR' ? new Date(Date.now() + scanRetryDelayMs(0)) : null,
+        quarantineExpiresAt: result.status === 'ERROR' ? undefined : null,
         scannedAt: new Date(),
       },
     });
@@ -654,12 +745,27 @@ export async function uploadClientDocumentAction(
   const duplicate = await findDuplicate(access, client.id, uploadId);
   if (duplicate) return duplicate;
 
+  let permitHeld = false;
+  let retainPermit = false;
   try {
     const metadata = parseMetadata(formData);
     if (!metadata) return { status: 'error', message: 'Проверьте данные документа.' };
-    const { file, bytes, validated } = await fileBytes(formData);
-    const hash = sha256(bytes);
+    const file = uploadedFile(formData);
     const storage = await LocalPrivateStorage.create(privateStorageRoot());
+    const permit = await acquirePermit(storage, access, client, uploadId, file, 'DOCUMENT');
+    if (!permit.result.ok) return { status: 'error', message: permit.result.message };
+    permitHeld = true;
+    const { bytes, validated } = await fileBytes(file);
+    const permitRenewedBeforeWrite = await renewClientUploadPermit(uploadPermitDatabase(), {
+      uploadId,
+      companyId: client.companyId,
+      now: new Date(),
+      leaseMs: permit.limits.leaseMs,
+    });
+    if (!permitRenewedBeforeWrite) {
+      throw new Error('Срок резервирования ресурсов загрузки истёк.');
+    }
+    const hash = sha256(bytes);
     const scanner = ClamAvClient.fromEnvironment();
     const requestedDocumentId = formString(formData, 'documentId');
     const upload = requestedDocumentId
@@ -671,8 +777,18 @@ export async function uploadClientDocumentAction(
           file,
           validated,
           hash,
+          permit.limits.leaseMs,
         )
-      : await createNewUpload(client, access, uploadId, metadata, file, validated, hash);
+      : await createNewUpload(
+          client,
+          access,
+          uploadId,
+          metadata,
+          file,
+          validated,
+          hash,
+          permit.limits.leaseMs,
+        );
 
     if (!upload) return { status: 'error', message: 'Документ недоступен для замены.' };
     if ('status' in upload) return upload;
@@ -725,27 +841,36 @@ export async function uploadClientDocumentAction(
         uploadId,
         storageKey: upload.storageKey,
         renewPromotionLease: async () => {
-          const renewed = await prisma.clientDocumentVersion.updateMany({
-            where: {
-              id: upload.versionId,
-              documentId: upload.documentId,
-              uploadId: upload.uploadId,
-              version: upload.version,
-              scanVerdict: null,
-              document: {
-                companyId: upload.companyId,
-                clientId: upload.clientId,
-                archivedAt: null,
+          const [renewed, permitRenewed] = await Promise.all([
+            prisma.clientDocumentVersion.updateMany({
+              where: {
+                id: upload.versionId,
+                documentId: upload.documentId,
+                uploadId: upload.uploadId,
+                version: upload.version,
+                scanVerdict: null,
+                document: {
+                  companyId: upload.companyId,
+                  clientId: upload.clientId,
+                  archivedAt: null,
+                },
               },
-            },
-            data: { scanLeaseExpiresAt: newScanLeaseExpiresAt() },
-          });
-          return renewed.count === 1;
+              data: { scanLeaseExpiresAt: newScanLeaseExpiresAt() },
+            }),
+            renewClientUploadPermit(uploadPermitDatabase(), {
+              uploadId,
+              companyId: client.companyId,
+              now: new Date(),
+              leaseMs: permit.limits.leaseMs,
+            }),
+          ]);
+          return renewed.count === 1 && permitRenewed;
         },
       });
     } catch {
       scanResult = { status: 'ERROR', audit: { sha256: hash, verdict: 'ERROR' } };
     }
+    retainPermit = scanResult.status === 'ERROR';
     try {
       await finalizeUpload(access, upload, scanResult);
     } catch {
@@ -766,6 +891,10 @@ export async function uploadClientDocumentAction(
     const fileError = safeFileErrorState(error);
     if (fileError) return fileError;
     return uploadError;
+  } finally {
+    if (permitHeld && !retainPermit) {
+      await releasePermit(uploadId, client.companyId, 'COMPLETED');
+    }
   }
 }
 
@@ -806,15 +935,22 @@ export async function archiveClientDocumentAction(
           companyId: client.companyId,
           archivedAt: null,
           status: { not: 'ARCHIVED' },
-          versions: {
-            none: {
-              OR: [{ scanVerdict: null }, { scanLeaseExpiresAt: { not: null } }],
-            },
-          },
         },
         data: { status: 'ARCHIVED', archivedAt: new Date() },
       });
       if (updated.count !== 1) return 'missing' as const;
+
+      const versions = await transaction.clientDocumentVersion.findMany({
+        where: {
+          documentId,
+          document: { companyId: client.companyId, clientId: client.id },
+        },
+        select: { id: true, uploadId: true, storageKey: true },
+      });
+      await transaction.clientDocumentVersion.updateMany({
+        where: { id: { in: versions.map((version) => version.id) }, documentId },
+        data: { cleanupPending: true, cleanupLeaseExpiresAt: new Date() },
+      });
 
       await writeAuditLog(
         {
@@ -828,7 +964,7 @@ export async function archiveClientDocumentAction(
         },
         transaction,
       );
-      return 'archived' as const;
+      return { kind: 'archived' as const, versions };
     });
 
     if (archived === 'forbidden') {
@@ -839,6 +975,53 @@ export async function archiveClientDocumentAction(
     }
     if (archived === 'missing') {
       return { status: 'error', message: 'Документ недоступен для архивирования.' };
+    }
+
+    try {
+      const storage = await LocalPrivateStorage.create(privateStorageRoot());
+      const cleanupResults = await Promise.all(
+        archived.versions.map(async (version) => {
+          const [privateRemoved, quarantineRemoved] = await Promise.all([
+            removePrivateTracked(storage, version.storageKey),
+            version.uploadId
+              ? storage
+                  .removeUploadArtifacts(version.uploadId)
+                  .then(() => true)
+                  .catch(() => false)
+              : Promise.resolve(true),
+          ]);
+          return { ...version, cleaned: privateRemoved && quarantineRemoved };
+        }),
+      );
+      const cleaned = cleanupResults.filter((result) => result.cleaned);
+      const retryIds = cleanupResults
+        .filter((result) => !result.cleaned)
+        .map((result) => result.id);
+      if (cleaned.length > 0) {
+        await prisma.clientDocumentVersion.updateMany({
+          where: { id: { in: cleaned.map((result) => result.id) }, documentId },
+          data: {
+            cleanupPending: false,
+            cleanupLeaseExpiresAt: null,
+            storageDeletedAt: new Date(),
+          },
+        });
+        await Promise.all(
+          cleaned.map((version) =>
+            version.uploadId
+              ? releasePermit(version.uploadId, client.companyId, 'RELEASED')
+              : Promise.resolve(),
+          ),
+        );
+      }
+      if (retryIds.length > 0) {
+        await prisma.clientDocumentVersion.updateMany({
+          where: { id: { in: retryIds }, documentId },
+          data: { cleanupPending: true, cleanupLeaseExpiresAt: newScanLeaseExpiresAt() },
+        });
+      }
+    } catch {
+      // Durable cleanupPending rows remain immediately eligible for the recovery worker.
     }
 
     revalidatePath(`/clients/${client.id}`);
@@ -957,27 +1140,63 @@ export async function uploadClientPhotoAction(
   let finalStoragePromoted = false;
   let databaseCommitted = false;
   let photoUploadId: string | undefined;
+  let permitHeld = false;
+  let retainPermit = false;
+  let permitLeaseMs = clientUploadLimitsFromEnvironment().leaseMs;
   try {
-    const { bytes, validated } = await fileBytes(formData);
+    const file = uploadedFile(formData);
+    storage = await LocalPrivateStorage.create(privateStorageRoot());
+    const permit = await acquirePermit(storage, access, client, uploadId, file, 'PHOTO');
+    if (!permit.result.ok) return { status: 'error', message: permit.result.message };
+    permitHeld = true;
+    permitLeaseMs = permit.limits.leaseMs;
+    const { bytes, validated } = await fileBytes(file);
     if (!validated.mime.startsWith('image/')) {
       return { status: 'error', message: 'Фотография должна быть в формате JPG, PNG или WebP.' };
     }
-    storage = await LocalPrivateStorage.create(privateStorageRoot());
-    const scanner = ClamAvClient.fromEnvironment();
-    sourceStorageKey = `companies/${client.companyId}/clients/${client.id}/photos/source/${uploadId}.${validated.extension}`;
-    const durableUpload = await prisma.clientPhotoUpload.create({
-      data: {
-        uploadId,
-        companyId: client.companyId,
-        clientId: client.id,
-        sourceStorageKey,
-        finalStorageKey,
-        previousPhotoPath: client.photoPath,
-        status: 'PENDING',
-        leaseExpiresAt: newScanLeaseExpiresAt(),
-      },
-      select: { id: true },
+    const permitRenewedBeforeWrite = await renewClientUploadPermit(uploadPermitDatabase(), {
+      uploadId,
+      companyId: client.companyId,
+      now: new Date(),
+      leaseMs: permitLeaseMs,
     });
+    if (!permitRenewedBeforeWrite) {
+      throw new Error('Срок резервирования ресурсов загрузки истёк.');
+    }
+    const scanner = ClamAvClient.fromEnvironment();
+    const durableSourceStorageKey = `companies/${client.companyId}/clients/${client.id}/photos/source/${uploadId}.${validated.extension}`;
+    sourceStorageKey = durableSourceStorageKey;
+    const durableUpload = await prisma.$transaction(
+      async (transaction) => {
+        const permitClaim = await transaction.clientUploadPermit.updateMany({
+          where: {
+            uploadId,
+            companyId: client.companyId,
+            userId: access.user.id,
+            status: 'ACTIVE',
+            leaseExpiresAt: { gt: new Date() },
+          },
+          data: { leaseExpiresAt: new Date(Date.now() + permitLeaseMs) },
+        });
+        if (permitClaim.count !== 1) {
+          throw new Error('Резервирование ресурсов загрузки истекло.');
+        }
+        return transaction.clientPhotoUpload.create({
+          data: {
+            uploadId,
+            companyId: client.companyId,
+            clientId: client.id,
+            sourceStorageKey: durableSourceStorageKey,
+            finalStorageKey,
+            previousPhotoPath: client.photoPath,
+            status: 'PENDING',
+            leaseExpiresAt: newScanLeaseExpiresAt(),
+          },
+          select: { id: true },
+        });
+      },
+      { isolationLevel: 'Serializable' },
+    );
     photoUploadId = durableUpload.id;
     await storage.putQuarantine(uploadId, bytes);
     const scanResult = await scanPendingUpload({
@@ -987,26 +1206,35 @@ export async function uploadClientPhotoAction(
       storageKey: sourceStorageKey,
       renewPromotionLease: async () => {
         if (!photoUploadId) return false;
-        const renewed = await prisma.clientPhotoUpload.updateMany({
-          where: {
-            id: photoUploadId,
+        const [renewed, permitRenewed] = await Promise.all([
+          prisma.clientPhotoUpload.updateMany({
+            where: {
+              id: photoUploadId,
+              uploadId,
+              companyId: client.companyId,
+              clientId: client.id,
+              status: 'PENDING',
+            },
+            data: { leaseExpiresAt: newScanLeaseExpiresAt() },
+          }),
+          renewClientUploadPermit(uploadPermitDatabase(), {
             uploadId,
             companyId: client.companyId,
-            clientId: client.id,
-            status: 'PENDING',
-          },
-          data: { leaseExpiresAt: newScanLeaseExpiresAt() },
-        });
-        return renewed.count === 1;
+            now: new Date(),
+            leaseMs: permitLeaseMs,
+          }),
+        ]);
+        return renewed.count === 1 && permitRenewed;
       },
     });
+    retainPermit = scanResult.status === 'ERROR';
     await prisma.$transaction((transaction) =>
       auditPhotoScan(access, client, scanResult, photoUploadId!, transaction),
     );
     if (scanResult.status !== 'CLEAN') {
       await prisma.clientPhotoUpload.updateMany({
         where: { id: photoUploadId, companyId: client.companyId, clientId: client.id },
-        data: { status: 'CLEANUP_PENDING', leaseExpiresAt: new Date() },
+        data: { status: 'CLEANUP_PENDING', leaseExpiresAt: newScanLeaseExpiresAt() },
       });
       return resultState(scanResult, client.id);
     }
@@ -1030,6 +1258,13 @@ export async function uploadClientPhotoAction(
     if (promotionLease.count !== 1) {
       throw new Error('Срок обработки загрузки фото истёк.');
     }
+    const permitRenewed = await renewClientUploadPermit(uploadPermitDatabase(), {
+      uploadId,
+      companyId: client.companyId,
+      now: new Date(),
+      leaseMs: permitLeaseMs,
+    });
+    if (!permitRenewed) throw new Error('Срок обработки загрузки фото истёк.');
     await storage.putQuarantine(normalizedUploadId, normalized);
     await storage.promote(normalizedUploadId, finalStorageKey);
     finalStoragePromoted = true;
@@ -1162,6 +1397,9 @@ export async function uploadClientPhotoAction(
   } finally {
     if (storage && sourceStorageKey && databaseCommitted) {
       await removePrivateQuietly(storage, sourceStorageKey);
+    }
+    if (permitHeld && !retainPermit) {
+      await releasePermit(uploadId, client.companyId, 'COMPLETED');
     }
   }
 }
