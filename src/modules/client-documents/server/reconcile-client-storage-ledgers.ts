@@ -1,5 +1,3 @@
-import 'server-only';
-
 import { prisma } from '@/database/prisma/client';
 import { LocalPrivateStorage } from '@/services/storage/local-private-storage';
 
