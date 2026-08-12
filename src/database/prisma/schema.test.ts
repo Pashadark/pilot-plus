@@ -65,17 +65,17 @@ describe('доменная схема автопарка', () => {
 
   it('хранит реквизиты демонстрационной компании без обязательного заполнения старых записей', () => {
     for (const field of [
-      'inn                 String?',
-      'kpp                 String?',
-      'ogrn                String?',
-      'directorName        String?',
-      'legalAddress        String?',
-      'actualAddress       String?',
-      'phone               String?',
-      'email               String?',
-      'isDemo              Boolean              @default(false)',
+      /inn\s+String\?/,
+      /kpp\s+String\?/,
+      /ogrn\s+String\?/,
+      /directorName\s+String\?/,
+      /legalAddress\s+String\?/,
+      /actualAddress\s+String\?/,
+      /phone\s+String\?/,
+      /email\s+String\?/,
+      /isDemo\s+Boolean\s+@default\(false\)/,
     ]) {
-      expect(schema).toContain(field);
+      expect(schema).toMatch(field);
     }
   });
 
