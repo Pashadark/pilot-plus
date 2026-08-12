@@ -8,11 +8,7 @@ vi.mock('@/database/prisma/client', () => ({
   prisma: { companyMember: { findMany: membershipFindManyMock } },
 }));
 
-import {
-  AdminAccessDeniedError,
-  getAdminCenterAccess,
-  requireAdminCenterAccess,
-} from './server';
+import { AdminAccessDeniedError, getAdminCenterAccess, requireAdminCenterAccess } from './server';
 
 const superAdmin = {
   id: 'user-system',
@@ -39,7 +35,10 @@ describe('серверный доступ к центру администрир
   it('выдаёт администратору компании только его компании', async () => {
     const companyAdmin = { ...superAdmin, id: 'user-company', role: 'MEMBER' as const };
     readSessionMock.mockResolvedValue(companyAdmin);
-    membershipFindManyMock.mockResolvedValue([{ companyId: 'company-2' }, { companyId: 'company-1' }]);
+    membershipFindManyMock.mockResolvedValue([
+      { companyId: 'company-2' },
+      { companyId: 'company-1' },
+    ]);
 
     await expect(getAdminCenterAccess()).resolves.toEqual({
       user: companyAdmin,

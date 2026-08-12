@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  getToastDuration,
-  initialToastState,
-  toastReducer,
-  type ToastRecord,
-} from './toast-state';
+import { getToastDuration, initialToastState, toastReducer, type ToastRecord } from './toast-state';
 
 function toast(id: string, tone: ToastRecord['tone'] = 'info'): ToastRecord {
   return { id, tone, title: `Уведомление ${id}` };

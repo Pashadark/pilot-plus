@@ -1,192 +1,107 @@
-# Final fix wave — dynamic vehicle tracks
+# Pilot+ Client Documents + ClamAV — final fix report
 
-**Дата:** 30 июля 2026
-**Ветка:** `codex/dynamic-vehicle-tracks`
+**Дата:** 10 августа 2026
 
-## Результат
+**Ветка:** `codex/client-documents-clamav`
 
-- «7 дней» теперь строит коллекционную модель из трёх отдельных поездок. В GeoJSON у каждого
-  сегмента и события есть `tripId`/`tripIndex`; поездки разделены белой границей, небольшим
-  `line-offset` и собственными точками «Старт»/«Финиш».
-- Сводка периода агрегирует пробег, длительность, максимальную скорость и только реальные
-  `stop`-события. Playback семидневного периода явно управляет самой новой поездкой.
-- В панели выбранного автомобиля добавлен видимый список всех событий. Hover, focus и click/tap
-  используют единый callback; совпавшие события остаются отдельными доступными элементами списка,
-  а маркер карты показывает их общий счётчик.
-- Ошибка трекового слоя показывает «Повторить». Отдельный `trackAttempt` перемонтирует только
-  источники/слои маршрута и не пересоздаёт базовую MapLibre-карту или автомобильные маркеры.
-- `fitBounds` использует размеры map container. `ResizeObserver` повторно вписывает маршрут только
-  при смене container breakpoint или ориентации.
-- Мобильная OSM-атрибуция поднята над панелью `48dvh`; Playwright проверяет отсутствие пересечения.
-- Все 15 fixtures содержат распределённые события потери связи и входа/выхода из геозоны; есть
-  стабильный grouped same-point случай.
-- Loading skeleton синхронизирован с `48dvh`, правой desktop-панелью и геометрией playback.
+## Итог
 
-## RED
+- `ERROR` остаётся fail closed в quarantine. Версия получает durable retry lease, bounded retries
+  (по умолчанию 3), absolute retention (24 часа, максимум 7 суток), безопасный повторный ClamAV scan
+  и secure cleanup после expiry. Obsolete replacement не может откатить более новую CLEAN-версию.
+- Archive атомарно ставит cleanup lease всем версиям, сразу удаляет private/quarantine artifacts и
+  оставляет retry ownership при storage error. Активные permits освобождаются только после cleanup.
+- Добавлен durable PostgreSQL `ClientUploadPermit`: per-user/company rate limits, bounded concurrent
+  scans и tenant quota проверяются до `arrayBuffer`/scan для нового документа, replacement и фото.
+  Serializable claims и отдельный orphan-permit reconciler покрывают несколько процессов/crash.
+- Tenant quota включает private usage и ACTIVE/RECONCILING quarantine reservations. Для фото
+  резервируется максимум 30 MiB на одновременные source + normalized WebP; лимит входного файла
+  остаётся 15 MiB, лимит клиента — 20 активных документов.
+- Storage root fail closed для repo root, `public`, `.next`, `.git`, `node_modules`, `src`; production
+  repo-local root запрещён без явного override. Добавлен cross-process lock и root-anchored
+  `/.pilot-private-storage/` ignore.
+- Списки/скачивание читают только exact current version. Photo route после открытия stream атомарно
+  повторно проверяет tenant/revision/storage key и пишет безопасный `VIEW` audit без path/PII.
+- `DocumentCard` получил live status, `aria-controls`, именованный region и перевод фокуса в форму.
+- Новая rolling-safe миграция удаляет только избыточный `ClientDocument_clientId_fkey`; составной
+  tenant FK остаётся. Добавлены lifecycle columns, permits table и indexes без изменения старых
+  миграций.
+- README, PROJECT_GUIDE, `.env.example` и runbook фиксируют точную host-dev Compose-команду,
+  production network contract без host-порта clamd, ACL/storage policy, capacity monitoring,
+  scheduler liveness и fresh migration procedure.
+- Добавлены gated live ClamAV test (harmless PDF + EICAR) и guarded fresh-migration deploy script.
 
-Команда:
+## TDD
 
-```text
-npx vitest run src/modules/online-map/track-model.test.ts src/modules/online-map/components/OnlineMapWorkspace.test.tsx src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts
-```
+RED был зафиксирован до implementation:
 
-Результат: `exit 1`, `3 failed` test files, `16 failed | 22 passed` tests.
+- storage root/usage/multi-adapter — 6 ожидаемых падений;
+- resource controls — отсутствующий модуль;
+- current-version queries, photo audit/revalidation и DocumentCard disclosure — 4 ожидаемых
+  падения;
+- orphan permit reconciler — отсутствующий модуль.
 
-Ожидаемые причины падений:
-
-- отсутствовали `buildTrackPeriodViewModel`, `getVehicleTracks`, `stopsCount` и trip discriminator;
-- «7 дней» оставался однодневным;
-- не было видимого списка событий и period aggregate;
-- отсутствовали `getTrackFitOptions` и retry-кнопка трекового слоя.
-
-## GREEN
-
-Целевые unit/component:
-
-```text
-3 passed test files
-41 passed tests
-```
-
-Полный unit:
+GREEN focused после исправлений:
 
 ```text
-Test Files 79 passed (79)
-Tests      393 passed (393)
+12 test files passed, 117 tests passed, live test skipped without explicit gate
 ```
 
-Статические проверки:
+Дополнительно покрыты ERROR retry CLEAN, retry ERROR, expiry removal, obsolete replacement,
+archive cleanup, cleanup retry, multi-process conditional claim, P2034 retry и guarded fresh DB URL.
+
+## Финальная проверка
 
 ```text
-npm run typecheck — exit 0
-npm run lint      — exit 0
+npm run test:unit
+125 files passed, 1 gated live file skipped
+675 tests passed, 1 skipped
+
+RUN_CLAMAV_INTEGRATION=1 + local healthy clamd
+1 live integration test passed (harmless PDF + EICAR)
+
+npm run lint
+exit 0; одно существующее warning @next/next/no-img-element в DataDisplay.tsx
+
+npm run typecheck
+exit 0
+
+npm run build
+exit 0; Next.js 16.2.10 compiled, TypeScript passed, 17/17 static pages
+
+npm run format:check
+exit 0
+
+npx prettier --check docs/PROJECT_GUIDE.md docs/runbooks/client-document-upload-reconciliation.md
+exit 0
+
+npx prisma format
+exit 0
+
+npx prisma generate
+exit 0
+
+DATABASE_URL=<non-secret local validation URL> npx prisma validate
+exit 0
+
+docker compose -f compose.yaml -f compose.dev.yaml config --quiet
+exit 0
+
+git diff --check
+exit 0
 ```
 
-Полный браузерный прогон до последней косметической детализации списка:
-
-```text
-npx playwright test tests/online-map.spec.ts --workers=1
-26 passed, 4 skipped
-```
-
-Финальный целевой браузерный прогон после всех изменений:
-
-```text
-npx playwright test tests/online-map.spec.ts --workers=1 \
-  --grep "показывает цветной|несколько разделённых|видимый список|на телефоне ждёт"
-7 passed, 1 skipped
-```
-
-Production build:
-
-```text
-npm run build — exit 0
-Next.js 16.2.10, compiled successfully, 15/15 static pages generated
-```
-
-Formatting и diff:
-
-```text
-Prettier touched-files check — exit 0
-git diff --check            — exit 0
-```
+Полный Playwright suite не запускался и не заявляется. Fresh migration deploy не применялся:
+одноразовая БД не была предоставлена, а применение миграций к общей БД запрещено задачей.
+Вместо этого guard/helper покрыт 5 unit tests, а runbook содержит точную disposable-DB процедуру.
+Seed не запускался.
 
 ## Известные предупреждения
 
-- Next.js сообщает о нескольких lockfiles и автоматически выбранном workspace root.
-- Turbopack сохраняет существующее предупреждение NFT trace из `next.config.ts`/Prisma/system-health.
-- Эти предупреждения существовали до final fix wave и не влияют на успешный build или тесты.
+- Next build сообщает о нескольких lockfiles в основном repo/worktree и автоматически выбранном
+  workspace root.
+- Turbopack NFT trace сохраняет предупреждение из generated Prisma client. Build успешен.
+- Lint сохраняет одно прежнее warning об `<img>` в `src/shared/ui/DataDisplay.tsx`; ошибок нет.
 
----
-
-## Final fix wave 2 — preview, keyboard surface и event glyphs
-
-### Результат
-
-- Preview и activation разделены во всём вертикальном срезе. Hover/focus показывают popup и
-  подсветку, но не меняют выбранное событие, playback position или autoplay; click/Enter/tap
-  активируют событие.
-- MapLibre event hover закрывается по `mouseleave`. После click активированное событие остаётся
-  показанным, а `focusAfterOpen: false` не позволяет popup красть фокус у видимой кнопки.
-- Полностью clipped accessibility surface больше не содержит кнопок или `tabindex`. В нём остались
-  только неинтерактивные data probes для браузерной проверки отрисовки.
-- В панели открыт видимый collapsible-раздел «Участки маршрута». Он содержит все участки всех
-  поездок, дату в accessible name, время, скорость, адрес и видимые точки старта/финиша.
-- Клавиатурный E2E проходит реальным последовательным `Tab`, без программного `focus()` на
-  clipped-элементы.
-- Для шести типов событий регистрируются шесть разных raster glyphs через MapLibre `addImage`.
-  Symbol layer использует `icon-image: ["get", "icon"]` и не зависит от map font glyphs.
-- Runtime probe читает реальные MapLibre paint properties для casing width и trip line offset;
-  browser-тест проверяет точные сериализованные значения.
-
-### RED
-
-```text
-npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx \
-  src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts
-
-2 failed test files
-6 failed | 25 passed
-```
-
-Ожидаемые причины: clipped surface ещё содержал 12 кнопок; hover активировал событие и перемещал
-playback; не было видимого списка участков, raster glyphs, отдельного preview callback и runtime
-paint probe.
-
-### GREEN и полная проверка
-
-```text
-npm run lint       — exit 0
-npm run typecheck  — exit 0
-npm run test:unit  — 79 files, 397 tests passed
-npm run build      — exit 0, 15/15 static pages
-
-npx playwright test tests/online-map.spec.ts --workers=1
-26 passed, 4 skipped
-
-Focused component/unit
-31 passed
-```
-
-`npm run format:check` по всему репозиторию по-прежнему сообщает 14 исторически
-неформатированных файлов вне этого изменения. Проверка Prettier для touched files и
-`git diff --check` проходит. Файлы `.superpowers/sdd/task-1-report.md` и
-`.superpowers/sdd/task-2-report.md` являются посторонними незакоммиченными изменениями и намеренно
-не включаются в commit.
-
----
-
-## Final review follow-up — playback endpoints
-
-- Старт и финиш каждой поездки стали видимыми focusable-кнопками с датой, временем и адресом в
-  accessible name.
-- Workspace хранит отдельный `playbackTripId`. Семидневный период по умолчанию воспроизводит
-  новейшую поездку, но endpoint старой поездки переводит marker, slider и последующий autoplay на
-  выбранную поездку.
-- Выбор endpoint устанавливает точный прогресс `0`/`100`; смена периода, даты, автомобиля или
-  закрытие панели сбрасывает transient playback-trip selection.
-- Accessible name каждого события теперь всегда содержит дату поездки, поэтому одинаковые события
-  разных дней однозначны.
-
-### RED
-
-```text
-npx vitest run src/modules/online-map/components/OnlineMapWorkspace.test.tsx
-
-1 failed file
-5 failed | 13 passed
-```
-
-Падения подтверждали отсутствие endpoint-кнопок, dated event names, playback-trip state и новой
-индикации активной поездки.
-
-### GREEN
-
-```text
-Focused component/unit: 33 passed
-Full unit:              79 files, 399 passed
-Targeted Playwright:    4 passed
-Full online-map E2E:    28 passed, 4 skipped
-npm run typecheck:      exit 0
-npm run lint:           exit 0
-```
+`.superpowers/sdd/task-1-report.md` является посторонним незакоммиченным изменением и намеренно не
+редактировался, не stage-ился и не включается в commit.

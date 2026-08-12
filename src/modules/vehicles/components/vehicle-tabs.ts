@@ -1,11 +1,5 @@
 export type VehicleTab =
-  | 'overview'
-  | 'trips'
-  | 'routes'
-  | 'events'
-  | 'fuel'
-  | 'maintenance'
-  | 'documents';
+  'overview' | 'trips' | 'routes' | 'events' | 'fuel' | 'maintenance' | 'documents';
 
 export const vehicleTabs: readonly { value: VehicleTab; label: string }[] = [
   { value: 'overview', label: 'Обзор' },
@@ -23,7 +17,10 @@ export function normalizeVehicleTab(value: string | undefined): VehicleTab {
   return value && values.has(value as VehicleTab) ? (value as VehicleTab) : 'overview';
 }
 
-const emptyStates: Record<Exclude<VehicleTab, 'overview'>, { title: string; description: string }> = {
+const emptyStates: Record<
+  Exclude<VehicleTab, 'overview'>,
+  { title: string; description: string }
+> = {
   trips: {
     title: 'Поездки ещё не поступали',
     description: 'История появится после первой обработанной поездки автомобиля.',

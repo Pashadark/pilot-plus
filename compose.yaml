@@ -51,6 +51,27 @@ services:
     networks:
       - pilot-network
 
+  clamav:
+    image: clamav/clamav:1.4
+    container_name: pilot-clamav
+    restart: unless-stopped
+
+    # Production contract: clamd доступен только сервисам в pilot-network; host port отсутствует.
+
+    volumes:
+      - ./docker/clamav/clamd.conf:/etc/clamav/clamd.conf:ro
+      - clamav-data:/var/lib/clamav
+
+    healthcheck:
+      test: ['CMD-SHELL', 'clamdscan --config-file=/etc/clamav/clamd.conf --ping 1']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+    networks:
+      - pilot-network
+
 networks:
   pilot-network:
     driver: bridge
@@ -60,3 +81,4 @@ volumes:
   redis-data:
   mosquitto-data:
   mosquitto-log:
+  clamav-data:

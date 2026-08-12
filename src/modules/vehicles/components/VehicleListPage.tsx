@@ -32,12 +32,7 @@ export function VehicleListPage({ vehicles }: { vehicles: readonly VehicleCardDt
           Показано {filtered.length} из {vehicles.length}
         </Badge>
       </header>
-      <VehicleFilters
-        filters={filters}
-        vehicles={vehicles}
-        onChange={setFilters}
-        onReset={reset}
-      />
+      <VehicleFilters filters={filters} vehicles={vehicles} onChange={setFilters} onReset={reset} />
       <VehicleGrid vehicles={filtered} onReset={reset} />
     </main>
   );

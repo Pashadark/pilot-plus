@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
@@ -17,6 +17,26 @@ const maintenanceStatusPreflight = readFileSync(
 const clientsMigration = readFileSync(
   new URL('./migrations/20260804171000_add_company_clients/migration.sql', import.meta.url),
   'utf8',
+);
+const clientDocumentsMigrationPath = new URL(
+  './migrations/20260804180000_add_client_documents/migration.sql',
+  import.meta.url,
+);
+const clientDocumentUploadIdMigrationPath = new URL(
+  './migrations/20260810120000_add_client_document_upload_id/migration.sql',
+  import.meta.url,
+);
+const clientDocumentScanLeaseMigrationPath = new URL(
+  './migrations/20260810150000_add_client_document_scan_lease/migration.sql',
+  import.meta.url,
+);
+const clientPhotoUploadLeaseMigrationPath = new URL(
+  './migrations/20260810170000_add_client_photo_upload_leases/migration.sql',
+  import.meta.url,
+);
+const clientUploadHardeningMigrationPath = new URL(
+  './migrations/20260810190000_harden_client_upload_lifecycle/migration.sql',
+  import.meta.url,
 );
 
 describe('доменная схема автопарка', () => {
@@ -128,5 +148,111 @@ describe('доменная схема автопарка', () => {
     expect(schema).not.toMatch(/driverLicense\s+String/);
     expect(clientsMigration).toContain('CREATE TABLE "public"."Client"');
     expect(clientsMigration).not.toMatch(/\bDROP\b/i);
+  });
+
+  it('описывает приватные версии документов клиентов без публичных адресов', () => {
+    expect(existsSync(clientDocumentsMigrationPath)).toBe(true);
+    if (!existsSync(clientDocumentsMigrationPath)) return;
+
+    const clientDocumentsMigration = readFileSync(clientDocumentsMigrationPath, 'utf8');
+
+    expect(schema).toContain('enum ClientDocumentCategory {');
+    expect(schema).toContain('enum DocumentScanStatus {');
+    expect(schema).toContain('model ClientDocument {');
+    expect(schema).toContain('model ClientDocumentVersion {');
+    expect(schema).toMatch(/companyId\s+String/);
+    expect(schema).toMatch(/clientId\s+String/);
+    expect(schema).toMatch(/status\s+DocumentScanStatus\s+@default\(UPLOADING\)/);
+    expect(schema).toMatch(/storageKey\s+String\s+@unique/);
+    expect(schema).toMatch(/originalName\s+String/);
+    expect(schema).toMatch(/verifiedMime\s+String/);
+    expect(schema).toMatch(/sha256\s+String/);
+    expect(schema).toContain('@@unique([companyId, id])');
+    expect(schema).toMatch(
+      /client\s+Client\s+@relation\(fields: \[companyId, clientId\], references: \[companyId, id\], onDelete: Cascade\)/,
+    );
+    expect(schema).toMatch(/@@index\(\[companyId, clientId, status\]\)/);
+    expect(schema).not.toMatch(/publicUrl\s+String/);
+    expect(clientDocumentsMigration).toContain("'VIEW'");
+    expect(clientDocumentsMigration).toContain("'DOWNLOAD'");
+    expect(clientDocumentsMigration).toContain("'SCAN'");
+    expect(clientDocumentsMigration).toContain("'CLIENT_DOCUMENT'");
+    expect(clientDocumentsMigration).toContain(
+      'CREATE UNIQUE INDEX "Client_companyId_id_key" ON "public"."Client"("companyId", "id")',
+    );
+    expect(clientDocumentsMigration).toContain(
+      'FOREIGN KEY ("companyId", "clientId") REFERENCES "public"."Client"("companyId", "id") ON DELETE CASCADE ON UPDATE CASCADE',
+    );
+    expect(clientDocumentsMigration).not.toMatch(/\bDROP\b/i);
+  });
+
+  it('хранит persistent upload id в отдельной add-only миграции Task 3', () => {
+    expect(existsSync(clientDocumentUploadIdMigrationPath)).toBe(true);
+    if (!existsSync(clientDocumentUploadIdMigrationPath)) return;
+
+    const migration = readFileSync(clientDocumentUploadIdMigrationPath, 'utf8');
+
+    expect(schema).toMatch(/uploadId\s+String\?\s+@unique/);
+    expect(migration).toContain('ADD COLUMN "uploadId" TEXT');
+    expect(migration).toContain(
+      'CREATE UNIQUE INDEX "ClientDocumentVersion_uploadId_key" ON "public"."ClientDocumentVersion"("uploadId")',
+    );
+    expect(migration).not.toMatch(/\bDROP\b/i);
+    expect(migration).not.toContain('SET NOT NULL');
+    expect(migration).not.toMatch(/^\s*UPDATE\b/im);
+    expect(migration).not.toContain('20260804180000_add_client_documents');
+  });
+
+  it('добавляет nullable scan lease отдельной add-only миграцией для crash recovery', () => {
+    expect(existsSync(clientDocumentScanLeaseMigrationPath)).toBe(true);
+    if (!existsSync(clientDocumentScanLeaseMigrationPath)) return;
+
+    const migration = readFileSync(clientDocumentScanLeaseMigrationPath, 'utf8');
+    expect(schema).toMatch(/scanLeaseExpiresAt\s+DateTime\?/);
+    expect(schema).toContain('@@index([scanVerdict, scanLeaseExpiresAt])');
+    expect(migration).toContain('ADD COLUMN "scanLeaseExpiresAt" TIMESTAMP(3)');
+    expect(migration).toContain(
+      'CREATE INDEX "ClientDocumentVersion_scanVerdict_scanLeaseExpiresAt_idx"',
+    );
+    expect(migration).not.toMatch(/\bDROP\b/i);
+    expect(migration).not.toMatch(/\bUPDATE\b/i);
+    expect(migration).not.toContain('SET NOT NULL');
+  });
+
+  it('добавляет durable lease для crash-safe загрузки фото отдельной add-only миграцией', () => {
+    expect(existsSync(clientPhotoUploadLeaseMigrationPath)).toBe(true);
+    if (!existsSync(clientPhotoUploadLeaseMigrationPath)) return;
+
+    const migration = readFileSync(clientPhotoUploadLeaseMigrationPath, 'utf8');
+    expect(schema).toContain('model ClientPhotoUpload');
+    expect(schema).toMatch(/uploadId\s+String\s+@unique/);
+    expect(schema).toMatch(/leaseExpiresAt\s+DateTime\?/);
+    expect(schema).toMatch(/committedAt\s+DateTime\?/);
+    expect(migration).toContain('CREATE TABLE "public"."ClientPhotoUpload"');
+    expect(migration).toContain('ClientPhotoUpload_companyId_clientId_fkey');
+    expect(migration).toContain('"committedAt" TIMESTAMP(3)');
+    expect(migration).not.toMatch(/\bDROP\b/i);
+    expect(migration).not.toMatch(/^\s*UPDATE\b/im);
+  });
+
+  it('добавляет durable permits, bounded quarantine и archive cleanup новой rolling-safe миграцией', () => {
+    expect(existsSync(clientUploadHardeningMigrationPath)).toBe(true);
+    if (!existsSync(clientUploadHardeningMigrationPath)) return;
+
+    const migration = readFileSync(clientUploadHardeningMigrationPath, 'utf8');
+    expect(schema).toContain('model ClientUploadPermit {');
+    expect(schema).toMatch(/reservedBytes\s+Int/);
+    expect(schema).toMatch(/leaseExpiresAt\s+DateTime/);
+    expect(schema).toMatch(/scanRetryCount\s+Int\s+@default\(0\)/);
+    expect(schema).toMatch(/quarantineExpiresAt\s+DateTime\?/);
+    expect(schema).toMatch(/cleanupPending\s+Boolean\s+@default\(false\)/);
+    expect(schema).toMatch(/cleanupLeaseExpiresAt\s+DateTime\?/);
+    expect(schema).toMatch(/storageDeletedAt\s+DateTime\?/);
+    expect(migration).toContain('CREATE TABLE "public"."ClientUploadPermit"');
+    expect(migration).toContain('ClientUploadPermit_companyId_status_leaseExpiresAt_idx');
+    expect(migration).toContain('ClientUploadPermit_userId_createdAt_idx');
+    expect(migration).toContain('DROP CONSTRAINT IF EXISTS "ClientDocument_clientId_fkey"');
+    expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
+    expect(migration).not.toMatch(/^\s*UPDATE\b/im);
   });
 });

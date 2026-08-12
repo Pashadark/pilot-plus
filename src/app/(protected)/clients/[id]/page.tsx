@@ -1,6 +1,12 @@
 import { notFound } from 'next/navigation';
 
-import { canManageClient, getClientAccess, requireClientAccess } from '@/modules/clients/access';
+import { getClientDocuments } from '@/modules/client-documents/server/queries';
+import {
+  canArchiveClient,
+  canManageClient,
+  getClientAccess,
+  requireClientAccess,
+} from '@/modules/clients/access';
 import { ClientDetailPage } from '@/modules/clients/components/ClientDetailPage';
 import { getClientById, getClientCompanyOptions } from '@/modules/clients/server/queries';
 import { AppShell } from '@/shared/components/app-shell/AppShell';
@@ -14,7 +20,11 @@ export default async function ClientRoute({ params }: { params: Promise<{ id: st
   const client = await getClientById(access, id);
   if (!client) notFound();
   const canManage = canManageClient(manageAccess, client.companyId);
-  const companies = canManage && manageAccess ? await getClientCompanyOptions(manageAccess) : [];
+  const [companies, documents, canArchiveDocuments] = await Promise.all([
+    canManage && manageAccess ? getClientCompanyOptions(manageAccess) : [],
+    getClientDocuments(access, client.id),
+    canArchiveClient(manageAccess, client.companyId),
+  ]);
   return (
     <AppShell
       breadcrumbs={[
@@ -23,7 +33,13 @@ export default async function ClientRoute({ params }: { params: Promise<{ id: st
         { label: client.fullName },
       ]}
     >
-      <ClientDetailPage client={client} canManage={canManage} companies={companies} />
+      <ClientDetailPage
+        client={client}
+        canManage={canManage}
+        canArchiveDocuments={canArchiveDocuments}
+        documents={documents}
+        companies={companies}
+      />
     </AppShell>
   );
 }

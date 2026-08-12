@@ -22,7 +22,13 @@ export default async function VehiclePage({
   if (!vehicle) notFound();
 
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Автомобили', href: '/vehicles' }, { label: vehicle.model }]}>
+    <AppShell
+      breadcrumbs={[
+        { label: 'Pilot+', href: '/' },
+        { label: 'Автомобили', href: '/vehicles' },
+        { label: vehicle.model },
+      ]}
+    >
       <VehicleDetailPage vehicle={vehicle} activeTab={normalizeVehicleTab(query.tab)} />
     </AppShell>
   );

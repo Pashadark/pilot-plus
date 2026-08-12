@@ -35,6 +35,8 @@ const rawClient = {
   status: 'VERIFIED' as const,
   createdAt: new Date('2026-08-01T10:00:00.000Z'),
   updatedAt: new Date('2026-08-02T10:00:00.000Z'),
+  photoPath: 'companies/c1/clients/client-1/photos/clean.webp',
+  telegramUsername: 'anna_demo',
 };
 
 function createRepository() {
@@ -77,6 +79,7 @@ describe('tenant-scoped client queries', () => {
   it('decrypts plaintext contact and document fields only for the authorized detail DTO', async () => {
     const fake = createRepository();
     const queries = createClientQueries(fake.repository, { encryptionKey });
+    const photoRevision = rawClient.updatedAt.getTime().toString(36);
 
     const result = await queries.getClientById(access, 'client-1');
 
@@ -89,7 +92,10 @@ describe('tenant-scoped client queries', () => {
       passport: '4510 123456',
       driverLicense: '9910 654321',
       birthDate: '1990-04-12T00:00:00.000Z',
+      localPhotoUrl: `/clients/client-1/photo?v=${photoRevision}`,
     });
+    expect(JSON.stringify(result)).not.toContain('companies/c1');
+    expect(result?.localPhotoUrl).not.toContain(rawClient.updatedAt.toISOString());
     expect(result).not.toHaveProperty('passportEncrypted');
   });
 

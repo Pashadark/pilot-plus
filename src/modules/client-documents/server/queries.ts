@@ -1,0 +1,252 @@
+import 'server-only';
+
+import type { Prisma } from '@/database/generated/prisma';
+import { prisma } from '@/database/prisma/client';
+import type {
+  ClientDocumentListItem,
+  DownloadableClientDocument,
+  DownloadableClientPhoto,
+} from '@/modules/client-documents/types';
+import type { ClientAccess } from '@/modules/clients/access';
+import { clientPhotoRevision } from '@/modules/clients/photo-revision';
+
+type ClientDocumentRepository = {
+  findMany(args: unknown): Promise<unknown[]>;
+  findFirst(args: unknown): Promise<unknown | null>;
+  findVersionFirst(args: unknown): Promise<unknown | null>;
+};
+
+type RawVersion = {
+  version: number;
+  storageKey: string;
+  originalName: string;
+  verifiedMime: string;
+  bytes: number;
+  sha256: string;
+  scanVerdict: string | null;
+};
+
+type RawDocument = {
+  id: string;
+  companyId: string;
+  clientId: string;
+  category: ClientDocumentListItem['category'];
+  title: string;
+  status: ClientDocumentListItem['status'];
+  currentVersion: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+const versionSelect = {
+  version: true,
+  storageKey: true,
+  originalName: true,
+  verifiedMime: true,
+  bytes: true,
+  sha256: true,
+  scanVerdict: true,
+} satisfies Prisma.ClientDocumentVersionSelect;
+
+function tenantCompanyWhere(access: ClientAccess) {
+  return access.scope === 'SYSTEM' ? undefined : { in: [...access.companyIds] };
+}
+
+export function createClientDocumentQueries(repository: ClientDocumentRepository) {
+  return {
+    async getClientDocuments(
+      access: ClientAccess,
+      clientId: string,
+    ): Promise<ClientDocumentListItem[]> {
+      const documents = (await repository.findMany({
+        where: {
+          clientId,
+          ...(tenantCompanyWhere(access) ? { companyId: tenantCompanyWhere(access) } : {}),
+          client: { archivedAt: null },
+          archivedAt: null,
+          status: { not: 'ARCHIVED' },
+        },
+        select: {
+          id: true,
+          companyId: true,
+          clientId: true,
+          category: true,
+          title: true,
+          status: true,
+          currentVersion: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      })) as RawDocument[];
+
+      return Promise.all(
+        documents.map(async (document) => {
+          const version = (await repository.findVersionFirst({
+            where: { documentId: document.id, version: document.currentVersion },
+            select: versionSelect,
+          })) as RawVersion | null;
+          return {
+            id: document.id,
+            category: document.category,
+            title: document.title,
+            status: document.status,
+            currentVersion: document.currentVersion,
+            originalName: version?.originalName ?? null,
+            verifiedMime: version?.verifiedMime ?? null,
+            bytes: version?.bytes ?? null,
+            createdAt: document.createdAt.toISOString(),
+            updatedAt: document.updatedAt.toISOString(),
+          };
+        }),
+      );
+    },
+
+    async getDownloadableClientDocument(
+      access: ClientAccess,
+      clientId: string,
+      documentId: string,
+      expectedVersion?: number,
+    ): Promise<DownloadableClientDocument | null> {
+      const document = (await repository.findFirst({
+        where: {
+          id: documentId,
+          clientId,
+          ...(expectedVersion === undefined ? {} : { currentVersion: expectedVersion }),
+          ...(tenantCompanyWhere(access) ? { companyId: tenantCompanyWhere(access) } : {}),
+          client: { archivedAt: null },
+          status: 'CLEAN',
+          archivedAt: null,
+        },
+        select: {
+          id: true,
+          companyId: true,
+          clientId: true,
+          category: true,
+          title: true,
+          status: true,
+          currentVersion: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      })) as RawDocument | null;
+
+      if (
+        !document ||
+        document.status !== 'CLEAN' ||
+        (expectedVersion !== undefined && document.currentVersion !== expectedVersion)
+      ) {
+        return null;
+      }
+      const version = (await repository.findVersionFirst({
+        where: {
+          documentId: document.id,
+          version: document.currentVersion,
+          scanVerdict: 'CLEAN',
+        },
+        select: versionSelect,
+      })) as RawVersion | null;
+      if (!version) return null;
+
+      return {
+        documentId: document.id,
+        companyId: document.companyId,
+        version: version.version,
+        storageKey: version.storageKey,
+        originalName: version.originalName,
+        verifiedMime: version.verifiedMime,
+        sha256: version.sha256,
+      };
+    },
+  };
+}
+
+type DocumentDatabase = Pick<Prisma.TransactionClient, 'clientDocument' | 'clientDocumentVersion'>;
+
+function queriesFor(database: DocumentDatabase) {
+  return createClientDocumentQueries({
+    findMany: (args) => database.clientDocument.findMany(args as Prisma.ClientDocumentFindManyArgs),
+    findFirst: (args) =>
+      database.clientDocument.findFirst(args as Prisma.ClientDocumentFindFirstArgs),
+    findVersionFirst: (args) =>
+      database.clientDocumentVersion.findFirst(args as Prisma.ClientDocumentVersionFindFirstArgs),
+  });
+}
+
+export async function getClientDocuments(
+  access: ClientAccess,
+  clientId: string,
+  database: DocumentDatabase = prisma,
+) {
+  return queriesFor(database).getClientDocuments(access, clientId);
+}
+
+export async function getDownloadableClientDocument(
+  access: ClientAccess,
+  clientId: string,
+  documentId: string,
+  expectedVersion?: number,
+  database: DocumentDatabase = prisma,
+) {
+  return queriesFor(database).getDownloadableClientDocument(
+    access,
+    clientId,
+    documentId,
+    expectedVersion,
+  );
+}
+
+type RawClientPhoto = {
+  id: string;
+  companyId: string;
+  photoPath: string | null;
+  updatedAt: Date;
+};
+
+type ClientPhotoDatabase = {
+  client: { findFirst(args: unknown): Promise<RawClientPhoto | null> };
+};
+
+function clientPhotoDatabase(): ClientPhotoDatabase {
+  return {
+    client: {
+      findFirst: (args) =>
+        prisma.client.findFirst(
+          args as Prisma.ClientFindFirstArgs,
+        ) as Promise<RawClientPhoto | null>,
+    },
+  };
+}
+
+export async function getDownloadableClientPhoto(
+  access: ClientAccess,
+  clientId: string,
+  expectedRevision: string,
+  database: ClientPhotoDatabase = clientPhotoDatabase(),
+): Promise<DownloadableClientPhoto | null> {
+  const client = await database.client.findFirst({
+    where: {
+      id: clientId,
+      ...(tenantCompanyWhere(access) ? { companyId: tenantCompanyWhere(access) } : {}),
+      archivedAt: null,
+      photoPath: { not: null },
+    },
+    select: { id: true, companyId: true, photoPath: true, updatedAt: true },
+  });
+  if (!client?.photoPath) return null;
+
+  const revision = clientPhotoRevision(client.updatedAt);
+  if (revision !== expectedRevision) return null;
+
+  const expectedPrefix = `companies/${client.companyId}/clients/${client.id}/photos/`;
+  if (!client.photoPath.startsWith(expectedPrefix) || !client.photoPath.endsWith('.webp')) {
+    return null;
+  }
+
+  return {
+    companyId: client.companyId,
+    clientId: client.id,
+    storageKey: client.photoPath,
+    revision,
+  };
+}

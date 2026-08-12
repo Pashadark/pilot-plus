@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { FiArrowLeft, FiFileText, FiPhone } from 'react-icons/fi';
 
+import { DocumentsPanel } from '@/modules/client-documents/components/DocumentsPanel';
+import type { ClientDocumentListItem } from '@/modules/client-documents/types';
 import type { ClientDetailDto, ClientStatus } from '../types';
 import { Badge, Card, CardContent, CardHeader } from '@/shared/ui';
 
@@ -33,10 +35,14 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
 export function ClientDetailPage({
   client,
   canManage,
+  canArchiveDocuments,
+  documents,
   companies,
 }: {
   client: ClientDetailDto;
   canManage: boolean;
+  canArchiveDocuments: boolean;
+  documents: readonly ClientDocumentListItem[];
   companies: readonly { id: string; name: string }[];
 }) {
   return (
@@ -94,7 +100,7 @@ export function ClientDetailPage({
           <CardHeader>
             <h2 className="flex items-center gap-2 font-bold">
               <FiFileText aria-hidden="true" />
-              Документы
+              Реквизиты документов
             </h2>
           </CardHeader>
           <CardContent>
@@ -106,12 +112,16 @@ export function ClientDetailPage({
               <DetailRow label="Выдано">{date(client.driverLicenseIssuedAt)}</DetailRow>
               <DetailRow label="Действует до">{date(client.driverLicenseExpiresAt)}</DetailRow>
             </dl>
-            <p className="mt-4 text-sm text-[var(--color-text-secondary)]">
-              Файлы документов ещё не загружаются: этот этап будет добавлен отдельно.
-            </p>
           </CardContent>
         </Card>
       </div>
+      <DocumentsPanel
+        clientId={client.id}
+        clientName={client.fullName}
+        documents={documents}
+        canManage={canManage}
+        canArchive={canArchiveDocuments}
+      />
       {canManage ? <ClientForm companies={companies} client={client} /> : null}
     </main>
   );

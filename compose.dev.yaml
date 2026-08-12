@@ -1,0 +1,5 @@
+services:
+  clamav:
+    # Development-only loopback access for `npm run dev` on the host.
+    ports:
+      - '127.0.0.1:3310:3310'

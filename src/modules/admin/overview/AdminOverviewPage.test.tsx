@@ -81,6 +81,19 @@ describe('AdminOverviewPage', () => {
     expect(screen.getByText('Действий пока нет')).toBeTruthy();
   });
 
+  it('показывает русское название нового действия аудита', () => {
+    render(
+      <AdminOverviewPage
+        overview={{
+          ...overview,
+          recentAudit: [{ ...overview.recentAudit[0], action: 'VIEW' as const }],
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/Просмотр/)).toBeTruthy();
+  });
+
   it('показывает компании и их команды после показателей', () => {
     render(<AdminOverviewPage overview={{ ...overview, companyProfiles: [companyProfile] }} />);
 

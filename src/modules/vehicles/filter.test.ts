@@ -49,8 +49,12 @@ const vehicles = [
 describe('фильтрация автопарка', () => {
   it('ищет без учёта регистра по модели, городу, офису и номеру', () => {
     expect(filterVehicles(vehicles, { ...initialVehicleFilters, query: 'yArIs' })).toHaveLength(1);
-    expect(filterVehicles(vehicles, { ...initialVehicleFilters, query: 'аэропорт' })).toHaveLength(1);
-    expect(filterVehicles(vehicles, { ...initialVehicleFilters, query: 'PLT-001' })).toHaveLength(3);
+    expect(filterVehicles(vehicles, { ...initialVehicleFilters, query: 'аэропорт' })).toHaveLength(
+      1,
+    );
+    expect(filterVehicles(vehicles, { ...initialVehicleFilters, query: 'PLT-001' })).toHaveLength(
+      3,
+    );
   });
 
   it('комбинирует город, топливо, статус и количество мест', () => {

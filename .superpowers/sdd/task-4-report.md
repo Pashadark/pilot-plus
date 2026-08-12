@@ -1,186 +1,164 @@
-# Task 4 — скелетоны, E2E, документация и полная проверка
+# Task 4 — UI Pilot+ для документов клиента
 
 ## Статус
 
-Task 4 завершена. Добавлена доступная сериализованная поверхность реального `VehicleTrackViewModel`,
-расширен skeleton `/map`, актуализирован проектный handoff и проверен полный пользовательский поток
-динамических маршрутов на desktop, телефоне и планшете.
+Task 4 реализована в изолированном worktree `client-documents-clamav`. Карточка клиента получила
+доступную панель документов и загрузку локального фото. UI использует существующие семантические
+токены Pilot+, русские подписи, системные иконки и серверные правила tenant/RBAC. Общие миграции и
+seed не применялись.
 
-## RED
+## Реализовано
 
-1. После добавления базового сценария:
+- `DocumentDropzone` поддерживает видимый нативный file input, drag-and-drop как дополнение,
+  проверку формата/размера, прогресс и локальную ошибку.
+- `DocumentCard` показывает формат, имя, дату, размер и статус текстом с иконкой, поэтому состояние
+  не передаётся одним цветом. Предпросмотр и скачивание существуют только для `CLEAN`.
+- `DocumentsPanel` содержит счётчик лимита 20 документов, пустое/read-only состояние, загрузку,
+  замену, архивирование и тосты успеха/ошибки.
+- `SUPER_ADMIN`, `COMPANY_ADMIN` и `DISPATCHER` могут загружать и заменять; архивирование доступно
+  только `SUPER_ADMIN` и `COMPANY_ADMIN`; `VIEWER` видит read-only UI; `DRIVER` не получает данные.
+- Архивирование выполнено Serializable tenant-scoped Server Action с audit-записью и атомарным
+  запретом при незавершённой версии или активном recovery lease.
+- Локальное фото клиента отдаётся новым защищённым маршрутом `/clients/[id]/photo`, проверяющим
+  компанию и допустимый storage key. Оно имеет приоритет над messenger/fallback, а при отсутствии
+  или ошибке загрузки используется доступная SVG-заглушка.
+- Маршрут скачивания поддерживает `?preview=1` для inline-предпросмотра и по-прежнему обслуживает
+  только `CLEAN` через атомарную серверную проверку. Preview пишет только аудит `VIEW`, обычное
+  скачивание — только `DOWNLOAD`.
+- Для `/clients/[id]` добавлены skeleton с зарезервированной геометрией и локальный error boundary
+  Next.js 16.2 с `unstable_retry`.
+- Все интерактивные элементы имеют видимые подписи/focus, touch target не меньше 44 px; сетка и
+  действия рассчитаны на 375/390 px без горизонтального переполнения; motion учитывает
+  `prefers-reduced-motion`.
 
-   ```powershell
-   npx playwright test tests/online-map.spec.ts --project=desktop --grep "показывает цветной маршрут"
-   ```
+## TDD: RED
 
-   Результат: `1 failed`; ожидаемое функциональное падение на отсутствующем
-   `[data-track-color="green"]`.
-
-2. После добавления полного набора требований:
-
-   ```powershell
-   npx playwright test tests/online-map.spec.ts --project=desktop --grep "показывает цветной|все действия маршрута|маршрут не создаёт горизонтальную"
-   ```
-
-   Результат: `4 failed`; во всех случаях отсутствовал `data-testid="vehicle-track-a11y"`.
-
-3. E2E отдельно выявил узкий дефект предыдущей реализации: slider переходил к точке события, но
-   `data-playback-point` реального MapLibre marker оставался на `p0`. Причина: update-effect вызывал
-   `Marker.setLngLat`, но dataset задавался только при создании marker. После согласования с
-   родительской задачей добавлена синхронизация dataset перед реальным перемещением.
-
-Первый технический запуск остановился до проверки функции из-за отсутствия auth-переменных в
-worktree. Все зачтённые RED/GREEN-прогоны выполнялись с безопасной загрузкой корневого `.env` без
-вывода значений и на изолированных портах.
-
-## GREEN
-
-- Цвета `green/yellow/red`, вычисленная opacity `0.72`, дата и координаты сериализуются из того же
-  view model, который получает MapLibre.
-- Координата события «Заправка» точно совпадает с координатой точки линии.
-- Hover/focus сегмента вызывает реальные popup callbacks с временем, скоростью и адресом.
-- Клик/Enter по событию открывает реальный popup и перемещает slider/marker.
-- Начало и конец маршрута управляют тем же progress callback, что slider.
-- Воспроизведение меняет реальный `data-playback-point`; закрытие карточки удаляет surface, слои и
-  playback marker.
-- Проверены keyboard-only сценарий и отсутствие overflow на `390×844`, `1024×768`, а также
-  существующие проверки `1440×900`.
-
-Итоговый browser-прогон:
+До реализации были добавлены тесты компонентов и серверных границ.
 
 ```powershell
-npx playwright test tests/online-map.spec.ts --workers=1
+npx vitest run src/modules/client-documents/components/DocumentDropzone.test.tsx `
+  src/modules/client-documents/components/DocumentCard.test.tsx `
+  src/modules/client-documents/components/DocumentsPanel.test.tsx
 ```
 
-Результат: `22 passed`, `4 skipped`, код `0`. Skip относятся только к намеренно
-desktop/mobile-specific сценариям противоположного проекта.
+Результат: три suites завершились RED, потому что компонентов ещё не существовало.
 
-## Изменённые файлы
+Отдельные RED-прогоны зафиксировали отсутствующие контрактные части: `archiveClientDocumentAction`,
+inline-disposition для preview, защищённый маршрут фото, преобразование приватного `photoPath` в
+URL, `canArchiveClient`, панель документов на странице и route loading/error states.
 
-- `src/app/(protected)/map/loading.tsx`
-- `src/modules/online-map/components/VehicleTrackLayers.tsx`
-- `src/modules/online-map/components/OnlineFleetMap.tsx`
-- `src/modules/online-map/components/OnlineMapWorkspace.tsx`
-- `src/modules/online-map/components/OnlineMapWorkspace.test.tsx`
-- `src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts`
-- `tests/online-map.spec.ts`
-- `docs/PROJECT_GUIDE.md`
-- `.superpowers/sdd/task-4-report.md`
+## TDD: GREEN
 
-Отчёты Task 1–2 сохранены без изменений этой задачи.
+После реализации все focused-тесты компонентов, actions/access, DTO, download/photo routes,
+страницы, фото и route states прошли. Финальный полный unit-прогон:
 
-## Полная проверка
+```powershell
+npm run test:unit
+```
 
-| Команда | Результат |
-| --- | --- |
-| `npm run typecheck` | PASS, код `0` |
-| `npm run lint` | PASS, код `0`, без warnings |
-| `npm run test:unit` | PASS: 79 файлов, 384 теста |
-| `npm run build` | PASS, код `0`, 15/15 static pages |
-| `npx playwright test tests/online-map.spec.ts --workers=1` | PASS: 22, skipped: 4 |
-| `npx prettier --check <все файлы Task 4>` | PASS |
-| `npx prettier --check docs/PROJECT_GUIDE.md` | PASS |
-| `git diff --check` | PASS, вывода нет |
+Результат: `122` файла, `640` тестов, код `0`.
 
-`npm run format:check` остаётся красным на 14 несвязанных baseline-файлах, которые существовали до
-Task 4. Все файлы этой задачи отдельно проходят Prettier. Они не переформатировались массово, чтобы
-не затронуть пользовательские изменения.
+## Playwright-набор
 
-## Self-review и замечания
+Добавлен `tests/client-documents.spec.ts` с UUID-scoped fixtures и точечной очисткой только данных
+и storage текущего тестового tenant. Набор покрывает:
 
-- В brief указано `--project=chromium`, но в репозитории проекты называются `desktop` и `mobile`;
-  оба используют Chromium devices. Итоговая команда без фильтра проекта проверила оба проекта и
-  сильнее указанной команды.
-- Параллельный E2E с восемью workers один раз поймал существующую auth-гонку:
-  `/?welcome=1` вместо строгого `/` в `tests/helpers/auth.ts`. Последовательный канонический прогон
-  стабильно зелёный; auth-helper вне scope Task 4 не менялся.
-- Build сохраняет известные warnings о нескольких lockfiles/workspace root и NFT tracing
-  `next.config.ts`; сборка завершается успешно. Эти предупреждения не вызваны динамическими треками.
-- Новых зависимостей нет. Источник маршрутов остаётся `track-fixtures.ts`; API/MQTT не имитируется.
+- безопасный JPG через drag-and-drop и безопасный PDF через file picker;
+- загрузку фото, замену и архивирование;
+- EICAR внутри валидного PDF;
+- скачивание и проверку байтов;
+- изоляцию второго tenant и отказ для `DRIVER`, включая прямой download URL;
+- mobile 390 px, touch targets и отсутствие overflow;
+- `PENDING` и skeleton навигации.
+
+Runtime-прогон не получил результата из-за инфраструктурной остановки:
+
+```powershell
+npx playwright test tests/client-documents.spec.ts --workers=1
+```
+
+Через приблизительно `842 s` команда была внешне прервана без единой строки stdout/stderr.
+`test-results` и `playwright-report` не созданы; listeners на портах 3000–3002 и новые процессы
+Playwright/Chromium после остановки отсутствовали. Это не PASS и не test failure: процесс не
+оставил признаков запуска браузерного runtime. Повторный длительный запуск не выполнялся. Общая БД
+не мигрировалась и не seed-илась; для фактического E2E нужен уже подготовленный изолированный test DB
+и работающая инфраструктура Playwright/ClamAV.
+
+## Изменённые области
+
+- `src/modules/client-documents`: типы, queries, actions, три UI-компонента и unit-тесты.
+- `src/modules/clients`: capability, DTO фото, `ClientPhoto`, `ClientDetailPage` и тесты.
+- `src/app/(protected)/clients/[id]`: page, loading/error, download preview и защищённый photo route.
+- `tests/client-documents.spec.ts`.
+- `docs/PROJECT_GUIDE.md`.
+
+`.superpowers/sdd/task-1-report.md` не редактировался этой задачей и не включается в коммит.
 
 ## Исправления после review
 
-Все четыре замечания review закрыты:
+Read-only review выявил три Important-риска. Для каждого сначала был подтверждён RED, затем focused
+прогон `3` файлов / `36` тестов стал GREEN:
 
-1. Desktop-сценарий `1440×900` вызывает `expectNoPageOverflow` сразу после готовности трека.
-2. `vehicle-track-a11y` стал настоящей visually-hidden surface размером `1×1`, с clipping и
-   `pointer-events: none`. Он не перехватывает мышь карты, но вложенные кнопки остаются доступны
-   через программный focus и Enter/Space.
-3. DOM и MapLibre вызывают один локальный `activateEvent`; прежние соседние event-select и
-   playback callbacks заменены единым `onEventActivate` от workspace до слоя.
-4. Keyboard E2E фокусирует скрытый сегмент маршрута и проверяет popup: `08:00–08:08`,
-   `Средняя скорость: 32 км/ч`, `Красноярск, ул. Дубровинского`.
+1. Архивирование могло пересечься с незавершённой replacement-версией после promotion. Операция
+   переведена на Serializable transaction и выполняется только при отсутствии версий с
+   `scanVerdict = null` либо активным `scanLeaseExpiresAt`, поэтому незавершённая версия не
+   исключается из recovery.
+2. Ошибка защищённого photo route оставляла сломанный `<img>`. `ClientPhoto` запоминает только
+   упавший source и переключается на доступный `ClientPlaceholder`; новый URL снова пробуется.
+3. Preview и download одновременно писали `VIEW` и `DOWNLOAD`. Явный `?preview=1` теперь выбирает
+   inline + `VIEW`, а attachment — `DOWNLOAD`; tenant/CLEAN и повторная атомарная проверка не
+   изменены.
 
-### Review RED
+Повторный review подтвердил: прежние замечания закрыты, новых Critical/Important в этих участках
+нет.
 
-```powershell
-npx vitest run src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts
-```
+## Исправления после внешнего review
 
-Результат: `1 failed`, `8 passed`; ожидаемое падение:
-`TypeError: options.onEventSelect is not a function`. Новый regression-тест требовал единственный
-`onEventActivate`.
+Внешний review выявил stale-image риск и два слабых места E2E. RED-прогон дал `19 failed` в шести
+suites; после исправлений тот же focused-набор завершился `6 passed`, `42 passed`:
 
-```powershell
-npx playwright test tests/online-map.spec.ts --project=desktop --workers=1 --grep "показывает цветной маршрут"
-```
+1. `DocumentCard` добавляет `currentVersion` в preview URL и React key. Route принимает только
+   положительную числовую ревизию, а оба tenant/CLEAN чтения требуют именно эту текущую версию.
+   Устаревший URL после replacement получает 404 и не открывает storage.
+2. DTO клиента строит `/clients/{id}/photo?v={revision}` из base36 `updatedAt`. Токен не содержит
+   storage key, путь или hash. Photo route валидирует его и отдаёт файл только при совпадении с
+   текущей ревизией; смена URL сбрасывает зафиксированную в `ClientPhoto` ошибку источника.
+3. Длинное исходное имя переносится через `break-all` и `min-w-0`; mobile fixture использует имя
+   без пробелов и по-прежнему проверяет отсутствие overflow на 390 px.
+4. CLEAN fixtures cross-tenant/DRIVER E2E теперь действительно записывают PDF-байты через
+   `LocalPrivateStorage` и атомарно promote в private storage. Поэтому 404/403 не может случайно
+   пройти из-за отсутствующего файла; cleanup удаляет только
+   `<PRIVATE_STORAGE_ROOT>/private/companies/{test-company-id}` после проверки границы root.
 
-Результат: `1 failed`; ожидаемое значение `pointer-events: none`, фактическое старое значение
-`pointer-events: auto`.
+`npx playwright test tests/client-documents.spec.ts --list` успешно обнаруживает восемь
+project-сценариев. Полный browser runtime не повторялся после зафиксированной инфраструктурной
+остановки. Повторный read-only review новых исправлений: approved, Critical/Important не найдено.
 
-### Review GREEN и финальная проверка
+## Финальная mobile-корректировка
 
-| Команда | Свежий результат |
-| --- | --- |
-| `npx vitest run OnlineFleetMap.cleanup.test.ts OnlineMapWorkspace.test.tsx` | PASS: 2 файла, 22 теста |
-| focused desktop E2E двух динамических сценариев | PASS: 2 теста |
-| `npm run typecheck` | PASS, код `0` |
-| `npm run lint` | PASS, код `0`, без warnings |
-| `npm run test:unit` | PASS: 79 файлов, 384 теста |
-| `npx playwright test tests/online-map.spec.ts --workers=1` | PASS: 22, skipped: 4, код `0` |
-| `npm run build` | PASS, код `0`, 15/15 static pages |
+Имя выбранного в `DocumentDropzone` файла теперь само ограничено `min-w-0 max-w-full` и
+переносится через `break-all`, поэтому валидное длинное имя без пробелов не расширяет dropzone до
+загрузки. Targeted-тест сначала дал ожидаемый RED (`1 failed`, остальные `3 passed`), после
+минимального исправления тот же файл завершился `4 passed`; полный unit-набор — `640 passed`.
 
-Во время полного E2E один OSM tile ответил `Failed to fetch`; MapLibre продолжил работу, все 22
-исполняемых сценария прошли. Это внешняя tile-сеть, а не ошибка трека.
+## Полная проверка
 
-## Финальный review loop
+| Команда                                                          | Результат                                                                |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `npm run lint`                                                   | PASS, 0 ошибок; 1 существующее warning в `src/shared/ui/DataDisplay.tsx` |
+| `npm run typecheck`                                              | PASS, код `0`                                                            |
+| `npm run test:unit`                                              | PASS: 122 файла, 640 тестов                                              |
+| `npm run build`                                                  | PASS, Next.js 16.2.10, 17/17 static pages                                |
+| `npx playwright test tests/client-documents.spec.ts --workers=1` | INFRA BLOCKED: ~842 s, нет output/artifacts/runtime                      |
+| `npx prettier --check <файлы Task 4>`                            | PASS, код `0`                                                            |
+| `git diff --check`                                               | PASS, код `0`, вывода нет                                                |
 
-Clipped semantic segment снова получил `onMouseEnter`, но без восстановления pointer hit-testing:
-контейнер остаётся `pointer-events: none`. `onMouseEnter` и `onFocus` используют одну локальную
-функцию `activateSegment`, поэтому popup не имеет отдельной бизнес-логики для E2E.
+Build сохраняет известные предупреждения репозитория о нескольких lockfiles/workspace root и
+широком NFT trace через сгенерированный Prisma client. Новых зависимостей нет.
 
-RED:
+## Риски и handoff
 
-```powershell
-npx playwright test tests/online-map.spec.ts --project=desktop --workers=1 --grep "показывает цветной маршрут"
-```
-
-Результат: `1 failed`; после браузерного `dispatchEvent('mouseover')` popup
-`08:00–08:08` отсутствовал.
-
-GREEN:
-
-```powershell
-npx playwright test tests/online-map.spec.ts --project=desktop --workers=1 --grep "показывает цветной маршрут"
-```
-
-Результат: `1 passed (10.1s)`, код `0`. Тест программно отправляет реальный browser `mouseover` на
-неперехватывающий segment control и проверяет время, скорость и адрес popup. Отдельная keyboard
-проверка focus сохранена.
-
-```powershell
-npm run typecheck
-```
-
-Результат: PASS, код `0`.
-
-Post-fix formatting и whitespace:
-
-```powershell
-npx prettier --check ".superpowers/sdd/task-4-report.md" "docs/PROJECT_GUIDE.md" "src/app/(protected)/map/loading.tsx" "src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts" "src/modules/online-map/components/OnlineFleetMap.tsx" "src/modules/online-map/components/OnlineMapWorkspace.test.tsx" "src/modules/online-map/components/OnlineMapWorkspace.tsx" "src/modules/online-map/components/VehicleTrackLayers.tsx" "tests/online-map.spec.ts"
-git diff --check
-```
-
-Ожидаемый и подтверждённый ниже результат: Prettier — `All matched files use Prettier code style!`;
-`git diff --check` — код `0`, вывода нет.
+- Browser-сценарии написаны, но не подтверждены runtime-прогоном из-за описанного infra blocker.
+- Сканирование EICAR зависит от доступного ClamAV worker и подготовленной мигрированной test DB.
+- UI не выдаёт preview/download для `PENDING`, `BLOCKED` или `ERROR` и не раскрывает внутренние
+  storage key либо технические детали антивируса.
