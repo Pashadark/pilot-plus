@@ -61,7 +61,7 @@ expect(schema).toContain('archivedAt DateTime?');
 
 - [ ] **Step 2: Run RED**
 
-Run: `npx vitest run src/database/prisma/rental-schema.test.ts`  
+Run: `npx vitest run src/database/prisma/rental-schema.test.ts`
 Expected: FAIL because rental models do not exist.
 
 - [ ] **Step 3: Add enums and models**
@@ -99,7 +99,7 @@ Add explicit relations, company legal/bank fields, vehicle legal/rental fields, 
 
 - [ ] **Step 4: Verify schema and migration**
 
-Run: `npx prisma format && npx prisma generate && npx prisma validate && npx vitest run src/database/prisma/rental-schema.test.ts`  
+Run: `npx prisma format && npx prisma generate && npx prisma validate && npx vitest run src/database/prisma/rental-schema.test.ts`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -135,7 +135,7 @@ expect(canManageRentals('DRIVER')).toBe(false);
 
 - [ ] **Step 2: Run RED**
 
-Run: `npx vitest run src/modules/vehicles/manage/access.test.ts src/modules/rentals/server/access.test.ts`  
+Run: `npx vitest run src/modules/vehicles/manage/access.test.ts src/modules/rentals/server/access.test.ts`
 Expected: dispatcher vehicle assertion fails and rental module is missing.
 
 - [ ] **Step 3: Implement exact tenant scope**
@@ -177,7 +177,7 @@ await expect(createVehicleForCompany('foreign-company', input)).rejects.toThrow(
 
 - [ ] **Step 2: Run RED**
 
-Run: `npx vitest run src/modules/vehicles/manage`  
+Run: `npx vitest run src/modules/vehicles/manage`
 Expected: missing modules.
 
 - [ ] **Step 3: Implement Zod input and transactional mutations**
@@ -203,7 +203,7 @@ Each mutation reauthorizes, checks normalized plate/VIN inside the company, writ
 
 - [ ] **Step 4: Run GREEN and typecheck**
 
-Run: `npx vitest run src/modules/vehicles/manage && npm run typecheck`  
+Run: `npx vitest run src/modules/vehicles/manage && npm run typecheck`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -243,7 +243,7 @@ expect(result.errors).toEqual([]);
 
 - [ ] **Step 2: Run RED**
 
-Run: `npx vitest run src/modules/vehicles/manage/import`  
+Run: `npx vitest run src/modules/vehicles/manage/import`
 Expected: parser missing.
 
 - [ ] **Step 3: Implement bounded parser and idempotent apply**
