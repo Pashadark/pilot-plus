@@ -7,6 +7,37 @@ const migrationPath = new URL(
   './migrations/20260813090000_add_rentals_and_vehicle_legal_fields/migration.sql',
   import.meta.url,
 );
+const indexMigrationPath = new URL(
+  './migrations/20260813090100_add_rentals_and_vehicle_legal_indexes/migration.sql',
+  import.meta.url,
+);
+
+const normalizeVin = (value: string) => value.trim().toUpperCase() || null;
+
+const calculationPermits = ({
+  dailyRateMinor,
+  billableDays,
+  basePriceMinor,
+  discountMinor,
+  servicesMinor,
+  totalPriceMinor,
+  priceOverrideReason,
+}: {
+  dailyRateMinor: bigint;
+  billableDays: number;
+  basePriceMinor: bigint;
+  discountMinor: bigint;
+  servicesMinor: bigint;
+  totalPriceMinor: bigint;
+  priceOverrideReason: string | null;
+}) => {
+  const hasGenuineOverride = priceOverrideReason?.trim().length;
+  return Boolean(
+    hasGenuineOverride ||
+    (dailyRateMinor * BigInt(billableDays) === basePriceMinor &&
+      totalPriceMinor === basePriceMinor - discountMinor + servicesMinor),
+  );
+};
 
 describe('доменная схема аренды', () => {
   it('описывает статусы аренды и форматы документов', () => {
@@ -92,7 +123,8 @@ describe('доменная схема аренды', () => {
 
     expect(schema).toMatch(/model\s+String/);
     expect(schema).toContain('@@unique([companyId, registrationNumberNormalized])');
-    expect(schema).toContain('@@unique([companyId, vin])');
+    expect(schema).toContain('vinNormalized                 String?');
+    expect(schema).toContain('@@unique([companyId, vinNormalized])');
   });
 
   it('поставляет add-only rolling migration с SQL-ограничениями интервала и стоимости', () => {
@@ -117,7 +149,7 @@ describe('доменная схема аренды', () => {
     expect(rentalDocumentModel).toMatch(/companyId\s+String/);
     expect(rentalDocumentModel).toMatch(/clientId\s+String/);
     expect(rentalDocumentModel).toMatch(/clientDocumentId\s+String/);
-    expect(rentalDocumentModel).toMatch(/clientDocumentVersionId\s+String/);
+    expect(rentalDocumentModel).toMatch(/clientDocumentVersionId\s+String\s+@unique/);
     expect(rentalDocumentModel).toMatch(
       /rental\s+Rental\s+@relation\(fields: \[companyId, clientId, rentalId\], references: \[companyId, clientId, id\]/,
     );
@@ -143,30 +175,41 @@ describe('доменная схема аренды', () => {
 
   it('stages populated legacy vehicle data before tenant uniqueness and keeps old writers normalized', () => {
     const migration = readFileSync(migrationPath, 'utf8');
+    const indexMigration = readFileSync(indexMigrationPath, 'utf8');
 
     expect(migration).toMatch(/CREATE FUNCTION "public"\."normalize_vehicle_registration_number"/);
+    expect(migration).toMatch(/CREATE FUNCTION "public"\."normalize_vehicle_vin"/);
     expect(migration).toMatch(/UPDATE "public"\."Vehicle"[\s\S]*"registrationNumberNormalized"/);
+    expect(migration).toMatch(/"vinNormalized" = "public"\."normalize_vehicle_vin"\("vin"\)/);
     expect(migration).toMatch(/duplicate normalized registration numbers/);
     expect(migration).toMatch(/duplicate VIN values/);
-    expect(migration).toMatch(/CREATE TRIGGER "Vehicle_normalize_registration_number"/);
-    expect(migration).toMatch(/BEFORE INSERT OR UPDATE OF "registrationNumber"/);
+    expect(migration).toMatch(/CREATE TRIGGER "Vehicle_normalize_legal_identifiers"/);
+    expect(migration).toMatch(/BEFORE INSERT OR UPDATE OF "registrationNumber", "vin"/);
     expect(migration).toMatch(/SET LOCAL lock_timeout/);
-    expect(migration).toMatch(
-      /CREATE UNIQUE INDEX "Vehicle_companyId_registrationNumberNormalized_key"/,
+    expect(migration).toMatch(/SET LOCAL statement_timeout/);
+    expect(migration).toMatch(/^BEGIN;/m);
+    expect(migration).toMatch(/^COMMIT;/m);
+    expect(indexMigration).toMatch(
+      /CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "Vehicle_companyId_registrationNumberNormalized_key"/,
     );
+    expect(indexMigration).toMatch(
+      /CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "Vehicle_companyId_vinNormalized_key"/,
+    );
+    expect(indexMigration).not.toMatch(/^\s*(BEGIN|COMMIT)\s*;/m);
 
-    const trigger = migration.indexOf('CREATE TRIGGER "Vehicle_normalize_registration_number"');
+    const trigger = migration.indexOf('CREATE TRIGGER "Vehicle_normalize_legal_identifiers"');
     const backfill = migration.indexOf('UPDATE "public"."Vehicle"');
     const duplicatePreflight = migration.indexOf('duplicate normalized registration numbers');
-    const uniqueIndex = migration.indexOf(
-      'CREATE UNIQUE INDEX "Vehicle_companyId_registrationNumberNormalized_key"',
+    const uniqueIndex = indexMigration.indexOf(
+      'CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "Vehicle_companyId_registrationNumberNormalized_key"',
     );
 
     expect(trigger).toBeGreaterThan(-1);
     expect(backfill).toBeGreaterThan(trigger);
     expect(duplicatePreflight).toBeGreaterThan(backfill);
-    expect(uniqueIndex).toBeGreaterThan(duplicatePreflight);
-    expect(migration).toContain('GROUP BY "companyId", upper(btrim("vin"))');
+    expect(uniqueIndex).toBeGreaterThan(-1);
+    expect(migration).toContain('GROUP BY "companyId", "vinNormalized"');
+    expect(migration).toContain("SELECT NULLIF(upper(btrim(value)), '');");
     expect(migration).not.toMatch(/^\s*(DELETE|TRUNCATE)\b/im);
   });
 
@@ -183,8 +226,79 @@ describe('доменная схема аренды', () => {
       'RentalDocumentVersion_version_positive_check',
       'RentalDocumentVersion_contract_category_check',
       'RentalDocumentVersion_format_matches_client_version_check',
+      'RentalDocumentVersion_clientDocumentVersionId_key',
+      'ContractTemplateVersion_prevent_published_mutation',
+      'Rental_prevent_legal_snapshot_mutation',
+      'ClientDocument_prevent_rental_category_mutation',
+      'ClientDocumentVersion_prevent_rental_mime_mutation',
     ]) {
       expect(migration).toContain(constraint);
     }
+
+    expect(migration).toContain('NULLIF(btrim("priceOverrideReason"), \'\') IS NOT NULL');
+    expect(migration).toContain(
+      '"dailyRateMinor"::numeric * "billableDays"::numeric = "basePriceMinor"::numeric',
+    );
+    expect(migration).toContain(
+      '"totalPriceMinor"::numeric = "basePriceMinor"::numeric - "discountMinor"::numeric + "servicesMinor"::numeric',
+    );
+    expect(migration).toContain(
+      "OLD.\"status\" = 'DRAFT' AND NEW.\"status\" IN ('DRAFT', 'CONFIRMED', 'CANCELLED')",
+    );
+    expect(migration).toContain(
+      "OLD.\"status\" = 'CONFIRMED' AND NEW.\"status\" IN ('CONFIRMED', 'ACTIVE', 'CANCELLED')",
+    );
+    expect(migration).toContain(
+      "OLD.\"status\" = 'ACTIVE' AND NEW.\"status\" IN ('ACTIVE', 'COMPLETED', 'CANCELLED')",
+    );
+  });
+
+  it('makes the rolling concurrent-index wave recoverable and validates normalized VIN collision cases', () => {
+    const indexMigration = readFileSync(indexMigrationPath, 'utf8');
+
+    expect(existsSync(indexMigrationPath)).toBe(true);
+    expect(indexMigration).toContain(
+      'VIN123 / vin123 / leading-or-trailing spaces normalize identically',
+    );
+    expect(indexMigration).toContain('IF NOT EXISTS');
+    expect(indexMigration).toMatch(
+      /CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "ClientDocument_companyId_clientId_id_key"/,
+    );
+    expect(indexMigration).toMatch(
+      /CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "ClientDocumentVersion_documentId_id_key"/,
+    );
+    expect(indexMigration).toMatch(
+      /CREATE INDEX CONCURRENTLY IF NOT EXISTS "Vehicle_companyId_archivedAt_idx"/,
+    );
+    expect(indexMigration).not.toContain('CREATE INDEX "Vehicle_companyId_archivedAt_idx"');
+  });
+
+  it('models the populated-row guards: VIN canonicalization and non-override calculation reject invalid legacy values', () => {
+    expect(normalizeVin('VIN123')).toBe('VIN123');
+    expect(normalizeVin('vin123')).toBe('VIN123');
+    expect(normalizeVin('  vin123  ')).toBe('VIN123');
+
+    expect(
+      calculationPermits({
+        dailyRateMinor: BigInt(1000),
+        billableDays: 4,
+        basePriceMinor: BigInt(2000),
+        discountMinor: BigInt(0),
+        servicesMinor: BigInt(0),
+        totalPriceMinor: BigInt(2000),
+        priceOverrideReason: null,
+      }),
+    ).toBe(false);
+    expect(
+      calculationPermits({
+        dailyRateMinor: BigInt(1000),
+        billableDays: 4,
+        basePriceMinor: BigInt(2000),
+        discountMinor: BigInt(0),
+        servicesMinor: BigInt(0),
+        totalPriceMinor: BigInt(2000),
+        priceOverrideReason: 'manual discount programme',
+      }),
+    ).toBe(true);
   });
 });

@@ -402,31 +402,31 @@ model ClientDocument {
 }
 
 model ClientDocumentVersion {
-  id                     String                  @id @default(cuid())
-  documentId             String
-  document               ClientDocument          @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  uploadId               String?                 @unique
-  version                Int
-  storageKey             String                  @unique
-  originalName           String
-  verifiedMime           String
-  bytes                  Int
-  sha256                 String
-  scanEngine             String?
-  signatureVersion       String?
-  scanVerdict            String?
-  scanLeaseExpiresAt     DateTime?
-  claimToken             String?                 @unique
-  scanRetryCount         Int                     @default(0)
-  quarantineExpiresAt    DateTime?
-  cleanupPending         Boolean                 @default(false)
-  cleanupLeaseExpiresAt  DateTime?
-  storageDeletedAt       DateTime?
-  ledgerCommittedBytes   Int                     @default(0)
-  scannedAt              DateTime?
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
-  rentalDocumentVersions RentalDocumentVersion[]
+  id                    String                 @id @default(cuid())
+  documentId            String
+  document              ClientDocument         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploadId              String?                @unique
+  version               Int
+  storageKey            String                 @unique
+  originalName          String
+  verifiedMime          String
+  bytes                 Int
+  sha256                String
+  scanEngine            String?
+  signatureVersion      String?
+  scanVerdict           String?
+  scanLeaseExpiresAt    DateTime?
+  claimToken            String?                @unique
+  scanRetryCount        Int                    @default(0)
+  quarantineExpiresAt   DateTime?
+  cleanupPending        Boolean                @default(false)
+  cleanupLeaseExpiresAt DateTime?
+  storageDeletedAt      DateTime?
+  ledgerCommittedBytes  Int                    @default(0)
+  scannedAt             DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  rentalDocumentVersion RentalDocumentVersion?
 
   @@unique([documentId, version])
   @@unique([documentId, id])
@@ -497,6 +497,7 @@ model Vehicle {
   registrationNumber            String?
   registrationNumberNormalized  String?
   vin                           String?
+  vinNormalized                 String?
   make                          String?
   modelName                     String?
   generation                    String?
@@ -553,7 +554,7 @@ model Vehicle {
   @@unique([companyId, internalNumber])
   @@unique([companyId, id])
   @@unique([companyId, registrationNumberNormalized])
-  @@unique([companyId, vin])
+  @@unique([companyId, vinNormalized])
   @@index([companyId, status])
   @@index([companyId, city])
   @@index([companyId, archivedAt])
@@ -653,7 +654,7 @@ model RentalDocumentVersion {
   rental                  Rental                @relation(fields: [companyId, clientId, rentalId], references: [companyId, clientId, id], onDelete: Cascade)
   clientDocumentId        String
   clientDocument          ClientDocument        @relation(fields: [companyId, clientId, clientDocumentId], references: [companyId, clientId, id], onDelete: Restrict)
-  clientDocumentVersionId String
+  clientDocumentVersionId String                @unique
   clientDocumentVersion   ClientDocumentVersion @relation(fields: [clientDocumentId, clientDocumentVersionId], references: [documentId, id], onDelete: Restrict)
   version                 Int
   format                  RentalDocumentFormat
@@ -661,6 +662,7 @@ model RentalDocumentVersion {
   updatedAt               DateTime              @updatedAt @db.Timestamptz(3)
 
   @@unique([rentalId, version, format])
+  @@unique([clientDocumentId, clientDocumentVersionId])
   @@index([companyId, clientId, rentalId])
 }
 
