@@ -49,3 +49,40 @@ Prettier was run only on TypeScript tests: the repository does not configure Pri
 
 - No disposable database was supplied for end-to-end `prisma migrate deploy` or fresh-migration verification. This task deliberately did not use the common database. Apply the migration first to a disposable PostgreSQL/PostGIS database in the later integration task.
 - Prisma warns that `package.json#prisma` is deprecated ahead of Prisma 7; this is pre-existing and outside this migration task.
+
+## Review hardening wave
+
+Review findings were addressed in a separate fix wave without applying the migration or running seed.
+
+### RED → GREEN evidence
+
+- Extended `rental-schema.test.ts` before changing the schema/migration. The RED run failed in four independent assertions: rental documents had no client-scoped ownership link, rentals used timestamp-without-time-zone and `Int` money, legacy plate migration had no normalization/preflight/trigger, and lifecycle/version/document-category constraints were absent.
+- After the first implementation pass, a focused test added for verified MIME-to-format consistency failed because a rental `DOCX`/`PDF` association could be mislabeled. The migration now has a second trigger that checks the linked immutable client-document version has the exact DOCX or PDF MIME type.
+- GREEN: `rental-schema.test.ts` now passes 14/14, including migration ordering (`trigger → deterministic backfill → duplicate preflight → unique index`), duplicate guards, lock timeout, composite document ownership, UTC types, bigint minor units, lifecycle/calculation checks, and CONTRACT/MIME triggers.
+
+### Database-bound document association
+
+- `RentalDocumentVersion` no longer duplicates mutable storage key, checksum, byte count, or scan status. Those remain solely on `ClientDocumentVersion`.
+- Each rental-document association has required `companyId`, `clientId`, `rentalId`, `clientDocumentId`, and `clientDocumentVersionId`.
+- Composite foreign keys enforce that the rental belongs to the same company/client, the client document belongs to that company/client, and the selected version belongs to that same document. A trigger additionally requires category `CONTRACT`; another trigger requires the declared DOCX/PDF format to match the version’s verified MIME type.
+
+### Legacy vehicle and operational safety
+
+- A deterministic plate normalizer plus `BEFORE INSERT OR UPDATE OF registrationNumber` trigger preserves the derived normalized value for legacy writers.
+- Existing rows are backfilled before uniqueness. A `DO` preflight aborts with a clear message if normalized plates or case/whitespace-insensitive VINs are duplicated; it never resolves or deletes rows automatically.
+- Prisma migration transactions cannot use `CREATE INDEX CONCURRENTLY`. The migration sets a five-second local lock timeout and documents that index creation must be deployed in a low-write window; lock contention fails rather than causing an unbounded wait.
+
+### Type and invariant hardening
+
+- Rental interval and lifecycle instants use `TIMESTAMPTZ(3)` / `@db.Timestamptz(3)`; birth and insurance calendar dates use `DATE` / `@db.Date`.
+- New rental and vehicle monetary columns use `BIGINT` / Prisma `BigInt`. Existing `Vehicle.dailyPriceMinor Int` remains unchanged for compatibility.
+- Added positive snapshot/template/document versions, nonnegative driver ordering, template publishing consistency, lifecycle timestamp/contract-number consistency, nonnegative amounts, and calculation consistency unless a manual override reason is recorded.
+
+### Additional verification after hardening
+
+- `npx prisma format --schema src/database/prisma/schema.prisma`
+- `DATABASE_URL=<non-connecting validation URL>; npx prisma validate --schema src/database/prisma/schema.prisma`
+- `DATABASE_URL=<non-connecting validation URL>; npx prisma generate --schema src/database/prisma/schema.prisma`
+- `npx vitest run src/database/prisma/rental-schema.test.ts` — 14/14 passed.
+- `npx vitest run src/database/prisma/schema.test.ts` — 14/14 passed.
+- `npm run typecheck`
