@@ -24,6 +24,7 @@ type StorageLedgerRepository = {
     companyId: string;
     committedBytes: bigint;
     reservedBytes: bigint;
+    reconciledAt: Date | null;
   }>;
   updateMany(args: unknown): Promise<Count>;
 };
@@ -147,10 +148,13 @@ export async function acquireClientUploadPermit({
     }
     const ledger = await transaction.clientStorageLedger.upsert({
       where: { companyId },
-      create: { companyId },
+      create: { companyId, reconciledAt: now },
       update: {},
-      select: { companyId: true, committedBytes: true, reservedBytes: true },
+      select: { companyId: true, committedBytes: true, reservedBytes: true, reconciledAt: true },
     });
+    if (!ledger.reconciledAt) {
+      return { ok: false, reason: 'COMPANY_QUOTA', message: quotaMessage };
+    }
     if (
       ledger.committedBytes + ledger.reservedBytes + BigInt(requestedBytes) >
       BigInt(limits.companyQuotaBytes)

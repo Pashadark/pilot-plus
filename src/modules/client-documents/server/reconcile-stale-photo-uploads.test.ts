@@ -18,6 +18,7 @@ const candidate = {
   sha256: 'a'.repeat(64),
   leaseExpiresAt: new Date('2026-08-10T11:59:00.000Z'),
   committedAt: null,
+  claimToken: null,
   createdAt: new Date('2026-08-10T11:30:00.000Z'),
   client: { photoPath: null, photoBytes: 0, archivedAt: null },
 };
@@ -136,5 +137,20 @@ describe('stale client photo upload reconciliation', () => {
         committedAt,
       }),
     });
+  });
+
+  it('не позволяет просроченному worker завершить работу после повторного claim', async () => {
+    const { database, storage } = dependencies();
+    let updates = 0;
+    database.clientPhotoUpload.updateMany.mockImplementation(async () => {
+      updates += 1;
+      if (updates === 2) return { count: 0 };
+      return { count: 1 };
+    });
+
+    await reconcileStaleClientPhotoUploads({ database, storage, now });
+
+    expect(storage.removePrivate).not.toHaveBeenCalled();
+    expect(database.clientUploadPermit.updateMany).not.toHaveBeenCalled();
   });
 });

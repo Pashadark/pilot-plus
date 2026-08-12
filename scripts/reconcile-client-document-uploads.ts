@@ -1,13 +1,16 @@
 import { prisma } from '../src/database/prisma/client';
 import { reconcileExpiredClientUploadPermits } from '../src/modules/client-documents/server/reconcile-expired-upload-permits';
+import { reconcileClientStorageLedgers } from '../src/modules/client-documents/server/reconcile-client-storage-ledgers';
 import { reconcileStaleClientDocumentUploads } from '../src/modules/client-documents/server/reconcile-stale-uploads';
 import { reconcileStaleClientPhotoUploads } from '../src/modules/client-documents/server/reconcile-stale-photo-uploads';
 import { safeReconciliationFailureMessage } from '../src/modules/client-documents/server/recovery-policy';
 
 async function main() {
+  const ledgers = await reconcileClientStorageLedgers();
   const result = await reconcileStaleClientDocumentUploads();
   const photos = await reconcileStaleClientPhotoUploads();
   const permits = await reconcileExpiredClientUploadPermits();
+  console.log(`Reconciliation storage ledger: сверено ${ledgers.reconciled}.`);
   console.log(
     `Reconciliation документов: восстановлено ${result.recovered}, повторно проверено ${result.retried}, ожидают retry ${result.retryPending}, expired ${result.expired}, archive cleanup ${result.archivedCleaned}, ожидают очистки ${result.cleanupPending}, удалено устаревших quarantine-файлов ${result.staleFilesRemoved}.`,
   );
@@ -34,7 +37,7 @@ async function main() {
   ) {
     process.exitCode = 2;
   }
-  if (result.hasMore || photos.hasMore || permits.hasMore) {
+  if (ledgers.hasMore || result.hasMore || photos.hasMore || permits.hasMore) {
     console.error('Остались необработанные строки: повторите команду.');
     process.exitCode = 2;
   }

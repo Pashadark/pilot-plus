@@ -1,4 +1,5 @@
 import type { Prisma } from '@/database/generated/prisma';
+import { randomUUID } from 'node:crypto';
 import { prisma } from '@/database/prisma/client';
 import { LocalPrivateStorage } from '@/services/storage/local-private-storage';
 import type { PrivateStorage } from '@/services/storage/private-storage';
@@ -25,6 +26,7 @@ type PhotoUpload = {
   sha256: string | null;
   leaseExpiresAt: Date | null;
   committedAt: Date | null;
+  claimToken: string | null;
   createdAt: Date;
 };
 
@@ -187,6 +189,7 @@ export async function reconcileStaleClientPhotoUploads(
       sha256: true,
       leaseExpiresAt: true,
       committedAt: true,
+      claimToken: true,
       createdAt: true,
     },
     orderBy: [{ leaseExpiresAt: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
@@ -198,6 +201,8 @@ export async function reconcileStaleClientPhotoUploads(
   let cleanupPending = 0;
 
   for (const candidate of candidates) {
+    const claimToken = randomUUID();
+    let ownedLease = new Date(Date.now() + (options.cleanupRetryMs ?? defaultCleanupRetryMs));
     const claimed = await database.$transaction(async (transaction) => {
       const claim = await transaction.clientPhotoUpload.updateMany({
         where: {
@@ -205,12 +210,13 @@ export async function reconcileStaleClientPhotoUploads(
           companyId: candidate.companyId,
           clientId: candidate.clientId,
           status: { in: ['PENDING', 'CLEANUP_PENDING', 'RECONCILING'] },
+          claimToken: candidate.claimToken,
           OR: [
             { leaseExpiresAt: { lte: now } },
             { leaseExpiresAt: null, createdAt: { lte: cutoff } },
           ],
         },
-        data: { status: 'RECONCILING', leaseExpiresAt: retryAt },
+        data: { status: 'RECONCILING', leaseExpiresAt: ownedLease, claimToken },
       });
       if (claim.count !== 1) return false;
       if (candidate.status === 'PENDING') {
@@ -236,6 +242,27 @@ export async function reconcileStaleClientPhotoUploads(
     });
     if (!claimed) continue;
 
+    const renewOwnership = async () => {
+      const mutationAt = new Date();
+      const renewedLease = new Date(
+        mutationAt.getTime() + (options.cleanupRetryMs ?? defaultCleanupRetryMs),
+      );
+      const renewed = await database.clientPhotoUpload.updateMany({
+        where: {
+          id: candidate.id,
+          companyId: candidate.companyId,
+          clientId: candidate.clientId,
+          status: 'RECONCILING',
+          claimToken,
+          leaseExpiresAt: ownedLease,
+          AND: { leaseExpiresAt: { gt: mutationAt } },
+        },
+        data: { leaseExpiresAt: renewedLease },
+      });
+      if (renewed.count === 1) ownedLease = renewedLease;
+      return renewed.count === 1;
+    };
+
     const currentClient = await database.client.findFirst({
       where: {
         id: candidate.clientId,
@@ -245,13 +272,21 @@ export async function reconcileStaleClientPhotoUploads(
     });
     if (!currentClient) {
       await database.clientPhotoUpload.updateMany({
-        where: { id: candidate.id, companyId: candidate.companyId, clientId: candidate.clientId },
-        data: { status: 'CLEANUP_PENDING', leaseExpiresAt: retryAt },
+        where: {
+          id: candidate.id,
+          companyId: candidate.companyId,
+          clientId: candidate.clientId,
+          status: 'RECONCILING',
+          claimToken,
+          leaseExpiresAt: ownedLease,
+        },
+        data: { status: 'CLEANUP_PENDING', leaseExpiresAt: retryAt, claimToken: null },
       });
       cleanupPending += 1;
       continue;
     }
 
+    if (!(await renewOwnership())) continue;
     const isCurrent = currentClient.photoPath === candidate.finalStorageKey;
     const committed = candidate.committedAt !== null || isCurrent;
     const cleanup = committed
@@ -279,11 +314,14 @@ export async function reconcileStaleClientPhotoUploads(
             companyId: candidate.companyId,
             clientId: candidate.clientId,
             status: 'RECONCILING',
+            claimToken,
+            leaseExpiresAt: ownedLease,
           },
           data: {
             status: committed ? 'COMMITTED' : 'ERROR',
             leaseExpiresAt: null,
             ledgerCommittedBytes: finalBytes,
+            claimToken: null,
             ...(committed ? { committedAt: candidate.committedAt ?? now } : {}),
           },
         });
@@ -318,8 +356,10 @@ export async function reconcileStaleClientPhotoUploads(
           companyId: candidate.companyId,
           clientId: candidate.clientId,
           status: 'RECONCILING',
+          claimToken,
+          leaseExpiresAt: ownedLease,
         },
-        data: { status: 'CLEANUP_PENDING', leaseExpiresAt: retryAt },
+        data: { status: 'CLEANUP_PENDING', leaseExpiresAt: retryAt, claimToken: null },
       });
     }
     reconciled += 1;

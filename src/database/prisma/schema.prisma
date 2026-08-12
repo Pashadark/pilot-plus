@@ -329,6 +329,7 @@ model ClientPhotoUpload {
   ledgerCommittedBytes Int       @default(0)
   status               String    @default("PENDING")
   scanVerdict          String?
+  claimToken           String?   @unique
   sha256               String?
   leaseExpiresAt       DateTime?
   committedAt          DateTime?

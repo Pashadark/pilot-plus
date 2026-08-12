@@ -21,6 +21,7 @@ function dependencies() {
       companyId: 'company-1',
       committedBytes: BigInt(70),
       reservedBytes: BigInt(0),
+      reconciledAt: now,
     }),
     updateMany: vi.fn().mockResolvedValue({ count: 1 }),
   };
@@ -129,6 +130,7 @@ describe('durable client upload resource controls', () => {
       companyId: 'company-1',
       committedBytes: BigInt(70),
       reservedBytes: BigInt(20),
+      reconciledAt: now,
     });
 
     const result = await acquireClientUploadPermit({
@@ -153,6 +155,37 @@ describe('durable client upload resource controls', () => {
     expect(result).toMatchObject({ ok: false, reason: 'COMPANY_QUOTA' });
     if (result.ok) throw new Error('Ожидался отказ tenant quota.');
     expect(result.message).toMatch(/хранилищ/u);
+    expect(permit.create).not.toHaveBeenCalled();
+  });
+
+  it('fail-closed отклоняет legacy ledger до сверки приватного хранилища', async () => {
+    const { acquireClientUploadPermit } = await import('./upload-resource-controls');
+    const { database, permit, ledger } = dependencies();
+    ledger.upsert.mockResolvedValue({
+      companyId: 'company-1',
+      committedBytes: BigInt(0),
+      reservedBytes: BigInt(0),
+      reconciledAt: null,
+    });
+    const result = await acquireClientUploadPermit({
+      database,
+      now,
+      uploadId: '123e4567-e89b-42d3-a456-426614174000',
+      companyId: 'company-1',
+      userId: 'user-1',
+      kind: 'PHOTO',
+      requestedBytes: 15,
+      limits: {
+        windowMs: 60_000,
+        userRate: 10,
+        companyRate: 20,
+        userConcurrent: 2,
+        companyConcurrent: 5,
+        companyQuotaBytes: 100,
+        leaseMs: 15 * 60_000,
+      },
+    });
+    expect(result).toMatchObject({ ok: false, reason: 'COMPANY_QUOTA' });
     expect(permit.create).not.toHaveBeenCalled();
   });
 

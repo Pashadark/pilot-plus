@@ -6,7 +6,11 @@ ALTER TABLE "public"."ClientPhotoUpload"
 ADD COLUMN "sourceBytes" INTEGER NOT NULL DEFAULT 0,
 ADD COLUMN "finalBytes" INTEGER,
 ADD COLUMN "previousPhotoBytes" INTEGER NOT NULL DEFAULT 0,
-ADD COLUMN "ledgerCommittedBytes" INTEGER NOT NULL DEFAULT 0;
+ADD COLUMN "ledgerCommittedBytes" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "claimToken" TEXT;
+
+CREATE UNIQUE INDEX "ClientPhotoUpload_claimToken_key"
+ON "public"."ClientPhotoUpload"("claimToken");
 
 ALTER TABLE "public"."ClientDocumentVersion"
 ADD COLUMN "claimToken" TEXT,
@@ -36,11 +40,12 @@ SET "ledgerCommittedBytes" = "bytes"
 WHERE "scanVerdict" = 'CLEAN' AND "storageDeletedAt" IS NULL;
 
 INSERT INTO "public"."ClientStorageLedger"
-  ("companyId", "committedBytes", "reservedBytes", "updatedAt")
+  ("companyId", "committedBytes", "reservedBytes", "reconciledAt", "updatedAt")
 SELECT
   company."id",
   COALESCE(document_usage."bytes", 0),
   COALESCE(active_permits."bytes", 0),
+  NULL,
   CURRENT_TIMESTAMP
 FROM "public"."Company" AS company
 LEFT JOIN (
