@@ -156,6 +156,7 @@ export function DocumentCard({
 }) {
   const { showToast } = useToast();
   const [replacing, setReplacing] = useState(false);
+  const replacementTriggerRef = useRef<HTMLButtonElement>(null);
   const [archiveState, archiveAction, archivePending] = useActionState(
     async (previous: ClientDocumentActionState, formData: FormData) => {
       const next = await archiveClientDocumentAction(previous, formData);
@@ -177,6 +178,10 @@ export function DocumentCard({
   const downloadUrl = `/clients/${clientId}/documents/${document.id}/download`;
   const previewUrl = `${downloadUrl}?preview=1&v=${document.currentVersion}`;
   const replacementId = `document-replacement-${document.id}`;
+  const closeReplacement = () => {
+    setReplacing(false);
+    queueMicrotask(() => replacementTriggerRef.current?.focus());
+  };
 
   return (
     <article
@@ -256,7 +261,8 @@ export function DocumentCard({
         </p>
       ) : document.status === 'ERROR' ? (
         <p role="alert" className="text-sm text-[var(--color-danger)]">
-          Проверка временно недоступна. Загрузите файл повторно позже.
+          Проверка временно недоступна. Система автоматически повторит проверку; файл пока
+          недоступен.
         </p>
       ) : document.status === 'PENDING' || document.status === 'UPLOADING' ? (
         <p role="status" className="text-sm text-[var(--color-text-secondary)]">
@@ -290,6 +296,7 @@ export function DocumentCard({
         ) : null}
         {canManage && isClean ? (
           <Button
+            ref={replacementTriggerRef}
             type="button"
             size="sm"
             variant="soft"
@@ -297,7 +304,7 @@ export function DocumentCard({
             aria-controls={replacementId}
             aria-label={`Заменить документ «${document.title}»`}
             leadingIcon={<FiRefreshCw aria-hidden="true" />}
-            onClick={() => setReplacing((current) => !current)}
+            onClick={() => (replacing ? closeReplacement() : setReplacing(true))}
           >
             Заменить
           </Button>
@@ -331,7 +338,7 @@ export function DocumentCard({
           id={replacementId}
           clientId={clientId}
           document={document}
-          onDone={() => setReplacing(false)}
+          onDone={closeReplacement}
         />
       ) : null}
       {archiveState.status === 'error' ? (

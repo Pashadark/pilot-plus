@@ -6,9 +6,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClientDocumentListItem } from '../types';
 
+const actionMocks = vi.hoisted(() => ({
+  archive: vi.fn(),
+  upload: vi.fn(),
+}));
 vi.mock('../actions', () => ({
-  archiveClientDocumentAction: vi.fn(),
-  uploadClientDocumentAction: vi.fn(),
+  archiveClientDocumentAction: actionMocks.archive,
+  uploadClientDocumentAction: actionMocks.upload,
 }));
 vi.mock('@/shared/providers/ToastProvider', () => ({
   useToast: () => ({ showToast: vi.fn() }),
@@ -118,6 +122,33 @@ describe('DocumentCard', () => {
     expect(region.contains(document.activeElement)).toBe(true);
   });
 
+  it('возвращает фокус на disclosure trigger после отмены', async () => {
+    const user = userEvent.setup();
+    render(<DocumentCard clientId="client-1" document={cleanImage} canManage canArchive />);
+    const trigger = screen.getByRole('button', { name: 'Заменить документ «Паспорт»' });
+    await user.click(trigger);
+
+    await user.click(screen.getByRole('button', { name: 'Отмена' }));
+
+    expect(screen.queryByRole('region', { name: 'Замена документа «Паспорт»' })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('возвращает фокус на disclosure trigger после успешной замены', async () => {
+    const user = userEvent.setup();
+    actionMocks.upload.mockResolvedValueOnce({ status: 'success', message: 'Документ загружен.' });
+    render(<DocumentCard clientId="client-1" document={cleanImage} canManage canArchive />);
+    const trigger = screen.getByRole('button', { name: 'Заменить документ «Паспорт»' });
+    await user.click(trigger);
+    const input = screen.getByLabelText('Новый файл для «Паспорт»');
+    await user.upload(input, new File(['clean'], 'passport.jpg', { type: 'image/jpeg' }));
+
+    await user.click(screen.getByRole('button', { name: 'Загрузить замену' }));
+
+    expect(screen.queryByRole('region', { name: 'Замена документа «Паспорт»' })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it.each([
     ['PENDING', 'Проверяется'],
     ['BLOCKED', 'Заблокирован'],
@@ -136,5 +167,18 @@ describe('DocumentCard', () => {
     expect(screen.queryByRole('link', { name: 'Скачать' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Предпросмотр' })).toBeNull();
     expect(screen.queryByRole('img', { name: /Предпросмотр документа/u })).toBeNull();
+  });
+
+  it('объясняет, что ERROR будет автоматически повторно проверен', () => {
+    render(
+      <DocumentCard
+        clientId="client-1"
+        document={{ ...cleanImage, status: 'ERROR' }}
+        canManage
+        canArchive
+      />,
+    );
+
+    expect(screen.getByRole('alert').textContent).toMatch(/автоматически повторит/u);
   });
 });

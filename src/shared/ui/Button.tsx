@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'soft' | 'outline' | 'ghost' | 'danger';
 export type ComponentSize = 'xs' | 'sm' | 'md' | 'lg';
@@ -32,20 +32,24 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   trailingIcon?: ReactNode;
 }
 
-export function Button({
-  variant = 'primary',
-  size = 'md',
-  loading = false,
-  leadingIcon,
-  trailingIcon,
-  className = '',
-  children,
-  disabled,
-  type = 'button',
-  ...props
-}: ButtonProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  {
+    variant = 'primary',
+    size = 'md',
+    loading = false,
+    leadingIcon,
+    trailingIcon,
+    className = '',
+    children,
+    disabled,
+    type = 'button',
+    ...props
+  },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type={type}
       aria-busy={loading}
       disabled={disabled || loading}
@@ -57,4 +61,4 @@ export function Button({
       {trailingIcon}
     </button>
   );
-}
+});

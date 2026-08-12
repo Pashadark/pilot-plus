@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 import { scanPendingUpload } from '@/modules/client-documents/scan-upload';
@@ -5,6 +7,10 @@ import { ClamAvClient } from '@/services/malware-scanner/clamav-client';
 import type { MalwareScanner } from '@/services/malware-scanner/types';
 import { LocalPrivateStorage } from '@/services/storage/local-private-storage';
 import type { PrivateStorage } from '@/services/storage/private-storage';
+import {
+  settleClientUploadPermitInTransaction,
+  type UploadPermitTransaction,
+} from './upload-resource-controls';
 
 import {
   maxQuarantineScanRetries,
@@ -21,8 +27,11 @@ type StaleUpload = {
   version: number;
   storageKey: string;
   sha256: string;
+  bytes: number;
+  ledgerCommittedBytes: number;
   scanVerdict: string | null;
   scanLeaseExpiresAt: Date | null;
+  claimToken: string | null;
   scanRetryCount: number;
   quarantineExpiresAt: Date | null;
   cleanupPending: boolean;
@@ -42,7 +51,11 @@ type ReconciliationTransaction = {
   clientDocumentVersion: { updateMany(args: unknown): Promise<Count> };
   clientDocument: { updateMany(args: unknown): Promise<Count> };
   auditLog: { create(args: unknown): Promise<unknown> };
-  clientUploadPermit: { updateMany(args: unknown): Promise<Count> };
+  clientUploadPermit: {
+    findFirst(args: unknown): Promise<{ reservedBytes: number } | null>;
+    updateMany(args: unknown): Promise<Count>;
+  };
+  clientStorageLedger: { updateMany(args: unknown): Promise<Count> };
 };
 
 export type ReconciliationDatabase = ReconciliationTransaction & {
@@ -57,6 +70,7 @@ type ReconciliationOptions = {
   storage?: PrivateStorage;
   scanner?: MalwareScanner;
   now?: Date;
+  clock?: () => Date;
   staleAfterMs?: number;
   cleanupRetryMs?: number;
   batchSize?: number;
@@ -95,8 +109,16 @@ function prismaReconciliationDatabase(): ReconciliationDatabase {
       create: (args) => prisma.auditLog.create(args as Prisma.AuditLogCreateArgs),
     },
     clientUploadPermit: {
+      findFirst: (args) =>
+        prisma.clientUploadPermit.findFirst(
+          args as Prisma.ClientUploadPermitFindFirstArgs,
+        ) as Promise<{ reservedBytes: number } | null>,
       updateMany: (args) =>
         prisma.clientUploadPermit.updateMany(args as Prisma.ClientUploadPermitUpdateManyArgs),
+    },
+    clientStorageLedger: {
+      updateMany: (args) =>
+        prisma.clientStorageLedger.updateMany(args as Prisma.ClientStorageLedgerUpdateManyArgs),
     },
     $transaction: (operation) =>
       prisma.$transaction((transaction) =>
@@ -115,9 +137,19 @@ function prismaReconciliationDatabase(): ReconciliationDatabase {
             create: (args) => transaction.auditLog.create(args as Prisma.AuditLogCreateArgs),
           },
           clientUploadPermit: {
+            findFirst: (args) =>
+              transaction.clientUploadPermit.findFirst(
+                args as Prisma.ClientUploadPermitFindFirstArgs,
+              ) as Promise<{ reservedBytes: number } | null>,
             updateMany: (args) =>
               transaction.clientUploadPermit.updateMany(
                 args as Prisma.ClientUploadPermitUpdateManyArgs,
+              ),
+          },
+          clientStorageLedger: {
+            updateMany: (args) =>
+              transaction.clientStorageLedger.updateMany(
+                args as Prisma.ClientStorageLedgerUpdateManyArgs,
               ),
           },
         }),
@@ -151,11 +183,11 @@ function boundedBatchSize(value: number) {
 export async function reconcileStaleClientDocumentUploads(
   options: ReconciliationOptions = {},
 ): Promise<StaleUploadReconciliationResult> {
-  const now = options.now ?? new Date();
+  const clock = options.clock ?? (options.now ? () => options.now as Date : () => new Date());
+  const now = options.now ?? clock();
   const staleAfterMs = options.staleAfterMs ?? staleUploadThresholdMs();
   const cleanupRetryMs = options.cleanupRetryMs ?? defaultCleanupRetryMs;
   const cutoff = new Date(now.getTime() - staleAfterMs);
-  const retryAt = new Date(now.getTime() + cleanupRetryMs);
   const database = options.database ?? prismaReconciliationDatabase();
   const storage = options.storage ?? (await LocalPrivateStorage.create(privateStorageRoot()));
 
@@ -198,8 +230,11 @@ export async function reconcileStaleClientDocumentUploads(
       version: true,
       storageKey: true,
       sha256: true,
+      bytes: true,
+      ledgerCommittedBytes: true,
       scanVerdict: true,
       scanLeaseExpiresAt: true,
+      claimToken: true,
       scanRetryCount: true,
       quarantineExpiresAt: true,
       cleanupPending: true,
@@ -232,44 +267,99 @@ export async function reconcileStaleClientDocumentUploads(
 
   for (const candidate of candidates) {
     if (candidate.cleanupPending) {
+      const claimToken = randomUUID();
+      let ownedLease = new Date(clock().getTime() + cleanupRetryMs);
       const claimed = await database.clientDocumentVersion.updateMany({
         where: {
           id: candidate.id,
           cleanupPending: true,
+          claimToken: candidate.claimToken,
           OR: [
             { cleanupLeaseExpiresAt: { lte: now } },
             { cleanupLeaseExpiresAt: null, createdAt: { lte: cutoff } },
           ],
         },
-        data: { cleanupLeaseExpiresAt: retryAt },
+        data: { claimToken, cleanupLeaseExpiresAt: ownedLease },
       });
       if (claimed.count !== 1) continue;
+      const mutationAt = clock();
+      const mutationLease = new Date(mutationAt.getTime() + cleanupRetryMs);
+      const ownsMutation = await database.clientDocumentVersion.updateMany({
+        where: {
+          id: candidate.id,
+          cleanupPending: true,
+          claimToken,
+          cleanupLeaseExpiresAt: ownedLease,
+          AND: { cleanupLeaseExpiresAt: { gt: mutationAt } },
+        },
+        data: { cleanupLeaseExpiresAt: mutationLease },
+      });
+      if (ownsMutation.count !== 1) continue;
+      ownedLease = mutationLease;
       const cleanup = await Promise.allSettled([
         removePrivateIfPresent(storage, candidate.storageKey),
         ...(candidate.uploadId ? [storage.removeUploadArtifacts(candidate.uploadId)] : []),
       ]);
       const cleaned = cleanup.every((result) => result.status === 'fulfilled');
       if (!cleaned) cleanupPending += 1;
-      await database.clientDocumentVersion.updateMany({
-        where: { id: candidate.id, cleanupPending: true },
-        data: {
-          cleanupPending: !cleaned,
-          cleanupLeaseExpiresAt: cleaned ? null : retryAt,
-          ...(cleaned ? { storageDeletedAt: now } : {}),
-        },
-      });
       if (cleaned) {
-        archivedCleaned += 1;
-        if (candidate.uploadId) {
-          await database.clientUploadPermit.updateMany({
+        const finalizedAt = clock();
+        const committed = await database.$transaction(async (transaction) => {
+          const version = await transaction.clientDocumentVersion.updateMany({
             where: {
-              uploadId: candidate.uploadId,
-              companyId: candidate.document.companyId,
-              status: 'ACTIVE',
+              id: candidate.id,
+              cleanupPending: true,
+              claimToken,
+              cleanupLeaseExpiresAt: ownedLease,
             },
-            data: { status: 'RELEASED', completedAt: now, leaseExpiresAt: now },
+            data: {
+              cleanupPending: false,
+              cleanupLeaseExpiresAt: null,
+              claimToken: null,
+              storageDeletedAt: finalizedAt,
+              ledgerCommittedBytes: 0,
+            },
           });
-        }
+          if (version.count !== 1) return false;
+          if (candidate.ledgerCommittedBytes > 0) {
+            const ledger = await transaction.clientStorageLedger.updateMany({
+              where: {
+                companyId: candidate.document.companyId,
+                committedBytes: { gte: BigInt(candidate.ledgerCommittedBytes) },
+              },
+              data: { committedBytes: { decrement: BigInt(candidate.ledgerCommittedBytes) } },
+            });
+            if (ledger.count !== 1) throw new Error('Storage ledger drift.');
+          }
+          if (candidate.uploadId) {
+            await settleClientUploadPermitInTransaction(
+              transaction as unknown as UploadPermitTransaction,
+              {
+                uploadId: candidate.uploadId,
+                companyId: candidate.document.companyId,
+                status: 'RELEASED',
+                now: finalizedAt,
+                committedBytes: 0,
+              },
+            );
+          }
+          return true;
+        });
+        if (committed) archivedCleaned += 1;
+      } else {
+        const current = clock();
+        await database.clientDocumentVersion.updateMany({
+          where: {
+            id: candidate.id,
+            cleanupPending: true,
+            claimToken,
+            cleanupLeaseExpiresAt: ownedLease,
+          },
+          data: {
+            claimToken: null,
+            cleanupLeaseExpiresAt: new Date(current.getTime() + cleanupRetryMs),
+          },
+        });
       }
       continue;
     }
@@ -286,12 +376,14 @@ export async function reconcileStaleClientDocumentUploads(
       candidate.scanRetryCount < maxQuarantineScanRetries() &&
       quarantineExpiresAt > now;
     if (canRetry) {
-      const claimLease = new Date(now.getTime() + staleAfterMs);
+      const claimToken = randomUUID();
+      let ownedLease = new Date(clock().getTime() + staleAfterMs);
       const claim = await database.clientDocumentVersion.updateMany({
         where: {
           id: candidate.id,
           uploadId: candidate.uploadId,
           scanVerdict: 'ERROR',
+          claimToken: candidate.claimToken,
           OR: [
             { scanLeaseExpiresAt: { lte: now } },
             { scanLeaseExpiresAt: null, createdAt: { lte: cutoff } },
@@ -302,27 +394,37 @@ export async function reconcileStaleClientDocumentUploads(
             archivedAt: null,
           },
         },
-        data: { scanLeaseExpiresAt: claimLease, scanRetryCount: { increment: 1 } },
+        data: {
+          claimToken,
+          scanLeaseExpiresAt: ownedLease,
+          scanRetryCount: { increment: 1 },
+        },
       });
       if (claim.count !== 1) continue;
       retried += 1;
+      const renewClaim = async () => {
+        const current = clock();
+        const renewedLease = new Date(current.getTime() + staleAfterMs);
+        const renewed = await database.clientDocumentVersion.updateMany({
+          where: {
+            id: candidate.id,
+            uploadId: candidate.uploadId,
+            scanVerdict: 'ERROR',
+            claimToken,
+            scanLeaseExpiresAt: ownedLease,
+            AND: { scanLeaseExpiresAt: { gt: current } },
+          },
+          data: { scanLeaseExpiresAt: renewedLease },
+        });
+        if (renewed.count === 1) ownedLease = renewedLease;
+        return renewed.count === 1;
+      };
       const result = await scanPendingUpload({
         storage,
         scanner: options.scanner ?? ClamAvClient.fromEnvironment(),
         uploadId: candidate.uploadId,
         storageKey: candidate.storageKey,
-        renewPromotionLease: async () => {
-          const renewed = await database.clientDocumentVersion.updateMany({
-            where: {
-              id: candidate.id,
-              uploadId: candidate.uploadId,
-              scanVerdict: 'ERROR',
-              scanLeaseExpiresAt: claimLease,
-            },
-            data: { scanLeaseExpiresAt: new Date(now.getTime() + staleAfterMs) },
-          });
-          return renewed.count === 1;
-        },
+        renewMutationLease: renewClaim,
       }).catch(() => ({
         status: 'ERROR' as const,
         audit: { sha256: candidate.sha256, verdict: 'ERROR' as const },
@@ -330,11 +432,19 @@ export async function reconcileStaleClientDocumentUploads(
 
       if (result.status === 'ERROR') {
         retryPending += 1;
+        const current = clock();
         await database.clientDocumentVersion.updateMany({
-          where: { id: candidate.id, uploadId: candidate.uploadId, scanVerdict: 'ERROR' },
+          where: {
+            id: candidate.id,
+            uploadId: candidate.uploadId,
+            scanVerdict: 'ERROR',
+            claimToken,
+            scanLeaseExpiresAt: ownedLease,
+          },
           data: {
+            claimToken: null,
             scanLeaseExpiresAt: new Date(
-              now.getTime() + scanRetryDelayMs(candidate.scanRetryCount + 1),
+              current.getTime() + scanRetryDelayMs(candidate.scanRetryCount + 1),
             ),
           },
         });
@@ -342,17 +452,28 @@ export async function reconcileStaleClientDocumentUploads(
       }
 
       try {
+        if (!(await renewClaim())) throw new Error('Retry ownership lost.');
+        const finalizedAt = clock();
         await database.$transaction(async (transaction) => {
           const version = await transaction.clientDocumentVersion.updateMany({
-            where: { id: candidate.id, uploadId: candidate.uploadId, scanVerdict: 'ERROR' },
+            where: {
+              id: candidate.id,
+              uploadId: candidate.uploadId,
+              scanVerdict: 'ERROR',
+              claimToken,
+              scanLeaseExpiresAt: ownedLease,
+              AND: { scanLeaseExpiresAt: { gt: finalizedAt } },
+            },
             data: {
               scanVerdict: result.status,
               scanLeaseExpiresAt: null,
+              claimToken: null,
               quarantineExpiresAt: null,
-              scannedAt: now,
+              scannedAt: finalizedAt,
               sha256: result.audit.sha256,
               scanEngine: result.audit.engine ?? 'ClamAV',
               signatureVersion: result.audit.signatureVersion ?? null,
+              ledgerCommittedBytes: result.status === 'CLEAN' ? candidate.bytes : 0,
             },
           });
           if (version.count !== 1) throw new Error('Состояние версии изменилось.');
@@ -397,27 +518,38 @@ export async function reconcileStaleClientDocumentUploads(
                 verdict: result.status,
                 reason: 'QUARANTINE_RETRY',
                 version: candidate.version,
+                ...(result.audit.signatureVersion
+                  ? { signatureVersion: result.audit.signatureVersion }
+                  : {}),
+                ...(result.audit.signature ? { threat: result.audit.signature } : {}),
               },
             },
             select: { id: true },
           });
-          await transaction.clientUploadPermit.updateMany({
-            where: {
-              uploadId: candidate.uploadId,
+          const settled = await settleClientUploadPermitInTransaction(
+            transaction as unknown as UploadPermitTransaction,
+            {
+              uploadId: candidate.uploadId as string,
               companyId: candidate.document.companyId,
-              status: 'ACTIVE',
+              status: 'COMPLETED',
+              now: finalizedAt,
+              committedBytes: result.status === 'CLEAN' ? candidate.bytes : 0,
             },
-            data: { status: 'COMPLETED', completedAt: now, leaseExpiresAt: now },
-          });
+          );
+          if (!settled) throw new Error('Upload permit ownership lost.');
         });
       } catch {
-        if (result.status === 'CLEAN') await removePrivateIfPresent(storage, candidate.storageKey);
+        if (result.status === 'CLEAN' && (await renewClaim().catch(() => false))) {
+          await removePrivateIfPresent(storage, candidate.storageKey);
+        }
         retryPending += 1;
       }
       continue;
     }
 
     let claimed = false;
+    const claimToken = randomUUID();
+    let ownedLease = new Date(clock().getTime() + cleanupRetryMs);
 
     if (candidate.scanVerdict === 'ERROR') {
       const claim = await database.clientDocumentVersion.updateMany({
@@ -425,6 +557,7 @@ export async function reconcileStaleClientDocumentUploads(
           id: candidate.id,
           uploadId: candidate.uploadId,
           scanVerdict: 'ERROR',
+          claimToken: candidate.claimToken,
           OR: [
             { scanLeaseExpiresAt: { lte: now } },
             { scanLeaseExpiresAt: null, createdAt: { lte: cutoff } },
@@ -435,7 +568,7 @@ export async function reconcileStaleClientDocumentUploads(
             archivedAt: null,
           },
         },
-        data: { scanLeaseExpiresAt: retryAt },
+        data: { claimToken, scanLeaseExpiresAt: ownedLease },
       });
       claimed = claim.count === 1;
     }
@@ -453,6 +586,7 @@ export async function reconcileStaleClientDocumentUploads(
               archivedAt: null,
             },
             scanVerdict: null,
+            claimToken: candidate.claimToken,
             OR: [
               { scanLeaseExpiresAt: { lte: now } },
               { scanLeaseExpiresAt: null, createdAt: { lte: cutoff } },
@@ -461,7 +595,8 @@ export async function reconcileStaleClientDocumentUploads(
           data: {
             scanVerdict: 'ERROR',
             scannedAt: now,
-            scanLeaseExpiresAt: retryAt,
+            claimToken,
+            scanLeaseExpiresAt: ownedLease,
           },
         });
         if (version.count !== 1) return false;
@@ -509,6 +644,21 @@ export async function reconcileStaleClientDocumentUploads(
 
     if (!claimed) continue;
     if (candidate.scanVerdict === 'ERROR') expired += 1;
+    const mutationAt = clock();
+    const mutationLease = new Date(mutationAt.getTime() + cleanupRetryMs);
+    const ownsMutation = await database.clientDocumentVersion.updateMany({
+      where: {
+        id: candidate.id,
+        uploadId: candidate.uploadId,
+        scanVerdict: 'ERROR',
+        claimToken,
+        scanLeaseExpiresAt: ownedLease,
+        AND: { scanLeaseExpiresAt: { gt: mutationAt } },
+      },
+      data: { scanLeaseExpiresAt: mutationLease },
+    });
+    if (ownsMutation.count !== 1) continue;
+    ownedLease = mutationLease;
     const cleanup = await Promise.allSettled([
       storage.removeUploadArtifacts(candidate.uploadId),
       removePrivateIfPresent(storage, candidate.storageKey),
@@ -517,32 +667,66 @@ export async function reconcileStaleClientDocumentUploads(
     const cleaned = cleanup.every((result) => result.status === 'fulfilled');
     if (!cleaned) cleanupPending += 1;
 
-    await database.clientDocumentVersion.updateMany({
-      where: {
-        id: candidate.id,
-        uploadId: candidate.uploadId,
-        documentId: candidate.document.id,
-        document: {
-          companyId: candidate.document.companyId,
-          clientId: candidate.document.clientId,
-          archivedAt: null,
-        },
-        scanVerdict: 'ERROR',
-        scanLeaseExpiresAt: retryAt,
-      },
-      data: {
-        scanLeaseExpiresAt: cleaned ? null : retryAt,
-        ...(cleaned ? { storageDeletedAt: now } : {}),
-      },
-    });
     if (cleaned) {
-      await database.clientUploadPermit.updateMany({
+      const finalizedAt = clock();
+      await database.$transaction(async (transaction) => {
+        const version = await transaction.clientDocumentVersion.updateMany({
+          where: {
+            id: candidate.id,
+            uploadId: candidate.uploadId,
+            documentId: candidate.document.id,
+            document: {
+              companyId: candidate.document.companyId,
+              clientId: candidate.document.clientId,
+              archivedAt: null,
+            },
+            scanVerdict: 'ERROR',
+            claimToken,
+            scanLeaseExpiresAt: ownedLease,
+          },
+          data: {
+            claimToken: null,
+            scanLeaseExpiresAt: null,
+            storageDeletedAt: finalizedAt,
+            ledgerCommittedBytes: 0,
+          },
+        });
+        if (version.count !== 1) throw new Error('Cleanup ownership lost.');
+        if (candidate.ledgerCommittedBytes > 0) {
+          const ledger = await transaction.clientStorageLedger.updateMany({
+            where: {
+              companyId: candidate.document.companyId,
+              committedBytes: { gte: BigInt(candidate.ledgerCommittedBytes) },
+            },
+            data: { committedBytes: { decrement: BigInt(candidate.ledgerCommittedBytes) } },
+          });
+          if (ledger.count !== 1) throw new Error('Storage ledger drift.');
+        }
+        await settleClientUploadPermitInTransaction(
+          transaction as unknown as UploadPermitTransaction,
+          {
+            uploadId: candidate.uploadId as string,
+            companyId: candidate.document.companyId,
+            status: 'RELEASED',
+            now: finalizedAt,
+            committedBytes: 0,
+          },
+        );
+      });
+    } else {
+      const current = clock();
+      await database.clientDocumentVersion.updateMany({
         where: {
+          id: candidate.id,
           uploadId: candidate.uploadId,
-          companyId: candidate.document.companyId,
-          status: 'ACTIVE',
+          scanVerdict: 'ERROR',
+          claimToken,
+          scanLeaseExpiresAt: ownedLease,
         },
-        data: { status: 'RELEASED', completedAt: now, leaseExpiresAt: now },
+        data: {
+          claimToken: null,
+          scanLeaseExpiresAt: new Date(current.getTime() + cleanupRetryMs),
+        },
       });
     }
   }

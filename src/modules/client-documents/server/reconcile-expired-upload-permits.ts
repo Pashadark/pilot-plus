@@ -9,11 +9,16 @@ type ExpiredPermit = {
   uploadId: string;
   companyId: string;
   status: string;
+  reservedBytes: number;
   leaseExpiresAt: Date;
 };
 
 type PermitTransaction = {
-  clientUploadPermit: { updateMany(args: unknown): Promise<Count> };
+  clientUploadPermit: {
+    findFirst(args: unknown): Promise<{ reservedBytes: number } | null>;
+    updateMany(args: unknown): Promise<Count>;
+  };
+  clientStorageLedger: { updateMany(args: unknown): Promise<Count> };
   clientDocumentVersion: { count(args: unknown): Promise<number> };
   clientPhotoUpload: { count(args: unknown): Promise<number> };
 };
@@ -21,6 +26,7 @@ type PermitTransaction = {
 export type PermitReconciliationDatabase = PermitTransaction & {
   clientUploadPermit: PermitTransaction['clientUploadPermit'] & {
     findMany(args: unknown): Promise<ExpiredPermit[]>;
+    deleteMany(args: unknown): Promise<Count>;
   };
   $transaction<T>(
     operation: (transaction: PermitTransaction) => Promise<T>,
@@ -35,18 +41,22 @@ type Options = {
   now?: Date;
   cleanupRetryMs?: number;
   batchSize?: number;
+  historyRetentionMs?: number;
 };
 
 export type PermitReconciliationResult = {
   released: number;
   linked: number;
   cleanupPending: number;
+  purged: number;
   hasMore: boolean;
 };
 
 const defaultBatchSize = 100;
 const maximumBatchSize = 500;
 const defaultCleanupRetryMs = 5 * 60_000;
+const minimumHistoryRetentionMs = 2 * 60 * 60_000;
+const defaultHistoryRetentionMs = 24 * 60 * 60_000;
 
 function databaseAdapter(): PermitReconciliationDatabase {
   return {
@@ -55,8 +65,18 @@ function databaseAdapter(): PermitReconciliationDatabase {
         (await prisma.clientUploadPermit.findMany(
           args as Prisma.ClientUploadPermitFindManyArgs,
         )) as ExpiredPermit[],
+      findFirst: (args) =>
+        prisma.clientUploadPermit.findFirst(
+          args as Prisma.ClientUploadPermitFindFirstArgs,
+        ) as Promise<{ reservedBytes: number } | null>,
       updateMany: (args) =>
         prisma.clientUploadPermit.updateMany(args as Prisma.ClientUploadPermitUpdateManyArgs),
+      deleteMany: (args) =>
+        prisma.clientUploadPermit.deleteMany(args as Prisma.ClientUploadPermitDeleteManyArgs),
+    },
+    clientStorageLedger: {
+      updateMany: (args) =>
+        prisma.clientStorageLedger.updateMany(args as Prisma.ClientStorageLedgerUpdateManyArgs),
     },
     clientDocumentVersion: {
       count: (args) =>
@@ -70,9 +90,19 @@ function databaseAdapter(): PermitReconciliationDatabase {
         (transaction) =>
           operation({
             clientUploadPermit: {
+              findFirst: (args) =>
+                transaction.clientUploadPermit.findFirst(
+                  args as Prisma.ClientUploadPermitFindFirstArgs,
+                ) as Promise<{ reservedBytes: number } | null>,
               updateMany: (args) =>
                 transaction.clientUploadPermit.updateMany(
                   args as Prisma.ClientUploadPermitUpdateManyArgs,
+                ),
+            },
+            clientStorageLedger: {
+              updateMany: (args) =>
+                transaction.clientStorageLedger.updateMany(
+                  args as Prisma.ClientStorageLedgerUpdateManyArgs,
                 ),
             },
             clientDocumentVersion: {
@@ -112,7 +142,14 @@ export async function reconcileExpiredClientUploadPermits(
   const storage = options.storage ?? (await LocalPrivateStorage.create(privateStorageRoot()));
   const page = await database.clientUploadPermit.findMany({
     where: { status: { in: ['ACTIVE', 'RECONCILING'] }, leaseExpiresAt: { lte: now } },
-    select: { id: true, uploadId: true, companyId: true, status: true, leaseExpiresAt: true },
+    select: {
+      id: true,
+      uploadId: true,
+      companyId: true,
+      status: true,
+      reservedBytes: true,
+      leaseExpiresAt: true,
+    },
     orderBy: [{ leaseExpiresAt: 'asc' }, { id: 'asc' }],
     take: batchSize + 1,
   });
@@ -195,17 +232,54 @@ export async function reconcileExpiredClientUploadPermits(
       continue;
     }
 
-    const result = await database.clientUploadPermit.updateMany({
-      where: {
-        id: candidate.id,
-        uploadId: candidate.uploadId,
-        companyId: candidate.companyId,
-        status: 'RECONCILING',
+    const result = await database.$transaction(
+      async (transaction) => {
+        const completed = await transaction.clientUploadPermit.updateMany({
+          where: {
+            id: candidate.id,
+            uploadId: candidate.uploadId,
+            companyId: candidate.companyId,
+            status: 'RECONCILING',
+            leaseExpiresAt: retryAt,
+          },
+          data: { status: 'RELEASED', completedAt: now, leaseExpiresAt: now },
+        });
+        if (completed.count !== 1) return false;
+        const ledger = await transaction.clientStorageLedger.updateMany({
+          where: {
+            companyId: candidate.companyId,
+            reservedBytes: { gte: BigInt(candidate.reservedBytes) },
+          },
+          data: { reservedBytes: { decrement: BigInt(candidate.reservedBytes) } },
+        });
+        if (ledger.count !== 1) throw new Error('Storage ledger drift.');
+        return true;
       },
-      data: { status: 'RELEASED', completedAt: now, leaseExpiresAt: now },
-    });
-    if (result.count === 1) released += 1;
+      { isolationLevel: 'Serializable' },
+    );
+    if (result) released += 1;
   }
 
-  return { released, linked, cleanupPending, hasMore };
+  const configuredRetention = options.historyRetentionMs ?? defaultHistoryRetentionMs;
+  const retentionMs = Math.max(minimumHistoryRetentionMs, configuredRetention);
+  const terminal = await database.clientUploadPermit.findMany({
+    where: {
+      status: { in: ['COMPLETED', 'RELEASED'] },
+      completedAt: { lte: new Date(now.getTime() - retentionMs) },
+    },
+    select: { id: true },
+    orderBy: [{ completedAt: 'asc' }, { id: 'asc' }],
+    take: batchSize,
+  });
+  const purge =
+    terminal.length > 0
+      ? await database.clientUploadPermit.deleteMany({
+          where: {
+            id: { in: terminal.map((item) => item.id) },
+            status: { in: ['COMPLETED', 'RELEASED'] },
+          },
+        })
+      : { count: 0 };
+
+  return { released, linked, cleanupPending, purged: purge.count, hasMore };
 }

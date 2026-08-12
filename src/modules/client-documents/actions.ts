@@ -1,6 +1,6 @@
 'use server';
 
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
 
 import { revalidatePath } from 'next/cache';
@@ -28,6 +28,8 @@ import {
   clientUploadLimitsFromEnvironment,
   releaseClientUploadPermit,
   renewClientUploadPermit,
+  settleClientUploadPermitInTransaction,
+  type UploadPermitTransaction,
   type UploadPermitDatabase,
 } from '@/modules/client-documents/server/upload-resource-controls';
 import { getClientAccess, type ClientAccess } from '@/modules/clients/access';
@@ -49,6 +51,7 @@ const uploadIdentifier = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3
 const maxActiveDocuments = 20;
 const serializableAttempts = 3;
 const cleanupRetryMs = 5 * 60_000;
+const archiveImmediateCleanupLimit = 3;
 const safeFileErrors = new Set([
   'Выберите файл для загрузки.',
   'Размер файла не должен превышать 15 МБ.',
@@ -69,7 +72,12 @@ const uploadError: ClientDocumentActionState = {
   message: 'Не удалось загрузить файл. Попробуйте позже.',
 };
 
-type AccessibleClient = { id: string; companyId: string; photoPath: string | null };
+type AccessibleClient = {
+  id: string;
+  companyId: string;
+  photoPath: string | null;
+  photoBytes: number;
+};
 
 type DocumentMetadata = {
   category: ClientDocumentCategory;
@@ -88,6 +96,7 @@ type UploadRecord = {
   previousVersion: number | null;
   uploadId: string;
   storageKey: string;
+  bytes: number;
 };
 
 function hasPrismaCode(error: unknown, code: string) {
@@ -127,7 +136,7 @@ async function findAccessibleClient(
       ...(allowedCompanyWhere(access) ? { companyId: allowedCompanyWhere(access) } : {}),
       archivedAt: null,
     },
-    select: { id: true, companyId: true, photoPath: true },
+    select: { id: true, companyId: true, photoPath: true, photoBytes: true },
   });
   return client && safeIdentifier.test(client.id) && safeIdentifier.test(client.companyId)
     ? client
@@ -212,7 +221,6 @@ function uploadPermitDatabase() {
 }
 
 async function acquirePermit(
-  storage: PrivateStorage,
   access: ClientAccess,
   client: AccessibleClient,
   uploadId: string,
@@ -220,7 +228,6 @@ async function acquirePermit(
   kind: 'DOCUMENT' | 'PHOTO',
 ) {
   const limits = clientUploadLimitsFromEnvironment();
-  const privateBytes = await storage.privateUsageBytes(`companies/${client.companyId}`);
   const result = await acquireClientUploadPermit({
     database: uploadPermitDatabase(),
     now: new Date(),
@@ -230,7 +237,6 @@ async function acquirePermit(
     kind,
     // Во время нормализации фото одновременно существуют исходник и новый WebP.
     requestedBytes: kind === 'PHOTO' ? maxUploadedFileBytes * 2 : file.size,
-    privateBytes,
     limits,
   });
   return { result, limits };
@@ -391,6 +397,7 @@ async function createNewUpload(
       previousVersion: null,
       uploadId,
       storageKey,
+      bytes: verified.bytes,
     } satisfies UploadRecord;
   });
 }
@@ -474,6 +481,7 @@ async function createReplacementUpload(
       previousVersion: document.currentVersion,
       uploadId,
       storageKey,
+      bytes: verified.bytes,
     } satisfies UploadRecord;
   });
 }
@@ -500,6 +508,7 @@ async function finalizeUpload(
           result.status === 'ERROR' ? new Date(Date.now() + scanRetryDelayMs(0)) : null,
         quarantineExpiresAt: result.status === 'ERROR' ? undefined : null,
         scannedAt: new Date(),
+        ledgerCommittedBytes: result.status === 'CLEAN' ? upload.bytes : 0,
       },
     });
     let documentCount = 1;
@@ -551,6 +560,19 @@ async function finalizeUpload(
       },
       transaction,
     );
+    if (result.status !== 'ERROR') {
+      const settled = await settleClientUploadPermitInTransaction(
+        transaction as unknown as UploadPermitTransaction,
+        {
+          uploadId: upload.uploadId,
+          companyId: upload.companyId,
+          now: new Date(),
+          status: 'COMPLETED',
+          committedBytes: result.status === 'CLEAN' ? upload.bytes : 0,
+        },
+      );
+      if (!settled) throw new Error('Резервирование ресурсов загрузки истекло.');
+    }
   });
 }
 
@@ -752,7 +774,7 @@ export async function uploadClientDocumentAction(
     if (!metadata) return { status: 'error', message: 'Проверьте данные документа.' };
     const file = uploadedFile(formData);
     const storage = await LocalPrivateStorage.create(privateStorageRoot());
-    const permit = await acquirePermit(storage, access, client, uploadId, file, 'DOCUMENT');
+    const permit = await acquirePermit(access, client, uploadId, file, 'DOCUMENT');
     if (!permit.result.ok) return { status: 'error', message: permit.result.message };
     permitHeld = true;
     const { bytes, validated } = await fileBytes(file);
@@ -940,17 +962,45 @@ export async function archiveClientDocumentAction(
       });
       if (updated.count !== 1) return 'missing' as const;
 
-      const versions = await transaction.clientDocumentVersion.findMany({
+      await transaction.clientDocumentVersion.updateMany({
         where: {
           documentId,
           document: { companyId: client.companyId, clientId: client.id },
         },
-        select: { id: true, uploadId: true, storageKey: true },
+        data: {
+          cleanupPending: true,
+          cleanupLeaseExpiresAt: new Date(),
+          claimToken: null,
+        },
       });
-      await transaction.clientDocumentVersion.updateMany({
-        where: { id: { in: versions.map((version) => version.id) }, documentId },
-        data: { cleanupPending: true, cleanupLeaseExpiresAt: new Date() },
+      const candidates = await transaction.clientDocumentVersion.findMany({
+        where: { documentId, cleanupPending: true, claimToken: null },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: archiveImmediateCleanupLimit,
+        select: {
+          id: true,
+          uploadId: true,
+          storageKey: true,
+          ledgerCommittedBytes: true,
+        },
       });
+      const versions = [];
+      for (const candidate of candidates) {
+        const claimToken = randomUUID();
+        const cleanupLeaseExpiresAt = new Date(Date.now() + cleanupRetryMs);
+        const claimed = await transaction.clientDocumentVersion.updateMany({
+          where: {
+            id: candidate.id,
+            documentId,
+            cleanupPending: true,
+            claimToken: null,
+          },
+          data: { claimToken, cleanupLeaseExpiresAt },
+        });
+        if (claimed.count === 1) {
+          versions.push({ ...candidate, claimToken, cleanupLeaseExpiresAt });
+        }
+      }
 
       await writeAuditLog(
         {
@@ -979,45 +1029,98 @@ export async function archiveClientDocumentAction(
 
     try {
       const storage = await LocalPrivateStorage.create(privateStorageRoot());
-      const cleanupResults = await Promise.all(
-        archived.versions.map(async (version) => {
-          const [privateRemoved, quarantineRemoved] = await Promise.all([
-            removePrivateTracked(storage, version.storageKey),
-            version.uploadId
-              ? storage
-                  .removeUploadArtifacts(version.uploadId)
-                  .then(() => true)
-                  .catch(() => false)
-              : Promise.resolve(true),
-          ]);
-          return { ...version, cleaned: privateRemoved && quarantineRemoved };
-        }),
-      );
-      const cleaned = cleanupResults.filter((result) => result.cleaned);
-      const retryIds = cleanupResults
-        .filter((result) => !result.cleaned)
-        .map((result) => result.id);
-      if (cleaned.length > 0) {
-        await prisma.clientDocumentVersion.updateMany({
-          where: { id: { in: cleaned.map((result) => result.id) }, documentId },
-          data: {
-            cleanupPending: false,
-            cleanupLeaseExpiresAt: null,
-            storageDeletedAt: new Date(),
+      const cleanupResults = [];
+      for (const version of archived.versions) {
+        const mutationAt = new Date();
+        const mutationLease = new Date(mutationAt.getTime() + cleanupRetryMs);
+        const ownsMutation = await prisma.clientDocumentVersion.updateMany({
+          where: {
+            id: version.id,
+            documentId,
+            cleanupPending: true,
+            claimToken: version.claimToken,
+            cleanupLeaseExpiresAt: version.cleanupLeaseExpiresAt,
+            AND: { cleanupLeaseExpiresAt: { gt: mutationAt } },
           },
+          data: { cleanupLeaseExpiresAt: mutationLease },
         });
-        await Promise.all(
-          cleaned.map((version) =>
-            version.uploadId
-              ? releasePermit(version.uploadId, client.companyId, 'RELEASED')
-              : Promise.resolve(),
-          ),
-        );
+        if (ownsMutation.count !== 1) continue;
+        const [privateRemoved, quarantineRemoved] = await Promise.all([
+          removePrivateTracked(storage, version.storageKey),
+          version.uploadId
+            ? storage
+                .removeUploadArtifacts(version.uploadId)
+                .then(() => true)
+                .catch(() => false)
+            : Promise.resolve(true),
+        ]);
+        cleanupResults.push({
+          ...version,
+          cleanupLeaseExpiresAt: mutationLease,
+          cleaned: privateRemoved && quarantineRemoved,
+        });
       }
-      if (retryIds.length > 0) {
+      const cleaned = cleanupResults.filter((result) => result.cleaned);
+      if (cleaned.length > 0) {
+        for (const version of cleaned) {
+          await prisma.$transaction(async (transaction) => {
+            const completed = await transaction.clientDocumentVersion.updateMany({
+              where: {
+                id: version.id,
+                documentId,
+                cleanupPending: true,
+                claimToken: version.claimToken,
+                cleanupLeaseExpiresAt: version.cleanupLeaseExpiresAt,
+              },
+              data: {
+                cleanupPending: false,
+                cleanupLeaseExpiresAt: null,
+                claimToken: null,
+                storageDeletedAt: new Date(),
+                ledgerCommittedBytes: 0,
+              },
+            });
+            if (completed.count !== 1) throw new Error('Cleanup ownership lost.');
+            if (version.ledgerCommittedBytes > 0) {
+              const ledger = await transaction.clientStorageLedger.updateMany({
+                where: {
+                  companyId: client.companyId,
+                  committedBytes: { gte: BigInt(version.ledgerCommittedBytes) },
+                },
+                data: {
+                  committedBytes: { decrement: BigInt(version.ledgerCommittedBytes) },
+                },
+              });
+              if (ledger.count !== 1) throw new Error('Storage ledger drift.');
+            }
+            if (version.uploadId) {
+              await settleClientUploadPermitInTransaction(
+                transaction as unknown as UploadPermitTransaction,
+                {
+                  uploadId: version.uploadId,
+                  companyId: client.companyId,
+                  now: new Date(),
+                  status: 'RELEASED',
+                  committedBytes: 0,
+                },
+              );
+            }
+          });
+        }
+      }
+      for (const version of cleanupResults.filter((result) => !result.cleaned)) {
         await prisma.clientDocumentVersion.updateMany({
-          where: { id: { in: retryIds }, documentId },
-          data: { cleanupPending: true, cleanupLeaseExpiresAt: newScanLeaseExpiresAt() },
+          where: {
+            id: version.id,
+            documentId,
+            cleanupPending: true,
+            claimToken: version.claimToken,
+            cleanupLeaseExpiresAt: version.cleanupLeaseExpiresAt,
+          },
+          data: {
+            claimToken: null,
+            cleanupLeaseExpiresAt: newScanLeaseExpiresAt(),
+          },
         });
       }
     } catch {
@@ -1146,7 +1249,7 @@ export async function uploadClientPhotoAction(
   try {
     const file = uploadedFile(formData);
     storage = await LocalPrivateStorage.create(privateStorageRoot());
-    const permit = await acquirePermit(storage, access, client, uploadId, file, 'PHOTO');
+    const permit = await acquirePermit(access, client, uploadId, file, 'PHOTO');
     if (!permit.result.ok) return { status: 'error', message: permit.result.message };
     permitHeld = true;
     permitLeaseMs = permit.limits.leaseMs;
@@ -1189,6 +1292,8 @@ export async function uploadClientPhotoAction(
             sourceStorageKey: durableSourceStorageKey,
             finalStorageKey,
             previousPhotoPath: client.photoPath,
+            previousPhotoBytes: client.photoBytes,
+            sourceBytes: bytes.byteLength,
             status: 'PENDING',
             leaseExpiresAt: newScanLeaseExpiresAt(),
           },
@@ -1277,7 +1382,7 @@ export async function uploadClientPhotoAction(
           photoPath: client.photoPath,
           archivedAt: null,
         },
-        data: { photoPath: finalStorageKey },
+        data: { photoPath: finalStorageKey, photoBytes: normalized.byteLength },
       });
       if (result.count !== 1) return false;
       const upload = await transaction.clientPhotoUpload.updateMany({
@@ -1292,6 +1397,7 @@ export async function uploadClientPhotoAction(
           status: 'CLEANUP_PENDING',
           leaseExpiresAt: new Date(),
           committedAt: new Date(),
+          finalBytes: normalized.byteLength,
         },
       });
       if (upload.count !== 1) throw new Error('Состояние загрузки фото изменилось.');
@@ -1306,19 +1412,59 @@ export async function uploadClientPhotoAction(
       removePrivateTracked(storage, sourceStorageKey),
       removePrivateTracked(storage, client.photoPath),
     ]);
-    await prisma.clientPhotoUpload.updateMany({
-      where: {
-        id: photoUploadId,
-        companyId: client.companyId,
-        clientId: client.id,
-        status: 'CLEANUP_PENDING',
-      },
-      data: {
-        status: sourceRemoved && previousRemoved ? 'COMMITTED' : 'CLEANUP_PENDING',
-        leaseExpiresAt: sourceRemoved && previousRemoved ? null : newScanLeaseExpiresAt(),
-        committedAt: new Date(),
-      },
-    });
+    if (sourceRemoved && previousRemoved) {
+      await prisma.$transaction(async (transaction) => {
+        const completed = await transaction.clientPhotoUpload.updateMany({
+          where: {
+            id: photoUploadId,
+            companyId: client.companyId,
+            clientId: client.id,
+            status: 'CLEANUP_PENDING',
+            ledgerCommittedBytes: 0,
+          },
+          data: {
+            status: 'COMMITTED',
+            leaseExpiresAt: null,
+            committedAt: new Date(),
+            ledgerCommittedBytes: normalized.byteLength,
+          },
+        });
+        if (completed.count !== 1) throw new Error('Состояние загрузки фото изменилось.');
+        if (client.photoPath) {
+          await transaction.clientPhotoUpload.updateMany({
+            where: {
+              companyId: client.companyId,
+              clientId: client.id,
+              finalStorageKey: client.photoPath,
+              ledgerCommittedBytes: { gt: 0 },
+            },
+            data: { ledgerCommittedBytes: 0 },
+          });
+        }
+        const settled = await settleClientUploadPermitInTransaction(
+          transaction as unknown as UploadPermitTransaction,
+          {
+            uploadId,
+            companyId: client.companyId,
+            now: new Date(),
+            status: 'COMPLETED',
+            committedBytes: normalized.byteLength - client.photoBytes,
+          },
+        );
+        if (!settled) throw new Error('Резервирование ресурсов загрузки истекло.');
+      });
+    } else {
+      retainPermit = true;
+      await prisma.clientPhotoUpload.updateMany({
+        where: {
+          id: photoUploadId,
+          companyId: client.companyId,
+          clientId: client.id,
+          status: 'CLEANUP_PENDING',
+        },
+        data: { leaseExpiresAt: newScanLeaseExpiresAt(), committedAt: new Date() },
+      });
+    }
     revalidatePath('/clients');
     revalidatePath(`/clients/${client.id}`);
     return {
@@ -1341,16 +1487,17 @@ export async function uploadClientPhotoAction(
 
       if (reread.available && reread.value?.photoPath === finalStorageKey) {
         databaseCommitted = true;
-        const [sourceRemoved, previousRemoved] = await Promise.all([
+        await Promise.all([
           removePrivateTracked(storage, sourceStorageKey ?? null),
           removePrivateTracked(storage, client.photoPath),
         ]);
+        retainPermit = true;
         await prisma.clientPhotoUpload
           .updateMany({
             where: { id: photoUploadId, companyId: client.companyId, clientId: client.id },
             data: {
-              status: sourceRemoved && previousRemoved ? 'COMMITTED' : 'CLEANUP_PENDING',
-              leaseExpiresAt: sourceRemoved && previousRemoved ? null : newScanLeaseExpiresAt(),
+              status: 'CLEANUP_PENDING',
+              leaseExpiresAt: new Date(),
               committedAt: new Date(),
             },
           })

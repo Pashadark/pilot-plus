@@ -15,6 +15,7 @@ type ScanPendingUploadInput = {
   scanner: MalwareScanner;
   uploadId: string;
   storageKey: string;
+  renewMutationLease?: () => Promise<boolean>;
   renewPromotionLease?: () => Promise<boolean>;
 };
 
@@ -53,6 +54,7 @@ export async function scanPendingUpload({
   scanner,
   uploadId,
   storageKey,
+  renewMutationLease,
   renewPromotionLease,
 }: ScanPendingUploadInput): Promise<ScanPendingUploadResult> {
   const snapshot = await storage.reserveQuarantine(uploadId);
@@ -75,8 +77,9 @@ export async function scanPendingUpload({
     }
 
     if (verdict.kind === 'clean') {
-      if (renewPromotionLease) {
-        const ownsPromotion = await renewPromotionLease().catch(() => false);
+      const renewOwnership = renewMutationLease ?? renewPromotionLease;
+      if (renewOwnership) {
+        const ownsPromotion = await renewOwnership().catch(() => false);
         if (!ownsPromotion) {
           try {
             await snapshot.remove();
@@ -100,6 +103,10 @@ export async function scanPendingUpload({
     }
 
     if (verdict.kind === 'infected') {
+      if (renewMutationLease) {
+        const ownsRemoval = await renewMutationLease().catch(() => false);
+        if (!ownsRemoval) return errorResult(sha256, metadata);
+      }
       try {
         await snapshot.remove();
         settled = true;

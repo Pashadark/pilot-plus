@@ -11,12 +11,15 @@ const candidate = {
   sourceStorageKey: 'companies/company-1/clients/client-1/photos/source/upload.jpg',
   finalStorageKey: 'companies/company-1/clients/client-1/photos/upload.webp',
   previousPhotoPath: 'companies/company-1/clients/client-1/photos/previous.webp',
+  finalBytes: 120,
+  previousPhotoBytes: 80,
+  ledgerCommittedBytes: 0,
   status: 'PENDING',
   sha256: 'a'.repeat(64),
   leaseExpiresAt: new Date('2026-08-10T11:59:00.000Z'),
   committedAt: null,
   createdAt: new Date('2026-08-10T11:30:00.000Z'),
-  client: { photoPath: null, archivedAt: null },
+  client: { photoPath: null, photoBytes: 0, archivedAt: null },
 };
 
 function dependencies(overrides = {}) {
@@ -27,7 +30,11 @@ function dependencies(overrides = {}) {
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     client: { findFirst: vi.fn().mockResolvedValue(value.client) },
-    clientUploadPermit: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    clientUploadPermit: {
+      findFirst: vi.fn().mockResolvedValue({ reservedBytes: 200 }),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    clientStorageLedger: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
     $transaction: vi.fn(),
   };
@@ -51,7 +58,7 @@ function dependencies(overrides = {}) {
 describe('stale client photo upload reconciliation', () => {
   it('сохраняет final photo после ambiguous commit и удаляет только artifacts', async () => {
     const { database, storage } = dependencies({
-      client: { photoPath: candidate.finalStorageKey, archivedAt: null },
+      client: { photoPath: candidate.finalStorageKey, photoBytes: 120, archivedAt: null },
     });
 
     await expect(
@@ -61,13 +68,18 @@ describe('stale client photo upload reconciliation', () => {
     expect(storage.removePrivate).not.toHaveBeenCalledWith(candidate.finalStorageKey);
     expect(storage.removePrivate).toHaveBeenCalledWith(candidate.sourceStorageKey);
     expect(storage.removePrivate).toHaveBeenCalledWith(candidate.previousPhotoPath);
-    expect(database.clientPhotoUpload.updateMany).toHaveBeenLastCalledWith({
+    expect(database.clientPhotoUpload.updateMany).toHaveBeenCalledWith({
       where: expect.objectContaining({
         id: candidate.id,
         companyId: candidate.companyId,
         clientId: candidate.clientId,
       }),
-      data: { status: 'COMMITTED', leaseExpiresAt: null, committedAt: now },
+      data: expect.objectContaining({
+        status: 'COMMITTED',
+        leaseExpiresAt: null,
+        committedAt: now,
+        ledgerCommittedBytes: 120,
+      }),
     });
   });
 
@@ -103,6 +115,7 @@ describe('stale client photo upload reconciliation', () => {
       committedAt,
       client: {
         photoPath: 'companies/company-1/clients/client-1/photos/newer.webp',
+        photoBytes: 100,
         archivedAt: true,
       },
     });
@@ -113,11 +126,15 @@ describe('stale client photo upload reconciliation', () => {
     expect(storage.removePrivate).toHaveBeenCalledWith(candidate.previousPhotoPath);
     expect(database.client.findFirst).toHaveBeenCalledWith({
       where: { id: candidate.clientId, companyId: candidate.companyId },
-      select: { photoPath: true },
+      select: { photoPath: true, photoBytes: true },
     });
-    expect(database.clientPhotoUpload.updateMany).toHaveBeenLastCalledWith({
+    expect(database.clientPhotoUpload.updateMany).toHaveBeenCalledWith({
       where: expect.objectContaining({ id: candidate.id, status: 'RECONCILING' }),
-      data: { status: 'COMMITTED', leaseExpiresAt: null, committedAt },
+      data: expect.objectContaining({
+        status: 'COMMITTED',
+        leaseExpiresAt: null,
+        committedAt,
+      }),
     });
   });
 });

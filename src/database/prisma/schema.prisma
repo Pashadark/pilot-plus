@@ -248,6 +248,7 @@ model Company {
   clients             Client[]
   clientDocuments     ClientDocument[]
   clientUploadPermits ClientUploadPermit[]
+  clientStorageLedger ClientStorageLedger?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 }
@@ -284,6 +285,7 @@ model Client {
   telegramUserId               String?
   maxUserId                    String?
   photoPath                    String?
+  photoBytes                   Int                 @default(0)
   registrationAddressEncrypted String?
   actualAddressEncrypted       String?
   passportEncrypted            String?
@@ -313,21 +315,25 @@ model Client {
 }
 
 model ClientPhotoUpload {
-  id                String    @id @default(cuid())
-  uploadId          String    @unique
-  companyId         String
-  clientId          String
-  client            Client    @relation(fields: [companyId, clientId], references: [companyId, id], onDelete: Cascade)
-  sourceStorageKey  String
-  finalStorageKey   String    @unique
-  previousPhotoPath String?
-  status            String    @default("PENDING")
-  scanVerdict       String?
-  sha256            String?
-  leaseExpiresAt    DateTime?
-  committedAt       DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                   String    @id @default(cuid())
+  uploadId             String    @unique
+  companyId            String
+  clientId             String
+  client               Client    @relation(fields: [companyId, clientId], references: [companyId, id], onDelete: Cascade)
+  sourceStorageKey     String
+  finalStorageKey      String    @unique
+  previousPhotoPath    String?
+  sourceBytes          Int       @default(0)
+  finalBytes           Int?
+  previousPhotoBytes   Int       @default(0)
+  ledgerCommittedBytes Int       @default(0)
+  status               String    @default("PENDING")
+  scanVerdict          String?
+  sha256               String?
+  leaseExpiresAt       DateTime?
+  committedAt          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@index([status, leaseExpiresAt])
   @@index([companyId, clientId, status])
@@ -371,11 +377,13 @@ model ClientDocumentVersion {
   signatureVersion      String?
   scanVerdict           String?
   scanLeaseExpiresAt    DateTime?
+  claimToken            String?        @unique
   scanRetryCount        Int            @default(0)
   quarantineExpiresAt   DateTime?
   cleanupPending        Boolean        @default(false)
   cleanupLeaseExpiresAt DateTime?
   storageDeletedAt      DateTime?
+  ledgerCommittedBytes  Int            @default(0)
   scannedAt             DateTime?
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
@@ -405,6 +413,16 @@ model ClientUploadPermit {
   @@index([userId, status, leaseExpiresAt])
   @@index([companyId, createdAt])
   @@index([userId, createdAt])
+}
+
+model ClientStorageLedger {
+  companyId      String    @id
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  committedBytes BigInt    @default(0)
+  reservedBytes  BigInt    @default(0)
+  reconciledAt   DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
 
 model AuditLog {

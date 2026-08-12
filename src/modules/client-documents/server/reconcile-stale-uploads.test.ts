@@ -16,8 +16,11 @@ const staleInitial = {
   version: 1,
   storageKey: 'companies/company-1/clients/client-1/documents/document-1/1.jpg',
   sha256: 'a'.repeat(64),
+  bytes: 5,
+  ledgerCommittedBytes: 0,
   scanVerdict: null as string | null,
   scanLeaseExpiresAt: new Date('2026-08-10T11:59:00.000Z') as Date | null,
+  claimToken: null as string | null,
   scanRetryCount: 0,
   quarantineExpiresAt: new Date('2026-08-11T12:00:00.000Z'),
   cleanupPending: false,
@@ -40,7 +43,11 @@ function dependencies(candidate = staleInitial) {
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     clientDocument: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
-    clientUploadPermit: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    clientUploadPermit: {
+      findFirst: vi.fn().mockResolvedValue({ reservedBytes: 15 }),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    clientStorageLedger: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
     $transaction: vi.fn(),
   };
@@ -200,16 +207,14 @@ describe('stale client document upload reconciliation', () => {
       where: {
         id: 'version-2',
         uploadId: replacement.uploadId,
-        documentId: 'document-1',
-        document: {
-          companyId: 'company-1',
-          clientId: 'client-1',
-          archivedAt: null,
-        },
         scanVerdict: 'ERROR',
+        claimToken: expect.any(String),
         scanLeaseExpiresAt: new Date('2026-08-10T12:05:00.000Z'),
       },
-      data: { scanLeaseExpiresAt: new Date('2026-08-10T12:05:00.000Z') },
+      data: {
+        claimToken: null,
+        scanLeaseExpiresAt: new Date('2026-08-10T12:05:00.000Z'),
+      },
     });
   });
 
@@ -272,14 +277,113 @@ describe('stale client document upload reconciliation', () => {
     expect(snapshot.promote).toHaveBeenCalledWith(errorCandidate.storageKey);
     expect(database.clientDocumentVersion.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ id: 'version-1', scanVerdict: 'ERROR' }),
-        data: expect.objectContaining({ scanVerdict: 'CLEAN', quarantineExpiresAt: null }),
+        where: expect.objectContaining({
+          id: 'version-1',
+          scanVerdict: 'ERROR',
+          claimToken: expect.any(String),
+          scanLeaseExpiresAt: expect.any(Date),
+        }),
+        data: expect.objectContaining({
+          scanVerdict: 'CLEAN',
+          quarantineExpiresAt: null,
+          claimToken: null,
+        }),
       }),
     );
     expect(database.clientUploadPermit.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ uploadId: errorCandidate.uploadId, status: 'ACTIVE' }),
         data: expect.objectContaining({ status: 'COMPLETED' }),
+      }),
+    );
+  });
+
+  it('не позволяет paused worker продвинуть файл после передачи lease новому claimToken', async () => {
+    const errorCandidate = {
+      ...staleInitial,
+      scanVerdict: 'ERROR',
+      scanRetryCount: 1,
+      document: { ...staleInitial.document, status: 'ERROR' },
+    };
+    const { database, storage } = dependencies(errorCandidate);
+    const snapshot = {
+      open: vi.fn().mockResolvedValue(Readable.from([Buffer.from('clean')])),
+      promote: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+      release: vi.fn().mockResolvedValue(undefined),
+    };
+    storage.reserveQuarantine.mockResolvedValue(snapshot);
+    const scanner = {
+      getMetadata: vi.fn().mockResolvedValue({
+        engine: 'ClamAV' as const,
+        engineVersion: '1.4.3',
+        signatureVersion: '27692',
+      }),
+      scanStream: vi.fn().mockResolvedValue({ kind: 'clean' as const }),
+    };
+    database.clientDocumentVersion.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValue({ count: 0 });
+
+    const result = await reconcileStaleClientDocumentUploads({
+      database,
+      storage,
+      scanner,
+      now,
+    });
+
+    expect(result.retryPending).toBe(1);
+    expect(snapshot.promote).not.toHaveBeenCalled();
+    expect(database.auditLog.create).not.toHaveBeenCalled();
+    expect(database.clientDocumentVersion.updateMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          claimToken: expect.any(String),
+          scanLeaseExpiresAt: expect.any(Date),
+        }),
+      }),
+    );
+  });
+
+  it('продлевает retry lease от текущего времени clock, а не от старта worker', async () => {
+    const errorCandidate = {
+      ...staleInitial,
+      scanVerdict: 'ERROR',
+      scanRetryCount: 1,
+      document: { ...staleInitial.document, status: 'ERROR' },
+    };
+    const { database, storage } = dependencies(errorCandidate);
+    const snapshot = {
+      open: vi.fn().mockResolvedValue(Readable.from([Buffer.from('clean')])),
+      promote: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+      release: vi.fn().mockResolvedValue(undefined),
+    };
+    storage.reserveQuarantine.mockResolvedValue(snapshot);
+    const scanner = {
+      getMetadata: vi.fn().mockResolvedValue({
+        engine: 'ClamAV' as const,
+        engineVersion: '1.4.3',
+        signatureVersion: '27692',
+      }),
+      scanStream: vi.fn().mockResolvedValue({ kind: 'clean' as const }),
+    };
+    const resumedAt = new Date('2026-08-10T12:10:00.000Z');
+
+    await reconcileStaleClientDocumentUploads({
+      database,
+      storage,
+      scanner,
+      now,
+      clock: () => resumedAt,
+      staleAfterMs: 15 * 60_000,
+    });
+
+    expect(database.clientDocumentVersion.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { scanLeaseExpiresAt: new Date('2026-08-10T12:25:00.000Z') },
       }),
     );
   });

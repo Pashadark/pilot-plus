@@ -8,6 +8,7 @@ function dependencies() {
   const permit = {
     count: vi.fn().mockResolvedValue(0),
     aggregate: vi.fn().mockResolvedValue({ _sum: { reservedBytes: 0 } }),
+    findFirst: vi.fn().mockResolvedValue({ reservedBytes: 15 }),
     create: vi.fn().mockResolvedValue({
       id: 'permit-1',
       uploadId: '123e4567-e89b-42d3-a456-426614174000',
@@ -15,22 +16,35 @@ function dependencies() {
     }),
     updateMany: vi.fn().mockResolvedValue({ count: 1 }),
   };
+  const ledger = {
+    upsert: vi.fn().mockResolvedValue({
+      companyId: 'company-1',
+      committedBytes: BigInt(70),
+      reservedBytes: BigInt(0),
+    }),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+  };
   const database = {
     clientUploadPermit: permit,
+    clientStorageLedger: ledger,
     $transaction: vi.fn(
-      async (operation: (transaction: { clientUploadPermit: typeof permit }) => unknown) =>
-        operation({ clientUploadPermit: permit }),
+      async (
+        operation: (transaction: {
+          clientUploadPermit: typeof permit;
+          clientStorageLedger: typeof ledger;
+        }) => unknown,
+      ) => operation({ clientUploadPermit: permit, clientStorageLedger: ledger }),
     ),
   };
-  return { database: database as unknown as UploadPermitDatabase, permit };
+  return { database: database as unknown as UploadPermitDatabase, permit, ledger };
 }
 
 describe('durable client upload resource controls', () => {
   beforeEach(() => vi.resetModules());
 
-  it('создаёт PostgreSQL permit до буферизации и учитывает tenant private usage в quota', async () => {
+  it('создаёт PostgreSQL permit и атомарно резервирует quota только по durable ledger', async () => {
     const { acquireClientUploadPermit } = await import('./upload-resource-controls');
-    const { database, permit } = dependencies();
+    const { database, permit, ledger } = dependencies();
 
     await expect(
       acquireClientUploadPermit({
@@ -41,7 +55,6 @@ describe('durable client upload resource controls', () => {
         userId: 'user-1',
         kind: 'DOCUMENT',
         requestedBytes: 15,
-        privateBytes: 70,
         limits: {
           windowMs: 60_000,
           userRate: 10,
@@ -54,12 +67,18 @@ describe('durable client upload resource controls', () => {
       }),
     ).resolves.toMatchObject({ ok: true, permitId: 'permit-1' });
 
-    expect(permit.aggregate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { companyId: 'company-1', status: { in: ['ACTIVE', 'RECONCILING'] } },
-        _sum: { reservedBytes: true },
-      }),
+    expect(ledger.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { companyId: 'company-1' } }),
     );
+    expect(permit.aggregate).not.toHaveBeenCalled();
+    expect(ledger.updateMany).toHaveBeenCalledWith({
+      where: {
+        companyId: 'company-1',
+        committedBytes: BigInt(70),
+        reservedBytes: BigInt(0),
+      },
+      data: { reservedBytes: { increment: BigInt(15) } },
+    });
     expect(permit.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ reservedBytes: 15 }) }),
     );
@@ -86,7 +105,6 @@ describe('durable client upload resource controls', () => {
       userId: 'user-1',
       kind: 'PHOTO',
       requestedBytes: 10,
-      privateBytes: 0,
       limits: {
         windowMs: 60_000,
         userRate: 10,
@@ -106,8 +124,12 @@ describe('durable client upload resource controls', () => {
 
   it('отклоняет quota до чтения bytes и не создаёт permit', async () => {
     const { acquireClientUploadPermit } = await import('./upload-resource-controls');
-    const { database, permit } = dependencies();
-    permit.aggregate.mockResolvedValue({ _sum: { reservedBytes: 20 } });
+    const { database, permit, ledger } = dependencies();
+    ledger.upsert.mockResolvedValue({
+      companyId: 'company-1',
+      committedBytes: BigInt(70),
+      reservedBytes: BigInt(20),
+    });
 
     const result = await acquireClientUploadPermit({
       database,
@@ -117,7 +139,6 @@ describe('durable client upload resource controls', () => {
       userId: 'user-1',
       kind: 'DOCUMENT',
       requestedBytes: 15,
-      privateBytes: 70,
       limits: {
         windowMs: 60_000,
         userRate: 10,
@@ -186,7 +207,6 @@ describe('durable client upload resource controls', () => {
         userId: 'user-1',
         kind: 'DOCUMENT',
         requestedBytes: 15,
-        privateBytes: 0,
         limits: {
           windowMs: 60_000,
           userRate: 10,
@@ -199,5 +219,39 @@ describe('durable client upload resource controls', () => {
       }),
     ).resolves.toMatchObject({ ok: true });
     expect(database.$transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it('идемпотентно переводит ACTIVE reservation в committed bytes одной транзакцией', async () => {
+    const { settleClientUploadPermit } = await import('./upload-resource-controls');
+    const { database, permit, ledger } = dependencies();
+    permit.findFirst.mockResolvedValueOnce({ reservedBytes: 15 }).mockResolvedValueOnce(null);
+
+    await expect(
+      settleClientUploadPermit(database, {
+        uploadId: '123e4567-e89b-42d3-a456-426614174000',
+        companyId: 'company-1',
+        now,
+        status: 'COMPLETED',
+        committedBytes: 12,
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      settleClientUploadPermit(database, {
+        uploadId: '123e4567-e89b-42d3-a456-426614174000',
+        companyId: 'company-1',
+        now,
+        status: 'COMPLETED',
+        committedBytes: 12,
+      }),
+    ).resolves.toBe(false);
+
+    expect(ledger.updateMany).toHaveBeenCalledOnce();
+    expect(ledger.updateMany).toHaveBeenCalledWith({
+      where: { companyId: 'company-1', reservedBytes: { gte: BigInt(15) } },
+      data: {
+        reservedBytes: { decrement: BigInt(15) },
+        committedBytes: { increment: BigInt(12) },
+      },
+    });
   });
 });

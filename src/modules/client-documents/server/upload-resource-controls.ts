@@ -14,14 +14,30 @@ type Count = { count: number };
 type UploadPermitRepository = {
   count(args: unknown): Promise<number>;
   aggregate(args: unknown): Promise<{ _sum: { reservedBytes: number | null } }>;
+  findFirst(args: unknown): Promise<{ reservedBytes: number } | null>;
   create(args: unknown): Promise<{ id: string; uploadId: string; leaseExpiresAt: Date }>;
   updateMany(args: unknown): Promise<Count>;
 };
 
+type StorageLedgerRepository = {
+  upsert(args: unknown): Promise<{
+    companyId: string;
+    committedBytes: bigint;
+    reservedBytes: bigint;
+  }>;
+  updateMany(args: unknown): Promise<Count>;
+};
+
+export type UploadPermitTransaction = {
+  clientUploadPermit: UploadPermitRepository;
+  clientStorageLedger: StorageLedgerRepository;
+};
+
 export type UploadPermitDatabase = {
   clientUploadPermit: UploadPermitRepository;
+  clientStorageLedger: StorageLedgerRepository;
   $transaction<T>(
-    operation: (transaction: { clientUploadPermit: UploadPermitRepository }) => Promise<T>,
+    operation: (transaction: UploadPermitTransaction) => Promise<T>,
     options?: { isolationLevel: 'Serializable' },
   ): Promise<T>;
 };
@@ -34,7 +50,6 @@ type AcquireInput = {
   userId: string;
   kind: 'DOCUMENT' | 'PHOTO';
   requestedBytes: number;
-  privateBytes: number;
   limits: ClientUploadLimits;
 };
 
@@ -52,6 +67,24 @@ const quotaMessage =
 
 function prismaCode(error: unknown, code: string) {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
+}
+
+function serializationConflict() {
+  return Object.assign(new Error('Concurrent upload ledger update.'), { code: 'P2034' });
+}
+
+async function serializable<T>(
+  database: UploadPermitDatabase,
+  operation: (transaction: UploadPermitTransaction) => Promise<T>,
+) {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await database.$transaction(operation, { isolationLevel: 'Serializable' });
+    } catch (error) {
+      if (!prismaCode(error, 'P2034') || attempt === 3) throw error;
+    }
+  }
+  throw new Error('Не удалось зарезервировать ресурсы загрузки.');
 }
 
 export function clientUploadLimitsFromEnvironment(): ClientUploadLimits {
@@ -84,71 +117,72 @@ export async function acquireClientUploadPermit({
   userId,
   kind,
   requestedBytes,
-  privateBytes,
   limits,
 }: AcquireInput): Promise<AcquireUploadPermitResult> {
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      return await database.$transaction(
-        async (transaction) => {
-          const since = new Date(now.getTime() - limits.windowMs);
-          const userRate = await transaction.clientUploadPermit.count({
-            where: { userId, createdAt: { gte: since } },
-          });
-          if (userRate >= limits.userRate) {
-            return { ok: false, reason: 'USER_RATE', message: rateMessage };
-          }
-          const companyRate = await transaction.clientUploadPermit.count({
-            where: { companyId, createdAt: { gte: since } },
-          });
-          if (companyRate >= limits.companyRate) {
-            return { ok: false, reason: 'COMPANY_RATE', message: rateMessage };
-          }
-          const userConcurrent = await transaction.clientUploadPermit.count({
-            where: { userId, status: 'ACTIVE' },
-          });
-          if (userConcurrent >= limits.userConcurrent) {
-            return { ok: false, reason: 'USER_CONCURRENT', message: concurrentMessage };
-          }
-          const companyConcurrent = await transaction.clientUploadPermit.count({
-            where: { companyId, status: 'ACTIVE' },
-          });
-          if (companyConcurrent >= limits.companyConcurrent) {
-            return { ok: false, reason: 'COMPANY_CONCURRENT', message: concurrentMessage };
-          }
-          const reserved = await transaction.clientUploadPermit.aggregate({
-            where: { companyId, status: { in: ['ACTIVE', 'RECONCILING'] } },
-            _sum: { reservedBytes: true },
-          });
-          if (
-            privateBytes + (reserved._sum.reservedBytes ?? 0) + requestedBytes >
-            limits.companyQuotaBytes
-          ) {
-            return { ok: false, reason: 'COMPANY_QUOTA', message: quotaMessage };
-          }
-
-          const leaseExpiresAt = new Date(now.getTime() + limits.leaseMs);
-          const permit = await transaction.clientUploadPermit.create({
-            data: {
-              uploadId,
-              companyId,
-              userId,
-              kind,
-              status: 'ACTIVE',
-              reservedBytes: requestedBytes,
-              leaseExpiresAt,
-            },
-            select: { id: true, uploadId: true, leaseExpiresAt: true },
-          });
-          return { ok: true, permitId: permit.id, leaseExpiresAt: permit.leaseExpiresAt };
-        },
-        { isolationLevel: 'Serializable' },
-      );
-    } catch (error) {
-      if (!prismaCode(error, 'P2034') || attempt === 3) throw error;
+  return serializable(database, async (transaction) => {
+    const since = new Date(now.getTime() - limits.windowMs);
+    const userRate = await transaction.clientUploadPermit.count({
+      where: { userId, createdAt: { gte: since } },
+    });
+    if (userRate >= limits.userRate) {
+      return { ok: false, reason: 'USER_RATE', message: rateMessage };
     }
-  }
-  throw new Error('Не удалось зарезервировать ресурсы загрузки.');
+    const companyRate = await transaction.clientUploadPermit.count({
+      where: { companyId, createdAt: { gte: since } },
+    });
+    if (companyRate >= limits.companyRate) {
+      return { ok: false, reason: 'COMPANY_RATE', message: rateMessage };
+    }
+    const userConcurrent = await transaction.clientUploadPermit.count({
+      where: { userId, status: 'ACTIVE' },
+    });
+    if (userConcurrent >= limits.userConcurrent) {
+      return { ok: false, reason: 'USER_CONCURRENT', message: concurrentMessage };
+    }
+    const companyConcurrent = await transaction.clientUploadPermit.count({
+      where: { companyId, status: 'ACTIVE' },
+    });
+    if (companyConcurrent >= limits.companyConcurrent) {
+      return { ok: false, reason: 'COMPANY_CONCURRENT', message: concurrentMessage };
+    }
+    const ledger = await transaction.clientStorageLedger.upsert({
+      where: { companyId },
+      create: { companyId },
+      update: {},
+      select: { companyId: true, committedBytes: true, reservedBytes: true },
+    });
+    if (
+      ledger.committedBytes + ledger.reservedBytes + BigInt(requestedBytes) >
+      BigInt(limits.companyQuotaBytes)
+    ) {
+      return { ok: false, reason: 'COMPANY_QUOTA', message: quotaMessage };
+    }
+
+    const reserved = await transaction.clientStorageLedger.updateMany({
+      where: {
+        companyId,
+        committedBytes: ledger.committedBytes,
+        reservedBytes: ledger.reservedBytes,
+      },
+      data: { reservedBytes: { increment: BigInt(requestedBytes) } },
+    });
+    if (reserved.count !== 1) throw serializationConflict();
+
+    const leaseExpiresAt = new Date(now.getTime() + limits.leaseMs);
+    const permit = await transaction.clientUploadPermit.create({
+      data: {
+        uploadId,
+        companyId,
+        userId,
+        kind,
+        status: 'ACTIVE',
+        reservedBytes: requestedBytes,
+        leaseExpiresAt,
+      },
+      select: { id: true, uploadId: true, leaseExpiresAt: true },
+    });
+    return { ok: true, permitId: permit.id, leaseExpiresAt: permit.leaseExpiresAt };
+  });
 }
 
 export async function renewClientUploadPermit(
@@ -171,9 +205,51 @@ export async function releaseClientUploadPermit(
     status: 'COMPLETED' | 'RELEASED';
   },
 ) {
-  const result = await database.clientUploadPermit.updateMany({
+  return settleClientUploadPermit(database, { ...input, committedBytes: 0 });
+}
+
+export async function settleClientUploadPermit(
+  database: UploadPermitDatabase,
+  input: {
+    uploadId: string;
+    companyId: string;
+    now: Date;
+    status: 'COMPLETED' | 'RELEASED';
+    committedBytes: number;
+  },
+) {
+  return serializable(database, (transaction) =>
+    settleClientUploadPermitInTransaction(transaction, input),
+  );
+}
+
+export async function settleClientUploadPermitInTransaction(
+  transaction: UploadPermitTransaction,
+  input: {
+    uploadId: string;
+    companyId: string;
+    now: Date;
+    status: 'COMPLETED' | 'RELEASED';
+    committedBytes: number;
+  },
+) {
+  const permit = await transaction.clientUploadPermit.findFirst({
+    where: { uploadId: input.uploadId, companyId: input.companyId, status: 'ACTIVE' },
+    select: { reservedBytes: true },
+  });
+  if (!permit) return false;
+  const completed = await transaction.clientUploadPermit.updateMany({
     where: { uploadId: input.uploadId, companyId: input.companyId, status: 'ACTIVE' },
     data: { status: input.status, completedAt: input.now, leaseExpiresAt: input.now },
   });
-  return result.count === 1;
+  if (completed.count !== 1) throw serializationConflict();
+  const ledger = await transaction.clientStorageLedger.updateMany({
+    where: { companyId: input.companyId, reservedBytes: { gte: BigInt(permit.reservedBytes) } },
+    data: {
+      reservedBytes: { decrement: BigInt(permit.reservedBytes) },
+      committedBytes: { increment: BigInt(input.committedBytes) },
+    },
+  });
+  if (ledger.count !== 1) throw new Error('Нарушена целостность лимита приватного хранилища.');
+  return true;
 }
