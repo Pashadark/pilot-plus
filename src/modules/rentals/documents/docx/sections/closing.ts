@@ -1,5 +1,5 @@
 import { Paragraph, TextRun } from 'docx';
-import { table } from './helpers';
+import { display, table } from './helpers';
 
 export function closing(
   s: any,
@@ -17,17 +17,17 @@ export function closing(
     table([
       [
         'Арендодатель',
-        `${s.company.legalName}, ИНН ${s.company.inn}, КПП ${s.company.kpp}, ОГРН ${s.company.ogrn}, адрес: ${s.company.address}`,
+        ` ${display(s.company.legalName)}, ИНН ${display(s.company.inn)}, КПП ${display(s.company.kpp)}, ОГРН ${display(s.company.ogrn)}, адрес: ${display(s.company.address)}`,
       ],
       [
         'Банковские реквизиты',
-        `${s.company.bankName}, р/с ${s.company.settlementAccount}, к/с ${s.company.correspondentAccount}, БИК ${s.company.bik}`,
+        `${display(s.company.bankName)}, р/с ${display(s.company.settlementAccount)}, к/с ${display(s.company.correspondentAccount)}, БИК ${display(s.company.bik)}`,
       ],
       [
         'Подписант Арендодателя',
-        `${s.company.signatoryName}, основание: ${s.company.signatoryAuthority}`,
+        `${display(s.company.signatoryName)}, основание: ${display(s.company.signatoryAuthority)}`,
       ],
-      ['Арендатор', `${s.client.fullName}, телефон ${s.client.phone}`],
+      ['Арендатор', `${display(s.client.fullName)}, телефон ${display(s.client.phone)}`],
       ['Подпись Арендодателя', '____________________'],
       ['Подпись Арендатора', '____________________'],
     ]),

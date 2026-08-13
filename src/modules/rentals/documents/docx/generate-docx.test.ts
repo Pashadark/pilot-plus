@@ -122,4 +122,54 @@ describe('generateRentalDocx', () => {
     expect(xml).toContain('12.08.2026');
     expect(xml).toContain('ДЕЙСТВИЕ ДОГОВОРА');
   });
+
+  it('renders every absent optional snapshot value as an em dash', async () => {
+    const sparse = {
+      ...snapshot,
+      company: { ...snapshot.company, actualAddress: null, bankName: null, kpp: null },
+      client: {
+        ...snapshot.client,
+        phone: null,
+        residentialAddress: null,
+        licenseIssuedAt: null,
+        licenseExpiresAt: null,
+      },
+      vehicle: {
+        ...snapshot.vehicle,
+        year: null,
+        color: null,
+        bodyType: null,
+        transmission: null,
+        fuelType: null,
+        seats: null,
+        cascoInsurer: null,
+        cascoPolicyNumber: null,
+        cascoStartsAt: null,
+        cascoEndsAt: null,
+        includedMileageKm: null,
+        overageMileagePriceMinor: null,
+        missingFuelPriceMinor: null,
+      },
+      rental: {
+        ...snapshot.rental,
+        discountMinor: null,
+        servicesMinor: null,
+        depositMinor: null,
+        conditions: null,
+        pickupAddress: null,
+        returnAddress: null,
+      },
+    };
+    const xml = documentXml(
+      await generateRentalDocx(sparse, {
+        contractNumber: 'ME-2026-0002-SPARSE',
+        templateVersion: 'legal-content-v1',
+      }),
+    );
+    expect(xml).not.toMatch(/undefined|null/);
+    expect(xml).toContain('—');
+    expect(xml).toMatch(/Скидка<\/w:t>[\s\S]*?<w:t[^>]*>—/);
+    expect(xml).toMatch(/Дополнительные услуги<\/w:t>[\s\S]*?<w:t[^>]*>—/);
+    expect(xml).toMatch(/Залог<\/w:t>[\s\S]*?<w:t[^>]*>—/);
+  });
 });

@@ -1,5 +1,5 @@
 import { Paragraph, TextRun } from 'docx';
-import { money, table } from './helpers';
+import { display, displayList, money, table, withUnit } from './helpers';
 
 function moscowDateTime(value: string) {
   return new Intl.DateTimeFormat('ru-RU', {
@@ -21,7 +21,10 @@ export function terms(s: any) {
       ['Окончание проката (Москва)', moscowDateTime(s.rental.endsAt)],
       ['Место выдачи', s.rental.pickupAddress],
       ['Место возврата', s.rental.returnAddress],
-      ['Допущенные водители', `${s.client.fullName}, ВУ ${s.client.licenseNumber}`],
+      [
+        'Допущенные водители',
+        `${display(s.client.fullName)}, ВУ ${display(s.client.licenseNumber)}`,
+      ],
     ]),
     table([
       ['Базовая стоимость', money(s.rental.calculatedTotalMinor)],
@@ -31,7 +34,15 @@ export function terms(s: any) {
       ['Залог', money(s.rental.depositMinor)],
       [
         'Условия: пробег / топливо',
-        `${s.rental.conditions}; ${s.vehicle.includedMileageKm} км, перерасход ${money(s.vehicle.overageMileagePriceMinor)}, топливо ${money(s.vehicle.missingFuelPriceMinor)}`,
+        displayList(
+          [
+            display(s.rental.conditions),
+            `включённый пробег ${withUnit(s.vehicle.includedMileageKm, 'км')}`,
+            `перерасход ${money(s.vehicle.overageMileagePriceMinor)}`,
+            `топливо ${money(s.vehicle.missingFuelPriceMinor)}`,
+          ],
+          '; ',
+        ),
       ],
     ]),
   ];
