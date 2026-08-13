@@ -8,7 +8,9 @@ import { useToast } from '@/shared/providers/ToastProvider';
 
 const initialState: VehicleActionState = { ok: false, code: 'IDLE', message: '' };
 
-export function VehicleForm({ companyId }: { companyId: string }) {
+export type ManageableCompany = { id: string; label: string };
+
+export function VehicleForm({ companies }: { companies: readonly ManageableCompany[] }) {
   const [state, action, pending] = useActionState(createVehicleAction, initialState);
   const { showToast } = useToast();
   useEffect(() => {
@@ -26,9 +28,20 @@ export function VehicleForm({ companyId }: { companyId: string }) {
   const fieldError = (name: string) => (!state.ok ? state.fieldErrors?.[name]?.[0] : undefined);
 
   return (
-    <form action={action} className="grid min-w-0 gap-5" noValidate>
-      <input type="hidden" name="companyId" value={companyId} />
+    <form action={action} className="grid min-w-0 gap-5">
       <section className="grid gap-4 rounded-[var(--radius-panel)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:grid-cols-2 sm:p-6">
+        {companies.length === 1 ? (
+          <input type="hidden" name="companyId" value={companies[0]?.id} />
+        ) : (
+          <Select name="companyId" label="Компания" required error={fieldError('companyId')}>
+            <option value="">Выберите компанию</option>
+            {companies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.label}
+              </option>
+            ))}
+          </Select>
+        )}
         <Input
           name="internalNumber"
           label="Внутренний номер"
@@ -60,11 +73,23 @@ export function VehicleForm({ companyId }: { companyId: string }) {
           required
           error={fieldError('dailyPriceRubles')}
         />
-        <Select name="transmission" label="Коробка передач" required defaultValue="АКПП">
+        <Select
+          name="transmission"
+          label="Коробка передач"
+          required
+          defaultValue="АКПП"
+          error={fieldError('transmission')}
+        >
           <option>АКПП</option>
           <option>МКПП</option>
         </Select>
-        <Select name="fuelType" label="Топливо" required defaultValue="PETROL">
+        <Select
+          name="fuelType"
+          label="Топливо"
+          required
+          defaultValue="PETROL"
+          error={fieldError('fuelType')}
+        >
           <option value="PETROL">Бензин</option>
           <option value="DIESEL">Дизель</option>
           <option value="ELECTRIC">Электро</option>
@@ -80,7 +105,13 @@ export function VehicleForm({ companyId }: { companyId: string }) {
           required
           error={fieldError('seats')}
         />
-        <Select name="status" label="Статус" required defaultValue="UNKNOWN">
+        <Select
+          name="status"
+          label="Статус"
+          required
+          defaultValue="UNKNOWN"
+          error={fieldError('status')}
+        >
           <option value="UNKNOWN">Неизвестен</option>
           <option value="IDLE">Свободен</option>
           <option value="MAINTENANCE">На обслуживании</option>

@@ -13,10 +13,10 @@ import { FleetImportDialog } from '@/modules/vehicles/manage/components/FleetImp
 
 export function VehicleListPage({
   vehicles,
-  managementCompanyId,
+  manageableCompanies = [],
 }: {
   vehicles: readonly VehicleCardDto[];
-  managementCompanyId?: string;
+  manageableCompanies?: readonly { id: string; label: string }[];
 }) {
   const [filters, setFilters] = useState(initialVehicleFilters);
   const filtered = useMemo(() => filterVehicles(vehicles, filters), [filters, vehicles]);
@@ -40,15 +40,19 @@ export function VehicleListPage({
           <Badge tone="primary" className="min-h-8 px-3 text-sm" data-testid="vehicle-count">
             Показано {filtered.length} из {vehicles.length}
           </Badge>
-          {managementCompanyId ? (
+          {manageableCompanies.length > 0 ? (
             <>
               <Link
-                href={`/vehicles/new?companyId=${encodeURIComponent(managementCompanyId)}`}
+                href={
+                  manageableCompanies.length === 1
+                    ? `/vehicles/new?companyId=${encodeURIComponent(manageableCompanies[0]?.id ?? '')}`
+                    : '/vehicles/new'
+                }
                 className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 text-sm font-semibold text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
               >
                 Добавить автомобиль
               </Link>
-              <FleetImportDialog companyId={managementCompanyId} />
+              <FleetImportDialog companies={manageableCompanies} />
             </>
           ) : null}
         </div>

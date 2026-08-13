@@ -9,17 +9,23 @@ export default async function VehiclesPage() {
   const user = await requireAdmin();
   const vehicles = await listVehiclesForUser(user.id);
   const access = await getVehicleManagementAccess();
-  const managementCompanyId =
-    access?.scope === 'COMPANY'
-      ? access.companyIds[0]
-      : access?.scope === 'SYSTEM'
-        ? (await prisma.company.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } }))
-            ?.id
-        : undefined;
+  const manageableCompanies = access
+    ? await prisma.company.findMany({
+        where: access.scope === 'SYSTEM' ? {} : { id: { in: [...access.companyIds] } },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      })
+    : [];
 
   return (
     <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Автомобили' }]}>
-      <VehicleListPage vehicles={vehicles} managementCompanyId={managementCompanyId} />
+      <VehicleListPage
+        vehicles={vehicles}
+        manageableCompanies={manageableCompanies.map((company) => ({
+          id: company.id,
+          label: company.name,
+        }))}
+      />
     </AppShell>
   );
 }

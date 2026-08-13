@@ -1,8 +1,12 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { requireVehicleManagementAccess } from '@/modules/vehicles/manage/access';
+import {
+  getVehicleManagementAccess,
+  requireVehicleManagementAccess,
+} from '@/modules/vehicles/manage/access';
 import { VehicleForm } from '@/modules/vehicles/manage/components/VehicleForm';
+import { prisma } from '@/database/prisma/client';
 import { AppShell } from '@/shared/components/app-shell/AppShell';
 
 export default async function NewVehiclePage({
@@ -11,8 +15,15 @@ export default async function NewVehiclePage({
   searchParams: Promise<{ companyId?: string }>;
 }) {
   const { companyId } = await searchParams;
-  if (!companyId) notFound();
-  await requireVehicleManagementAccess(companyId);
+  const access = await getVehicleManagementAccess();
+  if (!access) notFound();
+  const companies = await prisma.company.findMany({
+    where: access.scope === 'SYSTEM' ? {} : { id: { in: [...access.companyIds] } },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+  if (companies.length === 0) notFound();
+  if (companyId) await requireVehicleManagementAccess(companyId);
   return (
     <AppShell
       breadcrumbs={[
@@ -36,7 +47,9 @@ export default async function NewVehiclePage({
             Поля со звёздочкой обязательны для сохранения.
           </p>
         </div>
-        <VehicleForm companyId={companyId} />
+        <VehicleForm
+          companies={companies.map((company) => ({ id: company.id, label: company.name }))}
+        />
       </main>
     </AppShell>
   );

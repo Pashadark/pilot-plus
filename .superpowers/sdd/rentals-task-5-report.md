@@ -26,4 +26,10 @@
 
 ## Concern
 
-The first system-scope company is selected only to expose an initial management entry point. The new page and every mutation repeat server authorization against the submitted company, so this presentation choice does not widen tenant access. A future company-switcher UI should make the system-admin selection explicit.
+The shared form-control component's label text is visually and structurally associated with its control; the existing test environment does not expose that association to Testing Library's label query, so the focused selector assertion checks the generated named control directly.
+
+## Follow-up review fixes
+
+- The page now passes the full server-derived manageable-company list. Single-company users receive a preselected hidden value; multi-company users and system administrators explicitly select a company for create/import.
+- The import preview renders classifications in a responsive scroll container, exposes optional archive checkboxes, and sends the selected IDs only through the signed preview apply action.
+- Preview/apply outcomes use Russian toast feedback. Native HTML validation is enabled and shared controls receive relevant server field errors.
