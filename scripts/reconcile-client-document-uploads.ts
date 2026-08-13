@@ -3,6 +3,7 @@ import { reconcileExpiredClientUploadPermits } from '../src/modules/client-docum
 import { reconcileClientStorageLedgers } from '../src/modules/client-documents/server/reconcile-client-storage-ledgers';
 import { reconcileStaleClientDocumentUploads } from '../src/modules/client-documents/server/reconcile-stale-uploads';
 import { reconcileStaleClientPhotoUploads } from '../src/modules/client-documents/server/reconcile-stale-photo-uploads';
+import { reconcileStaleRentalDocumentGenerations } from '../src/modules/rentals/server/reconcile-rental-document-generations';
 import { safeReconciliationFailureMessage } from '../src/modules/client-documents/server/recovery-policy';
 
 async function main() {
@@ -10,6 +11,7 @@ async function main() {
   const result = await reconcileStaleClientDocumentUploads();
   const photos = await reconcileStaleClientPhotoUploads();
   const permits = await reconcileExpiredClientUploadPermits();
+  const rentalGenerations = await reconcileStaleRentalDocumentGenerations();
   console.log(`Reconciliation storage ledger: сверено ${ledgers.reconciled}.`);
   console.log(
     `Reconciliation документов: восстановлено ${result.recovered}, повторно проверено ${result.retried}, ожидают retry ${result.retryPending}, expired ${result.expired}, archive cleanup ${result.archivedCleaned}, ожидают очистки ${result.cleanupPending}, удалено устаревших quarantine-файлов ${result.staleFilesRemoved}.`,
@@ -21,11 +23,15 @@ async function main() {
     `Reconciliation permits: освобождено ${permits.released}, связаны с durable upload ${permits.linked}, ожидают очистки ${permits.cleanupPending}.`,
   );
   console.log(
+    `Reconciliation договоров: очищено ${rentalGenerations.reconciled}, ожидают retry ${rentalGenerations.retryPending}.`,
+  );
+  console.log(
     `CLIENT_DOCUMENT_RECONCILIATION_OK ${JSON.stringify({
       completedAt: new Date().toISOString(),
       documentCleanupPending: result.cleanupPending,
       photoCleanupPending: photos.cleanupPending,
       permitCleanupPending: permits.cleanupPending,
+      rentalDocumentGenerationRetryPending: rentalGenerations.retryPending,
       retryPending: result.retryPending,
     })}`,
   );
@@ -33,6 +39,7 @@ async function main() {
     result.cleanupPending > 0 ||
     photos.cleanupPending > 0 ||
     permits.cleanupPending > 0 ||
+    rentalGenerations.retryPending > 0 ||
     result.retryPending > 0
   ) {
     process.exitCode = 2;

@@ -207,6 +207,7 @@ describe('atomic rental confirmation', () => {
             company: expect.objectContaining({ legalName: 'ООО Пилот' }),
             client: expect.objectContaining({ passport: '4510 123456' }),
             vehicle: expect.objectContaining({ osagoPolicyNumber: 'ОСАГО' }),
+            template: expect.objectContaining({ legalContentVersion: 'legal-content-v1' }),
           }),
           confirmedByUserId: 'actor-1',
         }),

@@ -1,0 +1,13 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.pilot-private-storage
+logs
+*.log
+node_modules
+.next
+test-results
+playwright-report
+coverage

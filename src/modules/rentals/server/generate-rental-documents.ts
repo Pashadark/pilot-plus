@@ -4,7 +4,11 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import { Prisma, type RentalDocumentFormat } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
-import { generateRentalDocx } from '@/modules/rentals/documents/docx/generate-docx';
+import {
+  generateRentalDocx,
+  type RentalDocxOptions,
+} from '@/modules/rentals/documents/docx/generate-docx';
+import { isLegalTemplateVersion } from '@/modules/rentals/documents/legal-content-v1';
 import {
   convertDocxToPdf,
   PdfConversionError,
@@ -27,17 +31,22 @@ export type ConfirmedRentalSource = {
   companyId: string;
   clientId: string;
   contractNumber: string;
+  legalContentVersion: string;
   snapshot: Snapshot;
 };
 
-export type DocumentArtifact = {
+export type DocumentArtifactIdentity = {
   format: RentalDocumentFormat;
   uploadId: string;
+  quarantineKey: string;
   documentId: string;
   documentVersionId: string;
   storageKey: string;
   originalName: string;
   verifiedMime: string;
+};
+
+export type DocumentArtifact = DocumentArtifactIdentity & {
   bytes: Uint8Array;
   sha256: string;
 };
@@ -48,7 +57,7 @@ export type PairArtifactStorage = {
     scanEngine: string;
     signatureVersion?: string;
   }>;
-  cleanup(artifacts: readonly DocumentArtifact[]): Promise<void>;
+  cleanup(artifacts: readonly DocumentArtifactIdentity[]): Promise<void>;
 };
 
 export type DocumentPairRepository = {
@@ -57,8 +66,23 @@ export type DocumentPairRepository = {
     rentalId: string;
   }): Promise<ConfirmedRentalSource | null>;
   findExistingPair(input: { companyId: string; rentalId: string }): Promise<number | null>;
+  reserveGeneration(input: {
+    source: ConfirmedRentalSource;
+    artifacts: readonly DocumentArtifactIdentity[];
+    actor: Actor;
+    authorization?: Authorization;
+  }): Promise<{ generationId: string; version: number } | { existingVersion: number }>;
+  markPromoted(input: {
+    generationId: string;
+    source: ConfirmedRentalSource;
+    artifacts: readonly DocumentArtifact[];
+    scans: ReadonlyMap<RentalDocumentFormat, { scanEngine: string; signatureVersion?: string }>;
+  }): Promise<void>;
+  markError(input: { generationId: string; source: ConfirmedRentalSource }): Promise<void>;
   commit(input: {
     source: ConfirmedRentalSource;
+    generationId: string;
+    version: number;
     artifacts: readonly DocumentArtifact[];
     scans: ReadonlyMap<RentalDocumentFormat, { scanEngine: string; signatureVersion?: string }>;
     actor: Actor;
@@ -76,7 +100,7 @@ export type GenerateRentalDocumentPairInput = {
 type PairGeneratorDependencies = {
   repository: DocumentPairRepository;
   storage: PairArtifactStorage;
-  generateDocx: (snapshot: Snapshot, options: { contractNumber: string }) => Promise<Uint8Array>;
+  generateDocx: (snapshot: Snapshot, options: RentalDocxOptions) => Promise<Uint8Array>;
   convertPdf: PdfConverter;
 };
 
@@ -113,16 +137,32 @@ function requireConfirmedSnapshot(source: ConfirmedRentalSource): Snapshot {
   return source.snapshot;
 }
 
-function artifact(
+function snapshotLegalContentVersion(snapshot: unknown): string | null {
+  if (
+    typeof snapshot !== 'object' ||
+    snapshot === null ||
+    !('template' in snapshot) ||
+    typeof snapshot.template !== 'object' ||
+    snapshot.template === null ||
+    !('legalContentVersion' in snapshot.template) ||
+    typeof snapshot.template.legalContentVersion !== 'string'
+  ) {
+    return null;
+  }
+  return snapshot.template.legalContentVersion;
+}
+
+function artifactIdentity(
   source: ConfirmedRentalSource,
   format: RentalDocumentFormat,
-  bytes: Uint8Array,
-): DocumentArtifact {
+): DocumentArtifactIdentity {
   const extension = format.toLowerCase();
   const documentId = randomUUID();
+  const uploadId = randomUUID();
   return {
     format,
-    uploadId: randomUUID(),
+    uploadId,
+    quarantineKey: uploadId,
     documentId,
     documentVersionId: randomUUID(),
     storageKey: documentStorageKey(source, documentId, extension),
@@ -131,9 +171,11 @@ function artifact(
       format === 'DOCX'
         ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         : 'application/pdf',
-    bytes,
-    sha256: sha256(bytes),
   };
+}
+
+function artifact(identity: DocumentArtifactIdentity, bytes: Uint8Array): DocumentArtifact {
+  return { ...identity, bytes, sha256: sha256(bytes) };
 }
 
 function publicError(error: unknown) {
@@ -158,11 +200,23 @@ export function createRentalDocumentPairGenerator(dependencies: PairGeneratorDep
     if (existingVersion !== null) return { version: existingVersion };
 
     const snapshot = requireConfirmedSnapshot(source);
+    if (!isLegalTemplateVersion(source.legalContentVersion)) {
+      throw new Error('Версия юридического текста не поддерживается.');
+    }
+    const identities = [artifactIdentity(source, 'DOCX'), artifactIdentity(source, 'PDF')];
+    const reservation = await dependencies.repository.reserveGeneration({
+      source,
+      artifacts: identities,
+      actor: input.actor,
+      authorization: input.authorization,
+    });
+    if ('existingVersion' in reservation) return { version: reservation.existingVersion };
     let artifacts: DocumentArtifact[] = [];
     let committed = false;
     try {
       const docx = await dependencies.generateDocx(snapshot, {
         contractNumber: source.contractNumber,
+        templateVersion: source.legalContentVersion,
       });
       let pdf: Uint8Array;
       try {
@@ -170,7 +224,7 @@ export function createRentalDocumentPairGenerator(dependencies: PairGeneratorDep
       } catch {
         throw new PdfConversionError();
       }
-      artifacts = [artifact(source, 'DOCX', docx), artifact(source, 'PDF', pdf)];
+      artifacts = [artifact(identities[0]!, docx), artifact(identities[1]!, pdf)];
       const scans = new Map<
         RentalDocumentFormat,
         { scanEngine: string; signatureVersion?: string }
@@ -184,19 +238,38 @@ export function createRentalDocumentPairGenerator(dependencies: PairGeneratorDep
           signatureVersion: scan.signatureVersion,
         });
       }
+      await dependencies.repository.markPromoted({
+        generationId: reservation.generationId,
+        source,
+        artifacts,
+        scans,
+      });
       const result = await dependencies.repository.commit({
         source,
+        generationId: reservation.generationId,
+        version: reservation.version,
         artifacts,
         scans,
         actor: input.actor,
         authorization: input.authorization,
       });
       committed = result.created;
-      if (!result.created) await dependencies.storage.cleanup(artifacts);
+      if (!result.created) {
+        await dependencies.storage.cleanup(identities);
+        await dependencies.repository.markError({ generationId: reservation.generationId, source });
+      }
       return { version: result.version };
     } catch (error) {
-      if (artifacts.length > 0 && !committed) {
-        await dependencies.storage.cleanup(artifacts).catch(() => undefined);
+      if (!committed) {
+        try {
+          await dependencies.storage.cleanup(identities);
+          await dependencies.repository.markError({
+            generationId: reservation.generationId,
+            source,
+          });
+        } catch {
+          // The lease remains available to the bounded reconciler when storage cleanup is unavailable.
+        }
       }
       throw publicError(error);
     }
@@ -213,11 +286,11 @@ function privatePairArtifactStorage(storage: PrivateStorage): PairArtifactStorag
   const scanner = ClamAvClient.fromEnvironment();
   return {
     async stageAndPromote(current) {
-      await storage.putQuarantine(current.uploadId, current.bytes);
+      await storage.putQuarantine(current.quarantineKey, current.bytes);
       const result = await scanPendingUpload({
         storage,
         scanner,
-        uploadId: current.uploadId,
+        uploadId: current.quarantineKey,
         storageKey: current.storageKey,
       });
       if (result.status !== 'CLEAN') throw new Error('Проверка документа договора не завершена.');
@@ -230,16 +303,86 @@ function privatePairArtifactStorage(storage: PrivateStorage): PairArtifactStorag
     async cleanup(artifacts) {
       await Promise.all(
         artifacts.map(async (current) => {
-          await storage.removeUploadArtifacts(current.uploadId).catch(() => 0);
-          await storage.removePrivate(current.storageKey).catch(() => undefined);
+          await storage.removeUploadArtifacts(current.quarantineKey);
+          try {
+            await storage.removePrivate(current.storageKey);
+          } catch (error) {
+            if (!isMissingStorageError(error)) throw error;
+          }
         }),
       );
     },
   };
 }
 
+function isMissingStorageError(error: unknown) {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
+}
+
 function isPrismaCode(error: unknown, code: string) {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
+}
+
+function generationLease(now: Date) {
+  return new Date(now.getTime() + 15 * 60_000);
+}
+
+function artifactFor<T extends { format: RentalDocumentFormat }>(
+  artifacts: readonly T[],
+  format: RentalDocumentFormat,
+) {
+  return artifacts.find((artifact) => artifact.format === format);
+}
+
+function generationValues(artifacts: readonly DocumentArtifactIdentity[]) {
+  const docx = artifactFor(artifacts, 'DOCX');
+  const pdf = artifactFor(artifacts, 'PDF');
+  if (!docx || !pdf) throw new Error('Документы договора неполны.');
+  return {
+    docxUploadId: docx.uploadId,
+    pdfUploadId: pdf.uploadId,
+    docxQuarantineKey: docx.quarantineKey,
+    pdfQuarantineKey: pdf.quarantineKey,
+    docxStorageKey: docx.storageKey,
+    pdfStorageKey: pdf.storageKey,
+    docxDocumentId: docx.documentId,
+    pdfDocumentId: pdf.documentId,
+    docxDocumentVersionId: docx.documentVersionId,
+    pdfDocumentVersionId: pdf.documentVersionId,
+  };
+}
+
+function generationMatches(
+  artifacts: readonly DocumentArtifact[],
+  generation: {
+    docxUploadId: string;
+    pdfUploadId: string;
+    docxStorageKey: string;
+    pdfStorageKey: string;
+    docxDocumentId: string;
+    pdfDocumentId: string;
+    docxDocumentVersionId: string;
+    pdfDocumentVersionId: string;
+    docxSha256: string | null;
+    pdfSha256: string | null;
+  },
+) {
+  const docx = artifactFor(artifacts, 'DOCX');
+  const pdf = artifactFor(artifacts, 'PDF');
+  return Boolean(
+    docx &&
+    pdf &&
+    generation.docxUploadId === docx.uploadId &&
+    generation.pdfUploadId === pdf.uploadId &&
+    generation.docxStorageKey === docx.storageKey &&
+    generation.pdfStorageKey === pdf.storageKey &&
+    generation.docxDocumentId === docx.documentId &&
+    generation.pdfDocumentId === pdf.documentId &&
+    generation.docxDocumentVersionId === docx.documentVersionId &&
+    generation.pdfDocumentVersionId === pdf.documentVersionId &&
+    generation.docxSha256 === docx.sha256 &&
+    generation.pdfSha256 === pdf.sha256,
+  );
 }
 
 function createPrismaDocumentPairRepository(): DocumentPairRepository {
@@ -247,14 +390,23 @@ function createPrismaDocumentPairRepository(): DocumentPairRepository {
     async loadConfirmedRental({ companyId, rentalId }) {
       const rental = await prisma.rental.findFirst({
         where: { id: rentalId, companyId, status: 'CONFIRMED', contractNumber: { not: null } },
-        select: { id: true, companyId: true, clientId: true, contractNumber: true, snapshot: true },
+        select: {
+          id: true,
+          companyId: true,
+          clientId: true,
+          contractNumber: true,
+          snapshot: true,
+        },
       });
       if (!rental?.contractNumber) return null;
+      const legalContentVersion = snapshotLegalContentVersion(rental.snapshot);
+      if (!legalContentVersion) return null;
       return {
         rentalId: rental.id,
         companyId: rental.companyId,
         clientId: rental.clientId,
         contractNumber: rental.contractNumber,
+        legalContentVersion,
         snapshot: rental.snapshot as Snapshot,
       };
     },
@@ -264,6 +416,132 @@ function createPrismaDocumentPairRepository(): DocumentPairRepository {
         select: { version: true, format: true },
       });
       return completePairVersion(records);
+    },
+    async reserveGeneration(input) {
+      return retrySerializable(async () =>
+        prisma.$transaction(
+          async (transaction) => {
+            await verifyAuthorization(transaction, input.source.companyId, input.authorization);
+            const rental = await transaction.rental.findFirst({
+              where: {
+                id: input.source.rentalId,
+                companyId: input.source.companyId,
+                clientId: input.source.clientId,
+                status: 'CONFIRMED',
+                contractNumber: input.source.contractNumber,
+              },
+              select: { id: true },
+            });
+            if (!rental) throw new Error('Подтверждённая аренда недоступна.');
+            const existing = await transaction.rentalDocumentVersion.findMany({
+              where: { companyId: input.source.companyId, rentalId: input.source.rentalId },
+              select: { version: true, format: true },
+            });
+            const existingVersion = completePairVersion(existing);
+            if (existingVersion !== null) return { existingVersion };
+            if (existing.length > 0)
+              throw new Error('Найдена неполная версия документов договора.');
+            const current = new Date();
+            const active = await transaction.rentalDocumentGeneration.findFirst({
+              where: {
+                companyId: input.source.companyId,
+                rentalId: input.source.rentalId,
+                status: { in: ['PENDING', 'PROMOTED'] },
+              },
+              select: { id: true, leaseExpiresAt: true },
+            });
+            if (active) {
+              if (active.leaseExpiresAt && active.leaseExpiresAt > current)
+                throw new Error('Создание документов договора уже выполняется.');
+              throw new Error('Ожидается очистка незавершённой генерации договора.');
+            }
+            const failed = await transaction.rentalDocumentGeneration.findFirst({
+              where: {
+                companyId: input.source.companyId,
+                rentalId: input.source.rentalId,
+                status: 'ERROR',
+              },
+              orderBy: { updatedAt: 'desc' },
+              select: { id: true, version: true },
+            });
+            const values = generationValues(input.artifacts);
+            if (failed) {
+              await transaction.rentalDocumentGeneration.update({
+                where: { id: failed.id },
+                data: {
+                  ...values,
+                  status: 'PENDING',
+                  leaseExpiresAt: generationLease(current),
+                  retryCount: { increment: 1 },
+                  lastErrorCode: null,
+                  promotedAt: null,
+                  committedAt: null,
+                },
+              });
+              return { generationId: failed.id, version: failed.version };
+            }
+            const latest = await transaction.rentalDocumentVersion.findFirst({
+              where: { companyId: input.source.companyId, rentalId: input.source.rentalId },
+              orderBy: { version: 'desc' },
+              select: { version: true },
+            });
+            const version = (latest?.version ?? 0) + 1;
+            const generation = await transaction.rentalDocumentGeneration.create({
+              data: {
+                companyId: input.source.companyId,
+                clientId: input.source.clientId,
+                rentalId: input.source.rentalId,
+                version,
+                status: 'PENDING',
+                leaseExpiresAt: generationLease(current),
+                ...values,
+              },
+              select: { id: true },
+            });
+            return { generationId: generation.id, version };
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        ),
+      );
+    },
+    async markPromoted(input) {
+      const docx = artifactFor(input.artifacts, 'DOCX');
+      const pdf = artifactFor(input.artifacts, 'PDF');
+      const docxScan = input.scans.get('DOCX');
+      const pdfScan = input.scans.get('PDF');
+      if (!docx || !pdf || !docxScan || !pdfScan) throw new Error('Документы договора неполны.');
+      const updated = await prisma.rentalDocumentGeneration.updateMany({
+        where: {
+          id: input.generationId,
+          companyId: input.source.companyId,
+          rentalId: input.source.rentalId,
+          status: 'PENDING',
+          leaseExpiresAt: { gt: new Date() },
+        },
+        data: {
+          status: 'PROMOTED',
+          leaseExpiresAt: generationLease(new Date()),
+          promotedAt: new Date(),
+          docxSha256: docx.sha256,
+          pdfSha256: pdf.sha256,
+          docxScanEngine: docxScan.scanEngine,
+          pdfScanEngine: pdfScan.scanEngine,
+          docxSignatureVersion: docxScan.signatureVersion,
+          pdfSignatureVersion: pdfScan.signatureVersion,
+        },
+      });
+      if (updated.count !== 1) throw new Error('Состояние генерации документов изменилось.');
+    },
+    async markError({ generationId, source }) {
+      await prisma.rentalDocumentGeneration.updateMany({
+        where: {
+          id: generationId,
+          companyId: source.companyId,
+          rentalId: source.rentalId,
+          status: { not: 'COMMITTED' },
+        },
+        data: { status: 'ERROR', leaseExpiresAt: null, lastErrorCode: 'GENERATION_FAILED' },
+      });
     },
     async commit(input) {
       return retrySerializable(async () =>
@@ -289,13 +567,32 @@ function createPrismaDocumentPairRepository(): DocumentPairRepository {
             if (existingVersion !== null) return { version: existingVersion, created: false };
             if (existing.length > 0)
               throw new Error('Найдена неполная версия документов договора.');
-
-            const latest = await transaction.rentalDocumentVersion.findFirst({
-              where: { companyId: input.source.companyId, rentalId: input.source.rentalId },
-              orderBy: { version: 'desc' },
-              select: { version: true },
+            const generation = await transaction.rentalDocumentGeneration.findFirst({
+              where: {
+                id: input.generationId,
+                companyId: input.source.companyId,
+                rentalId: input.source.rentalId,
+                version: input.version,
+                status: 'PROMOTED',
+                leaseExpiresAt: { gt: new Date() },
+              },
+              select: {
+                id: true,
+                docxUploadId: true,
+                pdfUploadId: true,
+                docxStorageKey: true,
+                pdfStorageKey: true,
+                docxDocumentId: true,
+                pdfDocumentId: true,
+                docxDocumentVersionId: true,
+                pdfDocumentVersionId: true,
+                docxSha256: true,
+                pdfSha256: true,
+              },
             });
-            const version = (latest?.version ?? 0) + 1;
+            if (!generation || !generationMatches(input.artifacts, generation)) {
+              throw new Error('Состояние генерации документов изменилось.');
+            }
             const current = new Date();
             for (const document of input.artifacts) {
               const scan = input.scans.get(document.format);
@@ -335,7 +632,7 @@ function createPrismaDocumentPairRepository(): DocumentPairRepository {
                   rentalId: input.source.rentalId,
                   clientDocumentId: document.documentId,
                   clientDocumentVersionId: document.documentVersionId,
-                  version,
+                  version: input.version,
                   format: document.format,
                 },
               });
@@ -349,16 +646,28 @@ function createPrismaDocumentPairRepository(): DocumentPairRepository {
                 entityType: 'RENTAL',
                 entityId: input.source.rentalId,
                 entityLabel: 'Документы договора аренды',
-                changes: { version, formats: ['DOCX', 'PDF'] },
+                changes: { version: input.version, formats: ['DOCX', 'PDF'] },
               },
             });
-            return { version, created: true };
+            const committed = await transaction.rentalDocumentGeneration.updateMany({
+              where: { id: generation.id, status: 'PROMOTED' },
+              data: { status: 'COMMITTED', leaseExpiresAt: null, committedAt: current },
+            });
+            if (committed.count !== 1)
+              throw new Error('Состояние генерации документов изменилось.');
+            return { version: input.version, created: true };
           },
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
         ),
-      ).catch((error: unknown) => {
-        if (isPrismaCode(error, 'P2002'))
+      ).catch(async (error: unknown) => {
+        if (isPrismaCode(error, 'P2002')) {
+          const version = await this.findExistingPair({
+            companyId: input.source.companyId,
+            rentalId: input.source.rentalId,
+          });
+          if (version !== null) return { version, created: false };
           throw new Error('Версия документов договора уже существует.');
+        }
         throw error;
       });
     },

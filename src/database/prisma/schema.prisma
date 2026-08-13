@@ -200,6 +200,13 @@ enum RentalDocumentFormat {
   PDF
 }
 
+enum RentalDocumentGenerationStatus {
+  PENDING
+  PROMOTED
+  COMMITTED
+  ERROR
+}
+
 model User {
   id                       String                    @id @default(cuid())
   email                    String                    @unique
@@ -244,50 +251,51 @@ model LoginThrottle {
 }
 
 model Company {
-  id                      String                    @id @default(cuid())
-  name                    String
-  slug                    String                    @unique
-  inn                     String?
-  kpp                     String?
-  ogrn                    String?
-  directorName            String?
-  legalAddress            String?
-  actualAddress           String?
-  phone                   String?
-  email                   String?
-  legalName               String?
-  entrepreneurName        String?
-  lessorBirthDate         DateTime?                 @db.Date
-  lessorPassportEncrypted String?
-  ogrnip                  String?
-  bankName                String?
-  settlementAccount       String?
-  correspondentAccount    String?
-  bik                     String?
-  contractCity            String?
-  defaultPickupAddress    String?
-  defaultReturnAddress    String?
-  signatoryName           String?
-  signatoryAuthority      String?
-  isDemo                  Boolean                   @default(false)
-  members                 CompanyMember[]
-  vehicles                Vehicle[]
-  devices                 Device[]
-  deviceCommands          DeviceCommand[]
-  manualVehicleEvents     ManualVehicleEvent[]
-  eventReadReceipts       EventReadReceipt[]
-  auditLogs               AuditLog[]
-  clients                 Client[]
-  clientDocuments         ClientDocument[]
-  clientUploadPermits     ClientUploadPermit[]
-  clientStorageLedger     ClientStorageLedger?
-  rentals                 Rental[]
-  rentalNumberCounters    RentalNumberCounter[]
-  rentalDrivers           RentalDriver[]
-  rentalDocumentVersions  RentalDocumentVersion[]
-  contractTemplates       ContractTemplateVersion[]
-  createdAt               DateTime                  @default(now())
-  updatedAt               DateTime                  @updatedAt
+  id                        String                     @id @default(cuid())
+  name                      String
+  slug                      String                     @unique
+  inn                       String?
+  kpp                       String?
+  ogrn                      String?
+  directorName              String?
+  legalAddress              String?
+  actualAddress             String?
+  phone                     String?
+  email                     String?
+  legalName                 String?
+  entrepreneurName          String?
+  lessorBirthDate           DateTime?                  @db.Date
+  lessorPassportEncrypted   String?
+  ogrnip                    String?
+  bankName                  String?
+  settlementAccount         String?
+  correspondentAccount      String?
+  bik                       String?
+  contractCity              String?
+  defaultPickupAddress      String?
+  defaultReturnAddress      String?
+  signatoryName             String?
+  signatoryAuthority        String?
+  isDemo                    Boolean                    @default(false)
+  members                   CompanyMember[]
+  vehicles                  Vehicle[]
+  devices                   Device[]
+  deviceCommands            DeviceCommand[]
+  manualVehicleEvents       ManualVehicleEvent[]
+  eventReadReceipts         EventReadReceipt[]
+  auditLogs                 AuditLog[]
+  clients                   Client[]
+  clientDocuments           ClientDocument[]
+  clientUploadPermits       ClientUploadPermit[]
+  clientStorageLedger       ClientStorageLedger?
+  rentals                   Rental[]
+  rentalNumberCounters      RentalNumberCounter[]
+  rentalDrivers             RentalDriver[]
+  rentalDocumentVersions    RentalDocumentVersion[]
+  rentalDocumentGenerations RentalDocumentGeneration[]
+  contractTemplates         ContractTemplateVersion[]
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
 }
 
 model CompanyMember {
@@ -571,6 +579,7 @@ model ContractTemplateVersion {
   version               Int
   title                 String
   content               String
+  legalContentVersion   String    @default("legal-content-v1")
   documentSchemaVersion Int
   isPublished           Boolean   @default(false)
   publishedAt           DateTime? @db.Timestamptz(3)
@@ -586,23 +595,23 @@ model ContractTemplateVersion {
 }
 
 model Rental {
-  id                       String                  @id @default(cuid())
+  id                       String                     @id @default(cuid())
   companyId                String
-  company                  Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  company                  Company                    @relation(fields: [companyId], references: [id], onDelete: Restrict)
   clientId                 String
-  client                   Client                  @relation("ClientRentals", fields: [companyId, clientId], references: [companyId, id], onDelete: Restrict)
+  client                   Client                     @relation("ClientRentals", fields: [companyId, clientId], references: [companyId, id], onDelete: Restrict)
   vehicleId                String
-  vehicle                  Vehicle                 @relation("VehicleRentals", fields: [companyId, vehicleId], references: [companyId, id], onDelete: Restrict)
+  vehicle                  Vehicle                    @relation("VehicleRentals", fields: [companyId, vehicleId], references: [companyId, id], onDelete: Restrict)
   contractNumber           String?
-  startsAt                 DateTime                @db.Timestamptz(3)
-  endsAt                   DateTime                @db.Timestamptz(3)
-  status                   RentalStatus            @default(DRAFT)
-  currency                 String                  @db.Char(3)
+  startsAt                 DateTime                   @db.Timestamptz(3)
+  endsAt                   DateTime                   @db.Timestamptz(3)
+  status                   RentalStatus               @default(DRAFT)
+  currency                 String                     @db.Char(3)
   dailyRateMinor           BigInt
   billableDays             Int
   basePriceMinor           BigInt
-  discountMinor            BigInt                  @default(0)
-  servicesMinor            BigInt                  @default(0)
+  discountMinor            BigInt                     @default(0)
+  servicesMinor            BigInt                     @default(0)
   totalPriceMinor          BigInt
   depositMinor             BigInt?
   includedMileageKm        Int?
@@ -612,19 +621,20 @@ model Rental {
   snapshotVersion          Int
   snapshot                 Json
   templateVersionId        String
-  templateVersion          ContractTemplateVersion @relation(fields: [companyId, templateVersionId], references: [companyId, id], onDelete: Restrict)
+  templateVersion          ContractTemplateVersion    @relation(fields: [companyId, templateVersionId], references: [companyId, id], onDelete: Restrict)
   createdByUserId          String
-  createdBy                User                    @relation("RentalCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  confirmedAt              DateTime?               @db.Timestamptz(3)
+  createdBy                User                       @relation("RentalCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  confirmedAt              DateTime?                  @db.Timestamptz(3)
   confirmedByUserId        String?
-  confirmedBy              User?                   @relation("RentalConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
-  activatedAt              DateTime?               @db.Timestamptz(3)
-  completedAt              DateTime?               @db.Timestamptz(3)
-  cancelledAt              DateTime?               @db.Timestamptz(3)
-  createdAt                DateTime                @default(now()) @db.Timestamptz(3)
-  updatedAt                DateTime                @updatedAt @db.Timestamptz(3)
+  confirmedBy              User?                      @relation("RentalConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
+  activatedAt              DateTime?                  @db.Timestamptz(3)
+  completedAt              DateTime?                  @db.Timestamptz(3)
+  cancelledAt              DateTime?                  @db.Timestamptz(3)
+  createdAt                DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime                   @updatedAt @db.Timestamptz(3)
   drivers                  RentalDriver[]
   documentVersions         RentalDocumentVersion[]
+  documentGenerations      RentalDocumentGeneration[]
 
   @@unique([companyId, id])
   @@unique([companyId, clientId, id])
@@ -680,6 +690,44 @@ model RentalDocumentVersion {
   @@unique([rentalId, version, format])
   @@unique([clientDocumentId, clientDocumentVersionId])
   @@index([companyId, clientId, rentalId])
+}
+
+model RentalDocumentGeneration {
+  id                    String                         @id @default(cuid())
+  companyId             String
+  company               Company                        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  clientId              String
+  rentalId              String
+  rental                Rental                         @relation(fields: [companyId, clientId, rentalId], references: [companyId, clientId, id], onDelete: Cascade)
+  version               Int
+  status                RentalDocumentGenerationStatus @default(PENDING)
+  docxUploadId          String                         @unique
+  pdfUploadId           String                         @unique
+  docxQuarantineKey     String                         @unique
+  pdfQuarantineKey      String                         @unique
+  docxStorageKey        String                         @unique
+  pdfStorageKey         String                         @unique
+  docxDocumentId        String
+  pdfDocumentId         String
+  docxDocumentVersionId String
+  pdfDocumentVersionId  String
+  docxSha256            String?
+  pdfSha256             String?
+  docxScanEngine        String?
+  pdfScanEngine         String?
+  docxSignatureVersion  String?
+  pdfSignatureVersion   String?
+  leaseExpiresAt        DateTime?                      @db.Timestamptz(3)
+  retryCount            Int                            @default(0)
+  lastErrorCode         String?
+  promotedAt            DateTime?                      @db.Timestamptz(3)
+  committedAt           DateTime?                      @db.Timestamptz(3)
+  createdAt             DateTime                       @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                       @updatedAt @db.Timestamptz(3)
+
+  @@unique([rentalId, version])
+  @@index([companyId, status, leaseExpiresAt])
+  @@index([companyId, rentalId, status])
 }
 
 model Device {

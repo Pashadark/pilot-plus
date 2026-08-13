@@ -33,6 +33,10 @@ const rentalConfirmationActorMigrationPath = new URL(
   './migrations/20260813090012_add_rental_confirmation_actor/migration.sql',
   import.meta.url,
 );
+const rentalDocumentGenerationMigrationPath = new URL(
+  './migrations/20260813090101_add_rental_document_generation_lifecycle/migration.sql',
+  import.meta.url,
+);
 const migrationRecoveryRunbookPath = new URL(
   '../../../docs/runbooks/rental-migration-recovery.md',
   import.meta.url,
@@ -142,6 +146,27 @@ describe('доменная схема аренды', () => {
     expect(migration).toContain('ADD COLUMN "confirmedByUserId" TEXT');
     expect(migration).toContain('Rental_confirmedByUserId_fkey');
     expect(migration).toContain('Rental_companyId_confirmedByUserId_confirmedAt_idx');
+    expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
+  });
+
+  it('persists a tenant-scoped, leased document-generation lifecycle and legal content version', () => {
+    const generation = schema.match(/model RentalDocumentGeneration \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const template = schema.match(/model ContractTemplateVersion \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(schema).toContain('enum RentalDocumentGenerationStatus {');
+    expect(generation).toMatch(/status\s+RentalDocumentGenerationStatus\s+@default\(PENDING\)/);
+    expect(generation).toMatch(/leaseExpiresAt\s+DateTime\?/);
+    expect(generation).toMatch(/docxQuarantineKey\s+String\s+@unique/);
+    expect(generation).toMatch(/pdfQuarantineKey\s+String\s+@unique/);
+    expect(generation).toMatch(/docxStorageKey\s+String\s+@unique/);
+    expect(generation).toMatch(/pdfStorageKey\s+String\s+@unique/);
+    expect(generation).toContain('@@unique([rentalId, version])');
+    expect(template).toMatch(/legalContentVersion\s+String\s+@default\("legal-content-v1"\)/);
+    expect(existsSync(rentalDocumentGenerationMigrationPath)).toBe(true);
+    if (!existsSync(rentalDocumentGenerationMigrationPath)) return;
+    const migration = readFileSync(rentalDocumentGenerationMigrationPath, 'utf8');
+    expect(migration).toContain('CREATE TABLE "RentalDocumentGeneration"');
+    expect(migration).toContain('CREATE TYPE "RentalDocumentGenerationStatus"');
+    expect(migration).toContain('ADD COLUMN "legalContentVersion" TEXT NOT NULL DEFAULT');
     expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
   });
 

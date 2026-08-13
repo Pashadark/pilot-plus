@@ -3,6 +3,7 @@ import 'server-only';
 import { Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 import { buildRentalSnapshot } from '@/modules/rentals/domain/build-snapshot';
+import { isLegalTemplateVersion } from '@/modules/rentals/documents/legal-content-v1';
 import { decryptField } from '@/services/security/field-encryption';
 
 import { requireRentalAccess } from './access';
@@ -280,7 +281,12 @@ export function createRentalConfirmation(
         }),
         transaction.contractTemplateVersion.findFirst({
           where: { id: rental.templateVersionId, companyId: input.companyId, isPublished: true },
-          select: { id: true, version: true, documentSchemaVersion: true },
+          select: {
+            id: true,
+            version: true,
+            documentSchemaVersion: true,
+            legalContentVersion: true,
+          },
         }),
         transaction.clientDocument.findMany({
           where: {
@@ -304,6 +310,9 @@ export function createRentalConfirmation(
         throw new Error('Связанные данные аренды недоступны.');
       if (template.documentSchemaVersion !== 1)
         throw new Error('Версия шаблона несовместима со снимком договора.');
+      const legalContentVersion = text(template.legalContentVersion) || 'legal-content-v1';
+      if (!isLegalTemplateVersion(legalContentVersion))
+        throw new Error('Версия юридического текста не поддерживается.');
       requireCurrentClientDocuments(documents);
       requireLegalVehicle(vehicle, startsAt, endsAt);
 
@@ -429,6 +438,7 @@ export function createRentalConfirmation(
               id: text(template.id),
               version: template.version,
               documentSchemaVersion: template.documentSchemaVersion,
+              legalContentVersion,
             },
             confirmation: {
               confirmedAt: confirmedAt.toISOString(),

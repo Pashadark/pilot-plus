@@ -6,6 +6,13 @@
 `RentalDocumentVersion` одной версии. При ошибке конвертации, сканирования или транзакции quarantine
 и уже promoted private artifacts удаляются; частичной доступной версии не возникает.
 
+Каждая попытка до первого storage write создаёт `RentalDocumentGeneration` со статусом `PENDING` и
+уникальными quarantine/final keys. После двух promotions запись становится `PROMOTED`; та же
+Serializable transaction сохраняет metadata и переводит её в `COMMITTED`. Неудача переходит в `ERROR`.
+Lease ограничивает зависшую работу 15 минутами: внешний scheduler `npm run client-documents:reconcile`
+удаляет только expired `PENDING`/`PROMOTED` keys, bounded retry выполняет до трёх раз. Никогда не
+очищайте `COMMITTED` запись вручную через filesystem.
+
 ## Runtime prerequisites
 
 - В image процесса приложения установлен LibreOffice Writer. Используйте фиксированный абсолютный
@@ -39,3 +46,7 @@ test и не применяйте миграции этой процедурой
 место/`tmpfs`, ClamAV и private storage ACL; не включайте debug-логи с bytes, аргументами процесса,
 storage keys или персональными данными. После исправления повторите генерацию: уже complete pair
 идемпотентно возвращает существующую версию, а параллельные попытки сходятся к одной версии.
+
+При `P2002` или неясном результате Serializable commit генератор повторно читает exact complete
+`DOCX`+`PDF` pair этого rental. Только complete pair возвращается как идемпотентный успех; собственные
+generation-scoped keys проигравшей попытки удаляются, поэтому они не могут затронуть чужую пару.

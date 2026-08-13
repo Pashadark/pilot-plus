@@ -45,6 +45,12 @@ export const legalContentV1 = {
 export const legalTemplates = { 'legal-content-v1': legalContentV1 } as const;
 export type LegalTemplateVersion = keyof typeof legalTemplates;
 
+export function isLegalTemplateVersion(version: string): version is LegalTemplateVersion {
+  return Object.hasOwn(legalTemplates, version);
+}
+
 export function resolveLegalTemplate(version: LegalTemplateVersion = 'legal-content-v1') {
-  return legalTemplates[version];
+  const template = legalTemplates[version];
+  if (!template) throw new Error('Версия юридического текста не поддерживается.');
+  return template;
 }
