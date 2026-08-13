@@ -22,3 +22,8 @@
 - All `*Minor` monetary inputs in vehicle and rental data are validated as nonnegative safe integers.
 - Output has an explicit `completeness` state. Missing conditional legal fields are represented as `null` for drafts; confirmed-ready snapshots fail closed when mandatory contract fields are absent.
 - Snapshot sections use a fixed serializable field set, preventing `undefined` values from escaping into a legal document payload.
+
+## Persisted Company alignment
+
+- Company snapshots now use exact persisted contract field names: `entrepreneurName`, `lessorBirthDate`, `lessorPassportEncrypted`, `ogrnip`, `defaultPickupAddress`, `defaultReturnAddress`, `signatoryName`, and `signatoryAuthority`.
+- Confirmation completeness requires the canonical signatory and default pickup/return values. Encrypted passport data is copied as an opaque value and is never logged.

@@ -120,4 +120,50 @@ describe('rental legal snapshot', () => {
       }),
     ).toThrow('обязательные');
   });
+
+  it('copies canonical persisted company contract fields', () => {
+    const snapshot = buildRentalSnapshot({
+      company: {
+        id: 'c',
+        legalName: 'ИП',
+        inn: '1',
+        address: 'x',
+        entrepreneurName: 'Павел',
+        lessorBirthDate: '1990-01-01',
+        lessorPassportEncrypted: 'encrypted:opaque',
+        ogrnip: '2',
+        defaultPickupAddress: 'Выдача',
+        defaultReturnAddress: 'Возврат',
+        signatoryName: 'Павел',
+        signatoryAuthority: 'Устав',
+        contractCity: 'Москва',
+      },
+      client: { id: 'p', fullName: 'Иван', phone: '1', passport: 'p' },
+      vehicle: {
+        id: 'v',
+        make: 'K',
+        model: 'M',
+        registrationNumber: 'А156АХ997',
+        vin: 'V',
+        dailyMinor: 1,
+        depositMinor: 0,
+      },
+      rental: {
+        id: 'r',
+        startsAt: new Date(),
+        endsAt: new Date(Date.now() + 1),
+        calculatedTotalMinor: 1,
+        agreedTotalMinor: 1,
+        currency: 'RUB',
+      },
+    });
+    expect(snapshot.company).toMatchObject({
+      entrepreneurName: 'Павел',
+      lessorPassportEncrypted: 'encrypted:opaque',
+      ogrnip: '2',
+      defaultPickupAddress: 'Выдача',
+      defaultReturnAddress: 'Возврат',
+      signatoryAuthority: 'Устав',
+    });
+  });
 });

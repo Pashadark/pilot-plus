@@ -15,8 +15,14 @@ type Input = {
     correspondentAccount?: string;
     bik?: string;
     signatoryName?: string;
-    signatoryBasis?: string;
+    signatoryAuthority?: string;
     contractCity?: string;
+    entrepreneurName?: string;
+    lessorBirthDate?: string;
+    lessorPassportEncrypted?: string;
+    ogrnip?: string;
+    defaultPickupAddress?: string;
+    defaultReturnAddress?: string;
   };
   client: {
     id: string;
@@ -101,8 +107,10 @@ export function buildRentalSnapshot(input: Input) {
     input.company.inn,
     input.company.address,
     input.company.signatoryName,
-    input.company.signatoryBasis,
+    input.company.signatoryAuthority,
     input.company.contractCity,
+    input.company.defaultPickupAddress,
+    input.company.defaultReturnAddress,
     input.client.fullName,
     input.client.passport,
     input.client.birthDate,
@@ -134,10 +142,14 @@ export function buildRentalSnapshot(input: Input) {
         'correspondentAccount',
         'bik',
         'signatoryName',
-        'signatoryBasis',
+        'signatoryAuthority',
         'contractCity',
-        'pickupAddress',
-        'returnAddress',
+        'entrepreneurName',
+        'lessorBirthDate',
+        'lessorPassportEncrypted',
+        'ogrnip',
+        'defaultPickupAddress',
+        'defaultReturnAddress',
       ]),
     ),
     client: frozen(
