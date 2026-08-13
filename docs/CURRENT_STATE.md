@@ -169,3 +169,7 @@ npm run build
 ## 11. Состояние Git при передаче
 
 Ожидаемая ветка: `feature/simple-admin-login`. После handoff-коммита рабочее дерево должно содержать только пользовательский `?? debug.log`. Все остальные изменения должны быть закоммичены и отправлены на GitHub.
+
+## 12. Дополнение: contracts/fleet, август 2026
+
+Добавлены tenant-scoped модели и серверные операции клиентов, автомобилей и аренды: черновик, подтверждение с неизменяемым legal snapshot, проверка перекрытия, audit log, company-scoped нумерация и приватная идемпотентная генерация DOCX/PDF. Защищены загрузки версий договоров; список `/rentals` и детали `/rentals/[id]` доступны только company admin/dispatcher (или system admin), с фильтрами и мобильным календарём. E2E `tests/rentals.spec.ts` намеренно запускается только с `PILOT_RENTALS_E2E=1` против изолированной disposable БД; он не имеет права мигрировать, seed-ить или очищать общую БД. Для запуска нужны подготовленный отдельный tenant, `PILOT_RENTALS_E2E_CLIENT_ID`, `PILOT_RENTALS_E2E_OVERLAP_CLIENT_ID`, `PILOT_RENTALS_E2E_FOREIGN_RENTAL_ID`, workbook из четырёх demo-строк и учётные данные dispatcher/driver fixture, а для полного document path — ClamAV/LibreOffice. Выполнение `npx playwright test --list` допустимо без инфраструктуры; runtime Playwright может зависнуть на отсутствующем dev-server/DB и должен завершаться по timeout. В исходниках русские комментарии описывают ограничение тестовых fixtures без персональных данных.
