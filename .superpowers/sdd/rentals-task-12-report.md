@@ -24,3 +24,9 @@ Verification:
 - Confirmed/non-draft detail data now comes from the persisted immutable snapshot (client, vehicle, term, agreed price, pickup/return and issuance terms). Drafts retain live values and an explicit `Текущие данные черновика` source label.
 - RED/GREEN coverage: full-week/month exclusion/multi-day/millisecond boundary calendar test; immutable snapshot stability test; invalid date and exclusive next-day parsing test.
 - Verification: focused Vitest (4/4), `npm run typecheck`, targeted Prettier, and `git diff --check` pass.
+
+## Monday-first calendar correction
+
+- Calendar week offsets now use `(getUTCDay() + 6) % 7` from a Moscow daytime anchor, while occupancy boundaries remain Moscow midnight. This prevents a UTC weekday from shifting the Monday-first grid.
+- Regression test asserts that Saturday, 1 August 2026, occupies the sixth (Saturday) day cell in the first Monday-first week.
+- Verification: focused calendar Vitest (2/2), `npm run typecheck`, Prettier, and `git diff --check` pass.

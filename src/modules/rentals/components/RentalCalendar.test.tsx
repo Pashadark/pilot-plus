@@ -62,6 +62,7 @@ describe('RentalCalendar', () => {
     );
 
     expect(screen.getAllByRole('gridcell')).toHaveLength(42);
+    expect(screen.getAllByRole('gridcell')[5]?.getAttribute('aria-label')).toMatch(/^1 августа/u);
     expect(screen.getByRole('gridcell', { name: /31 августа.*Polo/u })).toBeTruthy();
     expect(screen.queryByText('Не показывать')).toBeNull();
     expect(screen.getByTestId('rental-calendar-agenda').textContent).toContain('Polo');

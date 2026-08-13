@@ -60,8 +60,13 @@ export function RentalCalendar({
   const nextYear = monthNumber === 12 ? year + 1 : year;
   const nextMonthNumber = monthNumber === 12 ? 1 : monthNumber + 1;
   const monthEnd = dayStart(`${nextYear}-${String(nextMonthNumber).padStart(2, '0')}-01`);
-  const calendarStart = addDays(monthStart, -monthStart.getUTCDay());
-  const calendarEnd = addDays(monthEnd, (7 - monthEnd.getUTCDay()) % 7);
+  const monthWeekday = new Date(`${safeMonth}-01T12:00:00.000+03:00`);
+  const nextMonthWeekday = new Date(
+    `${nextYear}-${String(nextMonthNumber).padStart(2, '0')}-01T12:00:00.000+03:00`,
+  );
+  const mondayOffset = (monthWeekday.getUTCDay() + 6) % 7;
+  const calendarStart = addDays(monthStart, -mondayOffset);
+  const calendarEnd = addDays(monthEnd, (7 - ((nextMonthWeekday.getUTCDay() + 6) % 7)) % 7);
   const days = Array.from(
     { length: Math.round((calendarEnd.getTime() - calendarStart.getTime()) / 86_400_000) },
     (_, index) => addDays(calendarStart, index),
