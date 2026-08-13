@@ -6,3 +6,7 @@
 ## Verification
 
 - Focused confirmation test and TypeScript check run before commit.
+
+## Second wave
+
+- Added tenant-scoped rental list query and cancellation action. Cancellation reauthorizes, limits state transitions to DRAFT/CONFIRMED, and records a sanitized audit entry atomically.
