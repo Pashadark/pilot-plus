@@ -33,3 +33,4 @@ The shared form-control component's label text is visually and structurally asso
 - The page now passes the full server-derived manageable-company list. Single-company users receive a preselected hidden value; multi-company users and system administrators explicitly select a company for create/import.
 - The import preview renders classifications in a responsive scroll container, exposes optional archive checkboxes, and sends the selected IDs only through the signed preview apply action.
 - Preview/apply outcomes use Russian toast feedback. Native HTML validation is enabled and shared controls receive relevant server field errors.
+- Archive capability is now resolved strictly from the company selected for the preview; changing a multi-company selection cannot inherit archive permission from another company.

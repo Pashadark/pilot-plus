@@ -16,12 +16,17 @@ const initialState: FleetImportActionState = { ok: false, code: 'IDLE', message:
 export function FleetImportDialog({ companies }: { companies: readonly ManageableCompany[] }) {
   const [open, setOpen] = useState(false);
   const [archiveIds, setArchiveIds] = useState<string[]>([]);
+  const [previewCompanyId, setPreviewCompanyId] = useState(
+    companies.length === 1 ? (companies[0]?.id ?? '') : '',
+  );
   const [preview, previewAction, previewPending] = useActionState(
     previewFleetImportAction,
     initialState,
   );
   const [applied, applyAction, applyPending] = useActionState(applyFleetImportAction, initialState);
   const previewReady = preview.ok && 'token' in preview;
+  const canArchivePreview =
+    companies.find((company) => company.id === previewCompanyId)?.canArchive === true;
   const { showToast } = useToast();
   useEffect(() => {
     if (preview.ok && 'token' in preview)
@@ -54,7 +59,13 @@ export function FleetImportDialog({ companies }: { companies: readonly Manageabl
         title="Импорт автопарка"
         description="Загрузите книгу Excel для безопасного предпросмотра."
       >
-        <form action={previewAction} className="grid gap-4">
+        <form
+          action={previewAction}
+          onSubmit={(event) =>
+            setPreviewCompanyId(String(new FormData(event.currentTarget).get('companyId') ?? ''))
+          }
+          className="grid gap-4"
+        >
           {companies.length === 1 ? (
             <input type="hidden" name="companyId" value={companies[0]?.id} />
           ) : (
@@ -132,36 +143,33 @@ export function FleetImportDialog({ companies }: { companies: readonly Manageabl
                 </tbody>
               </table>
             </div>
-            {preview.optionalArchives.length > 0 &&
-              companies.some((company) => company.canArchive) && (
-                <fieldset className="grid gap-2">
-                  <legend className="font-semibold">Архивировать отсутствующие автомобили</legend>
-                  {preview.optionalArchives.map((vehicle) => (
-                    <label key={vehicle.id} className="flex min-h-11 items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={archiveIds.includes(vehicle.id)}
-                        onChange={(event) =>
-                          setArchiveIds((ids) =>
-                            event.target.checked
-                              ? [...ids, vehicle.id]
-                              : ids.filter((id) => id !== vehicle.id),
-                          )
-                        }
-                      />{' '}
-                      {vehicle.internalNumber}
-                    </label>
-                  ))}
-                </fieldset>
-              )}
+            {preview.optionalArchives.length > 0 && canArchivePreview && (
+              <fieldset className="grid gap-2">
+                <legend className="font-semibold">Архивировать отсутствующие автомобили</legend>
+                {preview.optionalArchives.map((vehicle) => (
+                  <label key={vehicle.id} className="flex min-h-11 items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={archiveIds.includes(vehicle.id)}
+                      onChange={(event) =>
+                        setArchiveIds((ids) =>
+                          event.target.checked
+                            ? [...ids, vehicle.id]
+                            : ids.filter((id) => id !== vehicle.id),
+                        )
+                      }
+                    />{' '}
+                    {vehicle.internalNumber}
+                  </label>
+                ))}
+              </fieldset>
+            )}
             <form action={applyAction}>
               <input type="hidden" name="token" value={preview.token} />
               <input
                 type="hidden"
                 name="archiveIds"
-                value={JSON.stringify(
-                  companies.some((company) => company.canArchive) ? archiveIds : [],
-                )}
+                value={JSON.stringify(canArchivePreview ? archiveIds : [])}
               />
               <Button
                 type="submit"
