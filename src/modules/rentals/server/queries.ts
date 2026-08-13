@@ -50,10 +50,29 @@ export async function listRentalsForCurrentUser() {
 }
 
 export type RentalListFilters = { status?: string; query?: string; from?: string; to?: string };
+export function parseRentalListMoscowBoundary(
+  value: string | undefined,
+  nextDay = false,
+): Date | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) return null;
+  const date = new Date(`${value}T00:00:00.000+03:00`);
+  if (!Number.isFinite(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const read = (type: string) => parts.find((part) => part.type === type)?.value;
+  if (`${read('year')}-${read('month')}-${read('day')}` !== value) return null;
+  return new Date(date.getTime() + (nextDay ? 86_400_000 : 0));
+}
 export async function listFilteredRentalsForCurrentUser(filters: RentalListFilters) {
   const access = await (await import('./access')).getRentalAccess();
   if (!access) throw new (await import('./access')).RentalAccessDeniedError();
   const query = filters.query?.trim();
+  const from = parseRentalListMoscowBoundary(filters.from);
+  const toExclusive = parseRentalListMoscowBoundary(filters.to, true);
   const statuses = ['DRAFT', 'CONFIRMED', 'ACTIVE', 'COMPLETED', 'CANCELLED'];
   return prisma.rental.findMany({
     where: {
@@ -61,8 +80,8 @@ export async function listFilteredRentalsForCurrentUser(filters: RentalListFilte
       ...(filters.status && statuses.includes(filters.status)
         ? { status: filters.status as never }
         : {}),
-      ...(filters.from ? { endsAt: { gte: new Date(`${filters.from}T00:00:00+03:00`) } } : {}),
-      ...(filters.to ? { startsAt: { lte: new Date(`${filters.to}T23:59:59+03:00`) } } : {}),
+      ...(from ? { endsAt: { gt: from } } : {}),
+      ...(toExclusive ? { startsAt: { lt: toExclusive } } : {}),
       ...(query
         ? {
             OR: [

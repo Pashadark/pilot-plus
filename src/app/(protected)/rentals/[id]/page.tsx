@@ -5,6 +5,7 @@ import {
   getRentalDetailForCurrentUser,
   listRentalAuditForCurrentUser,
 } from '@/modules/rentals/server/queries';
+import { rentalDetailPresentation } from '@/modules/rentals/components/rental-detail-presentation';
 export default async function RentalDetail({ params }: { params: Promise<{ id: string }> }) {
   const rental = await getRentalDetailForCurrentUser((await params).id);
   if (!rental) notFound();
@@ -12,6 +13,17 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
     .filter(Boolean)
     .join(' ');
   const history = await listRentalAuditForCurrentUser(rental.companyId, rental.id);
+  const detail = rentalDetailPresentation({
+    status: rental.status,
+    snapshot: rental.snapshot,
+    clientLabel: client,
+    vehicleLabel: [rental.vehicle.make, rental.vehicle.modelName, rental.vehicle.registrationNumber]
+      .filter(Boolean)
+      .join(' · '),
+    startsAt: rental.startsAt.toISOString(),
+    endsAt: rental.endsAt.toISOString(),
+    totalPriceMinor: rental.totalPriceMinor,
+  });
   return (
     <AppShell
       breadcrumbs={[
@@ -24,21 +36,41 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
         <h1 className="text-2xl font-bold">{rental.contractNumber ?? 'Черновик договора'}</h1>
         <dl className="grid gap-3 rounded-[var(--radius-md)] border p-4">
           <div>
+            <dt>Источник данных</dt>
+            <dd>{detail.source}</dd>
+          </div>
+          <div>
             <dt>Клиент</dt>
-            <dd>{client}</dd>
+            <dd>{detail.client}</dd>
           </div>
           <div>
             <dt>Автомобиль</dt>
-            <dd>
-              {[rental.vehicle.make, rental.vehicle.modelName, rental.vehicle.registrationNumber]
-                .filter(Boolean)
-                .join(' · ')}
-            </dd>
+            <dd>{detail.vehicle}</dd>
           </div>
           <div>
             <dt>Статус</dt>
             <dd>{rental.status}</dd>
           </div>
+          <div>
+            <dt>Срок</dt>
+            <dd>{detail.term}</dd>
+          </div>
+          <div>
+            <dt>Итог</dt>
+            <dd>{(detail.totalMinor / 100).toLocaleString('ru-RU')} ₽</dd>
+          </div>
+          <div>
+            <dt>Выдача / возврат</dt>
+            <dd>
+              {detail.pickupAddress ?? '—'} / {detail.returnAddress ?? '—'}
+            </dd>
+          </div>
+          {detail.issuance ? (
+            <div>
+              <dt>Условия выдачи</dt>
+              <dd>{Object.values(detail.issuance).map(String).join(' · ') || '—'}</dd>
+            </div>
+          ) : null}
         </dl>
         <RentalDetailPanel
           rental={{

@@ -16,3 +16,11 @@ Verification:
 - The list query now supports server-side URL status/date/query filtering; its query searches the linked vehicle and client fields without requiring PII in URLs.
 - RED/GREEN: a new jsdom detail-panel test covered history, download links, missing-pair retry, generation-error state, and cancellation confirmation.
 - Verification: `RentalDetailPanel`, calendar, and wizard component tests (4/4); focused rental actions (6/6); `npm run typecheck`; Prettier; and `git diff --check` pass.
+
+## Calendar and snapshot review follow-up
+
+- Replaced the event-only calendar with a true Monday-first seven-column Moscow month grid, including complete leading/trailing weeks and accessible date cells. Each in-month day shows every half-open rental occupancy interval intersecting that Moscow day; the mobile agenda is month-scoped and start-time sorted.
+- Strict `YYYY-MM-DD` filter parsing validates calendar dates in Moscow, silently ignores malformed values, and uses the next Moscow midnight as an exclusive end bound.
+- Confirmed/non-draft detail data now comes from the persisted immutable snapshot (client, vehicle, term, agreed price, pickup/return and issuance terms). Drafts retain live values and an explicit `Текущие данные черновика` source label.
+- RED/GREEN coverage: full-week/month exclusion/multi-day/millisecond boundary calendar test; immutable snapshot stability test; invalid date and exclusive next-day parsing test.
+- Verification: focused Vitest (4/4), `npm run typecheck`, targeted Prettier, and `git diff --check` pass.
