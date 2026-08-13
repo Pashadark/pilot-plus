@@ -13,6 +13,7 @@ import {
   RentalAccessDeniedError,
   canAccessRentalCompany,
   canManageRentals,
+  getRentalAccessForUser,
   getRentalAccess,
   requireRentalAccess,
 } from './access';
@@ -44,6 +45,14 @@ describe('серверный доступ к договорам аренды', (
 
     expect(access).toMatchObject({ scope: 'SYSTEM', companyIds: [] });
     expect(canAccessRentalCompany(access, 'company-foreign')).toBe(true);
+    expect(membershipFindManyMock).not.toHaveBeenCalled();
+  });
+
+  it('строит доступ для уже проверенного пользователя без повторного чтения сессии', async () => {
+    const access = await getRentalAccessForUser(superAdmin);
+
+    expect(access).toMatchObject({ user: superAdmin, scope: 'SYSTEM', companyIds: [] });
+    expect(readSessionMock).not.toHaveBeenCalled();
     expect(membershipFindManyMock).not.toHaveBeenCalled();
   });
 

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   getCachedSystemHealthSummary: vi.fn(),
   getClientAccess: vi.fn(),
+  getRentalAccessForUser: vi.fn(),
   requireAdmin: vi.fn(),
 }));
 
@@ -11,6 +12,9 @@ vi.mock('@/modules/system-health/get-system-health-summary', () => ({
   getCachedSystemHealthSummary: mocks.getCachedSystemHealthSummary,
 }));
 vi.mock('@/modules/clients/access', () => ({ getClientAccess: mocks.getClientAccess }));
+vi.mock('@/modules/rentals/server/access', () => ({
+  getRentalAccessForUser: mocks.getRentalAccessForUser,
+}));
 
 import ProtectedLayout from './layout';
 
@@ -28,6 +32,7 @@ describe('ProtectedLayout', () => {
       canAccessAdmin: true,
     });
     mocks.getClientAccess.mockResolvedValue({ scope: 'SYSTEM' });
+    mocks.getRentalAccessForUser.mockResolvedValue({ scope: 'SYSTEM' });
     mocks.getCachedSystemHealthSummary.mockResolvedValue({
       state: 'healthy',
       count: 3,
@@ -39,6 +44,13 @@ describe('ProtectedLayout', () => {
 
     expect(mocks.requireAdmin).toHaveBeenCalledOnce();
     expect(mocks.getCachedSystemHealthSummary).toHaveBeenCalledOnce();
+    expect(mocks.getRentalAccessForUser).toHaveBeenCalledWith({
+      id: 'admin-1',
+      name: 'Администратор',
+      email: 'admin@pilot.local',
+      role: 'SUPER_ADMIN',
+      canAccessAdmin: true,
+    });
     expect(mocks.requireAdmin.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.getCachedSystemHealthSummary.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
@@ -49,7 +61,7 @@ describe('ProtectedLayout', () => {
         total: 4,
         checkedAt: '2026-07-20T12:00:00.000Z',
       },
-      user: expect.objectContaining({ canAccessAdmin: true }),
+      user: expect.objectContaining({ canAccessAdmin: true, capabilities: ['CLIENTS', 'RENTALS'] }),
     });
   });
 

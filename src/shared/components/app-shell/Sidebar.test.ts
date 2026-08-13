@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { FiDroplet, FiTool, FiUsers } from 'react-icons/fi';
+import { FiDroplet, FiFileText, FiTool, FiUsers } from 'react-icons/fi';
 import { describe, expect, it, vi } from 'vitest';
 
 const route = vi.hoisted(() => ({ pathname: '/' }));
@@ -32,6 +32,7 @@ describe('Sidebar health summary', () => {
       '/map',
       '/vehicles',
       '/clients',
+      '/rentals',
       '/maintenance',
       '/wash',
       '/devices',
@@ -45,6 +46,7 @@ describe('Sidebar health summary', () => {
         { label: 'Техническое обслуживание', href: '/maintenance', icon: FiTool },
         { label: 'Мойка', href: '/wash', icon: FiDroplet },
         { label: 'Клиенты', href: '/clients', icon: FiUsers, requiredCapability: 'CLIENTS' },
+        { label: 'Аренда', href: '/rentals', icon: FiFileText, requiredCapability: 'RENTALS' },
       ]),
     );
   });
@@ -92,6 +94,23 @@ describe('Sidebar health summary', () => {
 
     expect(markup).toContain('href="/clients"');
     expect(markup).toContain('Клиенты');
+  });
+
+  it('показывает аренду только при server-derived rental capability', () => {
+    const denied = renderToStaticMarkup(
+      createElement(Sidebar, { expanded: true, user: member, systemHealthSummary: summary }),
+    );
+    const permitted = renderToStaticMarkup(
+      createElement(Sidebar, {
+        expanded: true,
+        user: { ...member, capabilities: ['RENTALS'] },
+        systemHealthSummary: summary,
+      }),
+    );
+
+    expect(denied).not.toContain('href="/rentals"');
+    expect(permitted).toContain('href="/rentals"');
+    expect(permitted).toContain('Аренда');
   });
 
   it('даёт раскрытым подписям доступную ширину и перенос строк', () => {
