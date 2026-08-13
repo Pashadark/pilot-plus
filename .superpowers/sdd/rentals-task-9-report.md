@@ -52,3 +52,10 @@ documented environment gap.
 - Generation renewal, promotion and metadata commit all require an unclaimed lifecycle row. The deterministic
   selected-candidate-versus-generator-renewal test proves a losing reconciler claim does not delete either
   private or quarantine artifact.
+
+## Final crash recovery follow-up
+
+- Expired `CLEANING` rows are now candidates even with an old claim token. The next worker atomically steals
+  the exact old token/expired lease, replaces it, renews ownership before every filesystem operation and
+  finalizes only with that new token. A deterministic crash-after-claim regression proves cleanup completes
+  and a previous worker's token cannot perform the terminal transition.

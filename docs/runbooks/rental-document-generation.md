@@ -17,6 +17,9 @@ Lease ограничивает зависшую работу 15 минутами
 `claimToken`. Если generator успел renew/promote/commit, claim возвращает `0`, а file operations не
 запускаются. После claim только worker с тем же token вправе завершить cleanup. Generator CAS для renew,
 promotion и commit требует `claimToken = null`, поэтому не может продолжить работу после cleanup claim.
+Если процесс упал уже после claim, следующий проход выбирает expired `CLEANING` вместе со старым token и
+atomically заменяет token перед cleanup. Worker продлевает собственный claim непосредственно перед каждой
+filesystem operation; worker с потерянным token не может ни удалить следующий key, ни сделать terminal update.
 
 ## Runtime prerequisites
 

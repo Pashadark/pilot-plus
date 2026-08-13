@@ -51,6 +51,8 @@ const defaultBatchSize = 100;
 const defaultRetryDelayMs = 5 * 60_000;
 const defaultMaxRetries = 3;
 
+class CleanupClaimLostError extends Error {}
+
 function privateStorageRoot() {
   const root = process.env.PRIVATE_STORAGE_ROOT?.trim();
   if (!root) throw new Error('Приватное хранилище не настроено.');
@@ -67,6 +69,26 @@ async function removePrivateIfPresent(storage: RentalDocumentGenerationStorage, 
   } catch (error) {
     if (!isMissingStorageError(error)) throw error;
   }
+}
+
+async function renewCleanupClaim(
+  database: RentalDocumentGenerationReconciliationDatabase,
+  candidate: StaleGeneration,
+  claimToken: string,
+  retryDelayMs: number,
+) {
+  const renewed = await database.rentalDocumentGeneration.updateMany({
+    where: {
+      id: candidate.id,
+      companyId: candidate.companyId,
+      rentalId: candidate.rentalId,
+      status: 'CLEANING',
+      claimToken,
+      leaseExpiresAt: { gt: new Date() },
+    },
+    data: { leaseExpiresAt: new Date(Date.now() + retryDelayMs) },
+  });
+  if (renewed.count !== 1) throw new CleanupClaimLostError();
 }
 
 function defaultDatabase(): RentalDocumentGenerationReconciliationDatabase {
@@ -100,8 +122,7 @@ export async function reconcileStaleRentalDocumentGenerations(
   const candidates = await database.rentalDocumentGeneration.findMany({
     where: {
       status: { in: ['PENDING', 'PROMOTED', 'CLEANING'] },
-      leaseExpiresAt: { lt: now },
-      claimToken: null,
+      leaseExpiresAt: { lte: now },
     },
     orderBy: { leaseExpiresAt: 'asc' },
     take: batchSize,
@@ -128,8 +149,8 @@ export async function reconcileStaleRentalDocumentGenerations(
         companyId: candidate.companyId,
         rentalId: candidate.rentalId,
         status: candidate.status,
-        claimToken: null,
-        leaseExpiresAt: { lt: now },
+        claimToken: candidate.claimToken ?? null,
+        leaseExpiresAt: { lte: now },
       },
       data: {
         status: 'CLEANING',
@@ -139,9 +160,13 @@ export async function reconcileStaleRentalDocumentGenerations(
     });
     if (claimed.count !== 1) continue;
     try {
+      await renewCleanupClaim(database, candidate, claimToken, retryDelayMs);
       await storage.removeUploadArtifacts(candidate.docxQuarantineKey);
+      await renewCleanupClaim(database, candidate, claimToken, retryDelayMs);
       await storage.removeUploadArtifacts(candidate.pdfQuarantineKey);
+      await renewCleanupClaim(database, candidate, claimToken, retryDelayMs);
       await removePrivateIfPresent(storage, candidate.docxStorageKey);
+      await renewCleanupClaim(database, candidate, claimToken, retryDelayMs);
       await removePrivateIfPresent(storage, candidate.pdfStorageKey);
       const updated = await database.rentalDocumentGeneration.updateMany({
         where: {
@@ -150,6 +175,7 @@ export async function reconcileStaleRentalDocumentGenerations(
           rentalId: candidate.rentalId,
           status: 'CLEANING',
           claimToken,
+          leaseExpiresAt: { gt: new Date() },
         },
         data: {
           status: 'ERROR',
@@ -159,7 +185,8 @@ export async function reconcileStaleRentalDocumentGenerations(
         },
       });
       if (updated.count === 1) reconciled += 1;
-    } catch {
+    } catch (error) {
+      if (error instanceof CleanupClaimLostError) continue;
       const exhausted = candidate.retryCount + 1 >= maxRetries;
       const updated = await database.rentalDocumentGeneration.updateMany({
         where: {
@@ -168,6 +195,7 @@ export async function reconcileStaleRentalDocumentGenerations(
           rentalId: candidate.rentalId,
           status: 'CLEANING',
           claimToken,
+          leaseExpiresAt: { gt: new Date() },
         },
         data: {
           status: exhausted ? 'ERROR' : 'CLEANING',
