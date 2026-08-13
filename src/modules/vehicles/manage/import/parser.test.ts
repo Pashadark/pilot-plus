@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeFleetImportRows, parseExampleFleetWorkbook } from './parser';
+import {
+  normalizeFleetImportRows,
+  parseExampleFleetWorkbook,
+  validateApprovedExampleFleet,
+} from './parser';
 
 const encoder = new TextEncoder();
 
@@ -120,5 +124,20 @@ describe('example fleet import parser', () => {
     expect(() =>
       parseExampleFleetWorkbook({ filename: 'fleet.xlsx', bytes: canonicalWorkbook() }),
     ).toThrow('утверждённые четыре');
+  });
+
+  it('rejects an approved plate/year paired with a forged make or model', () => {
+    const result = normalizeFleetImportRows([
+      { make: 'Kia', model: "Cee'd", registrationNumber: 'А429АУ97', year: 2020 },
+      { make: 'Skoda', model: 'Octavia', registrationNumber: 'Е435АН997', year: 2019 },
+      {
+        make: 'Mercedes-Benz',
+        model: 'E 220 d 4MATIC',
+        registrationNumber: 'М283АМ997',
+        year: 2019,
+      },
+      { make: 'Volkswagen', model: 'Jetta', registrationNumber: 'А156АХ997', year: 2020 },
+    ]);
+    expect(() => validateApprovedExampleFleet(result)).toThrow('утверждённые четыре');
   });
 });

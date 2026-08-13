@@ -54,15 +54,42 @@ export function parseExampleFleetWorkbook(workbook: FleetImportWorkbook): FleetI
     ? readSharedStrings(requiredText(files, 'xl/sharedStrings.xml'))
     : [];
   const parsed = normalizeFleetImportRows(readSheet(requiredText(files, sheetPath), sharedStrings));
-  const approved = new Set(['А429АУ97:2020', 'Е435АН997:2019', 'М283АМ997:2019', 'А156АХ997:2020']);
+  const approved = new Set([
+    "Kia:Cee'd:А429АУ97:2020",
+    'Skoda:Octavia:Е435АН997:2019',
+    'Mercedes-Benz:E 220 d 4MATIC:М283АМ997:2019',
+    'Volkswagen:Polo:А156АХ997:2020',
+  ]);
   if (
     parsed.errors.length > 0 ||
     parsed.rows.length !== 4 ||
-    parsed.rows.some((row) => !approved.has(`${row.registrationNumberNormalized}:${row.year}`))
+    parsed.rows.some(
+      (row) =>
+        !approved.has(`${row.make}:${row.model}:${row.registrationNumberNormalized}:${row.year}`),
+    )
   ) {
     throw new Error('Файл должен содержать ровно утверждённые четыре автомобиля примера.');
   }
   return parsed;
+}
+
+export function validateApprovedExampleFleet(parsed: FleetImportParseResult): void {
+  const approved = new Set([
+    "Kia:Cee'd:А429АУ97:2020",
+    'Skoda:Octavia:Е435АН997:2019',
+    'Mercedes-Benz:E 220 d 4MATIC:М283АМ997:2019',
+    'Volkswagen:Polo:А156АХ997:2020',
+  ]);
+  if (
+    parsed.errors.length > 0 ||
+    parsed.rows.length !== 4 ||
+    parsed.rows.some(
+      (row) =>
+        !approved.has(`${row.make}:${row.model}:${row.registrationNumberNormalized}:${row.year}`),
+    )
+  ) {
+    throw new Error('Файл должен содержать ровно утверждённые четыре автомобиля примера.');
+  }
 }
 
 function requiredText(files: ReadonlyMap<string, Uint8Array>, name: string): string {
@@ -121,7 +148,17 @@ function readZip(bytes: Uint8Array): Map<string, Uint8Array> {
       localOffset + 30 + localNameLength + localExtraLength,
       localOffset + 30 + localNameLength + localExtraLength + compressedSize,
     );
-    const content = method === 0 ? payload : method === 8 ? inflateRawSync(payload) : null;
+    let content: Uint8Array | null = null;
+    try {
+      content =
+        method === 0
+          ? payload
+          : method === 8
+            ? inflateRawSync(payload, { maxOutputLength: MAX_WORKBOOK_BYTES })
+            : null;
+    } catch {
+      throw new Error('Книга Excel превышает безопасный лимит распаковки.');
+    }
     if (
       !content ||
       content.byteLength !== uncompressedSize ||
