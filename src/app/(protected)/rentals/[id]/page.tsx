@@ -1,13 +1,17 @@
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
 import { AppShell } from '@/shared/components/app-shell/AppShell';
-import { getRentalDetailForCurrentUser } from '@/modules/rentals/server/queries';
+import { RentalDetailPanel } from '@/modules/rentals/components/RentalDetailPanel';
+import {
+  getRentalDetailForCurrentUser,
+  listRentalAuditForCurrentUser,
+} from '@/modules/rentals/server/queries';
 export default async function RentalDetail({ params }: { params: Promise<{ id: string }> }) {
   const rental = await getRentalDetailForCurrentUser((await params).id);
   if (!rental) notFound();
   const client = [rental.client.lastName, rental.client.firstName, rental.client.middleName]
     .filter(Boolean)
     .join(' ');
+  const history = await listRentalAuditForCurrentUser(rental.companyId, rental.id);
   return (
     <AppShell
       breadcrumbs={[
@@ -36,18 +40,26 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
             <dd>{rental.status}</dd>
           </div>
         </dl>
-        <section>
-          <h2 className="text-lg font-bold">Документы</h2>
-          {rental.documentVersions.map((d) => (
-            <Link
-              key={`${d.version}-${d.format}`}
-              className="mr-4 inline-flex min-h-11 items-center text-[var(--color-primary)]"
-              href={`/rentals/${rental.id}/documents/${d.version}/${d.format}`}
-            >
-              Скачать {d.format} v{d.version}
-            </Link>
-          ))}
-        </section>
+        <RentalDetailPanel
+          rental={{
+            id: rental.id,
+            companyId: rental.companyId,
+            status: rental.status,
+            contractNumber: rental.contractNumber,
+          }}
+          documents={rental.documentVersions}
+          generations={rental.documentGenerations.map((item) => ({
+            version: item.version,
+            status: item.status,
+            updatedAt: item.updatedAt.toISOString(),
+          }))}
+          history={history.map((item) => ({
+            id: item.id,
+            action: item.action,
+            label: 'Действие с договором',
+            createdAt: item.createdAt.toISOString(),
+          }))}
+        />
       </main>
     </AppShell>
   );

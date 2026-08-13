@@ -8,4 +8,11 @@ Verification:
 - `npm run typecheck` — passed.
 - `git diff --check` — passed.
 
-Known scope boundary: filter controls are present as accessible UI controls; server-side query-parameter filtering and mutation controls remain follow-up work.
+## Completion follow-up
+
+- The detail route now loads tenant-scoped rental audit events, maps them to a fixed non-PII label, and displays a Moscow-time timeline.
+- Added document version status display, safe exact-version download links, and a retry action for a confirmed rental whose DOCX/PDF pair is incomplete or failed.
+- Added a two-step cancellation control for draft/confirmed rentals. It uses the existing server action, `useActionState`, a Russian toast, and refreshes the server state after success.
+- The list query now supports server-side URL status/date/query filtering; its query searches the linked vehicle and client fields without requiring PII in URLs.
+- RED/GREEN: a new jsdom detail-panel test covered history, download links, missing-pair retry, generation-error state, and cancellation confirmation.
+- Verification: `RentalDetailPanel`, calendar, and wizard component tests (4/4); focused rental actions (6/6); `npm run typecheck`; Prettier; and `git diff --check` pass.

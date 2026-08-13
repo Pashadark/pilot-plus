@@ -120,7 +120,27 @@ export async function getRentalDetailForCurrentUser(id: string) {
     include: {
       client: { select: { firstName: true, middleName: true, lastName: true } },
       vehicle: { select: { make: true, modelName: true, registrationNumber: true } },
-      documentVersions: { select: { version: true, format: true }, orderBy: { version: 'desc' } },
+      documentVersions: {
+        select: { version: true, format: true },
+        orderBy: [{ version: 'desc' }, { format: 'asc' }],
+      },
+      documentGenerations: {
+        select: { version: true, status: true, updatedAt: true },
+        orderBy: { version: 'desc' },
+        take: 5,
+      },
+      company: { select: { id: true } },
     },
+  });
+}
+
+export async function listRentalAuditForCurrentUser(companyId: string, rentalId: string) {
+  const access = await (await import('./access')).getRentalAccess();
+  if (!access || (access.scope !== 'SYSTEM' && !access.companyIds.includes(companyId))) return [];
+  return prisma.auditLog.findMany({
+    where: { companyId, entityType: 'RENTAL', entityId: rentalId },
+    select: { id: true, action: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
   });
 }
