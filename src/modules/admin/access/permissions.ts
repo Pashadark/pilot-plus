@@ -32,6 +32,8 @@ const permissionsByRole: Record<CompanyRole, readonly CompanyPermissionValue[]> 
   DISPATCHER: [
     'VIEW_CLIENTS',
     'MANAGE_CLIENTS',
+    'MANAGE_VEHICLES',
+    'MANAGE_DOCUMENTS',
     'MANAGE_MAINTENANCE',
     'MANAGE_WASH',
     'VIEW_REPORTS',

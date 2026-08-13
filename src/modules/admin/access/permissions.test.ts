@@ -24,7 +24,15 @@ describe('политика прав компании', () => {
   it.each([
     [
       'DISPATCHER',
-      ['MANAGE_CLIENTS', 'MANAGE_MAINTENANCE', 'MANAGE_WASH', 'VIEW_CLIENTS', 'VIEW_REPORTS'],
+      [
+        'MANAGE_CLIENTS',
+        'MANAGE_VEHICLES',
+        'MANAGE_DOCUMENTS',
+        'MANAGE_MAINTENANCE',
+        'MANAGE_WASH',
+        'VIEW_CLIENTS',
+        'VIEW_REPORTS',
+      ],
     ],
     ['DRIVER', []],
     ['VIEWER', ['VIEW_CLIENTS', 'VIEW_REPORTS']],
@@ -37,10 +45,12 @@ describe('политика прав компании', () => {
     expect(hasCompanyPermission('VIEWER', ['MANAGE_VEHICLES'], 'MANAGE_VEHICLES')).toBe(true);
   });
 
-  it('выдаёт диспетчеру управление транспортом и устройствами только отдельными grants', () => {
-    expect(hasCompanyPermission('DISPATCHER', [], 'MANAGE_VEHICLES')).toBe(false);
+  it('выдаёт диспетчеру управление автопарком и документами без опасных административных прав', () => {
+    expect(hasCompanyPermission('DISPATCHER', [], 'MANAGE_VEHICLES')).toBe(true);
+    expect(hasCompanyPermission('DISPATCHER', [], 'MANAGE_DOCUMENTS')).toBe(true);
+    expect(hasCompanyPermission('DISPATCHER', [], 'MANAGE_USERS')).toBe(false);
+    expect(hasCompanyPermission('DISPATCHER', [], 'MANAGE_ROLES')).toBe(false);
     expect(hasCompanyPermission('DISPATCHER', [], 'MANAGE_DEVICES')).toBe(false);
-    expect(hasCompanyPermission('DISPATCHER', ['MANAGE_VEHICLES'], 'MANAGE_VEHICLES')).toBe(true);
   });
 
   it('не моделирует системного суперадминистратора через права компании', () => {
