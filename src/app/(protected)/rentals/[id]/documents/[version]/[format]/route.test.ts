@@ -149,6 +149,27 @@ describe('protected rental contract download route', () => {
     expect(mocks.writeAuditLog).not.toHaveBeenCalled();
   });
 
+  it('does not touch private storage when transaction-scoped membership was revoked', async () => {
+    mocks.transaction.mockImplementationOnce(
+      async (operation: (transaction: object) => Promise<unknown>) =>
+        operation({
+          rentalDocumentVersion: { findFirst: mocks.findFirst },
+          companyMember: { findFirst: vi.fn().mockResolvedValue(null) },
+          user: { findFirst: vi.fn() },
+          auditLog: { create: vi.fn() },
+        }),
+    );
+
+    const response = await GET(
+      new Request('http://localhost/rentals/rental-1/documents/2/PDF'),
+      context,
+    );
+
+    expect(response.status).toBe(404);
+    expect(mocks.openPrivate).not.toHaveBeenCalled();
+    expect(mocks.writeAuditLog).not.toHaveBeenCalled();
+  });
+
   it('rejects a driver before querying metadata and rejects path-shaped version or format', async () => {
     mocks.getRentalAccess.mockResolvedValue(null);
     const driver = await GET(

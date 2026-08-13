@@ -134,7 +134,11 @@ export async function GET(request: Request, context: DownloadContext) {
   const target = parseTarget(await context.params);
   if (!target) return unavailable();
   const preview = new URL(request.url).searchParams.get('preview') === '1';
-  const initial = await findReadyDocument(prisma, access, target);
+  const initial = await prisma.$transaction(async (transaction) => {
+    const candidate = await findReadyDocument(transaction, access, target);
+    if (!candidate || !(await reauthorize(transaction, access, candidate.companyId))) return null;
+    return candidate;
+  });
   if (!initial) return unavailable();
 
   let stream: Readable;
