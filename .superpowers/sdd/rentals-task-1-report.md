@@ -136,6 +136,12 @@ Review findings were addressed in a separate fix wave without applying the migra
 - `Vehicle_archivedByUserId_fkey` is now attached `NOT VALID` in `20260813090009`; `20260813090010` validates it separately with bounded lock/statement timeouts. New rental-table FKs remain normal because their tables are empty at creation.
 - Added `docs/runbooks/rental-migration-recovery.md`. It requires inspecting the exact named `pg_index` row and `indisvalid`, dropping only an invalid/partial target index concurrently, resolving only the named migration as rolled back, rerunning `npx prisma migrate deploy`, and verifying both migration history and index readiness. No shared-DB automation is introduced.
 
+## Concurrent recovery runbook precision fix
+
+- The recovery runbook now requires an exact migration-directory → schema-qualified-index mapping and returns `schemaname`, `indexname`, `indisvalid`, `indisready`, and `pg_get_indexdef` for the one named target.
+- Branch A marks the migration applied only when one index is valid, ready, and has an exact expected definition. Branch B drops only the exact `public."<index_name>"` target when invalid or not ready, marks only that migration rolled back, then deploys. Branch C stops for manual DBA review on definition mismatch or any ambiguity; it explicitly forbids dropping or resolving in that case.
+- RED: the existing focused runbook contract was extended and failed because the former runbook did not inspect `pg_get_indexdef` or describe the applied/ambiguity branches. GREEN: `npx vitest run src/database/prisma/rental-schema.test.ts` passed 16/16 after the documentation update.
+
 ### Type and invariant hardening
 
 - Rental interval and lifecycle instants use `TIMESTAMPTZ(3)` / `@db.Timestamptz(3)`; birth and insurance calendar dates use `DATE` / `@db.Date`.

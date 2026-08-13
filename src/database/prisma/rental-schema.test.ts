@@ -328,9 +328,14 @@ describe('доменная схема аренды', () => {
     const runbook = readFileSync(migrationRecoveryRunbookPath, 'utf8');
     expect(runbook).toContain('pg_index');
     expect(runbook).toContain('indisvalid');
+    expect(runbook).toContain('indisready');
+    expect(runbook).toContain('pg_get_indexdef');
     expect(runbook).toContain('DROP INDEX CONCURRENTLY IF EXISTS');
+    expect(runbook).toContain('public."<index_name>"');
+    expect(runbook).toContain('npx prisma migrate resolve --applied <migration_name>');
     expect(runbook).toContain('npx prisma migrate resolve --rolled-back <migration_name>');
     expect(runbook).toContain('npx prisma migrate deploy');
+    expect(runbook).toContain('STOP/manual DBA');
   });
 
   it('models the populated-row guards: VIN canonicalization and non-override calculation reject invalid legacy values', () => {
