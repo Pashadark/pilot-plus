@@ -21,6 +21,7 @@ describe('tenant-scoped queries управления автопарком', () =
             odometerKm: { toString: () => '15000.5' },
             valueMinor: BigInt(120000000),
             dailyPriceMinor: 350000,
+            rangePriceMinor: BigInt(420050),
             depositMinor: BigInt(1000000),
             city: 'Москва',
             isRentalReady: true,
@@ -39,11 +40,13 @@ describe('tenant-scoped queries управления автопарком', () =
       expect.objectContaining({
         odometerKm: 15000.5,
         valueMinor: '120000000',
+        rangePriceMinor: '420050',
         depositMinor: '1000000',
         updatedAt: '2026-08-13T10:00:00.000Z',
       }),
     ]);
     expect(args).not.toMatchObject({ select: { vin: true } });
     expect(args).not.toMatchObject({ select: { registrationCertificateNumber: true } });
+    expect(args).toMatchObject({ select: { rangePriceMinor: true } });
   });
 });

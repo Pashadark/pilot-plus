@@ -29,6 +29,7 @@ const baseInput = {
   fuelType: 'PETROL',
   seats: '5',
   dailyPriceRubles: '3500',
+  rangePriceRubles: '4200.50',
   depositRubles: '10000',
   isRentalReady: 'true',
   status: 'UNKNOWN',
@@ -76,6 +77,11 @@ describe('Server Actions управления автопарком', () => {
     );
     expect(JSON.stringify(database.auditLog.create.mock.calls[0]?.[0])).not.toContain('XW8ZZZ');
     expect(JSON.stringify(database.auditLog.create.mock.calls[0]?.[0])).not.toContain('А429');
+    expect(database.vehicle.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ rangePriceMinor: BigInt(420050) }),
+      }),
+    );
   });
 
   it('не изменяет автомобиль чужой компании', async () => {

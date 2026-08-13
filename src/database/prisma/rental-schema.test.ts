@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
+import { registrationNumberHomoglyphs } from '../../modules/vehicles/manage/validation';
+
 const schema = readFileSync(new URL('./schema.prisma', import.meta.url), 'utf8');
 const migrationPath = new URL(
   './migrations/20260813090008_add_rental_domain_structures/migration.sql',
@@ -37,6 +39,21 @@ const concurrentIndexMigrationPaths = [
 ].map((path) => new URL(path, import.meta.url));
 
 const normalizeVin = (value: string) => value.trim().toUpperCase() || null;
+
+const plateHomoglyphMapping = [
+  ['A', 'А'],
+  ['B', 'В'],
+  ['C', 'С'],
+  ['E', 'Е'],
+  ['H', 'Н'],
+  ['K', 'К'],
+  ['M', 'М'],
+  ['O', 'О'],
+  ['P', 'Р'],
+  ['T', 'Т'],
+  ['X', 'Х'],
+  ['Y', 'У'],
+] as const;
 
 const calculationPermits = ({
   dailyRateMinor,
@@ -136,6 +153,7 @@ describe('доменная схема аренды', () => {
       'manufacturedYear',
       'bodyType',
       'depositMinor',
+      'rangePriceMinor',
       'includedMileageKm',
       'overageMileagePriceMinor',
       'missingFuelPriceMinor',
@@ -207,6 +225,7 @@ describe('доменная схема аренды', () => {
     expect(rentalModel).toMatch(/totalPriceMinor\s+BigInt/);
     expect(rentalModel).toMatch(/snapshotVersion\s+Int/);
     expect(vehicleModel).toMatch(/valueMinor\s+BigInt\?/);
+    expect(vehicleModel).toMatch(/rangePriceMinor\s+BigInt\?/);
     expect(vehicleModel).toMatch(/depositMinor\s+BigInt\?/);
     expect(schema).toMatch(/lessorBirthDate\s+DateTime\?\s+@db\.Date/);
   });
@@ -219,7 +238,11 @@ describe('доменная схема аренды', () => {
     expect(vehicleColumnsMigration).toMatch(
       /CREATE FUNCTION "public"\."normalize_vehicle_registration_number"/,
     );
+    expect(vehicleColumnsMigration).toContain('ADD COLUMN "rangePriceMinor" BIGINT');
     expect(vehicleColumnsMigration).toMatch(/CREATE FUNCTION "public"\."normalize_vehicle_vin"/);
+    expect(vehicleColumnsMigration).toContain(
+      "translate(upper(value), 'ABCEHKMOPTXY', 'АВСЕНКМОРТХУ')",
+    );
     expect(vehicleColumnsMigration).toMatch(/CREATE TRIGGER "Vehicle_normalize_legal_identifiers"/);
     expect(vehicleColumnsMigration).toMatch(
       /BEFORE INSERT OR UPDATE OF "registrationNumber", "vin"/,
@@ -239,6 +262,22 @@ describe('доменная схема аренды', () => {
     expect(vehicleBackfillMigration).toContain('GROUP BY "companyId", "vinNormalized"');
     expect(vehicleColumnsMigration).toContain("SELECT NULLIF(upper(btrim(value)), '');");
     expect(vehicleBackfillMigration).not.toMatch(/^\s*(DELETE|TRUNCATE)\b/im);
+  });
+
+  it('uses exactly the same Latin-to-Cyrillic plate mapping in TypeScript and SQL', () => {
+    expect(Object.entries(registrationNumberHomoglyphs)).toEqual(plateHomoglyphMapping);
+
+    const vehicleColumnsMigration = readFileSync(vehicleColumnsMigrationPath, 'utf8');
+    expect(vehicleColumnsMigration).toContain(
+      "translate(upper(value), 'ABCEHKMOPTXY', 'АВСЕНКМОРТХУ')",
+    );
+    expect(vehicleColumnsMigration).toContain('"normalize_vehicle_registration_number"');
+    expect(readFileSync(vehicleBackfillMigrationPath, 'utf8')).toContain(
+      '"normalize_vehicle_registration_number"("registrationNumber")',
+    );
+    expect(readFileSync(concurrentIndexMigrationPaths[1], 'utf8')).toContain(
+      '"registrationNumberNormalized"',
+    );
   });
 
   it('enforces rental lifecycle, version, document-category, and calculation invariants in SQL', () => {

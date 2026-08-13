@@ -17,6 +17,7 @@ ADD COLUMN "bodyType" TEXT,
 ADD COLUMN "odometerKm" DECIMAL(12,1),
 ADD COLUMN "valueMinor" BIGINT,
 ADD COLUMN "depositMinor" BIGINT,
+ADD COLUMN "rangePriceMinor" BIGINT,
 ADD COLUMN "includedMileageKm" INTEGER,
 ADD COLUMN "overageMileagePriceMinor" BIGINT,
 ADD COLUMN "missingFuelPriceMinor" BIGINT,
@@ -37,7 +38,15 @@ ADD COLUMN "archivedByUserId" TEXT;
 
 CREATE FUNCTION "public"."normalize_vehicle_registration_number"(value TEXT)
 RETURNS TEXT LANGUAGE sql IMMUTABLE STRICT AS $$
-  SELECT NULLIF(regexp_replace(upper(value), '[^0-9A-ZА-ЯЁ]', '', 'g'), '');
+  SELECT NULLIF(
+    regexp_replace(
+      translate(upper(value), 'ABCEHKMOPTXY', 'АВСЕНКМОРТХУ'),
+      '[^0-9А-ЯЁ]',
+      '',
+      'g'
+    ),
+    ''
+  );
 $$;
 
 CREATE FUNCTION "public"."normalize_vehicle_vin"(value TEXT)

@@ -170,6 +170,7 @@ function vehicleData(input: VehicleInput): Prisma.VehicleUncheckedCreateInput {
     odometerKm: input.odometerKm ?? null,
     valueMinor: input.valueMinor ?? null,
     depositMinor: input.depositMinor ?? null,
+    rangePriceMinor: input.rangePriceMinor ?? null,
     includedMileageKm: input.includedMileageKm ?? null,
     overageMileagePriceMinor: input.overageMileagePriceMinor ?? null,
     missingFuelPriceMinor: input.missingFuelPriceMinor ?? null,

@@ -511,6 +511,7 @@ model Vehicle {
   fuelType                      FuelType
   seats                         Int
   dailyPriceMinor               Int
+  rangePriceMinor               BigInt?
   currency                      String               @db.Char(3)
   odometerKm                    Decimal?             @db.Decimal(12, 1)
   valueMinor                    BigInt?

@@ -19,6 +19,7 @@ const vehicleManagementSelect = {
   odometerKm: true,
   valueMinor: true,
   dailyPriceMinor: true,
+  rangePriceMinor: true,
   depositMinor: true,
   city: true,
   isRentalReady: true,
@@ -37,6 +38,7 @@ type RawVehicleManagement = {
   odometerKm: { toString(): string } | null;
   valueMinor: bigint | null;
   dailyPriceMinor: number;
+  rangePriceMinor: bigint | null;
   depositMinor: bigint | null;
   city: string;
   isRentalReady: boolean;
@@ -55,6 +57,7 @@ export interface ManagedVehicleDto {
   odometerKm: number | null;
   valueMinor: string | null;
   dailyPriceMinor: number;
+  rangePriceMinor: string | null;
   depositMinor: string | null;
   city: string;
   isRentalReady: boolean;
@@ -68,6 +71,7 @@ function mapVehicle(vehicle: RawVehicleManagement): ManagedVehicleDto {
     ...vehicle,
     odometerKm: vehicle.odometerKm === null ? null : Number(vehicle.odometerKm.toString()),
     valueMinor: vehicle.valueMinor?.toString() ?? null,
+    rangePriceMinor: vehicle.rangePriceMinor?.toString() ?? null,
     depositMinor: vehicle.depositMinor?.toString() ?? null,
     archivedAt: vehicle.archivedAt?.toISOString() ?? null,
     updatedAt: vehicle.updatedAt.toISOString(),

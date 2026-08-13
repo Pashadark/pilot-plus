@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const MAX_ENTITY_ID_LENGTH = 128;
 const LICENSE_LETTERS = 'АВЕКМНОРСТУХ';
-const HOMOGLYPHS: Readonly<Record<string, string>> = {
+export const registrationNumberHomoglyphs: Readonly<Record<string, string>> = {
   A: 'А',
   B: 'В',
   C: 'С',
@@ -75,9 +75,10 @@ export function decimalRublesToMinor(value: string): bigint {
 
 export function normalizeRegistrationNumber(value: string): string {
   const compact = value.toUpperCase().replace(/[\s-]/g, '');
-  const normalized = Array.from(compact, (character) => HOMOGLYPHS[character] ?? character).join(
-    '',
-  );
+  const normalized = Array.from(
+    compact,
+    (character) => registrationNumberHomoglyphs[character] ?? character,
+  ).join('');
   if (!registrationNumberPattern.test(normalized)) {
     throw new Error('Укажите формат государственного номера А123АА77.');
   }
