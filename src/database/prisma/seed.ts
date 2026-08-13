@@ -7,6 +7,7 @@ import { seedPilotConnectDevices } from './device-seed';
 import { seedVehicleEventTimeline } from './event-timeline-seed';
 import { parseFleetSource, type FleetImportRow } from './fleet-import';
 import { parseVehicleImageManifest, type VehicleImageManifestRow } from './vehicle-images';
+import { seedApprovedRentalFleet } from './rental-fleet-seed';
 import { hashPassword } from '@/services/auth/password';
 import { blindIndex, encryptField } from '@/services/security/field-encryption';
 import { normalizeRussianPhone } from '@/shared/utils/phone';
@@ -599,6 +600,8 @@ async function main() {
     console.info(
       `Импортировано автомобилей: ${fleet.vehicles}; фотографий: ${fleet.images}. Компания: ${fleet.companyId}.`,
     );
+    const rentalFleet = await seedApprovedRentalFleet(prisma, fleet.companyId);
+    console.info(`Подготовлено автомобилей аренды: ${rentalFleet.vehicles}.`);
 
     const demoTeam = await seedDemoTeam(prisma, fleet.companyId);
     console.info(`Демо-команда: ${demoTeam.users} профиля, ${demoTeam.memberships} членства.`);
