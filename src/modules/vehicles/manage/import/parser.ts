@@ -53,7 +53,16 @@ export function parseExampleFleetWorkbook(workbook: FleetImportWorkbook): FleetI
   const sharedStrings = files.has('xl/sharedStrings.xml')
     ? readSharedStrings(requiredText(files, 'xl/sharedStrings.xml'))
     : [];
-  return normalizeFleetImportRows(readSheet(requiredText(files, sheetPath), sharedStrings));
+  const parsed = normalizeFleetImportRows(readSheet(requiredText(files, sheetPath), sharedStrings));
+  const approved = new Set(['А429АУ97:2020', 'Е435АН997:2019', 'М283АМ997:2019', 'А156АХ997:2020']);
+  if (
+    parsed.errors.length > 0 ||
+    parsed.rows.length !== 4 ||
+    parsed.rows.some((row) => !approved.has(`${row.registrationNumberNormalized}:${row.year}`))
+  ) {
+    throw new Error('Файл должен содержать ровно утверждённые четыре автомобиля примера.');
+  }
+  return parsed;
 }
 
 function requiredText(files: ReadonlyMap<string, Uint8Array>, name: string): string {
@@ -78,7 +87,11 @@ function readZip(bytes: Uint8Array): Map<string, Uint8Array> {
   const entries = view.getUint16(end + 10, true);
   if (entries > 128) throw new Error('Книга Excel содержит слишком много файлов.');
   let cursor = view.getUint32(end + 16, true);
+  const centralSize = view.getUint32(end + 12, true);
+  if (cursor + centralSize > end) throw new Error('Структура .xlsx повреждена.');
   const files = new Map<string, Uint8Array>();
+  let totalCompressed = 0;
+  let totalUncompressed = 0;
   for (let index = 0; index < entries; index += 1) {
     if (view.getUint32(cursor, true) !== 0x02014b50) throw new Error('Структура .xlsx повреждена.');
     const method = view.getUint16(cursor + 10, true);
@@ -88,6 +101,15 @@ function readZip(bytes: Uint8Array): Map<string, Uint8Array> {
     const extraLength = view.getUint16(cursor + 30, true);
     const commentLength = view.getUint16(cursor + 32, true);
     const localOffset = view.getUint32(cursor + 42, true);
+    totalCompressed += compressedSize;
+    totalUncompressed += uncompressedSize;
+    if (
+      totalCompressed > MAX_WORKBOOK_BYTES ||
+      totalUncompressed > MAX_WORKBOOK_BYTES ||
+      uncompressedSize > MAX_WORKBOOK_BYTES ||
+      (compressedSize > 0 && uncompressedSize / compressedSize > 100)
+    )
+      throw new Error('Книга Excel превышает безопасный лимит распаковки.');
     const name = decoder.decode(bytes.slice(cursor + 46, cursor + 46 + nameLength));
     if (!name || name.includes('..') || name.startsWith('/'))
       throw new Error('Недопустимый путь в .xlsx.');

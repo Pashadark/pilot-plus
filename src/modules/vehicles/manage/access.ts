@@ -9,6 +9,7 @@ export interface VehicleManagementAccess {
   user: SafeUser;
   scope: 'SYSTEM' | 'COMPANY';
   companyIds: readonly string[];
+  archiveCompanyIds: readonly string[];
 }
 
 export class VehicleManagementAccessDeniedError extends Error {
@@ -34,7 +35,7 @@ export async function getVehicleManagementAccess(): Promise<VehicleManagementAcc
   if (!user) return null;
 
   if (user.role === 'SUPER_ADMIN') {
-    return { user, scope: 'SYSTEM', companyIds: [] };
+    return { user, scope: 'SYSTEM', companyIds: [], archiveCompanyIds: [] };
   }
 
   const memberships = await prisma.companyMember.findMany({
@@ -47,7 +48,21 @@ export async function getVehicleManagementAccess(): Promise<VehicleManagementAcc
     .map(({ companyId }) => companyId);
   if (companyIds.length === 0) return null;
 
-  return { user, scope: 'COMPANY', companyIds };
+  return {
+    user,
+    scope: 'COMPANY',
+    companyIds,
+    archiveCompanyIds: memberships
+      .filter(({ role }) => role === 'COMPANY_ADMIN')
+      .map(({ companyId }) => companyId),
+  };
+}
+
+export function canArchiveVehicleCompany(
+  access: VehicleManagementAccess,
+  companyId: string,
+): boolean {
+  return access.scope === 'SYSTEM' || access.archiveCompanyIds.includes(companyId);
 }
 
 export async function requireVehicleManagementAccess(

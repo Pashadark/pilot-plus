@@ -88,6 +88,8 @@ describe('fleet import preview', () => {
       { companyId: 'company-1', userId: 'user-1', expiresAt: 2_000, rows, archiveIds: [] },
       'test-secret',
     );
+    expect(token).not.toContain('company-1');
+    expect(token).not.toContain('user-1');
     expect(verifyFleetImportPreview(token, 'test-secret', 1_500)).toMatchObject({
       companyId: 'company-1',
     });
@@ -95,5 +97,25 @@ describe('fleet import preview', () => {
       'недействителен',
     );
     expect(() => verifyFleetImportPreview(token, 'test-secret', 2_000)).toThrow('истёк');
+  });
+
+  it('does not allow multiple import rows to mutate the same existing vehicle', () => {
+    const result = createFleetImportPreview(
+      [
+        { ...rows[0]!, vinNormalized: 'VIN-1' },
+        { ...rows[1]!, vinNormalized: 'VIN-1' },
+      ],
+      [
+        {
+          id: 'one',
+          registrationNumberNormalized: 'А429АУ97',
+          vinNormalized: 'VIN-1',
+          make: 'Kia',
+          modelName: "Cee'd",
+          manufacturedYear: 2020,
+        },
+      ],
+    );
+    expect(result.rows[1]).toMatchObject({ operation: 'ERROR', code: 'DUPLICATE_EXISTING_MATCH' });
   });
 });

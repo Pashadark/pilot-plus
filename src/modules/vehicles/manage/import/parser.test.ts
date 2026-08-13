@@ -99,9 +99,9 @@ describe('example fleet import parser', () => {
   });
 
   it('reads the canonical Автомобили sheet and rejects macro and external-link containers', () => {
-    expect(
-      parseExampleFleetWorkbook({ filename: 'fleet.xlsx', bytes: canonicalWorkbook() }).rows,
-    ).toMatchObject([{ make: 'Kia', registrationNumberNormalized: 'А429АУ97' }]);
+    expect(() =>
+      parseExampleFleetWorkbook({ filename: 'fleet.xlsx', bytes: canonicalWorkbook() }),
+    ).toThrow('утверждённые четыре');
     expect(() =>
       parseExampleFleetWorkbook({
         filename: 'fleet.xlsx',
@@ -114,5 +114,11 @@ describe('example fleet import parser', () => {
         bytes: canonicalWorkbook({ 'xl/externalLinks/externalLink1.xml': '<externalLink />' }),
       }),
     ).toThrow(/внешн.*ссылк/i);
+  });
+
+  it('rejects an example workbook that is not exactly the approved four-car fleet', () => {
+    expect(() =>
+      parseExampleFleetWorkbook({ filename: 'fleet.xlsx', bytes: canonicalWorkbook() }),
+    ).toThrow('утверждённые четыре');
   });
 });

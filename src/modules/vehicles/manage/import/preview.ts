@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 
 import type { FleetImportOperation, FleetImportRow } from './types';
 
@@ -44,6 +44,9 @@ export function createFleetImportPreview(
     }
     const vehicle = plate ?? vin;
     if (!vehicle) return { row, operation: 'ADD' };
+    if (matched.has(vehicle.id)) {
+      return { row, operation: 'ERROR', code: 'DUPLICATE_EXISTING_MATCH' };
+    }
     matched.add(vehicle.id);
     const unchanged =
       vehicle.registrationNumberNormalized === row.registrationNumberNormalized &&
@@ -61,14 +64,16 @@ export function createFleetImportPreview(
   };
 }
 
-function signature(encoded: string, secret: string): string {
-  return createHmac('sha256', secret).update(encoded).digest('base64url');
+function key(secret: string) {
+  return createHash('sha256').update(secret).digest();
 }
 
 export function signFleetImportPreview(payload: SignedFleetImportPreview, secret: string): string {
   if (!secret) throw new Error('Не настроен секрет предпросмотра импорта.');
-  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  return `${encoded}.${signature(encoded, secret)}`;
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', key(secret), iv);
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(payload), 'utf8'), cipher.final()]);
+  return `${iv.toString('base64url')}.${encrypted.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}`;
 }
 
 export function verifyFleetImportPreview(
@@ -76,24 +81,23 @@ export function verifyFleetImportPreview(
   secret: string,
   now = Date.now(),
 ): SignedFleetImportPreview {
-  const [encoded, received, ...extra] = token.split('.');
-  if (!encoded || !received || extra.length > 0 || !secret) {
-    throw new Error('Предпросмотр импорта недействителен.');
-  }
-  const expected = signature(encoded, secret);
-  const receivedBytes = Buffer.from(received);
-  const expectedBytes = Buffer.from(expected);
-  if (
-    receivedBytes.length !== expectedBytes.length ||
-    !timingSafeEqual(receivedBytes, expectedBytes)
-  ) {
+  const [ivEncoded, encrypted, tagEncoded, ...extra] = token.split('.');
+  if (!ivEncoded || !encrypted || !tagEncoded || extra.length > 0 || !secret) {
     throw new Error('Предпросмотр импорта недействителен.');
   }
   let payload: SignedFleetImportPreview;
   try {
-    payload = JSON.parse(
-      Buffer.from(encoded, 'base64url').toString('utf8'),
-    ) as SignedFleetImportPreview;
+    const decipher = createDecipheriv(
+      'aes-256-gcm',
+      key(secret),
+      Buffer.from(ivEncoded, 'base64url'),
+    );
+    decipher.setAuthTag(Buffer.from(tagEncoded, 'base64url'));
+    const clear = Buffer.concat([
+      decipher.update(Buffer.from(encrypted, 'base64url')),
+      decipher.final(),
+    ]);
+    payload = JSON.parse(clear.toString('utf8')) as SignedFleetImportPreview;
   } catch {
     throw new Error('Предпросмотр импорта недействителен.');
   }

@@ -4,7 +4,11 @@ import { Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 import { revalidatePath } from 'next/cache';
 
-import { requireVehicleManagementAccess, VehicleManagementAccessDeniedError } from '../access';
+import {
+  canArchiveVehicleCompany,
+  requireVehicleManagementAccess,
+  VehicleManagementAccessDeniedError,
+} from '../access';
 
 import { applyFleetImport } from './apply';
 import { parseExampleFleetWorkbook } from './parser';
@@ -148,6 +152,7 @@ export async function applyFleetImportAction(
       actor: { id: access.user.id, email: access.user.email },
       rows: payload.rows,
       archiveIds,
+      allowArchive: canArchiveVehicleCompany(access, payload.companyId),
       transaction: (callback) =>
         prisma.$transaction(
           (transaction) => callback(transaction as unknown as Parameters<typeof callback>[0]),
@@ -158,6 +163,18 @@ export async function applyFleetImportAction(
     revalidatePath('/vehicles');
     return { ...result, message: 'Импорт автопарка применён.' };
   } catch (error) {
+    if (error instanceof Error && error.message === 'ACTIVE_RENTAL')
+      return {
+        ok: false,
+        code: 'ACTIVE_RENTAL',
+        message: 'Нельзя архивировать автомобиль с активной арендой.',
+      };
+    if (error instanceof Error && error.message === 'ARCHIVE_FORBIDDEN')
+      return {
+        ok: false,
+        code: 'FORBIDDEN',
+        message: 'Диспетчер не может архивировать автомобили.',
+      };
     return safeFailure(error);
   }
 }

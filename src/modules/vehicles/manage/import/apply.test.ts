@@ -61,6 +61,7 @@ describe('fleet import apply', () => {
       actor: { id: 'user-1', email: 'admin@pilot.test' },
       rows,
       archiveIds: ['old'],
+      allowArchive: true,
     });
     const second = await applyFleetImport({
       transaction,
@@ -77,5 +78,39 @@ describe('fleet import apply', () => {
     );
     expect(JSON.stringify(database.auditLog.create.mock.calls)).not.toContain('А429');
     expect(JSON.stringify(database.auditLog.create.mock.calls)).not.toContain('VIN');
+  });
+
+  it('prechecks archive blockers before creating or updating anything', async () => {
+    const database = {
+      vehicle: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'old',
+            registrationNumberNormalized: 'М283АМ997',
+            vinNormalized: null,
+            make: 'Mercedes-Benz',
+            modelName: 'E 220 d 4MATIC',
+            manufacturedYear: 2019,
+          },
+        ]),
+        create: vi.fn(),
+        update: vi.fn(),
+        updateMany: vi.fn(),
+      },
+      rental: { findFirst: vi.fn().mockResolvedValue({ id: 'active' }) },
+      auditLog: { create: vi.fn() },
+    };
+    await expect(
+      applyFleetImport({
+        transaction: async (callback) => callback(database),
+        companyId: 'company-1',
+        actor: { id: 'user-1', email: 'admin@pilot.test' },
+        rows,
+        archiveIds: ['old'],
+        allowArchive: true,
+      }),
+    ).rejects.toThrow('ACTIVE_RENTAL');
+    expect(database.vehicle.create).not.toHaveBeenCalled();
+    expect(database.vehicle.update).not.toHaveBeenCalled();
   });
 });

@@ -22,6 +22,7 @@ export interface ApplyFleetImportInput {
   actor: { id: string; email: string };
   rows: readonly FleetImportRow[];
   archiveIds: readonly string[];
+  allowArchive?: boolean;
 }
 
 function safeVehicleData(companyId: string, row: FleetImportRow) {
@@ -107,6 +108,22 @@ export async function applyFleetImport(
     let updated = 0;
     let unchanged = 0;
     let archived = 0;
+    if (input.archiveIds.length > 0 && !input.allowArchive) {
+      throw new Error('ARCHIVE_FORBIDDEN');
+    }
+    for (const id of input.archiveIds) {
+      const blocked = database.rental
+        ? await database.rental.findFirst({
+            where: {
+              companyId: input.companyId,
+              vehicleId: id,
+              status: { in: ['CONFIRMED', 'ACTIVE'] },
+            },
+            select: { id: true },
+          })
+        : null;
+      if (blocked) throw new Error('ACTIVE_RENTAL');
+    }
     for (const item of preview.rows) {
       if (item.operation === 'UNCHANGED') {
         unchanged += 1;
@@ -120,30 +137,22 @@ export async function applyFleetImport(
       } else if (item.operation === 'UPDATE' && item.vehicleId) {
         const vehicle = await database.vehicle.update({
           where: { id: item.vehicleId },
-          data: { ...data, sourceKey: undefined },
+          data: {
+            model: data.model,
+            registrationNumber: data.registrationNumber,
+            registrationNumberNormalized: data.registrationNumberNormalized,
+            vin: data.vin,
+            vinNormalized: data.vinNormalized,
+            make: data.make,
+            modelName: data.modelName,
+            manufacturedYear: data.manufacturedYear,
+          },
         });
         await audit(database, input, vehicle.id, 'UPDATE');
         updated += 1;
       }
     }
     for (const id of input.archiveIds) {
-      const blocked = database.rental
-        ? await database.rental.findFirst({
-            where: {
-              companyId: input.companyId,
-              vehicleId: id,
-              status: { in: ['CONFIRMED', 'ACTIVE'] },
-            },
-            select: { id: true },
-          })
-        : null;
-      if (blocked) {
-        return {
-          ok: false,
-          code: 'ACTIVE_RENTAL',
-          message: 'Нельзя архивировать автомобиль с активной арендой.',
-        };
-      }
       const result = await database.vehicle.updateMany({
         where: { id, companyId: input.companyId, archivedAt: null },
         data: { archivedAt: new Date(), archivedByUserId: input.actor.id },
