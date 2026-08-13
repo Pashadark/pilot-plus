@@ -6,3 +6,9 @@
 - The normal seed entrypoint invokes the adapter but this task did not run `db:seed`, migrations, or any shared database command.
 - RED/GREEN test invokes the adapter twice, requires four active marked records with unique normalized plates, and verifies a manual vehicle remains unarchived.
 - Verification: focused Vitest (1/1), `npm run typecheck`, Prettier, and `git diff --check` pass.
+
+## P1 follow-up
+
+- All four `example-fleet:` fixtures now receive distinct `DEMO…` 17-character VINs, paired `DEMO-STS`/`DEMO-PTS` identifiers, OSAGO and CASCO `DEMO ONLY Insurance` policies, and the stable 2026-01-01 through 2030-12-31 coverage period. They retain positive tariffs/deposits and rental readiness.
+- The demo company is created with clearly synthetic `DEMO ONLY` legal/contact values. Existing fixture-company updates now change only `isDemo`; contract defaults are filled only into absent fields after a fresh `isDemo` check, preserving configured values and never writing an encrypted passport.
+- RED/GREEN covered the vehicle legal field set, all contract-default fields, configured-value preservation, and non-demo no-op behavior. No shared database, migration, or `db:seed` command was run.

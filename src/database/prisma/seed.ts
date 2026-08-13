@@ -7,7 +7,7 @@ import { seedPilotConnectDevices } from './device-seed';
 import { seedVehicleEventTimeline } from './event-timeline-seed';
 import { parseFleetSource, type FleetImportRow } from './fleet-import';
 import { parseVehicleImageManifest, type VehicleImageManifestRow } from './vehicle-images';
-import { seedApprovedRentalFleet } from './rental-fleet-seed';
+import { seedApprovedRentalFleet, seedDemoCompanyContractDefaults } from './rental-fleet-seed';
 import { hashPassword } from '@/services/auth/password';
 import { blindIndex, encryptField } from '@/services/security/field-encryption';
 import { normalizeRussianPhone } from '@/shared/utils/phone';
@@ -48,7 +48,7 @@ interface FleetSeedDatabase {
     upsert(args: {
       where: { slug: string };
       create: DemoCompanyData;
-      update: Omit<DemoCompanyData, 'slug'>;
+      update: Partial<Omit<DemoCompanyData, 'slug'>>;
     }): Promise<{ id: string }>;
   };
   companyMember: {
@@ -80,16 +80,16 @@ interface FleetSeedDatabase {
 }
 
 export const demoCompanyData = {
-  name: 'ООО «Север Транс Мониторинг»',
+  name: 'DEMO ONLY ООО «Пилот Рент»',
   slug: 'pilot-demo',
-  inn: '2465357184',
-  kpp: '246501001',
-  ogrn: '1242400017356',
-  directorName: 'Александр Сергеевич Лебедев',
-  legalAddress: '660049, Красноярский край, г. Красноярск, ул. Карла Маркса, д. 93, офис 412',
-  actualAddress: '660020, Красноярский край, г. Красноярск, ул. Шахтёров, д. 33, стр. 2',
-  phone: '+7 (391) 205-17-40',
-  email: 'office@sever-trans.demo',
+  inn: '0000000000',
+  kpp: '000000000',
+  ogrn: '0000000000000',
+  directorName: 'DEMO ONLY Администратор',
+  legalAddress: 'DEMO ONLY, г. Москва, ул. Демо, д. 1',
+  actualAddress: 'DEMO ONLY, г. Москва, ул. Демо, д. 1',
+  phone: '+7 (000) 000-00-00',
+  email: 'office@pilot-demo.example.test',
   isDemo: true,
 } as const;
 
@@ -447,18 +447,7 @@ export async function seedFleet(
   const company = await database.company.upsert({
     where: { slug: demoCompanyData.slug },
     create: demoCompanyData,
-    update: {
-      name: demoCompanyData.name,
-      inn: demoCompanyData.inn,
-      kpp: demoCompanyData.kpp,
-      ogrn: demoCompanyData.ogrn,
-      directorName: demoCompanyData.directorName,
-      legalAddress: demoCompanyData.legalAddress,
-      actualAddress: demoCompanyData.actualAddress,
-      phone: demoCompanyData.phone,
-      email: demoCompanyData.email,
-      isDemo: demoCompanyData.isDemo,
-    },
+    update: { isDemo: demoCompanyData.isDemo },
   });
 
   await database.companyMember.upsert({
@@ -601,6 +590,7 @@ async function main() {
       `Импортировано автомобилей: ${fleet.vehicles}; фотографий: ${fleet.images}. Компания: ${fleet.companyId}.`,
     );
     const rentalFleet = await seedApprovedRentalFleet(prisma, fleet.companyId);
+    await seedDemoCompanyContractDefaults(prisma, fleet.companyId);
     console.info(`Подготовлено автомобилей аренды: ${rentalFleet.vehicles}.`);
 
     const demoTeam = await seedDemoTeam(prisma, fleet.companyId);
