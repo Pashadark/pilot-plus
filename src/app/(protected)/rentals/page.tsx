@@ -1,8 +1,12 @@
 import { AppShell } from '@/shared/components/app-shell/AppShell';
 import { RentalListPage } from '@/modules/rentals/components/RentalListPage';
-import { listRentalsForCurrentUser } from '@/modules/rentals/server/queries';
-export default async function RentalsPage() {
-  const records = await listRentalsForCurrentUser();
+import { listFilteredRentalsForCurrentUser } from '@/modules/rentals/server/queries';
+export default async function RentalsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; query?: string; from?: string; to?: string }>;
+}) {
+  const records = await listFilteredRentalsForCurrentUser(await searchParams);
   return (
     <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Аренда' }]}>
       <RentalListPage
