@@ -85,6 +85,29 @@ Prettier was run only on TypeScript tests: the repository does not configure Pri
 - The current diff retains the deliberate two-wave rolling layout: `20260813090000` is transactional structural/backfill/guard DDL; `20260813090100` contains the non-transactional `CREATE INDEX CONCURRENTLY` wave and must be run by a compatible deployment runner.
 - Docker-based disposable-PostgreSQL validation remains unavailable: the prior Docker API approval attempt was interrupted. No Docker command was retried, no shared database was touched, and migration execution remains an integration gap rather than a claimed verification result.
 
+## Prisma-deploy rolling split fix wave
+
+### RED → GREEN evidence
+
+- RED: the focused rental schema contract was extended before the migration rewrite. It failed in four expected places because the required structural files and one-statement concurrent migrations did not exist.
+- GREEN: the rewritten sequence passes the focused rental and legacy schema suites. The test now verifies that every populated-table concurrent-index migration has exactly one `CREATE INDEX CONCURRENTLY` statement and no `BEGIN`, `COMMIT`, `DO`, `SET`, `ALTER`, or table creation; it also checks that a later transactional foreign-key wave follows them.
+- The rental immutability contract was extended before the guard change. It now asserts `OLD.confirmedAt IS NOT NULL` and the frozen minor-unit calculation fields, so a confirmed rental remains immutable even after its status becomes `CANCELLED`.
+
+### Exact normal deploy sequence
+
+1. `20260813090000_add_vehicle_legal_columns`: short transactional Vehicle metadata ALTER plus normalizer functions/trigger. `SET LOCAL lock_timeout = '5s'` and `SET LOCAL statement_timeout = '60s'` bound this short migration only.
+2. `20260813090001_backfill_vehicle_legal_identifiers`: committed separately, performs the deterministic identifier backfill and duplicate preflight with a ten-minute statement timeout. It no longer holds the earlier Vehicle `ALTER TABLE` ACCESS EXCLUSIVE lock.
+3. `20260813090002` through `20260813090007`: each migration contains exactly one concurrent index statement for a populated legacy table. They are applied in order by the canonical `prisma migrate deploy` flow and are independently resumable through that same flow.
+4. `20260813090008_add_rental_domain_structures`: transactional company legal fields, rental enums/tables, constraints, immutable-history functions/triggers, and ordinary indexes only on newly created empty tables.
+5. `20260813090009_add_rental_domain_foreign_keys`: short transactional foreign-key wave after all required legacy supporting keys exist, with five-second lock and sixty-second statement timeouts. A failure rolls back its whole migration and is retried normally by `prisma migrate deploy`.
+
+The previous multi-statement `20260813090100` concurrent wave and monolithic `20260813090000` wave were removed before deployment; they were never applied to any database. There is no longer a custom non-transactional runner, migration-history reconciliation procedure, or invalid-index repair branch claimed by this task.
+
+### Final constraints and concern
+
+- The immutable rental trigger permits only documented lifecycle transitions. Once `confirmedAt` is present, it freezes tenant/client/vehicle, exact interval, contract/snapshot/template identity, currency, every calculation and tariff minor-unit value, plus any override reason; this persists for a subsequently cancelled rental. The lifecycle CHECK keeps all timestamp order and cancellation consistency rules.
+- A disposable PostgreSQL/PostGIS execution of the full migration sequence remains unverified because Docker approval was unavailable. No Docker command was retried, and no shared database, migration deployment, or seed was touched. The migration SQL remains an integration concern until it is exercised against a disposable database.
+
 ## Review hardening wave
 
 Review findings were addressed in a separate fix wave without applying the migration or running seed.

@@ -4,13 +4,29 @@ import { describe, expect, it } from 'vitest';
 
 const schema = readFileSync(new URL('./schema.prisma', import.meta.url), 'utf8');
 const migrationPath = new URL(
-  './migrations/20260813090000_add_rentals_and_vehicle_legal_fields/migration.sql',
+  './migrations/20260813090008_add_rental_domain_structures/migration.sql',
   import.meta.url,
 );
-const indexMigrationPath = new URL(
-  './migrations/20260813090100_add_rentals_and_vehicle_legal_indexes/migration.sql',
+const vehicleColumnsMigrationPath = new URL(
+  './migrations/20260813090000_add_vehicle_legal_columns/migration.sql',
   import.meta.url,
 );
+const vehicleBackfillMigrationPath = new URL(
+  './migrations/20260813090001_backfill_vehicle_legal_identifiers/migration.sql',
+  import.meta.url,
+);
+const foreignKeysMigrationPath = new URL(
+  './migrations/20260813090009_add_rental_domain_foreign_keys/migration.sql',
+  import.meta.url,
+);
+const concurrentIndexMigrationPaths = [
+  './migrations/20260813090002_add_vehicle_company_id_key_concurrently/migration.sql',
+  './migrations/20260813090003_add_vehicle_registration_number_key_concurrently/migration.sql',
+  './migrations/20260813090004_add_vehicle_vin_key_concurrently/migration.sql',
+  './migrations/20260813090005_add_vehicle_archived_at_index_concurrently/migration.sql',
+  './migrations/20260813090006_add_client_document_company_client_id_key_concurrently/migration.sql',
+  './migrations/20260813090007_add_client_document_version_document_id_key_concurrently/migration.sql',
+].map((path) => new URL(path, import.meta.url));
 
 const normalizeVin = (value: string) => value.trim().toUpperCase() || null;
 
@@ -175,42 +191,32 @@ describe('доменная схема аренды', () => {
 
   it('stages populated legacy vehicle data before tenant uniqueness and keeps old writers normalized', () => {
     const migration = readFileSync(migrationPath, 'utf8');
-    const indexMigration = readFileSync(indexMigrationPath, 'utf8');
+    const vehicleColumnsMigration = readFileSync(vehicleColumnsMigrationPath, 'utf8');
+    const vehicleBackfillMigration = readFileSync(vehicleBackfillMigrationPath, 'utf8');
 
-    expect(migration).toMatch(/CREATE FUNCTION "public"\."normalize_vehicle_registration_number"/);
-    expect(migration).toMatch(/CREATE FUNCTION "public"\."normalize_vehicle_vin"/);
-    expect(migration).toMatch(/UPDATE "public"\."Vehicle"[\s\S]*"registrationNumberNormalized"/);
-    expect(migration).toMatch(/"vinNormalized" = "public"\."normalize_vehicle_vin"\("vin"\)/);
-    expect(migration).toMatch(/duplicate normalized registration numbers/);
-    expect(migration).toMatch(/duplicate VIN values/);
-    expect(migration).toMatch(/CREATE TRIGGER "Vehicle_normalize_legal_identifiers"/);
-    expect(migration).toMatch(/BEFORE INSERT OR UPDATE OF "registrationNumber", "vin"/);
-    expect(migration).toMatch(/SET LOCAL lock_timeout/);
-    expect(migration).toMatch(/SET LOCAL statement_timeout/);
-    expect(migration).toMatch(/^BEGIN;/m);
-    expect(migration).toMatch(/^COMMIT;/m);
-    expect(indexMigration).toMatch(
-      /CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "Vehicle_companyId_registrationNumberNormalized_key"/,
+    expect(vehicleColumnsMigration).toMatch(
+      /CREATE FUNCTION "public"\."normalize_vehicle_registration_number"/,
     );
-    expect(indexMigration).toMatch(
-      /CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "Vehicle_companyId_vinNormalized_key"/,
+    expect(vehicleColumnsMigration).toMatch(/CREATE FUNCTION "public"\."normalize_vehicle_vin"/);
+    expect(vehicleColumnsMigration).toMatch(/CREATE TRIGGER "Vehicle_normalize_legal_identifiers"/);
+    expect(vehicleColumnsMigration).toMatch(
+      /BEFORE INSERT OR UPDATE OF "registrationNumber", "vin"/,
     );
-    expect(indexMigration).not.toMatch(/^\s*(BEGIN|COMMIT)\s*;/m);
+    expect(vehicleColumnsMigration).toMatch(/SET LOCAL lock_timeout/);
+    expect(vehicleColumnsMigration).toMatch(/SET LOCAL statement_timeout/);
+    expect(vehicleColumnsMigration).not.toContain('CREATE TABLE "public"."Rental"');
+    expect(vehicleBackfillMigration).toMatch(
+      /UPDATE "public"\."Vehicle"[\s\S]*"registrationNumberNormalized"/,
+    );
+    expect(vehicleBackfillMigration).toMatch(
+      /"vinNormalized" = "public"\."normalize_vehicle_vin"\("vin"\)/,
+    );
+    expect(vehicleBackfillMigration).toMatch(/duplicate normalized registration numbers/);
+    expect(vehicleBackfillMigration).toMatch(/duplicate VIN values/);
 
-    const trigger = migration.indexOf('CREATE TRIGGER "Vehicle_normalize_legal_identifiers"');
-    const backfill = migration.indexOf('UPDATE "public"."Vehicle"');
-    const duplicatePreflight = migration.indexOf('duplicate normalized registration numbers');
-    const uniqueIndex = indexMigration.indexOf(
-      'CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "Vehicle_companyId_registrationNumberNormalized_key"',
-    );
-
-    expect(trigger).toBeGreaterThan(-1);
-    expect(backfill).toBeGreaterThan(trigger);
-    expect(duplicatePreflight).toBeGreaterThan(backfill);
-    expect(uniqueIndex).toBeGreaterThan(-1);
-    expect(migration).toContain('GROUP BY "companyId", "vinNormalized"');
-    expect(migration).toContain("SELECT NULLIF(upper(btrim(value)), '');");
-    expect(migration).not.toMatch(/^\s*(DELETE|TRUNCATE)\b/im);
+    expect(vehicleBackfillMigration).toContain('GROUP BY "companyId", "vinNormalized"');
+    expect(vehicleColumnsMigration).toContain("SELECT NULLIF(upper(btrim(value)), '');");
+    expect(vehicleBackfillMigration).not.toMatch(/^\s*(DELETE|TRUNCATE)\b/im);
   });
 
   it('enforces rental lifecycle, version, document-category, and calculation invariants in SQL', () => {
@@ -251,26 +257,31 @@ describe('доменная схема аренды', () => {
     expect(migration).toContain(
       "OLD.\"status\" = 'ACTIVE' AND NEW.\"status\" IN ('ACTIVE', 'COMPLETED', 'CANCELLED')",
     );
+    expect(migration).toContain('IF OLD."confirmedAt" IS NOT NULL AND (');
+    expect(migration).toContain('OR NEW."dailyRateMinor" IS DISTINCT FROM OLD."dailyRateMinor"');
+    expect(migration).toContain('OR NEW."totalPriceMinor" IS DISTINCT FROM OLD."totalPriceMinor"');
   });
 
-  it('makes the rolling concurrent-index wave recoverable and validates normalized VIN collision cases', () => {
-    const indexMigration = readFileSync(indexMigrationPath, 'utf8');
-
-    expect(existsSync(indexMigrationPath)).toBe(true);
-    expect(indexMigration).toContain(
-      'VIN123 / vin123 / leading-or-trailing spaces normalize identically',
+  it('uses one-statement Prisma-deploy-compatible concurrent migrations and a later FK wave', () => {
+    expect(concurrentIndexMigrationPaths).toHaveLength(6);
+    for (const path of concurrentIndexMigrationPaths) {
+      expect(existsSync(path)).toBe(true);
+      const sql = readFileSync(path, 'utf8')
+        .replace(/^--.*$/gm, '')
+        .trim();
+      expect(sql).toMatch(/^CREATE (UNIQUE )?INDEX CONCURRENTLY [\s\S]+;$/);
+      expect(sql.match(/CREATE (UNIQUE )?INDEX CONCURRENTLY/g)).toHaveLength(1);
+      expect(sql).not.toMatch(/\b(BEGIN|COMMIT|DO|SET|ALTER|CREATE TABLE)\b/);
+    }
+    expect(readFileSync(concurrentIndexMigrationPaths[2], 'utf8')).toContain(
+      '"Vehicle_companyId_vinNormalized_key"',
     );
-    expect(indexMigration).toContain('IF NOT EXISTS');
-    expect(indexMigration).toMatch(
-      /CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "ClientDocument_companyId_clientId_id_key"/,
+    expect(readFileSync(concurrentIndexMigrationPaths[4], 'utf8')).toContain(
+      '"ClientDocument_companyId_clientId_id_key"',
     );
-    expect(indexMigration).toMatch(
-      /CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "ClientDocumentVersion_documentId_id_key"/,
+    expect(readFileSync(foreignKeysMigrationPath, 'utf8')).toContain(
+      'Rental_companyId_clientId_fkey',
     );
-    expect(indexMigration).toMatch(
-      /CREATE INDEX CONCURRENTLY IF NOT EXISTS "Vehicle_companyId_archivedAt_idx"/,
-    );
-    expect(indexMigration).not.toContain('CREATE INDEX "Vehicle_companyId_archivedAt_idx"');
   });
 
   it('models the populated-row guards: VIN canonicalization and non-override calculation reject invalid legacy values', () => {

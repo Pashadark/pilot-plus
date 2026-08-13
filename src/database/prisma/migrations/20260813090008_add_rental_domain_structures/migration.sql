@@ -1,13 +1,5 @@
--- Transactional structural wave. It deliberately has no concurrent index builds: PostgreSQL
--- cannot run CREATE INDEX CONCURRENTLY in a transaction block. The following migration is a
--- separately deployed non-transactional index wave. A failed structural wave rolls back fully.
-BEGIN;
-SET LOCAL lock_timeout = '5s';
-SET LOCAL statement_timeout = '10min';
-
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
--- AlterTable
 ALTER TABLE "public"."Company"
 ADD COLUMN "legalName" TEXT,
 ADD COLUMN "entrepreneurName" TEXT,
@@ -23,107 +15,6 @@ ADD COLUMN "defaultPickupAddress" TEXT,
 ADD COLUMN "defaultReturnAddress" TEXT,
 ADD COLUMN "signatoryName" TEXT,
 ADD COLUMN "signatoryAuthority" TEXT;
-
--- AlterTable
-ALTER TABLE "public"."Vehicle"
-ADD COLUMN "registrationNumberNormalized" TEXT,
-ADD COLUMN "vinNormalized" TEXT,
-ADD COLUMN "make" TEXT,
-ADD COLUMN "modelName" TEXT,
-ADD COLUMN "generation" TEXT,
-ADD COLUMN "trim" TEXT,
-ADD COLUMN "manufacturedYear" INTEGER,
-ADD COLUMN "color" TEXT,
-ADD COLUMN "category" TEXT,
-ADD COLUMN "bodyType" TEXT,
-ADD COLUMN "odometerKm" DECIMAL(12,1),
-ADD COLUMN "valueMinor" BIGINT,
-ADD COLUMN "depositMinor" BIGINT,
-ADD COLUMN "includedMileageKm" INTEGER,
-ADD COLUMN "overageMileagePriceMinor" BIGINT,
-ADD COLUMN "missingFuelPriceMinor" BIGINT,
-ADD COLUMN "registrationCertificateNumber" TEXT,
-ADD COLUMN "vehiclePassportNumber" TEXT,
-ADD COLUMN "osagoInsurer" TEXT,
-ADD COLUMN "osagoPolicyNumber" TEXT,
-ADD COLUMN "osagoStartsAt" DATE,
-ADD COLUMN "osagoEndsAt" DATE,
-ADD COLUMN "cascoInsurer" TEXT,
-ADD COLUMN "cascoPolicyNumber" TEXT,
-ADD COLUMN "cascoStartsAt" DATE,
-ADD COLUMN "cascoEndsAt" DATE,
-ADD COLUMN "isRentalReady" BOOLEAN NOT NULL DEFAULT false,
-ADD COLUMN "rentalReadyAt" TIMESTAMPTZ(3),
-ADD COLUMN "archivedAt" TIMESTAMPTZ(3),
-ADD COLUMN "archivedByUserId" TEXT;
-
--- Compatibility invariant: legacy writers may still send raw identifiers. The same canonical
--- expressions are used by backfill, preflight and the unique indexes in the next wave.
-CREATE FUNCTION "public"."normalize_vehicle_registration_number"(value TEXT)
-RETURNS TEXT
-LANGUAGE sql
-IMMUTABLE
-STRICT
-AS $$
-  SELECT NULLIF(regexp_replace(upper(value), '[^0-9A-ZА-ЯЁ]', '', 'g'), '');
-$$;
-
-CREATE FUNCTION "public"."normalize_vehicle_vin"(value TEXT)
-RETURNS TEXT
-LANGUAGE sql
-IMMUTABLE
-STRICT
-AS $$
-  SELECT NULLIF(upper(btrim(value)), '');
-$$;
-
-CREATE FUNCTION "public"."set_vehicle_legal_identifiers_normalized"()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  NEW."registrationNumberNormalized" := "public"."normalize_vehicle_registration_number"(NEW."registrationNumber");
-  NEW."vinNormalized" := "public"."normalize_vehicle_vin"(NEW."vin");
-  RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER "Vehicle_normalize_legal_identifiers"
-BEFORE INSERT OR UPDATE OF "registrationNumber", "vin" ON "public"."Vehicle"
-FOR EACH ROW EXECUTE FUNCTION "public"."set_vehicle_legal_identifiers_normalized"();
-
--- Backfill is deterministic and does not invent a resolution for duplicate legacy records.
-UPDATE "public"."Vehicle"
-SET
-  "registrationNumberNormalized" = "public"."normalize_vehicle_registration_number"("registrationNumber"),
-  "vinNormalized" = "public"."normalize_vehicle_vin"("vin")
-WHERE
-  "registrationNumberNormalized" IS DISTINCT FROM "public"."normalize_vehicle_registration_number"("registrationNumber")
-  OR "vinNormalized" IS DISTINCT FROM "public"."normalize_vehicle_vin"("vin");
-
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM "public"."Vehicle"
-    WHERE "registrationNumberNormalized" IS NOT NULL
-    GROUP BY "companyId", "registrationNumberNormalized"
-    HAVING COUNT(*) > 1
-  ) THEN
-    RAISE EXCEPTION 'Cannot add vehicle plate uniqueness: duplicate normalized registration numbers exist. Resolve duplicates explicitly before retrying; this migration does not alter legacy records.';
-  END IF;
-
-  IF EXISTS (
-    SELECT 1
-    FROM "public"."Vehicle"
-    WHERE "vinNormalized" IS NOT NULL
-    GROUP BY "companyId", "vinNormalized"
-    HAVING COUNT(*) > 1
-  ) THEN
-    RAISE EXCEPTION 'Cannot add vehicle VIN uniqueness: duplicate VIN values exist. Resolve duplicates explicitly before retrying; this migration does not alter legacy records.';
-  END IF;
-END;
-$$;
 
 -- CreateEnum
 CREATE TYPE "public"."RentalStatus" AS ENUM ('DRAFT', 'CONFIRMED', 'ACTIVE', 'COMPLETED', 'CANCELLED');
@@ -216,11 +107,23 @@ CREATE TABLE "public"."RentalDocumentVersion" (
     CONSTRAINT "RentalDocumentVersion_clientDocumentId_clientDocumentVersionId_key" UNIQUE ("clientDocumentId", "clientDocumentVersionId")
 );
 
--- Indexes are deferred to 20260813090100_add_rentals_and_vehicle_legal_indexes so populated
--- legacy tables receive CONCURRENTLY builds outside this transactional wave.
-
--- Tenant-scoped foreign keys follow the concurrent index wave. This avoids taking long table
--- locks while creating their required supporting keys on populated legacy tables.
+-- Indexes for these new empty tables are ordinary transactional indexes. Legacy-table indexes
+-- were built one-at-a-time by the preceding concurrent migration sequence.
+CREATE UNIQUE INDEX "ContractTemplateVersion_companyId_version_key" ON "public"."ContractTemplateVersion"("companyId", "version");
+CREATE UNIQUE INDEX "ContractTemplateVersion_companyId_id_key" ON "public"."ContractTemplateVersion"("companyId", "id");
+CREATE INDEX "ContractTemplateVersion_companyId_isPublished_publishedAt_idx" ON "public"."ContractTemplateVersion"("companyId", "isPublished", "publishedAt");
+CREATE UNIQUE INDEX "Rental_companyId_id_key" ON "public"."Rental"("companyId", "id");
+CREATE UNIQUE INDEX "Rental_companyId_clientId_id_key" ON "public"."Rental"("companyId", "clientId", "id");
+CREATE UNIQUE INDEX "Rental_companyId_contractNumber_key" ON "public"."Rental"("companyId", "contractNumber");
+CREATE INDEX "Rental_companyId_status_startsAt_idx" ON "public"."Rental"("companyId", "status", "startsAt");
+CREATE INDEX "Rental_companyId_vehicleId_startsAt_idx" ON "public"."Rental"("companyId", "vehicleId", "startsAt");
+CREATE INDEX "Rental_companyId_clientId_startsAt_idx" ON "public"."Rental"("companyId", "clientId", "startsAt");
+CREATE UNIQUE INDEX "RentalDriver_rentalId_sortOrder_key" ON "public"."RentalDriver"("rentalId", "sortOrder");
+CREATE INDEX "RentalDriver_companyId_clientId_idx" ON "public"."RentalDriver"("companyId", "clientId");
+CREATE UNIQUE INDEX "RentalDocumentVersion_rentalId_version_format_key" ON "public"."RentalDocumentVersion"("rentalId", "version", "format");
+CREATE UNIQUE INDEX "RentalDocumentVersion_clientDocumentVersionId_key" ON "public"."RentalDocumentVersion"("clientDocumentVersionId");
+CREATE UNIQUE INDEX "RentalDocumentVersion_clientDocumentId_clientDocumentVersionId_key" ON "public"."RentalDocumentVersion"("clientDocumentId", "clientDocumentVersionId");
+CREATE INDEX "RentalDocumentVersion_companyId_clientId_rentalId_idx" ON "public"."RentalDocumentVersion"("companyId", "clientId", "rentalId");
 
 -- Rental records always represent a forward UTC interval and non-negative minor-unit amounts.
 ALTER TABLE "public"."Rental"
@@ -372,7 +275,7 @@ BEGIN
     RAISE EXCEPTION 'Invalid rental lifecycle transition from % to %.', OLD."status", NEW."status";
   END IF;
 
-  IF OLD."status" IN ('CONFIRMED', 'ACTIVE', 'COMPLETED') AND (
+  IF OLD."confirmedAt" IS NOT NULL AND (
     NEW."companyId" IS DISTINCT FROM OLD."companyId"
     OR NEW."clientId" IS DISTINCT FROM OLD."clientId"
     OR NEW."vehicleId" IS DISTINCT FROM OLD."vehicleId"
@@ -382,6 +285,18 @@ BEGIN
     OR NEW."snapshotVersion" IS DISTINCT FROM OLD."snapshotVersion"
     OR NEW."snapshot" IS DISTINCT FROM OLD."snapshot"
     OR NEW."templateVersionId" IS DISTINCT FROM OLD."templateVersionId"
+    OR NEW."currency" IS DISTINCT FROM OLD."currency"
+    OR NEW."dailyRateMinor" IS DISTINCT FROM OLD."dailyRateMinor"
+    OR NEW."billableDays" IS DISTINCT FROM OLD."billableDays"
+    OR NEW."basePriceMinor" IS DISTINCT FROM OLD."basePriceMinor"
+    OR NEW."discountMinor" IS DISTINCT FROM OLD."discountMinor"
+    OR NEW."servicesMinor" IS DISTINCT FROM OLD."servicesMinor"
+    OR NEW."totalPriceMinor" IS DISTINCT FROM OLD."totalPriceMinor"
+    OR NEW."depositMinor" IS DISTINCT FROM OLD."depositMinor"
+    OR NEW."includedMileageKm" IS DISTINCT FROM OLD."includedMileageKm"
+    OR NEW."overageMileagePriceMinor" IS DISTINCT FROM OLD."overageMileagePriceMinor"
+    OR NEW."missingFuelPriceMinor" IS DISTINCT FROM OLD."missingFuelPriceMinor"
+    OR NEW."priceOverrideReason" IS DISTINCT FROM OLD."priceOverrideReason"
   ) THEN
     RAISE EXCEPTION 'Confirmed rental legal snapshot fields are immutable.';
   END IF;
@@ -436,5 +351,3 @@ $$;
 CREATE TRIGGER "ClientDocumentVersion_prevent_rental_mime_mutation"
 BEFORE UPDATE OF "verifiedMime" ON "public"."ClientDocumentVersion"
 FOR EACH ROW EXECUTE FUNCTION "public"."prevent_rental_document_mime_mutation"();
-
-COMMIT;
