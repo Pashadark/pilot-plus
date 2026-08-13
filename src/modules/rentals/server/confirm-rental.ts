@@ -142,6 +142,7 @@ function draftIssuance(snapshot: unknown) {
     territory: string('territory'),
     paymentTerms: string('paymentTerms'),
     allowedDrivers: string('allowedDrivers', 1000),
+    depositMinor: integer('depositMinor', Number.MAX_SAFE_INTEGER),
   };
 }
 function moscowYear(value: Date): number {
@@ -447,7 +448,7 @@ export function createRentalConfirmation(
           days: typeof rental.billableDays === 'number' ? rental.billableDays : undefined,
           discountMinor: optionalSafeMinor(rental.discountMinor),
           servicesMinor: optionalSafeMinor(rental.servicesMinor),
-          depositMinor: optionalSafeMinor(rental.depositMinor),
+          depositMinor: issuance.depositMinor ?? optionalSafeMinor(rental.depositMinor),
           pickupAddress:
             issuance.pickupAddress ?? (text(company.defaultPickupAddress) || undefined),
           returnAddress:

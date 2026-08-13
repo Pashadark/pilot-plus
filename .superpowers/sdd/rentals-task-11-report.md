@@ -56,3 +56,9 @@
   typed rental snapshot and records the full validated issuance selection immutably.
 - Added confirmation regression coverage for custom issue/return details surviving into the confirmed
   snapshot. Focused server/wizard suite: 21 passing tests.
+
+## P1 deposit follow-up
+
+- Deposit input is converted to canonical non-negative safe `depositMinor` before draft persistence.
+  Confirmation validates and carries that exact value into both issuance and immutable rental snapshot;
+  discount and services already use server-calculated minor-unit fields.

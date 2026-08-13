@@ -42,7 +42,7 @@ function draftValues(formData: FormData) {
   const endsAt = new Date(String(formData.get('endsAt') ?? ''));
   const discountMinor = Number(formData.get('discountMinor') ?? 0);
   const servicesMinor = Number(formData.get('servicesMinor') ?? 0);
-  const issuance = Object.fromEntries(
+  const issuance: Record<string, string | number | null> = Object.fromEntries(
     [
       'pickupAddress',
       'returnAddress',
@@ -56,6 +56,9 @@ function draftValues(formData: FormData) {
       'conditions',
     ].map((key) => [key, String(formData.get(key) ?? '').trim() || null]),
   );
+  const depositMinor = Number(issuance.depositMinor ?? 0);
+  if (!Number.isSafeInteger(depositMinor) || depositMinor < 0) throw new Error('VALIDATION');
+  issuance.depositMinor = depositMinor;
   if (!companyId || !clientId || !vehicleId || !templateVersionId) throw new Error('VALIDATION');
   return {
     companyId,

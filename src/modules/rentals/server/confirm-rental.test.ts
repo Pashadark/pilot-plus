@@ -233,6 +233,7 @@ describe('atomic rental confirmation', () => {
         returnAddress: 'Москва, Арбат, 2',
         startMileageKm: '12000',
         startFuelPercent: '80',
+        depositMinor: '125000',
         territory: 'Москва и МО',
         paymentTerms: 'Картой при выдаче',
         allowedDrivers: 'Иванов Иван',
@@ -257,7 +258,9 @@ describe('atomic rental confirmation', () => {
       territory: 'Москва и МО',
       startMileageKm: 12000,
       startFuelPercent: 80,
+      depositMinor: 125000,
     });
+    expect(update.data.snapshot.rental).toMatchObject({ depositMinor: 125000 });
   });
 
   it('rolls back before numbering when current clean passport and licence documents are absent', async () => {

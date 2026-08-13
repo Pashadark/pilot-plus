@@ -248,7 +248,7 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
               'returnMileageKm',
               'startFuelPercent',
               'returnFuelPercent',
-              'depositRubles',
+              'depositMinor',
               'paymentTerms',
               'territory',
               'allowedDrivers',
@@ -423,9 +423,14 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                     label="Залог, ₽"
                     type="number"
                     min="0"
-                    value={issuance.depositRubles ?? ''}
+                    value={issuance.depositMinor ? Number(issuance.depositMinor) / 100 : ''}
                     onChange={(event) =>
-                      setIssuance((current) => ({ ...current, depositRubles: event.target.value }))
+                      setIssuance((current) => ({
+                        ...current,
+                        depositMinor: String(
+                          Math.max(0, Math.round(Number(event.target.value) * 100) || 0),
+                        ),
+                      }))
                     }
                   />
                   <Input
