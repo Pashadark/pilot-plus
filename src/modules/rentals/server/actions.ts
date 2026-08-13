@@ -86,6 +86,13 @@ async function saveDraft(formData: FormData, rentalId?: string): Promise<RentalA
         snapshotVersion: 1,
         snapshot: { schemaVersion: 1, draft: true },
       };
+      if (rentalId) {
+        const draft = await tx.rental.findFirst({
+          where: { id: rentalId, companyId: value.companyId, status: 'DRAFT' },
+          select: { id: true },
+        });
+        if (!draft) throw new Error('NOT_DRAFT');
+      }
       const saved = rentalId
         ? await tx.rental.update({ where: { id: rentalId }, data, select: { id: true } })
         : await tx.rental.create({
