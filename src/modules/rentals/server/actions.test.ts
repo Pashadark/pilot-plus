@@ -28,4 +28,16 @@ describe('rental actions', () => {
     });
     expect(confirmRental).toHaveBeenCalledWith('company-1', 'rental-1');
   });
+
+  it('maps a unique contract-number conflict to a stable user-safe result', async () => {
+    confirmRental.mockRejectedValueOnce({ code: 'P2002' });
+    const form = new FormData();
+    form.set('companyId', 'company-1');
+    form.set('rentalId', 'rental-1');
+    await expect(confirmRentalAction(null, form)).resolves.toEqual({
+      ok: false,
+      code: 'CONFLICT',
+      message: 'Договор уже подтверждён или номер занят. Обновите страницу.',
+    });
+  });
 });

@@ -83,6 +83,7 @@ enum AuditEntityType {
   DEVICE
   DOCUMENT
   CLIENT_DOCUMENT
+  RENTAL
   SYSTEM
 }
 
@@ -216,6 +217,7 @@ model User {
   createdClientDocuments   ClientDocument[]
   clientUploadPermits      ClientUploadPermit[]
   createdRentals           Rental[]                  @relation("RentalCreatedBy")
+  confirmedRentals         Rental[]                  @relation("RentalConfirmedBy")
   createdContractTemplates ContractTemplateVersion[] @relation("ContractTemplateCreatedBy")
   archivedVehicles         Vehicle[]                 @relation("VehicleArchivedBy")
   createdAt                DateTime                  @default(now())
@@ -614,6 +616,8 @@ model Rental {
   createdByUserId          String
   createdBy                User                    @relation("RentalCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   confirmedAt              DateTime?               @db.Timestamptz(3)
+  confirmedByUserId        String?
+  confirmedBy              User?                   @relation("RentalConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
   activatedAt              DateTime?               @db.Timestamptz(3)
   completedAt              DateTime?               @db.Timestamptz(3)
   cancelledAt              DateTime?               @db.Timestamptz(3)
@@ -628,6 +632,7 @@ model Rental {
   @@index([companyId, status, startsAt])
   @@index([companyId, vehicleId, startsAt])
   @@index([companyId, clientId, startsAt])
+  @@index([companyId, confirmedByUserId, confirmedAt])
 }
 
 model RentalNumberCounter {

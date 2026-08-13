@@ -24,3 +24,10 @@
 - RED: counter schema/migration test failed before the model/migration existed; confirmation tests failed before number/snapshot/documents behavior and action wiring existed; the counter check test then failed before its SQL constraint was added.
 - GREEN: `npx vitest run src/modules/rentals/server` (14 tests), `npx vitest run src/database/prisma/rental-schema.test.ts` (18 tests), `npm run typecheck`, and `npx prisma validate` with a dummy non-connecting URL pass. `git diff --check` is clean.
 - `npm run format:check` remains blocked by pre-existing unrelated formatting in `src/modules/vehicles/manage/components/FleetImportDialog.test.tsx`; Task 7 TypeScript files were individually formatted and checked.
+
+## Review follow-up
+
+- Added `AuditEntityType.RENTAL` and a nullable `Rental.confirmedByUserId` relation/index through an additive migration; the confirmation update persists the actor in the same transaction.
+- Contract sequence years now use `Europe/Moscow`, the counter retry is limited strictly to `P2034`, and a `P2002` collision maps to a stable, PII-free confirmation result.
+- Draft price bases use `BigInt(days) * BigInt(dailyMinor)`, and draft updates use one tenant- and DRAFT-scoped `updateMany` check inside the transaction.
+- A current client document is accepted only when its `ClientDocumentVersion` at `currentVersion` has `scanVerdict: CLEAN`; stale parent status or an older clean version is rejected. Added regression coverage for cross-tenant/idempotent no-op, incomplete snapshot rollback, policy expiry, Moscow New Year numbering, P2002, and PII-free audit changes.

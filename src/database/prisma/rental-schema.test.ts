@@ -29,6 +29,10 @@ const rentalNumberCounterMigrationPath = new URL(
   './migrations/20260813090011_add_rental_number_counter/migration.sql',
   import.meta.url,
 );
+const rentalConfirmationActorMigrationPath = new URL(
+  './migrations/20260813090012_add_rental_confirmation_actor/migration.sql',
+  import.meta.url,
+);
 const migrationRecoveryRunbookPath = new URL(
   '../../../docs/runbooks/rental-migration-recovery.md',
   import.meta.url,
@@ -118,6 +122,26 @@ describe('доменная схема аренды', () => {
     expect(migration).toContain('RentalNumberCounter_pkey');
     expect(migration).toContain('RentalNumberCounter_companyId_fkey');
     expect(migration).toContain('RentalNumberCounter_nextValue_positive_check');
+    expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
+  });
+
+  it('records the confirming actor and audits rentals through additive schema changes', () => {
+    const rental = schema.match(/model Rental \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const user = schema.match(/model User \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(schema).toMatch(/enum AuditEntityType \{[\s\S]*\bRENTAL\b/);
+    expect(rental).toMatch(/confirmedByUserId\s+String\?/);
+    expect(rental).toMatch(/confirmedBy\s+User\?\s+@relation\("RentalConfirmedBy"/);
+    expect(rental).toContain('@@index([companyId, confirmedByUserId, confirmedAt])');
+    expect(user).toMatch(/confirmedRentals\s+Rental\[\]\s+@relation\("RentalConfirmedBy"\)/);
+    expect(existsSync(rentalConfirmationActorMigrationPath)).toBe(true);
+    if (!existsSync(rentalConfirmationActorMigrationPath)) return;
+    const migration = readFileSync(rentalConfirmationActorMigrationPath, 'utf8');
+    expect(migration).toContain(
+      'ALTER TYPE "public"."AuditEntityType" ADD VALUE IF NOT EXISTS \'RENTAL\'',
+    );
+    expect(migration).toContain('ADD COLUMN "confirmedByUserId" TEXT');
+    expect(migration).toContain('Rental_confirmedByUserId_fkey');
+    expect(migration).toContain('Rental_companyId_confirmedByUserId_confirmedAt_idx');
     expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
   });
 

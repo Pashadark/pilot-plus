@@ -44,6 +44,10 @@ function safeMinor(value: unknown): number {
     throw new Error('Сумма договора должна быть безопасным неотрицательным minor unit.');
   return Number(minor);
 }
+function money(value: unknown): bigint {
+  if (typeof value !== 'bigint' || value < 0) throw new Error('Сумма договора недействительна.');
+  return value;
+}
 function optionalSafeMinor(value: unknown): number | undefined {
   return value === null || value === undefined ? undefined : safeMinor(value);
 }
@@ -87,11 +91,29 @@ function requireLegalVehicle(vehicle: Record<string, unknown>, startsAt: Date, e
 function requireCurrentClientDocuments(documents: Array<Record<string, unknown>>): void {
   const categories = new Set(
     documents
-      .filter((document) => document.status === 'CLEAN' && document.archivedAt === null)
+      .filter(
+        (document) =>
+          document.archivedAt === null &&
+          Array.isArray(document.versions) &&
+          document.versions.some(
+            (version) =>
+              typeof version === 'object' &&
+              version !== null &&
+              (version as Record<string, unknown>).version === document.currentVersion &&
+              (version as Record<string, unknown>).scanVerdict === 'CLEAN',
+          ),
+      )
       .map((document) => document.category),
   );
   if (!categories.has('PASSPORT') || !categories.has('DRIVER_LICENSE'))
     throw new Error('Отсутствуют актуальные чистые документы клиента.');
+}
+function moscowYear(value: Date): number {
+  const year = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+  }).format(value);
+  return Number(year);
 }
 function contractNumber(year: number, value: number): string {
   if (!Number.isSafeInteger(value) || value < 1) throw new Error('Некорректный номер договора.');
@@ -251,10 +273,17 @@ export function createRentalConfirmation(
             companyId: input.companyId,
             clientId: rental.clientId,
             category: { in: ['PASSPORT', 'DRIVER_LICENSE'] },
-            status: 'CLEAN',
             archivedAt: null,
           },
-          select: { category: true, status: true, archivedAt: true, currentVersion: true },
+          select: {
+            category: true,
+            archivedAt: true,
+            currentVersion: true,
+            versions: {
+              where: { scanVerdict: 'CLEAN' },
+              select: { version: true, scanVerdict: true },
+            },
+          },
         }),
       ]);
       if (!company || !client || !vehicle || !template)
@@ -348,7 +377,11 @@ export function createRentalConfirmation(
           id: text(rental.id),
           startsAt,
           endsAt,
-          calculatedTotalMinor: safeMinor(rental.totalPriceMinor),
+          calculatedTotalMinor: safeMinor(
+            money(rental.basePriceMinor) -
+              money(rental.discountMinor) +
+              money(rental.servicesMinor),
+          ),
           agreedTotalMinor: safeMinor(rental.totalPriceMinor),
           currency: text(rental.currency),
           days: typeof rental.billableDays === 'number' ? rental.billableDays : undefined,
@@ -362,7 +395,7 @@ export function createRentalConfirmation(
         },
       });
       const confirmedAt = now();
-      const year = confirmedAt.getUTCFullYear();
+      const year = moscowYear(confirmedAt);
       const counter = await transaction.rentalNumberCounter.upsert({
         where: { companyId_year: { companyId: input.companyId, year } },
         create: { companyId: input.companyId, year, nextValue: 2 },
@@ -377,6 +410,7 @@ export function createRentalConfirmation(
           status: 'CONFIRMED',
           contractNumber: number,
           confirmedAt,
+          confirmedByUserId: actor?.id ?? null,
           snapshotVersion: 1,
           snapshot: {
             ...snapshot,
@@ -422,7 +456,7 @@ export async function retrySerializable<T>(work: () => Promise<T>, attempts = 3)
         typeof error === 'object' &&
         error !== null &&
         'code' in error &&
-        (error.code === 'P2034' || error.code === 'P2002')
+        error.code === 'P2034'
       ))
         throw error;
     }

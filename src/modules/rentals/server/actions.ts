@@ -14,6 +14,9 @@ const forbidden = {
   code: 'FORBIDDEN',
   message: 'Доступ к договорам аренды запрещён.',
 };
+function isPrismaCode(error: unknown, code: string): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
+}
 
 function input(formData: FormData) {
   const companyId = String(formData.get('companyId') ?? '').trim();
@@ -81,39 +84,41 @@ async function saveDraft(formData: FormData, rentalId?: string): Promise<RentalA
         currency: 'RUB',
         dailyRateMinor: BigInt(value.dailyMinor),
         billableDays: calculation.days,
-        basePriceMinor: BigInt(calculation.days * value.dailyMinor),
+        basePriceMinor: BigInt(calculation.days) * BigInt(value.dailyMinor),
         discountMinor: BigInt(calculation.discountMinor),
         servicesMinor: BigInt(calculation.servicesMinor),
         totalPriceMinor: BigInt(calculation.agreedTotalMinor),
         snapshotVersion: 1,
         snapshot: { schemaVersion: 1, draft: true },
       };
+      let savedId: string;
       if (rentalId) {
-        const draft = await tx.rental.findFirst({
+        const updated = await tx.rental.updateMany({
           where: { id: rentalId, companyId: value.companyId, status: 'DRAFT' },
+          data,
+        });
+        if (updated.count === 0) throw new Error('NOT_DRAFT');
+        savedId = rentalId;
+      } else {
+        const created = await tx.rental.create({
+          data: { companyId: value.companyId, createdByUserId: access.user.id, ...data },
           select: { id: true },
         });
-        if (!draft) throw new Error('NOT_DRAFT');
+        savedId = created.id;
       }
-      const saved = rentalId
-        ? await tx.rental.update({ where: { id: rentalId }, data, select: { id: true } })
-        : await tx.rental.create({
-            data: { companyId: value.companyId, createdByUserId: access.user.id, ...data },
-            select: { id: true },
-          });
       await tx.auditLog.create({
         data: {
           companyId: value.companyId,
           actorUserId: access.user.id,
           actorEmailSnapshot: access.user.email,
           action: rentalId ? 'UPDATE' : 'CREATE',
-          entityType: 'SYSTEM',
-          entityId: saved.id,
+          entityType: 'RENTAL',
+          entityId: savedId,
           entityLabel: 'Договор аренды',
           changes: { status: 'DRAFT' },
         },
       });
-      return saved;
+      return { id: savedId };
     });
     return { ok: true, rentalId: result.id };
   } catch {
@@ -148,7 +153,13 @@ export async function confirmRentalAction(
   } catch (error) {
     return error instanceof RentalAccessDeniedError
       ? forbidden
-      : { ok: false, code: 'CONFIRM_FAILED', message: 'Не удалось подтвердить договор.' };
+      : isPrismaCode(error, 'P2002')
+        ? {
+            ok: false,
+            code: 'CONFLICT',
+            message: 'Договор уже подтверждён или номер занят. Обновите страницу.',
+          }
+        : { ok: false, code: 'CONFIRM_FAILED', message: 'Не удалось подтвердить договор.' };
   }
 }
 
@@ -180,7 +191,7 @@ export async function cancelRentalAction(
           actorUserId: access.user.id,
           actorEmailSnapshot: access.user.email,
           action: 'UPDATE',
-          entityType: 'SYSTEM',
+          entityType: 'RENTAL',
           entityId: result.id,
           entityLabel: 'Договор аренды',
           changes: { status: 'CANCELLED' },

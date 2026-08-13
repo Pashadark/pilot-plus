@@ -116,8 +116,18 @@ function transactionFixture(overrides: Record<string, unknown> = {}) {
     },
     clientDocument: {
       findMany: vi.fn(async () => [
-        { category: 'PASSPORT', status: 'CLEAN', archivedAt: null, currentVersion: 1 },
-        { category: 'DRIVER_LICENSE', status: 'CLEAN', archivedAt: null, currentVersion: 1 },
+        {
+          category: 'PASSPORT',
+          archivedAt: null,
+          currentVersion: 1,
+          versions: [{ version: 1, scanVerdict: 'CLEAN' }],
+        },
+        {
+          category: 'DRIVER_LICENSE',
+          archivedAt: null,
+          currentVersion: 1,
+          versions: [{ version: 1, scanVerdict: 'CLEAN' }],
+        },
       ]),
     },
     rentalNumberCounter: { upsert: vi.fn(async () => ({ nextValue: 2 })) },
@@ -177,6 +187,7 @@ describe('atomic rental confirmation', () => {
             client: expect.objectContaining({ passport: '4510 123456' }),
             vehicle: expect.objectContaining({ osagoPolicyNumber: 'ОСАГО' }),
           }),
+          confirmedByUserId: 'actor-1',
         }),
       }),
     );
@@ -187,7 +198,16 @@ describe('atomic rental confirmation', () => {
 
   it('rolls back before numbering when current clean passport and licence documents are absent', async () => {
     const transaction = transactionFixture({
-      clientDocument: { findMany: vi.fn(async () => [{ category: 'PASSPORT', status: 'CLEAN' }]) },
+      clientDocument: {
+        findMany: vi.fn(async () => [
+          {
+            category: 'PASSPORT',
+            archivedAt: null,
+            currentVersion: 1,
+            versions: [{ version: 1, scanVerdict: 'CLEAN' }],
+          },
+        ]),
+      },
     });
     const confirm = createRentalConfirmation({
       async transaction(work) {
@@ -211,5 +231,130 @@ describe('atomic rental confirmation', () => {
 
     await expect(retrySerializable(work)).resolves.toBe('confirmed');
     expect(work).toHaveBeenCalledTimes(3);
+  });
+
+  it('uses Moscow year at the UTC new-year boundary and keeps audit changes free of PII', async () => {
+    const transaction = transactionFixture();
+    const confirm = createRentalConfirmation(
+      {
+        async transaction(work) {
+          return work(transaction as never);
+        },
+      },
+      { now: () => new Date('2026-12-31T21:30:00.000Z') },
+    );
+    await expect(
+      confirm({
+        companyId: 'company-1',
+        rentalId: 'rental-1',
+        actor: { id: 'actor-1', email: 'a@test' },
+      }),
+    ).resolves.toEqual({ rentalId: 'rental-1', contractNumber: 'ME-2027-0001-BK' });
+    expect(transaction.rentalNumberCounter.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { companyId_year: { companyId: 'company-1', year: 2027 } },
+      }),
+    );
+    expect(transaction.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          changes: expect.not.objectContaining({ passport: expect.anything() }),
+        }),
+      }),
+    );
+  });
+
+  it('rejects a stale document status when the current version is not CLEAN', async () => {
+    const transaction = transactionFixture({
+      clientDocument: {
+        findMany: vi.fn(async () => [
+          {
+            category: 'PASSPORT',
+            archivedAt: null,
+            currentVersion: 2,
+            versions: [{ version: 1, scanVerdict: 'CLEAN' }],
+          },
+          {
+            category: 'DRIVER_LICENSE',
+            archivedAt: null,
+            currentVersion: 1,
+            versions: [{ version: 1, scanVerdict: 'CLEAN' }],
+          },
+        ]),
+      },
+    });
+    const confirm = createRentalConfirmation({
+      async transaction(work) {
+        return work(transaction as never);
+      },
+    });
+    await expect(confirm({ companyId: 'company-1', rentalId: 'rental-1' })).rejects.toThrow(
+      'документы клиента',
+    );
+    expect(transaction.update).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent and tenant-scoped when the target is no longer a draft', async () => {
+    const transaction = transactionFixture({
+      rental: { findFirst: vi.fn(async () => null), update: vi.fn() },
+    });
+    const confirm = createRentalConfirmation({
+      async transaction(work) {
+        return work(transaction as never);
+      },
+    });
+    await expect(confirm({ companyId: 'other-company', rentalId: 'rental-1' })).rejects.toThrow(
+      'недоступен',
+    );
+    expect(transaction.rentalNumberCounter.upsert).not.toHaveBeenCalled();
+  });
+
+  it('rolls back an incomplete legal snapshot before allocating a number', async () => {
+    const transaction = transactionFixture({
+      company: {
+        findFirst: vi.fn(async () => ({
+          id: 'company-1',
+          legalName: '',
+          inn: '',
+          legalAddress: '',
+        })),
+      },
+    });
+    const confirm = createRentalConfirmation({
+      async transaction(work) {
+        return work(transaction as never);
+      },
+    });
+    await expect(confirm({ companyId: 'company-1', rentalId: 'rental-1' })).rejects.toThrow(
+      'обязательные',
+    );
+    expect(transaction.rentalNumberCounter.upsert).not.toHaveBeenCalled();
+    expect(transaction.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects an insurance policy that expires during the rental', async () => {
+    const transaction = transactionFixture({
+      vehicle: {
+        findFirst: vi.fn(async () => ({
+          ...(await transactionFixture().vehicle.findFirst()),
+          osagoEndsAt: new Date('2026-08-21T00:00:00.000Z'),
+        })),
+      },
+    });
+    const confirm = createRentalConfirmation({
+      async transaction(work) {
+        return work(transaction as never);
+      },
+    });
+    await expect(confirm({ companyId: 'company-1', rentalId: 'rental-1' })).rejects.toThrow(
+      'не покрывает',
+    );
+    expect(transaction.update).not.toHaveBeenCalled();
+  });
+
+  it('does not retry a unique-number conflict as a serialization conflict', async () => {
+    const work = vi.fn<() => Promise<string>>().mockRejectedValue({ code: 'P2002' });
+    await expect(retrySerializable(work)).rejects.toEqual({ code: 'P2002' });
+    expect(work).toHaveBeenCalledTimes(1);
   });
 });
