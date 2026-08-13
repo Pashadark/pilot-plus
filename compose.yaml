@@ -72,6 +72,20 @@ services:
     networks:
       - pilot-network
 
+  # One-shot smoke runtime: the application converter itself still spawns this fixed binary locally.
+  rental-document-runtime:
+    build:
+      context: .
+      dockerfile: docker/rental-document-runtime/Dockerfile
+    profiles: ['rental-documents']
+    environment:
+      RENTAL_DOCUMENT_CONVERTER_EXECUTABLE: /usr/bin/soffice
+      RENTAL_DOCUMENT_CONVERTER_TIMEOUT_MS: '45000'
+      RENTAL_DOCUMENT_MAX_BYTES: '15728640'
+      RUN_RENTAL_DOCUMENT_CONVERTER_INTEGRATION: '1'
+    tmpfs:
+      - /tmp:mode=0700,size=256m
+
 networks:
   pilot-network:
     driver: bridge

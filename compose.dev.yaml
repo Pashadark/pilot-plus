@@ -3,3 +3,8 @@ services:
     # Development-only loopback access for `npm run dev` on the host.
     ports:
       - '127.0.0.1:3310:3310'
+
+  rental-document-runtime:
+    # The profile is opt-in and never mounts a host private-storage directory into the smoke runtime.
+    environment:
+      PRIVATE_STORAGE_ROOT: /tmp/pilot-private-storage
