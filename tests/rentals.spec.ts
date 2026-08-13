@@ -1,4 +1,8 @@
+import { randomUUID } from 'node:crypto';
+
 import { expect, test, type Page } from '@playwright/test';
+
+import { prisma } from '../src/database/prisma/client';
 
 import { openAuthenticatedRoute } from './helpers/auth';
 
@@ -6,6 +10,101 @@ import { openAuthenticatedRoute } from './helpers/auth';
 // acknowledgement that the target is a disposable database with the fixture IDs below.
 // It must not point at a shared local or production tenant.
 const runnable = process.env.PILOT_RENTALS_E2E === '1';
+const marker = `rental-e2e-${randomUUID()}`;
+const created = {
+  companyIds: [] as string[],
+  userIds: [] as string[],
+  clientIds: [] as string[],
+  vehicleIds: [] as string[],
+};
+
+function requireDisposableDatabase() {
+  const url = process.env.DATABASE_URL ?? '';
+  if (!/e2e|test/i.test(url))
+    throw new Error('PILOT_RENTALS_E2E допускается только с отдельной test/e2e DATABASE_URL.');
+}
+
+async function createTenant(role: 'COMPANY_ADMIN' | 'DISPATCHER' | 'DRIVER') {
+  const companyId = randomUUID();
+  const userId = randomUUID();
+  const clientId = randomUUID();
+  const vehicleId = randomUUID();
+  await prisma.company.create({
+    data: {
+      id: companyId,
+      name: `E2E ${marker}`,
+      slug: `${marker}-${companyId.slice(0, 8)}`,
+      isDemo: true,
+    },
+  });
+  await prisma.user.create({
+    data: {
+      id: userId,
+      email: `${marker}-${userId}@example.test`,
+      name: 'E2E rental',
+      passwordHash: 'fixture-only',
+    },
+  });
+  await prisma.companyMember.create({
+    data: { companyId, userId, role, additionalPermissions: [] },
+  });
+  await prisma.client.create({
+    data: {
+      id: clientId,
+      companyId,
+      firstName: 'E2E',
+      lastName: marker,
+      phoneEncrypted: 'fixture',
+      phoneIndex: `${marker}-${clientId}`,
+      driverCategories: [],
+      createdByUserId: userId,
+    },
+  });
+  await prisma.vehicle.create({
+    data: {
+      id: vehicleId,
+      companyId,
+      sourceKey: `${marker}-${vehicleId}`,
+      internalNumber: marker,
+      model: 'E2E',
+      city: 'Москва',
+      transmission: 'AUTOMATIC',
+      fuelType: 'PETROL',
+      seats: 4,
+      dailyPriceMinor: 100000,
+      currency: 'RUB',
+    },
+  });
+  created.companyIds.push(companyId);
+  created.userIds.push(userId);
+  created.clientIds.push(clientId);
+  created.vehicleIds.push(vehicleId);
+  return { companyId, userId, clientId, vehicleId };
+}
+
+test.beforeAll(async () => {
+  if (!runnable) return;
+  requireDisposableDatabase();
+  await createTenant('COMPANY_ADMIN');
+  await createTenant('DISPATCHER');
+  await createTenant('DRIVER');
+  await createTenant('COMPANY_ADMIN');
+});
+test.afterAll(async () => {
+  if (!runnable) return;
+  await prisma.rentalDocumentVersion.deleteMany({
+    where: { companyId: { in: created.companyIds } },
+  });
+  await prisma.rentalDocumentGeneration.deleteMany({
+    where: { companyId: { in: created.companyIds } },
+  });
+  await prisma.rental.deleteMany({ where: { companyId: { in: created.companyIds } } });
+  await prisma.vehicle.deleteMany({ where: { id: { in: created.vehicleIds } } });
+  await prisma.client.deleteMany({ where: { id: { in: created.clientIds } } });
+  await prisma.company.deleteMany({ where: { id: { in: created.companyIds } } });
+  await prisma.user.deleteMany({ where: { id: { in: created.userIds } } });
+  await prisma.$disconnect();
+});
 const fixture = {
   clientId: process.env.PILOT_RENTALS_E2E_CLIENT_ID,
   overlapClientId: process.env.PILOT_RENTALS_E2E_OVERLAP_CLIENT_ID,

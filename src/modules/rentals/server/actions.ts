@@ -194,13 +194,19 @@ export async function confirmRentalAction(
   } catch (error) {
     return error instanceof RentalAccessDeniedError
       ? forbidden
-      : isPrismaCode(error, 'P2002')
+      : error instanceof Error && error.message === 'Автомобиль уже занят на выбранный период.'
         ? {
             ok: false,
-            code: 'CONFLICT',
-            message: 'Договор уже подтверждён или номер занят. Обновите страницу.',
+            code: 'OVERLAP',
+            message: 'Автомобиль уже занят на выбранный период.',
           }
-        : { ok: false, code: 'CONFIRM_FAILED', message: 'Не удалось подтвердить договор.' };
+        : isPrismaCode(error, 'P2002')
+          ? {
+              ok: false,
+              code: 'CONFLICT',
+              message: 'Договор уже подтверждён или номер занят. Обновите страницу.',
+            }
+          : { ok: false, code: 'CONFIRM_FAILED', message: 'Не удалось подтвердить договор.' };
   }
 }
 

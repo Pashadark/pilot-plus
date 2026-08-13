@@ -51,6 +51,18 @@ describe('rental actions', () => {
     });
   });
 
+  it('returns a specific safe overlap result without exposing rental details', async () => {
+    confirmRental.mockRejectedValueOnce(new Error('Автомобиль уже занят на выбранный период.'));
+    const form = new FormData();
+    form.set('companyId', 'company-1');
+    form.set('rentalId', 'rental-1');
+    await expect(confirmRentalAction(null, form)).resolves.toEqual({
+      ok: false,
+      code: 'OVERLAP',
+      message: 'Автомобиль уже занят на выбранный период.',
+    });
+  });
+
   it('generates the protected document pair after successful confirmation', async () => {
     confirmRental.mockResolvedValueOnce({
       rentalId: 'rental-1',
