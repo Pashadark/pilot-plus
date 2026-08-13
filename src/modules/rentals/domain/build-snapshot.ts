@@ -82,6 +82,79 @@ type Input = {
     createdAt?: Date;
   };
 };
+
+export type RentalSnapshot = {
+  schemaVersion: 1;
+  completeness: { confirmedReady: boolean; warnings: readonly string[] };
+  company: {
+    legalName?: string | null;
+    inn?: string | null;
+    kpp?: string | null;
+    ogrn?: string | null;
+    address?: string | null;
+    actualAddress?: string | null;
+    bankName?: string | null;
+    settlementAccount?: string | null;
+    correspondentAccount?: string | null;
+    bik?: string | null;
+    signatoryName?: string | null;
+    signatoryAuthority?: string | null;
+    [key: string]: unknown;
+  };
+  client: {
+    fullName?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    birthDate?: string | null;
+    passport?: string | null;
+    registrationAddress?: string | null;
+    residentialAddress?: string | null;
+    licenseNumber?: string | null;
+    licenseIssuedAt?: string | null;
+    licenseExpiresAt?: string | null;
+    [key: string]: unknown;
+  };
+  vehicle: {
+    make?: string | null;
+    model?: string | null;
+    registrationNumber?: string | null;
+    vin?: string | null;
+    year?: number | null;
+    color?: string | null;
+    bodyType?: string | null;
+    transmission?: string | null;
+    fuelType?: string | null;
+    seats?: number | null;
+    registrationCertificateNumber?: string | null;
+    vehiclePassportNumber?: string | null;
+    osagoInsurer?: string | null;
+    osagoPolicyNumber?: string | null;
+    osagoStartsAt?: string | null;
+    osagoEndsAt?: string | null;
+    cascoInsurer?: string | null;
+    cascoPolicyNumber?: string | null;
+    cascoStartsAt?: string | null;
+    cascoEndsAt?: string | null;
+    includedMileageKm?: number | null;
+    overageMileagePriceMinor?: number | null;
+    missingFuelPriceMinor?: number | null;
+    [key: string]: unknown;
+  };
+  rental: {
+    startsAt: string;
+    endsAt: string;
+    createdAt?: string;
+    calculatedTotalMinor?: number | null;
+    agreedTotalMinor?: number | null;
+    discountMinor?: number | null;
+    servicesMinor?: number | null;
+    depositMinor?: number | null;
+    pickupAddress?: string | null;
+    returnAddress?: string | null;
+    conditions?: string | null;
+    [key: string]: unknown;
+  };
+};
 function money(value: number) {
   if (!Number.isSafeInteger(value) || value < 0)
     throw new Error('Деньги должны быть безопасным целым числом.');
@@ -216,5 +289,5 @@ export function buildRentalSnapshot(input: Input) {
       createdAt: input.rental.createdAt?.toISOString(),
     }),
   };
-  return frozen(snapshot);
+  return frozen(snapshot) as RentalSnapshot;
 }

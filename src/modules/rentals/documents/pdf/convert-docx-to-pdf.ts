@@ -114,7 +114,8 @@ async function runConverter(
       if (completed) return;
       completed = true;
       clearTimeout(timeout);
-      error ? reject(error) : resolve();
+      if (error) reject(error);
+      else resolve();
     };
     const terminate = () => {
       if (rejected) return;

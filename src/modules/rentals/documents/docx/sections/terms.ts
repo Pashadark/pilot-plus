@@ -1,4 +1,5 @@
 import { Paragraph, TextRun } from 'docx';
+import type { RentalSnapshot } from '../../../domain/build-snapshot';
 import { display, displayList, money, table, withUnit } from './helpers';
 
 function moscowDateTime(value: string) {
@@ -13,7 +14,7 @@ function moscowDateTime(value: string) {
   }).format(new Date(value));
 }
 
-export function terms(s: any) {
+export function terms(s: RentalSnapshot) {
   return [
     new Paragraph({ children: [new TextRun({ text: '3. СРОК АРЕНДЫ И РАСЧЁТЫ', bold: true })] }),
     table([

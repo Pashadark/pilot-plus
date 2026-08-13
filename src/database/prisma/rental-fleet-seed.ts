@@ -1,3 +1,5 @@
+import type { FuelType, PrismaClient, VehicleStatus } from '../generated/prisma';
+
 const prefix = 'example-fleet:';
 export const approvedRentalFleet = [
   ['kia-ceed-2020', 'Kia', "Cee'd", 'А429АУ97', 2020, 350000],
@@ -12,6 +14,8 @@ type DemoCompanyContractDatabase = {
     update(args: { where: { id: string }; data: Record<string, string> }): Promise<unknown>;
   };
 };
+
+export type RentalFleetSeedDatabase = Pick<PrismaClient, 'vehicle'>;
 
 const demoCompanyContractDefaults = {
   legalName: 'DEMO ONLY ООО «Пилот Рент»',
@@ -55,15 +59,16 @@ function plate(value: string) {
   return value.replace(/[^A-Za-zА-Яа-я0-9]/gu, '').toUpperCase();
 }
 
-export async function seedApprovedRentalFleet(database: any, companyId: string) {
+export async function seedApprovedRentalFleet(
+  database: RentalFleetSeedDatabase,
+  companyId: string,
+) {
   const keys = new Set(approvedRentalFleet.map(([key]) => `${prefix}${key}`));
   const stale = await database.vehicle.findMany({
     where: { companyId, isDemoImport: true, archivedAt: null, sourceKey: { startsWith: prefix } },
     select: { id: true, sourceKey: true },
   });
-  const staleIds = stale
-    .filter((item: { sourceKey: string }) => !keys.has(item.sourceKey))
-    .map((item: { id: string }) => item.id);
+  const staleIds = stale.filter((item) => !keys.has(item.sourceKey)).map((item) => item.id);
   if (staleIds.length)
     await database.vehicle.updateMany({
       where: { id: { in: staleIds }, companyId, isDemoImport: true },
@@ -89,7 +94,7 @@ export async function seedApprovedRentalFleet(database: any, companyId: string) 
       office: 'Демо-парк',
       transmission: 'Автомат',
       engineLiters: 1.6,
-      fuelType: 'PETROL',
+      fuelType: 'PETROL' as FuelType,
       seats: 5,
       dailyPriceMinor,
       currency: 'RUB',
@@ -109,7 +114,7 @@ export async function seedApprovedRentalFleet(database: any, companyId: string) 
       cascoEndsAt: new Date('2030-12-31'),
       originalPrice: 'Демо-тариф',
       features: ['Демо-автопарк'],
-      status: 'AVAILABLE',
+      status: 'AVAILABLE' as VehicleStatus,
       isDemoImport: true,
       isRentalReady: true,
       rentalReadyAt: new Date(),

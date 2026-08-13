@@ -9,13 +9,11 @@ import {
   TextRun,
 } from 'docx';
 import { resolveLegalTemplate, type LegalTemplateVersion } from '../legal-content-v1';
-import type { buildRentalSnapshot } from '../../domain/build-snapshot';
+import type { RentalSnapshot } from '../../domain/build-snapshot';
 import { closing } from './sections/closing';
 import { parties } from './sections/parties';
 import { terms } from './sections/terms';
 import { vehicle } from './sections/vehicle';
-
-type Snapshot = ReturnType<typeof buildRentalSnapshot>;
 
 export type RentalDocxOptions = {
   contractNumber: string;
@@ -24,7 +22,7 @@ export type RentalDocxOptions = {
 
 /** Builds a byte-stable legal DOCX from the immutable confirmation snapshot. */
 export async function generateRentalDocx(
-  snapshot: Snapshot,
+  snapshot: RentalSnapshot,
   { contractNumber, templateVersion = 'legal-content-v1' }: RentalDocxOptions,
 ): Promise<Uint8Array> {
   const template = resolveLegalTemplate(templateVersion);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   approvedRentalFleet,
+  type RentalFleetSeedDatabase,
   seedApprovedRentalFleet,
   seedDemoCompanyContractDefaults,
 } from './rental-fleet-seed';
@@ -14,11 +15,20 @@ describe('approved rental fleet seed', () => {
         { id: 'old-demo', sourceKey: 'example-fleet:old', isDemoImport: true, archivedAt: null },
       ],
     ]);
+    type FleetUpsertArgs = {
+      where: { sourceKey: string };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    };
+    type FleetUpdateArgs = {
+      where: { id: { in: readonly string[] } };
+      data: Record<string, unknown>;
+    };
     const database = {
       vehicle: {
         findMany: async () =>
           [...records.values()].filter((item) => item.isDemoImport && item.archivedAt === null),
-        upsert: async ({ where, create, update }: any) => {
+        upsert: async ({ where, create, update }: FleetUpsertArgs) => {
           records.set(where.sourceKey, {
             ...(records.get(where.sourceKey) ?? create),
             ...update,
@@ -26,21 +36,21 @@ describe('approved rental fleet seed', () => {
           });
           return { id: where.sourceKey };
         },
-        updateMany: async ({ where, data }: any) => {
+        updateMany: async ({ where, data }: FleetUpdateArgs) => {
           for (const item of records.values())
-            if (where.id.in.includes(item.id)) Object.assign(item, data);
+            if (where.id.in.includes(String(item.id))) Object.assign(item, data);
           return { count: 1 };
         },
       },
     };
-    await seedApprovedRentalFleet(database, 'demo-company');
-    await seedApprovedRentalFleet(database, 'demo-company');
+    await seedApprovedRentalFleet(database as unknown as RentalFleetSeedDatabase, 'demo-company');
+    await seedApprovedRentalFleet(database as unknown as RentalFleetSeedDatabase, 'demo-company');
     const active = [...records.values()].filter(
       (item) => item.isDemoImport && item.archivedAt === null,
     );
     expect(active).toHaveLength(4);
     expect(new Set(active.map((item) => item.registrationNumberNormalized))).toHaveLength(4);
-    expect(new Set(active.map((item) => item.vin))).toHaveLength(4);
+    expect(new Set(active.map((item) => String(item.vin)))).toHaveLength(4);
     for (const vehicle of active) {
       expect(vehicle.vin).toMatch(/^DEMO[A-Z0-9]{13}$/u);
       expect(vehicle.registrationCertificateNumber).toMatch(/^DEMO-STS-\d{2}$/u);

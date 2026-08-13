@@ -1,8 +1,9 @@
 import { Paragraph, TextRun } from 'docx';
+import type { RentalSnapshot } from '../../../domain/build-snapshot';
 import { display, table } from './helpers';
 
 export function closing(
-  s: any,
+  s: RentalSnapshot,
   clauses: readonly (readonly [string, string])[],
   penalties: readonly (readonly [string, string])[],
 ) {

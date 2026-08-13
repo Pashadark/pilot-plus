@@ -1,7 +1,8 @@
 import { Paragraph, TextRun } from 'docx';
+import type { RentalSnapshot } from '../../../domain/build-snapshot';
 import { display, displayList, table } from './helpers';
 
-export function parties(s: any) {
+export function parties(s: RentalSnapshot) {
   return [
     new Paragraph({ children: [new TextRun({ text: '1. СТОРОНЫ ДОГОВОРА', bold: true })] }),
     new Paragraph(

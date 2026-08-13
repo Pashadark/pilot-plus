@@ -1,7 +1,8 @@
 import { Paragraph, TextRun } from 'docx';
+import type { RentalSnapshot } from '../../../domain/build-snapshot';
 import { displayList, table } from './helpers';
 
-export function vehicle(s: any) {
+export function vehicle(s: RentalSnapshot) {
   return [
     new Paragraph({
       children: [new TextRun({ text: '2. ПРЕДМЕТ ДОГОВОРА И ТРАНСПОРТНОЕ СРЕДСТВО', bold: true })],

@@ -119,13 +119,17 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
     legalReady(client, templateVersionId),
   );
   const saveAction = useCallback(
-    (previous: RentalActionResult | null, formData: FormData) =>
-      rentalId
-        ? updateRentalDraftAction(previous, formData)
-        : createRentalDraftAction(previous, formData),
+    async (previous: RentalActionResult | null, formData: FormData) => {
+      const result = rentalId
+        ? await updateRentalDraftAction(previous, formData)
+        : await createRentalDraftAction(previous, formData);
+      if (result.ok) setRentalId(result.rentalId);
+      return result;
+    },
     [rentalId],
   );
   const [draftState, draftFormAction, saving] = useActionState(saveAction, initialState);
+  const currentRentalId = rentalId;
   const [confirmState, confirmFormAction, confirming] = useActionState(
     confirmAndGenerateRentalAction,
     initialState,
@@ -138,7 +142,6 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
   useEffect(() => {
     if (!draftState) return;
     if (draftState.ok) {
-      setRentalId(draftState.rentalId);
       showToast({ tone: 'success', title: 'Черновик договора сохранён.' });
     } else showToast({ tone: 'danger', title: draftState.message });
   }, [draftState, showToast]);
@@ -183,8 +186,9 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
   const confirmedNeedsDocuments =
     Boolean(confirmState && !confirmState.ok && confirmState.confirmedNeedsDocuments) ||
     Boolean(retryState && !retryState.ok && retryState.confirmedNeedsDocuments);
-  const confirmedRentalId = confirmState && !confirmState.ok ? confirmState.rentalId : rentalId;
-  const confirmReady = ready && Boolean(rentalId);
+  const confirmedRentalId =
+    confirmState && !confirmState.ok ? confirmState.rentalId : currentRentalId;
+  const confirmReady = ready && Boolean(currentRentalId);
 
   return (
     <main
@@ -255,7 +259,9 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
             ].map((key) => (
               <input key={key} type="hidden" name={key} value={issuance[key] ?? ''} />
             ))}
-            {rentalId ? <input type="hidden" name="rentalId" value={rentalId} /> : null}
+            {currentRentalId ? (
+              <input type="hidden" name="rentalId" value={currentRentalId} />
+            ) : null}
             {step === 0 ? (
               <section aria-labelledby="step-client">
                 <h2 id="step-client" className="text-lg font-bold">
@@ -594,14 +600,14 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Link
                   className="inline-flex min-h-11 items-center gap-2 text-[var(--color-primary)] hover:underline"
-                  href={`/rentals/${(confirmState?.ok ? confirmState.rentalId : retryState?.rentalId) ?? rentalId}/documents/${documentVersion}/DOCX`}
+                  href={`/rentals/${(confirmState?.ok ? confirmState.rentalId : retryState?.rentalId) ?? currentRentalId}/documents/${documentVersion}/DOCX`}
                 >
                   <FiDownload aria-hidden="true" />
                   Скачать DOCX
                 </Link>
                 <Link
                   className="inline-flex min-h-11 items-center gap-2 text-[var(--color-primary)] hover:underline"
-                  href={`/rentals/${(confirmState?.ok ? confirmState.rentalId : retryState?.rentalId) ?? rentalId}/documents/${documentVersion}/PDF`}
+                  href={`/rentals/${(confirmState?.ok ? confirmState.rentalId : retryState?.rentalId) ?? currentRentalId}/documents/${documentVersion}/PDF`}
                 >
                   <FiDownload aria-hidden="true" />
                   Скачать PDF

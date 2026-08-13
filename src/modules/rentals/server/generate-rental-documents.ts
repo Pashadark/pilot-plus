@@ -412,7 +412,7 @@ function createPrismaDocumentPairRepository(): DocumentPairRepository {
         clientId: rental.clientId,
         contractNumber: rental.contractNumber,
         legalContentVersion,
-        snapshot: rental.snapshot as Snapshot,
+        snapshot: rental.snapshot as unknown as Snapshot,
       };
     },
     async findExistingPair({ companyId, rentalId }) {
