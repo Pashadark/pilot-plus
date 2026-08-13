@@ -5,8 +5,6 @@ import { expect, test, type Page } from '@playwright/test';
 import { prisma } from '../src/database/prisma/client';
 import { hashPassword } from '../src/services/auth/password';
 
-import { openAuthenticatedRoute } from './helpers/auth';
-
 // These tests never provision data themselves. PILOT_RENTALS_E2E=1 is an explicit
 // acknowledgement that the target is a disposable database with the fixture IDs below.
 // It must not point at a shared local or production tenant.
@@ -351,13 +349,11 @@ test.describe('rental workflow', () => {
     await page.goto('/vehicles');
     await page.getByRole('button', { name: 'Импортировать Excel' }).click();
     await page.getByLabel('Компания').selectOption(fixture.admin.companyId);
-    await page
-      .getByLabel('Файл Excel')
-      .setInputFiles({
-        name: 'canonical-four.xlsx',
-        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        buffer: canonicalFourWorkbook(),
-      });
+    await page.getByLabel('Файл Excel').setInputFiles({
+      name: 'canonical-four.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer: canonicalFourWorkbook(),
+    });
     await page.getByRole('button', { name: 'Подготовить предпросмотр' }).click();
     const preview = page.getByRole('table');
     await expect(preview.locator('tbody tr')).toHaveCount(4);

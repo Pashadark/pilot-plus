@@ -54,11 +54,14 @@ function draftValues(formData: FormData) {
       'paymentTerms',
       'allowedDrivers',
       'conditions',
+      'depositMinor',
     ].map((key) => [key, String(formData.get(key) ?? '').trim() || null]),
   );
-  const depositMinor = Number(issuance.depositMinor ?? 0);
-  if (!Number.isSafeInteger(depositMinor) || depositMinor < 0) throw new Error('VALIDATION');
-  issuance.depositMinor = depositMinor;
+  if (issuance.depositMinor !== null) {
+    const depositMinor = Number(issuance.depositMinor);
+    if (!Number.isSafeInteger(depositMinor) || depositMinor < 0) throw new Error('VALIDATION');
+    issuance.depositMinor = depositMinor;
+  }
   if (!companyId || !clientId || !vehicleId || !templateVersionId) throw new Error('VALIDATION');
   return {
     companyId,

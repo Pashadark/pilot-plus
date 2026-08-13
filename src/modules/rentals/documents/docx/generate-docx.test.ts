@@ -94,6 +94,21 @@ const snapshot = buildRentalSnapshot({
   },
 });
 
+const issuedSnapshot = {
+  ...snapshot,
+  issuance: {
+    pickupAddress: 'Москва, DEMO ONLY, выдача',
+    returnAddress: 'Москва, DEMO ONLY, возврат',
+    startMileageKm: '12000',
+    returnMileageKm: '12550',
+    startFuelPercent: '80',
+    returnFuelPercent: '45',
+    territory: 'Москва и МО',
+    paymentTerms: 'DEMO ONLY: оплата при выдаче',
+    allowedDrivers: 'Иванов Иван; Петров Пётр',
+  },
+};
+
 describe('generateRentalDocx', () => {
   it('returns DOCX bytes with complete contract data and structural tables', async () => {
     const bytes = await generateRentalDocx(snapshot, {
@@ -121,6 +136,31 @@ describe('generateRentalDocx', () => {
     const xml = documentXml(bytes);
     expect(xml).toContain('12.08.2026');
     expect(xml).toContain('ДЕЙСТВИЕ ДОГОВОРА');
+  });
+
+  it('renders immutable issuance details without substituting the primary client as a driver', async () => {
+    const xml = documentXml(
+      await generateRentalDocx(issuedSnapshot, {
+        contractNumber: 'ME-2026-ISSUANCE',
+        templateVersion: 'legal-content-v1',
+      }),
+    );
+
+    for (const value of [
+      'Москва, DEMO ONLY, выдача',
+      'Москва, DEMO ONLY, возврат',
+      '12000',
+      '12550',
+      '80',
+      '45',
+      'Москва и МО',
+      'DEMO ONLY: оплата при выдаче',
+      'Иванов Иван; Петров Пётр',
+    ])
+      expect(xml).toContain(value);
+    expect(xml).not.toContain(
+      'Допущенные водители</w:t></w:r></w:tc><w:tc><w:p><w:r><w:t>Иван Иванов',
+    );
   });
 
   it('renders every absent optional snapshot value as an em dash', async () => {

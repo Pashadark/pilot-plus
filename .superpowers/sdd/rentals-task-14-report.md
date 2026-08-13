@@ -7,3 +7,9 @@ The overlap server action now returns the safe stable `OVERLAP` code and Russian
 Runtime Playwright is intentionally not run by this change. Static listing/runtime needs a healthy disposable DB plus dev server; prior controller attempts hung before returning output. No shared DB mutation was performed.
 
 Deployment runbook: backup first; then migrate deploy, Prisma generate, client document reconciliation, controlled seed, and visual DOCX/PDF rendering with LibreOffice/ClamAV.
+
+## P1 issuance follow-up
+
+- Draft parsing now includes the canonical hidden `depositMinor` field and keeps it as a validated integer; an absent optional deposit remains absent instead of silently becoming zero.
+- The generated DOCX uses confirmed immutable `snapshot.issuance` for pickup/return locations, odometer and fuel readings, territory, payment terms and allowed drivers. It shows an em dash for an empty driver list and never substitutes the primary client.
+- RED/GREEN coverage verifies the persisted draft issuance deposit and structural DOCX XML values. The E2E helper’s unused authenticated-route import was removed.

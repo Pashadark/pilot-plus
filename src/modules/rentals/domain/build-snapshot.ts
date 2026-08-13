@@ -154,6 +154,18 @@ export type RentalSnapshot = {
     conditions?: string | null;
     [key: string]: unknown;
   };
+  issuance?: {
+    pickupAddress?: string | null;
+    returnAddress?: string | null;
+    startMileageKm?: string | number | null;
+    returnMileageKm?: string | number | null;
+    startFuelPercent?: string | number | null;
+    returnFuelPercent?: string | number | null;
+    territory?: string | null;
+    paymentTerms?: string | null;
+    allowedDrivers?: string | null;
+    [key: string]: unknown;
+  };
 };
 function money(value: number) {
   if (!Number.isSafeInteger(value) || value < 0)

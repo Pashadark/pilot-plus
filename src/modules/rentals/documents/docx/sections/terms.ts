@@ -15,17 +15,15 @@ function moscowDateTime(value: string) {
 }
 
 export function terms(s: RentalSnapshot) {
+  const issuance = s.issuance ?? {};
   return [
     new Paragraph({ children: [new TextRun({ text: '3. СРОК АРЕНДЫ И РАСЧЁТЫ', bold: true })] }),
     table([
       ['Начало проката (Москва)', moscowDateTime(s.rental.startsAt)],
       ['Окончание проката (Москва)', moscowDateTime(s.rental.endsAt)],
-      ['Место выдачи', s.rental.pickupAddress],
-      ['Место возврата', s.rental.returnAddress],
-      [
-        'Допущенные водители',
-        `${display(s.client.fullName)}, ВУ ${display(s.client.licenseNumber)}`,
-      ],
+      ['Место выдачи', issuance.pickupAddress ?? s.rental.pickupAddress],
+      ['Место возврата', issuance.returnAddress ?? s.rental.returnAddress],
+      ['Допущенные водители', display(issuance.allowedDrivers)],
     ]),
     table([
       ['Базовая стоимость', money(s.rental.calculatedTotalMinor)],
@@ -45,6 +43,17 @@ export function terms(s: RentalSnapshot) {
           '; ',
         ),
       ],
+    ]),
+    new Paragraph({
+      children: [new TextRun({ text: 'СВЕДЕНИЯ О ВЫДАЧЕ И ВОЗВРАТЕ', bold: true })],
+    }),
+    table([
+      ['Пробег при выдаче, км', display(issuance.startMileageKm)],
+      ['Пробег при возврате, км', display(issuance.returnMileageKm)],
+      ['Топливо при выдаче, %', display(issuance.startFuelPercent)],
+      ['Топливо при возврате, %', display(issuance.returnFuelPercent)],
+      ['Территория использования', display(issuance.territory)],
+      ['Условия оплаты', display(issuance.paymentTerms)],
     ]),
   ];
 }
