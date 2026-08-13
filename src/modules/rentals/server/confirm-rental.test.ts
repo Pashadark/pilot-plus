@@ -33,10 +33,15 @@ function transactionFixture(overrides: Record<string, unknown> = {}) {
     overageMileagePriceMinor: BigInt(1000),
     missingFuelPriceMinor: BigInt(5000),
     priceOverrideReason: null,
+    snapshot: { schemaVersion: 1, draft: true } as {
+      schemaVersion: number;
+      draft: boolean;
+      issuance?: Record<string, unknown>;
+    },
     createdByUserId: 'creator-1',
     createdAt: new Date('2026-08-01T09:00:00.000Z'),
   };
-  const update = vi.fn(async () => ({ id: rental.id }));
+  const update = vi.fn(async (_args: unknown) => ({ id: rental.id }));
   const fixture = {
     rental: {
       findFirst: vi.fn(async (args: { where: { status?: unknown } }) =>
@@ -216,6 +221,43 @@ describe('atomic rental confirmation', () => {
     expect(transaction.auditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ actorUserId: 'actor-1' }) }),
     );
+  });
+
+  it('retains validated issuance selections in the immutable confirmed snapshot', async () => {
+    const transaction = transactionFixture();
+    transaction.rentalRecord.snapshot = {
+      schemaVersion: 1,
+      draft: true,
+      issuance: {
+        pickupAddress: 'Москва, Тверская, 1',
+        returnAddress: 'Москва, Арбат, 2',
+        startMileageKm: '12000',
+        startFuelPercent: '80',
+        territory: 'Москва и МО',
+        paymentTerms: 'Картой при выдаче',
+        allowedDrivers: 'Иванов Иван',
+        conditions: 'Детское кресло',
+      },
+    };
+    const confirm = createRentalConfirmation({
+      async transaction(work) {
+        return work(transaction as never);
+      },
+    });
+    await confirm({ companyId: 'company-1', rentalId: 'rental-1' });
+    const update = transaction.update.mock.calls[0]?.[0] as unknown as {
+      data: { snapshot: { rental: Record<string, unknown>; issuance: Record<string, unknown> } };
+    };
+    expect(update.data.snapshot.rental).toMatchObject({
+      pickupAddress: 'Москва, Тверская, 1',
+      returnAddress: 'Москва, Арбат, 2',
+      conditions: 'Детское кресло',
+    });
+    expect(update.data.snapshot.issuance).toMatchObject({
+      territory: 'Москва и МО',
+      startMileageKm: 12000,
+      startFuelPercent: 80,
+    });
   });
 
   it('rolls back before numbering when current clean passport and licence documents are absent', async () => {

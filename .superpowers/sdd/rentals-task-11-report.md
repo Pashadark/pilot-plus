@@ -46,3 +46,13 @@
 - Issuance/return addresses, mileage, fuel, territory, payment, drivers and notes are collected in
   the six fixed steps; schema-supported price/deposit/policy values are persisted on the draft and
   operational notes are retained in its draft JSON snapshot.
+
+## P1 issuance retention follow-up
+
+- Wizard issuance controls are state-backed and mirrored into hidden form fields, so moving between
+  conditional steps cannot drop mileage, fuel, payment, territory or driver selections.
+- Confirmation reads the persisted draft JSON only, validates a bounded allowlist (text length/control
+  characters and safe integer mileage/fuel bounds), then merges allowed addresses/conditions into the
+  typed rental snapshot and records the full validated issuance selection immutably.
+- Added confirmation regression coverage for custom issue/return details surviving into the confirmed
+  snapshot. Focused server/wizard suite: 21 passing tests.

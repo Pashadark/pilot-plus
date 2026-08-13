@@ -109,6 +109,41 @@ function requireCurrentClientDocuments(documents: Array<Record<string, unknown>>
   if (!categories.has('PASSPORT') || !categories.has('DRIVER_LICENSE'))
     throw new Error('Отсутствуют актуальные чистые документы клиента.');
 }
+function draftIssuance(snapshot: unknown) {
+  const raw =
+    typeof snapshot === 'object' && snapshot !== null && 'issuance' in snapshot
+      ? (snapshot as { issuance?: unknown }).issuance
+      : null;
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
+  const source = raw as Record<string, unknown>;
+  const string = (key: string, maximum = 500) => {
+    const value = text(source[key]).trim();
+    if (!value) return undefined;
+    if (value.length > maximum || /[\u0000-\u001f]/u.test(value))
+      throw new Error('Данные выдачи и возврата некорректны.');
+    return value;
+  };
+  const integer = (key: string, maximum: number) => {
+    const value = source[key];
+    if (value === null || value === undefined || value === '') return undefined;
+    const parsed = typeof value === 'number' ? value : Number(value);
+    if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > maximum)
+      throw new Error('Показатели выдачи и возврата некорректны.');
+    return parsed;
+  };
+  return {
+    pickupAddress: string('pickupAddress'),
+    returnAddress: string('returnAddress'),
+    conditions: string('conditions', 2000),
+    startMileageKm: integer('startMileageKm', 9_999_999),
+    returnMileageKm: integer('returnMileageKm', 9_999_999),
+    startFuelPercent: integer('startFuelPercent', 100),
+    returnFuelPercent: integer('returnFuelPercent', 100),
+    territory: string('territory'),
+    paymentTerms: string('paymentTerms'),
+    allowedDrivers: string('allowedDrivers', 1000),
+  };
+}
 function moscowYear(value: Date): number {
   const year = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Europe/Moscow',
@@ -191,12 +226,14 @@ export function createRentalConfirmation(
           missingFuelPriceMinor: true,
           createdByUserId: true,
           createdAt: true,
+          snapshot: true,
         },
       });
       if (!rental) throw new Error('Черновик аренды недоступен или уже подтверждён.');
       const startsAt = date(rental.startsAt);
       const endsAt = date(rental.endsAt);
       if (endsAt <= startsAt) throw new Error('Некорректный период аренды.');
+      const issuance = draftIssuance(rental.snapshot);
 
       const [company, client, vehicle, template, documents] = await Promise.all([
         transaction.company.findFirst({
@@ -411,8 +448,11 @@ export function createRentalConfirmation(
           discountMinor: optionalSafeMinor(rental.discountMinor),
           servicesMinor: optionalSafeMinor(rental.servicesMinor),
           depositMinor: optionalSafeMinor(rental.depositMinor),
-          pickupAddress: text(company.defaultPickupAddress) || undefined,
-          returnAddress: text(company.defaultReturnAddress) || undefined,
+          pickupAddress:
+            issuance.pickupAddress ?? (text(company.defaultPickupAddress) || undefined),
+          returnAddress:
+            issuance.returnAddress ?? (text(company.defaultReturnAddress) || undefined),
+          conditions: issuance.conditions,
           createdByUserId: text(rental.createdByUserId),
           createdAt: date(rental.createdAt),
         },
@@ -434,6 +474,7 @@ export function createRentalConfirmation(
           snapshotVersion: 1,
           snapshot: {
             ...snapshot,
+            issuance,
             template: {
               id: text(template.id),
               version: template.version,

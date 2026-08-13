@@ -74,6 +74,7 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
   const [pickupAddress, setPickupAddress] = useState('');
   const [returnAddress, setReturnAddress] = useState('');
   const [conditions, setConditions] = useState('');
+  const [issuance, setIssuance] = useState<Record<string, string>>({});
   const [rentalId, setRentalId] = useState<string | null>(null);
   const [localError, setLocalError] = useState('');
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -242,6 +243,18 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
             <input type="hidden" name="pickupAddress" value={pickupAddress} />
             <input type="hidden" name="returnAddress" value={returnAddress} />
             <input type="hidden" name="conditions" value={conditions} />
+            {[
+              'startMileageKm',
+              'returnMileageKm',
+              'startFuelPercent',
+              'returnFuelPercent',
+              'depositRubles',
+              'paymentTerms',
+              'territory',
+              'allowedDrivers',
+            ].map((key) => (
+              <input key={key} type="hidden" name={key} value={issuance[key] ?? ''} />
+            ))}
             {rentalId ? <input type="hidden" name="rentalId" value={rentalId} /> : null}
             {step === 0 ? (
               <section aria-labelledby="step-client">
@@ -328,29 +341,50 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Input
                     label="Пробег при выдаче, км"
-                    name="startMileageKm"
                     type="number"
                     min="0"
+                    value={issuance.startMileageKm ?? ''}
+                    onChange={(event) =>
+                      setIssuance((current) => ({ ...current, startMileageKm: event.target.value }))
+                    }
                   />
                   <Input
                     label="Пробег при возврате, км"
-                    name="returnMileageKm"
                     type="number"
                     min="0"
+                    value={issuance.returnMileageKm ?? ''}
+                    onChange={(event) =>
+                      setIssuance((current) => ({
+                        ...current,
+                        returnMileageKm: event.target.value,
+                      }))
+                    }
                   />
                   <Input
                     label="Топливо при выдаче, %"
-                    name="startFuelPercent"
                     type="number"
                     min="0"
                     max="100"
+                    value={issuance.startFuelPercent ?? ''}
+                    onChange={(event) =>
+                      setIssuance((current) => ({
+                        ...current,
+                        startFuelPercent: event.target.value,
+                      }))
+                    }
                   />
                   <Input
                     label="Топливо при возврате, %"
-                    name="returnFuelPercent"
                     type="number"
                     min="0"
                     max="100"
+                    value={issuance.returnFuelPercent ?? ''}
+                    onChange={(event) =>
+                      setIssuance((current) => ({
+                        ...current,
+                        returnFuelPercent: event.target.value,
+                      }))
+                    }
                   />
                 </div>
               </section>
@@ -385,20 +419,37 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                   />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Input label="Залог, ₽" name="depositRubles" type="number" min="0" />
+                  <Input
+                    label="Залог, ₽"
+                    type="number"
+                    min="0"
+                    value={issuance.depositRubles ?? ''}
+                    onChange={(event) =>
+                      setIssuance((current) => ({ ...current, depositRubles: event.target.value }))
+                    }
+                  />
                   <Input
                     label="Условия оплаты"
-                    name="paymentTerms"
+                    value={issuance.paymentTerms ?? ''}
+                    onChange={(event) =>
+                      setIssuance((current) => ({ ...current, paymentTerms: event.target.value }))
+                    }
                     placeholder="При выдаче, картой или наличными"
                   />
                   <Input
                     label="Территория использования"
-                    name="territory"
+                    value={issuance.territory ?? ''}
+                    onChange={(event) =>
+                      setIssuance((current) => ({ ...current, territory: event.target.value }))
+                    }
                     placeholder="Москва и Московская область"
                   />
                   <Input
                     label="Допущенные водители"
-                    name="allowedDrivers"
+                    value={issuance.allowedDrivers ?? ''}
+                    onChange={(event) =>
+                      setIssuance((current) => ({ ...current, allowedDrivers: event.target.value }))
+                    }
                     placeholder="ФИО, при наличии"
                   />
                 </div>
