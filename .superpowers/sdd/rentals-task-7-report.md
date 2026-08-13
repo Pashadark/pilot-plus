@@ -31,3 +31,8 @@
 - Contract sequence years now use `Europe/Moscow`, the counter retry is limited strictly to `P2034`, and a `P2002` collision maps to a stable, PII-free confirmation result.
 - Draft price bases use `BigInt(days) * BigInt(dailyMinor)`, and draft updates use one tenant- and DRAFT-scoped `updateMany` check inside the transaction.
 - A current client document is accepted only when its `ClientDocumentVersion` at `currentVersion` has `scanVerdict: CLEAN`; stale parent status or an older clean version is rejected. Added regression coverage for cross-tenant/idempotent no-op, incomplete snapshot rollback, policy expiry, Moscow New Year numbering, P2002, and PII-free audit changes.
+
+## Concurrency regression
+
+- Extracted the production-used counter allocation seam and added a concurrent same-company/year regression with a shared atomic counter mock plus a confirmation-level barrier test. Both confirmations receive distinct `ME-2027-0001-BK` / `ME-2027-0002-BK` values.
+- RED: the allocator contract test failed because the seam was absent. GREEN: the seam delegates to the same `upsert` used by the serializable confirmation transaction.

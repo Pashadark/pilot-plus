@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import { createRentalConfirmation, retrySerializable } from './confirm-rental';
+import {
+  allocateRentalContractNumber,
+  createRentalConfirmation,
+  retrySerializable,
+} from './confirm-rental';
 
 const start = new Date('2026-08-20T09:00:00.000Z');
 const end = new Date('2026-08-22T09:00:00.000Z');
@@ -137,6 +141,23 @@ function transactionFixture(overrides: Record<string, unknown> = {}) {
 }
 
 describe('atomic rental confirmation', () => {
+  it('uses one atomic counter allocation per same-company concurrent confirmation', async () => {
+    let nextValue = 1;
+    const counter = {
+      upsert: vi.fn(async () => {
+        nextValue += 1;
+        return { nextValue };
+      }),
+    };
+    const now = new Date('2026-12-31T21:30:00.000Z');
+    const results = await Promise.all([
+      allocateRentalContractNumber(counter, 'company-1', now),
+      allocateRentalContractNumber(counter, 'company-1', now),
+    ]);
+    expect(results.sort()).toEqual(['ME-2027-0001-BK', 'ME-2027-0002-BK']);
+    expect(counter.upsert).toHaveBeenCalledTimes(2);
+  });
+
   it('rejects overlapping confirmed rentals using half-open intervals', async () => {
     const transaction = transactionFixture();
     transaction.rental.findFirst.mockImplementation(
@@ -356,5 +377,60 @@ describe('atomic rental confirmation', () => {
     const work = vi.fn<() => Promise<string>>().mockRejectedValue({ code: 'P2002' });
     await expect(retrySerializable(work)).rejects.toEqual({ code: 'P2002' });
     expect(work).toHaveBeenCalledTimes(1);
+  });
+
+  it('allocates distinct sequential numbers for concurrent confirmations in one company and Moscow year', async () => {
+    let arrived = 0;
+    let release!: () => void;
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let nextValue = 1;
+    const counter = {
+      upsert: vi.fn(async () => {
+        const allocated = nextValue;
+        nextValue += 1;
+        return { nextValue };
+      }),
+    };
+    function transactionFor(id: string) {
+      const transaction = transactionFixture();
+      transaction.rentalRecord.id = id;
+      transaction.rental.update = vi.fn(async () => ({ id }));
+      transaction.rentalNumberCounter = counter;
+      transaction.rental.findFirst.mockImplementation(
+        async (args: { where: { status?: unknown } }) => {
+          if (args.where.status === 'DRAFT') {
+            arrived += 1;
+            if (arrived === 2) release();
+            await barrier;
+            return transaction.rentalRecord;
+          }
+          return null;
+        },
+      );
+      return transaction;
+    }
+    const first = transactionFor('rental-1');
+    const second = transactionFor('rental-2');
+    let calls = 0;
+    const confirm = createRentalConfirmation(
+      {
+        async transaction(work) {
+          return work((calls++ === 0 ? first : second) as never);
+        },
+      },
+      { now: () => new Date('2026-12-31T21:30:00.000Z') },
+    );
+
+    const numbers = await Promise.all([
+      confirm({ companyId: 'company-1', rentalId: 'rental-1' }),
+      confirm({ companyId: 'company-1', rentalId: 'rental-2' }),
+    ]);
+    expect(numbers.map(({ contractNumber }) => contractNumber).sort()).toEqual([
+      'ME-2027-0001-BK',
+      'ME-2027-0002-BK',
+    ]);
+    expect(counter.upsert).toHaveBeenCalledTimes(2);
   });
 });

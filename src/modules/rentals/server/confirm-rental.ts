@@ -119,6 +119,20 @@ function contractNumber(year: number, value: number): string {
   if (!Number.isSafeInteger(value) || value < 1) throw new Error('Некорректный номер договора.');
   return `ME-${year}-${String(value).padStart(4, '0')}-BK`;
 }
+export async function allocateRentalContractNumber(
+  counter: { upsert(args: unknown): Promise<{ nextValue: number }> },
+  companyId: string,
+  confirmedAt: Date,
+): Promise<string> {
+  const year = moscowYear(confirmedAt);
+  const result = await counter.upsert({
+    where: { companyId_year: { companyId, year } },
+    create: { companyId, year, nextValue: 2 },
+    update: { nextValue: { increment: 1 } },
+    select: { nextValue: true },
+  });
+  return contractNumber(year, result.nextValue - 1);
+}
 
 export function createRentalConfirmation(
   database: ConfirmationDatabase,
@@ -395,14 +409,11 @@ export function createRentalConfirmation(
         },
       });
       const confirmedAt = now();
-      const year = moscowYear(confirmedAt);
-      const counter = await transaction.rentalNumberCounter.upsert({
-        where: { companyId_year: { companyId: input.companyId, year } },
-        create: { companyId: input.companyId, year, nextValue: 2 },
-        update: { nextValue: { increment: 1 } },
-        select: { nextValue: true },
-      });
-      const number = contractNumber(year, counter.nextValue - 1);
+      const number = await allocateRentalContractNumber(
+        transaction.rentalNumberCounter,
+        input.companyId,
+        confirmedAt,
+      );
       const actor = input.authorization?.actor ?? input.actor;
       const updated = await transaction.rental.update({
         where: { id: input.rentalId },
