@@ -2,14 +2,22 @@
 
 import { useMemo, useState } from 'react';
 import { FiTruck } from 'react-icons/fi';
+import Link from 'next/link';
 
 import { filterVehicles, initialVehicleFilters } from '../filter';
 import type { VehicleCardDto } from '../types';
 import { VehicleFilters } from './VehicleFilters';
 import { VehicleGrid } from './VehicleGrid';
 import { Badge } from '@/shared/ui';
+import { FleetImportDialog } from '@/modules/vehicles/manage/components/FleetImportDialog';
 
-export function VehicleListPage({ vehicles }: { vehicles: readonly VehicleCardDto[] }) {
+export function VehicleListPage({
+  vehicles,
+  managementCompanyId,
+}: {
+  vehicles: readonly VehicleCardDto[];
+  managementCompanyId?: string;
+}) {
   const [filters, setFilters] = useState(initialVehicleFilters);
   const filtered = useMemo(() => filterVehicles(vehicles, filters), [filters, vehicles]);
   const reset = () => setFilters(initialVehicleFilters);
@@ -28,9 +36,22 @@ export function VehicleListPage({ vehicles }: { vehicles: readonly VehicleCardDt
             Характеристики, статус и доступная телеметрия транспорта вашей компании.
           </p>
         </div>
-        <Badge tone="primary" className="min-h-8 px-3 text-sm" data-testid="vehicle-count">
-          Показано {filtered.length} из {vehicles.length}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone="primary" className="min-h-8 px-3 text-sm" data-testid="vehicle-count">
+            Показано {filtered.length} из {vehicles.length}
+          </Badge>
+          {managementCompanyId ? (
+            <>
+              <Link
+                href={`/vehicles/new?companyId=${encodeURIComponent(managementCompanyId)}`}
+                className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 text-sm font-semibold text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+              >
+                Добавить автомобиль
+              </Link>
+              <FleetImportDialog companyId={managementCompanyId} />
+            </>
+          ) : null}
+        </div>
       </header>
       <VehicleFilters filters={filters} vehicles={vehicles} onChange={setFilters} onReset={reset} />
       <VehicleGrid vehicles={filtered} onReset={reset} />
