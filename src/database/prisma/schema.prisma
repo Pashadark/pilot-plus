@@ -280,6 +280,7 @@ model Company {
   clientUploadPermits     ClientUploadPermit[]
   clientStorageLedger     ClientStorageLedger?
   rentals                 Rental[]
+  rentalNumberCounters    RentalNumberCounter[]
   rentalDrivers           RentalDriver[]
   rentalDocumentVersions  RentalDocumentVersion[]
   contractTemplates       ContractTemplateVersion[]
@@ -627,6 +628,15 @@ model Rental {
   @@index([companyId, status, startsAt])
   @@index([companyId, vehicleId, startsAt])
   @@index([companyId, clientId, startsAt])
+}
+
+model RentalNumberCounter {
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  year      Int
+  nextValue Int     @default(1)
+
+  @@id([companyId, year])
 }
 
 model RentalDriver {

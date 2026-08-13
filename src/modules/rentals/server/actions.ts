@@ -4,9 +4,11 @@ import { prisma } from '@/database/prisma/client';
 import { calculateRental } from '@/modules/rentals/domain/calculate-rental';
 
 import { requireRentalAccess, RentalAccessDeniedError } from './access';
+import { confirmRental } from './confirm-rental';
 
 export type RentalActionResult =
-  { ok: true; rentalId: string } | { ok: false; code: string; message: string };
+  | { ok: true; rentalId: string; contractNumber?: string }
+  | { ok: false; code: string; message: string };
 const forbidden = {
   ok: false as const,
   code: 'FORBIDDEN',
@@ -133,6 +135,21 @@ export async function updateRentalDraftAction(
   return rentalId
     ? saveDraft(formData, rentalId)
     : { ok: false as const, code: 'VALIDATION', message: 'Не указан черновик договора.' };
+}
+
+export async function confirmRentalAction(
+  _state: RentalActionResult | null,
+  formData: FormData,
+): Promise<RentalActionResult> {
+  try {
+    const value = input(formData);
+    const confirmed = await confirmRental(value.companyId, value.rentalId);
+    return { ok: true, rentalId: confirmed.rentalId, contractNumber: confirmed.contractNumber };
+  } catch (error) {
+    return error instanceof RentalAccessDeniedError
+      ? forbidden
+      : { ok: false, code: 'CONFIRM_FAILED', message: 'Не удалось подтвердить договор.' };
+  }
 }
 
 export async function cancelRentalAction(

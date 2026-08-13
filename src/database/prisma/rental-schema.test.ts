@@ -25,6 +25,10 @@ const foreignKeyValidationMigrationPath = new URL(
   './migrations/20260813090010_validate_vehicle_archived_by_user_foreign_key/migration.sql',
   import.meta.url,
 );
+const rentalNumberCounterMigrationPath = new URL(
+  './migrations/20260813090011_add_rental_number_counter/migration.sql',
+  import.meta.url,
+);
 const migrationRecoveryRunbookPath = new URL(
   '../../../docs/runbooks/rental-migration-recovery.md',
   import.meta.url,
@@ -99,6 +103,23 @@ describe('доменная схема аренды', () => {
       expect(schema).toContain(`model ${model} {`);
     },
   );
+
+  it('allocates company-scoped annual rental numbers through an additive counter', () => {
+    const counter = schema.match(/model RentalNumberCounter \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(counter).toMatch(/companyId\s+String/);
+    expect(counter).toMatch(/year\s+Int/);
+    expect(counter).toMatch(/nextValue\s+Int/);
+    expect(counter).toContain('@@id([companyId, year])');
+    expect(existsSync(rentalNumberCounterMigrationPath)).toBe(true);
+    if (!existsSync(rentalNumberCounterMigrationPath)) return;
+    const migration = readFileSync(rentalNumberCounterMigrationPath, 'utf8');
+    expect(migration).toContain('CREATE TABLE "public"."RentalNumberCounter"');
+    expect(migration).toContain('"nextValue" INTEGER NOT NULL');
+    expect(migration).toContain('RentalNumberCounter_pkey');
+    expect(migration).toContain('RentalNumberCounter_companyId_fkey');
+    expect(migration).toContain('RentalNumberCounter_nextValue_positive_check');
+    expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
+  });
 
   it('связывает аренду с tenant, клиентом, автомобилем, автором и версией шаблона', () => {
     expect(schema).toMatch(/companyId\s+String/);
