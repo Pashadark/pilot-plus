@@ -5,3 +5,11 @@
 - RED: generator test initially failed because the module did not exist. GREEN: focused test passes (1/1), confirms valid DOCX package output and no template mechanism is used.
 - PASS: focused Vitest, `npm run typecheck`, targeted Prettier and `git diff --check`.
 - Visual rendering QA was not run: no LibreOffice render step was available in the worktree; structural DOCX verification was used instead.
+
+## Review follow-up
+
+- Reworked the public API to `generateRentalDocx(snapshot, { contractNumber, templateVersion })`, returning `Promise<Uint8Array>` directly from `Packer.toBuffer`.
+- Added template selection through `legal-content-v1`; legal headings are numbered once by the document composer.
+- Split contract assembly into parties, vehicle/insurance, term/prices, and closing/signature sections. The result explicitly sets A4 geometry, 20 mm margins, Arial styles, header, footer, and a page-number field.
+- Structural tests unzip `word/document.xml` without a second DOCX dependency and assert contract number, plate, representative, personal/insurance/penalty fields, six-or-more real tables, no unresolved placeholders, Moscow date rendering, and the selected template.
+- Review verification: focused Vitest (2/2) and `npm run typecheck` pass. LibreOffice (`soffice`) is not installed, so no image render QA is possible; structural verification remains the documented limitation.
