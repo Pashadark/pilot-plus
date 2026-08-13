@@ -15,6 +15,8 @@ describe('rental calculation', () => {
       days: 2,
       calculatedTotalMinor: 950_000,
       agreedTotalMinor: 950_000,
+      discountMinor: 10_000,
+      servicesMinor: 20_000,
       warnings: [],
     });
   });
@@ -34,5 +36,18 @@ describe('rental calculation', () => {
         dailyMinor: Number.MAX_SAFE_INTEGER + 1,
       }),
     ).toThrow('безопас');
+  });
+
+  it('rejects impossible Moscow calendar values and returns price breakdowns', () => {
+    expect(() => moscowLocalToUtc('2026-02-30T12:00')).toThrow('календар');
+    expect(
+      calculateRental({
+        startsAt: moscowLocalToUtc('2026-01-01T00:00'),
+        endsAt: moscowLocalToUtc('2026-01-02T00:00'),
+        dailyMinor: 100,
+        discountMinor: 10,
+        serviceMinor: 20,
+      }),
+    ).toMatchObject({ discountMinor: 10, servicesMinor: 20 });
   });
 });

@@ -13,6 +13,8 @@ export interface RentalCalculation {
   days: number;
   calculatedTotalMinor: number;
   agreedTotalMinor: number;
+  discountMinor: number;
+  servicesMinor: number;
   warnings: string[];
 }
 export interface RentalInterval {

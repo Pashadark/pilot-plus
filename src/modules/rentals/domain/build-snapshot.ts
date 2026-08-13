@@ -1,6 +1,34 @@
 type Input = {
-  company: { id: string; legalName: string; inn: string; address: string };
-  client: { id: string; fullName: string; phone: string; passport: string };
+  company: {
+    id: string;
+    legalName: string;
+    inn: string;
+    address: string;
+    kpp?: string;
+    ogrn?: string;
+    actualAddress?: string;
+    phone?: string;
+    email?: string;
+    bankName?: string;
+    settlementAccount?: string;
+    correspondentAccount?: string;
+    bik?: string;
+    signatoryName?: string;
+    signatoryBasis?: string;
+    contractCity?: string;
+  };
+  client: {
+    id: string;
+    fullName: string;
+    phone: string;
+    passport: string;
+    birthDate?: string;
+    registrationAddress?: string;
+    residentialAddress?: string;
+    licenseNumber?: string;
+    licenseIssuedAt?: string;
+    licenseExpiresAt?: string;
+  };
   vehicle: {
     id: string;
     make: string;
@@ -9,6 +37,25 @@ type Input = {
     vin: string;
     dailyMinor: number;
     depositMinor: number;
+    registrationCertificateNumber?: string;
+    vehiclePassportNumber?: string;
+    osagoInsurer?: string;
+    osagoPolicyNumber?: string;
+    osagoStartsAt?: string;
+    osagoEndsAt?: string;
+    cascoInsurer?: string;
+    cascoPolicyNumber?: string;
+    cascoStartsAt?: string;
+    cascoEndsAt?: string;
+    year?: number;
+    color?: string;
+    bodyType?: string;
+    transmission?: string;
+    fuelType?: string;
+    seats?: number;
+    includedMileageKm?: number;
+    overageMileagePriceMinor?: number;
+    missingFuelPriceMinor?: number;
   };
   rental: {
     id: string;
@@ -17,6 +64,15 @@ type Input = {
     calculatedTotalMinor: number;
     agreedTotalMinor: number;
     currency: string;
+    days?: number;
+    discountMinor?: number;
+    servicesMinor?: number;
+    depositMinor?: number;
+    pickupAddress?: string;
+    returnAddress?: string;
+    conditions?: string;
+    createdByUserId?: string;
+    createdAt?: Date;
   };
 };
 function money(value: number) {
@@ -38,12 +94,10 @@ export function buildRentalSnapshot(input: Input) {
     client: frozen({ ...input.client }),
     vehicle: frozen({ ...input.vehicle }),
     rental: frozen({
-      id: input.rental.id,
+      ...input.rental,
       startsAt: input.rental.startsAt.toISOString(),
       endsAt: input.rental.endsAt.toISOString(),
-      calculatedTotalMinor: input.rental.calculatedTotalMinor,
-      agreedTotalMinor: input.rental.agreedTotalMinor,
-      currency: input.rental.currency,
+      createdAt: input.rental.createdAt?.toISOString(),
     }),
   };
   return frozen(snapshot);

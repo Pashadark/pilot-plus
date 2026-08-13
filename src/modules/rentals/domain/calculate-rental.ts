@@ -17,6 +17,19 @@ export function moscowLocalToUtc(value: string): Date {
     throw new Error('Укажите московскую дату и время.');
   const date = new Date(`${value}:00+03:00`);
   validDate(date);
+  const local = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+    .formatToParts(date)
+    .reduce<Record<string, string>>((out, part) => ({ ...out, [part.type]: part.value }), {});
+  if (`${local.year}-${local.month}-${local.day}T${local.hour}:${local.minute}` !== value)
+    throw new Error('Московская календарная дата некорректна.');
   return date;
 }
 
@@ -28,8 +41,10 @@ export function calculateRental(input: RentalCalculationInput): RentalCalculatio
   const daily = safeMoney(input.dailyMinor, 'Суточный тариф');
   const discount = safeMoney(input.discountMinor ?? 0, 'Скидка');
   const services = safeMoney(input.serviceMinor ?? 0, 'Услуги');
-  const total = days * daily - discount + services;
-  if (!Number.isSafeInteger(total) || total < 0) throw new Error('Итоговая сумма некорректна.');
+  const totalBig = BigInt(days) * BigInt(daily) - BigInt(discount) + BigInt(services);
+  if (totalBig < BigInt(0) || totalBig > BigInt(Number.MAX_SAFE_INTEGER))
+    throw new Error('Итоговая сумма некорректна.');
+  const total = Number(totalBig);
   const agreed =
     input.agreedTotalMinor === undefined
       ? total
@@ -38,6 +53,8 @@ export function calculateRental(input: RentalCalculationInput): RentalCalculatio
     days,
     calculatedTotalMinor: total,
     agreedTotalMinor: agreed,
+    discountMinor: discount,
+    servicesMinor: services,
     warnings: agreed === total ? [] : ['AGREED_TOTAL_DIFFERS'],
   };
 }

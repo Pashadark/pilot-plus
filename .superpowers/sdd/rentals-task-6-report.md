@@ -10,3 +10,9 @@
 - RED: missing domain modules; GREEN: calculation, half-open availability and snapshot tests.
 - Focused unit suite: 4 tests across 3 files passing.
 - Typecheck remains blocked by concurrent Task 5 `ManageableCompany.canArchive` integration changes, not Task 6 domain code.
+
+## Review hardening
+
+- Moscow local input now round-trips through `Europe/Moscow`, rejecting normalized impossible calendar dates.
+- Price arithmetic uses `BigInt` for multiplication/subtraction/addition and only returns a verified safe integer; calculation exposes discount and services minor-unit breakdowns.
+- Snapshot input and frozen output now cover company requisites/signatory, client identity/license/addresses, vehicle legal/policy/spec/tariff details and rental billable amounts, conditions, timestamps and creator.
