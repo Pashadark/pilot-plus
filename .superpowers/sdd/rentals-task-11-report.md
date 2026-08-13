@@ -1,0 +1,35 @@
+# Task 11 — Rental wizard and client integration
+
+## Delivered
+
+- Added the protected client route `/clients/[id]/rentals/new`, including tenant checks for both
+  client visibility and rental-management capability, plus loading skeleton and safe error boundary.
+- Added a Russian six-step responsive rental wizard: client, vehicle, Moscow term, price/services,
+  legal readiness, and review/confirmation. It keeps entered values when moving backwards, returns
+  focus to the step heading, uses 44px controls, semantic tokens and reduced-motion-safe shared UI.
+- The vehicle list explains static readiness/archive/maintenance/wash reasons and recomputes rental
+  overlap for the selected Moscow interval in the browser. Server confirmation remains authoritative.
+- Added client-card `Создать договор` entry only for server-provided rental capability.
+- Added `confirmAndGenerateRentalAction`: confirmation runs first, then the existing idempotent pair
+  generator; result exposes safe DOCX/PDF download links or a safe retry message.
+
+## TDD evidence
+
+- RED: `RentalWizard.test.tsx` first failed because the component did not exist; generation action
+  test first failed because `confirmAndGenerateRentalAction` did not exist.
+- GREEN: focused tests below pass.
+
+## Verification
+
+- `npx vitest run src/modules/rentals/components/RentalWizard.test.tsx src/modules/rentals/server/actions.test.ts src/modules/clients/components/ClientDetailPage.test.tsx` — 7 passed.
+- `npm run typecheck` — passed.
+- `npx prettier --check` on all Task 11 source/test files — passed.
+- `git diff --check` — passed.
+
+## Self-review
+
+- No Prisma schema, migration, shared database, dependency, or vehicle-management file changes.
+- Form actions retain server authorization through the existing hardened Task 7/9 APIs; browser state
+  only informs UX and cannot bypass confirmation validation or document-generation authorization.
+- Known scope boundary: route tests cover the wizard and client entry; no browser E2E is included in
+  Task 11's focused suite.

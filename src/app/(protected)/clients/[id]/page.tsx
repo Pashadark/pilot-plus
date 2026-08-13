@@ -10,12 +10,14 @@ import {
 import { ClientDetailPage } from '@/modules/clients/components/ClientDetailPage';
 import { getClientById, getClientCompanyOptions } from '@/modules/clients/server/queries';
 import { AppShell } from '@/shared/components/app-shell/AppShell';
+import { canAccessRentalCompany, getRentalAccess } from '@/modules/rentals/server/access';
 
 export default async function ClientRoute({ params }: { params: Promise<{ id: string }> }) {
-  const [{ id }, access, manageAccess] = await Promise.all([
+  const [{ id }, access, manageAccess, rentalAccess] = await Promise.all([
     params,
     requireClientAccess('VIEW_CLIENTS'),
     getClientAccess('MANAGE_CLIENTS'),
+    getRentalAccess(),
   ]);
   const client = await getClientById(access, id);
   if (!client) notFound();
@@ -39,6 +41,7 @@ export default async function ClientRoute({ params }: { params: Promise<{ id: st
         canArchiveDocuments={canArchiveDocuments}
         documents={documents}
         companies={companies}
+        canCreateRental={canAccessRentalCompany(rentalAccess, client.companyId)}
       />
     </AppShell>
   );

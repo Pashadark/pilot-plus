@@ -5,9 +5,10 @@ import { calculateRental } from '@/modules/rentals/domain/calculate-rental';
 
 import { requireRentalAccess, RentalAccessDeniedError } from './access';
 import { confirmRental } from './confirm-rental';
+import { generateRentalDocumentPair } from './generate-rental-documents';
 
 export type RentalActionResult =
-  | { ok: true; rentalId: string; contractNumber?: string }
+  | { ok: true; rentalId: string; contractNumber?: string; documentVersion?: number }
   | { ok: false; code: string; message: string };
 const forbidden = {
   ok: false as const,
@@ -160,6 +161,27 @@ export async function confirmRentalAction(
             message: 'Договор уже подтверждён или номер занят. Обновите страницу.',
           }
         : { ok: false, code: 'CONFIRM_FAILED', message: 'Не удалось подтвердить договор.' };
+  }
+}
+
+export async function confirmAndGenerateRentalAction(
+  _state: RentalActionResult | null,
+  formData: FormData,
+): Promise<RentalActionResult> {
+  const confirmed = await confirmRentalAction(null, formData);
+  if (!confirmed.ok) return confirmed;
+  try {
+    const document = await generateRentalDocumentPair({
+      companyId: String(formData.get('companyId') ?? '').trim(),
+      rentalId: confirmed.rentalId,
+    });
+    return { ...confirmed, documentVersion: document.version };
+  } catch {
+    return {
+      ok: false,
+      code: 'DOCUMENT_FAILED',
+      message: 'Договор подтверждён, но файлы не готовы. Повторите создание документов безопасно.',
+    };
   }
 }
 

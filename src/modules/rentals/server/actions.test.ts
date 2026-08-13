@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 const { confirmRental } = vi.hoisted(() => ({ confirmRental: vi.fn() }));
 vi.mock('./confirm-rental', () => ({ confirmRental }));
+const { generateRentalDocumentPair } = vi.hoisted(() => ({ generateRentalDocumentPair: vi.fn() }));
+vi.mock('./generate-rental-documents', () => ({ generateRentalDocumentPair }));
 
-import { confirmRentalAction } from './actions';
+import { confirmAndGenerateRentalAction, confirmRentalAction } from './actions';
 
 describe('rental actions', () => {
   it('reserves cancellation for draft and confirmed states', () => {
@@ -38,6 +40,28 @@ describe('rental actions', () => {
       ok: false,
       code: 'CONFLICT',
       message: 'Договор уже подтверждён или номер занят. Обновите страницу.',
+    });
+  });
+
+  it('generates the protected document pair after successful confirmation', async () => {
+    confirmRental.mockResolvedValueOnce({
+      rentalId: 'rental-1',
+      contractNumber: 'ME-2026-0001-BK',
+    });
+    generateRentalDocumentPair.mockResolvedValueOnce({ version: 2 });
+    const form = new FormData();
+    form.set('companyId', 'company-1');
+    form.set('rentalId', 'rental-1');
+
+    await expect(confirmAndGenerateRentalAction(null, form)).resolves.toEqual({
+      ok: true,
+      rentalId: 'rental-1',
+      contractNumber: 'ME-2026-0001-BK',
+      documentVersion: 2,
+    });
+    expect(generateRentalDocumentPair).toHaveBeenCalledWith({
+      companyId: 'company-1',
+      rentalId: 'rental-1',
     });
   });
 });

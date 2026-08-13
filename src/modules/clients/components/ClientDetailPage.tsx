@@ -38,12 +38,14 @@ export function ClientDetailPage({
   canArchiveDocuments,
   documents,
   companies,
+  canCreateRental = false,
 }: {
   client: ClientDetailDto;
   canManage: boolean;
   canArchiveDocuments: boolean;
   documents: readonly ClientDocumentListItem[];
   companies: readonly { id: string; name: string }[];
+  canCreateRental?: boolean;
 }) {
   return (
     <main className="grid min-w-0 gap-5 p-4 sm:p-6" data-testid="client-detail-page">
@@ -80,6 +82,14 @@ export function ClientDetailPage({
               <FiPhone aria-hidden="true" />
               {client.phone}
             </a>
+            {canCreateRental ? (
+              <Link
+                href={`/clients/${client.id}/rentals/new`}
+                className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 text-sm font-semibold text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+              >
+                Создать договор
+              </Link>
+            ) : null}
           </div>
         </CardContent>
       </Card>
