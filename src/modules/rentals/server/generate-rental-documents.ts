@@ -72,6 +72,7 @@ export type DocumentPairRepository = {
     actor: Actor;
     authorization?: Authorization;
   }): Promise<{ generationId: string; version: number } | { existingVersion: number }>;
+  renewGeneration(input: { generationId: string; source: ConfirmedRentalSource }): Promise<void>;
   markPromoted(input: {
     generationId: string;
     source: ConfirmedRentalSource;
@@ -225,6 +226,10 @@ export function createRentalDocumentPairGenerator(dependencies: PairGeneratorDep
         throw new PdfConversionError();
       }
       artifacts = [artifact(identities[0]!, docx), artifact(identities[1]!, pdf)];
+      await dependencies.repository.renewGeneration({
+        generationId: reservation.generationId,
+        source,
+      });
       const scans = new Map<
         RentalDocumentFormat,
         { scanEngine: string; signatureVersion?: string }
@@ -446,7 +451,7 @@ function createPrismaDocumentPairRepository(): DocumentPairRepository {
               where: {
                 companyId: input.source.companyId,
                 rentalId: input.source.rentalId,
-                status: { in: ['PENDING', 'PROMOTED'] },
+                status: { in: ['PENDING', 'PROMOTED', 'CLEANING'] },
               },
               select: { id: true, leaseExpiresAt: true },
             });
@@ -504,6 +509,20 @@ function createPrismaDocumentPairRepository(): DocumentPairRepository {
         ),
       );
     },
+    async renewGeneration({ generationId, source }) {
+      const renewed = await prisma.rentalDocumentGeneration.updateMany({
+        where: {
+          id: generationId,
+          companyId: source.companyId,
+          rentalId: source.rentalId,
+          status: 'PENDING',
+          claimToken: null,
+          leaseExpiresAt: { gt: new Date() },
+        },
+        data: { leaseExpiresAt: generationLease(new Date()) },
+      });
+      if (renewed.count !== 1) throw new Error('Состояние генерации документов изменилось.');
+    },
     async markPromoted(input) {
       const docx = artifactFor(input.artifacts, 'DOCX');
       const pdf = artifactFor(input.artifacts, 'PDF');
@@ -516,6 +535,7 @@ function createPrismaDocumentPairRepository(): DocumentPairRepository {
           companyId: input.source.companyId,
           rentalId: input.source.rentalId,
           status: 'PENDING',
+          claimToken: null,
           leaseExpiresAt: { gt: new Date() },
         },
         data: {
@@ -539,6 +559,7 @@ function createPrismaDocumentPairRepository(): DocumentPairRepository {
           companyId: source.companyId,
           rentalId: source.rentalId,
           status: { not: 'COMMITTED' },
+          claimToken: null,
         },
         data: { status: 'ERROR', leaseExpiresAt: null, lastErrorCode: 'GENERATION_FAILED' },
       });
@@ -574,6 +595,7 @@ function createPrismaDocumentPairRepository(): DocumentPairRepository {
                 rentalId: input.source.rentalId,
                 version: input.version,
                 status: 'PROMOTED',
+                claimToken: null,
                 leaseExpiresAt: { gt: new Date() },
               },
               select: {
@@ -650,7 +672,7 @@ function createPrismaDocumentPairRepository(): DocumentPairRepository {
               },
             });
             const committed = await transaction.rentalDocumentGeneration.updateMany({
-              where: { id: generation.id, status: 'PROMOTED' },
+              where: { id: generation.id, status: 'PROMOTED', claimToken: null },
               data: { status: 'COMMITTED', leaseExpiresAt: null, committedAt: current },
             });
             if (committed.count !== 1)

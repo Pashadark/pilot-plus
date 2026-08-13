@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
+
 import type { Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 import { LocalPrivateStorage } from '@/services/storage/local-private-storage';
@@ -8,7 +10,8 @@ type StaleGeneration = {
   id: string;
   companyId: string;
   rentalId: string;
-  status: 'PENDING' | 'PROMOTED';
+  status: 'PENDING' | 'PROMOTED' | 'CLEANING';
+  claimToken: string | null;
   retryCount: number;
   docxQuarantineKey: string;
   pdfQuarantineKey: string;
@@ -96,8 +99,9 @@ export async function reconcileStaleRentalDocumentGenerations(
   const storage = options.storage ?? (await LocalPrivateStorage.create(privateStorageRoot()));
   const candidates = await database.rentalDocumentGeneration.findMany({
     where: {
-      status: { in: ['PENDING', 'PROMOTED'] },
+      status: { in: ['PENDING', 'PROMOTED', 'CLEANING'] },
       leaseExpiresAt: { lt: now },
+      claimToken: null,
     },
     orderBy: { leaseExpiresAt: 'asc' },
     take: batchSize,
@@ -106,6 +110,7 @@ export async function reconcileStaleRentalDocumentGenerations(
       companyId: true,
       rentalId: true,
       status: true,
+      claimToken: true,
       retryCount: true,
       docxQuarantineKey: true,
       pdfQuarantineKey: true,
@@ -116,6 +121,23 @@ export async function reconcileStaleRentalDocumentGenerations(
   let reconciled = 0;
   let retryPending = 0;
   for (const candidate of candidates) {
+    const claimToken = randomUUID();
+    const claimed = await database.rentalDocumentGeneration.updateMany({
+      where: {
+        id: candidate.id,
+        companyId: candidate.companyId,
+        rentalId: candidate.rentalId,
+        status: candidate.status,
+        claimToken: null,
+        leaseExpiresAt: { lt: now },
+      },
+      data: {
+        status: 'CLEANING',
+        claimToken,
+        leaseExpiresAt: new Date(now.getTime() + retryDelayMs),
+      },
+    });
+    if (claimed.count !== 1) continue;
     try {
       await storage.removeUploadArtifacts(candidate.docxQuarantineKey);
       await storage.removeUploadArtifacts(candidate.pdfQuarantineKey);
@@ -126,10 +148,15 @@ export async function reconcileStaleRentalDocumentGenerations(
           id: candidate.id,
           companyId: candidate.companyId,
           rentalId: candidate.rentalId,
-          status: candidate.status,
-          leaseExpiresAt: { lt: now },
+          status: 'CLEANING',
+          claimToken,
         },
-        data: { status: 'ERROR', leaseExpiresAt: null, lastErrorCode: 'STALE_CLEANED' },
+        data: {
+          status: 'ERROR',
+          claimToken: null,
+          leaseExpiresAt: null,
+          lastErrorCode: 'STALE_CLEANED',
+        },
       });
       if (updated.count === 1) reconciled += 1;
     } catch {
@@ -139,11 +166,12 @@ export async function reconcileStaleRentalDocumentGenerations(
           id: candidate.id,
           companyId: candidate.companyId,
           rentalId: candidate.rentalId,
-          status: candidate.status,
-          leaseExpiresAt: { lt: now },
+          status: 'CLEANING',
+          claimToken,
         },
         data: {
-          status: exhausted ? 'ERROR' : candidate.status,
+          status: exhausted ? 'ERROR' : 'CLEANING',
+          claimToken: null,
           retryCount: { increment: 1 },
           leaseExpiresAt: exhausted ? null : new Date(now.getTime() + retryDelayMs),
           lastErrorCode: exhausted ? 'STALE_CLEANUP_EXHAUSTED' : 'STALE_CLEANUP_RETRY',

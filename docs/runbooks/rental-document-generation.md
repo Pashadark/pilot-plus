@@ -13,6 +13,11 @@ Lease ограничивает зависшую работу 15 минутами
 удаляет только expired `PENDING`/`PROMOTED` keys, bounded retry выполняет до трёх раз. Никогда не
 очищайте `COMMITTED` запись вручную через filesystem.
 
+Перед filesystem cleanup reconciler атомарно переводит exact expired строку в `CLEANING` с уникальным
+`claimToken`. Если generator успел renew/promote/commit, claim возвращает `0`, а file operations не
+запускаются. После claim только worker с тем же token вправе завершить cleanup. Generator CAS для renew,
+promotion и commit требует `claimToken = null`, поэтому не может продолжить работу после cleanup claim.
+
 ## Runtime prerequisites
 
 - В image процесса приложения установлен LibreOffice Writer. Используйте фиксированный абсолютный

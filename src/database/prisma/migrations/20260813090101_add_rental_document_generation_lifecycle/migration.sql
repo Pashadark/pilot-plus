@@ -2,7 +2,7 @@
 ALTER TABLE "ContractTemplateVersion"
 ADD COLUMN "legalContentVersion" TEXT NOT NULL DEFAULT 'legal-content-v1';
 
-CREATE TYPE "RentalDocumentGenerationStatus" AS ENUM ('PENDING', 'PROMOTED', 'COMMITTED', 'ERROR');
+CREATE TYPE "RentalDocumentGenerationStatus" AS ENUM ('PENDING', 'PROMOTED', 'CLEANING', 'COMMITTED', 'ERROR');
 
 CREATE TABLE "RentalDocumentGeneration" (
     "id" TEXT NOT NULL,
@@ -28,6 +28,7 @@ CREATE TABLE "RentalDocumentGeneration" (
     "docxSignatureVersion" TEXT,
     "pdfSignatureVersion" TEXT,
     "leaseExpiresAt" TIMESTAMPTZ(3),
+    "claimToken" TEXT,
     "retryCount" INTEGER NOT NULL DEFAULT 0,
     "lastErrorCode" TEXT,
     "promotedAt" TIMESTAMPTZ(3),
@@ -44,6 +45,7 @@ CREATE UNIQUE INDEX "RentalDocumentGeneration_docxQuarantineKey_key" ON "RentalD
 CREATE UNIQUE INDEX "RentalDocumentGeneration_pdfQuarantineKey_key" ON "RentalDocumentGeneration"("pdfQuarantineKey");
 CREATE UNIQUE INDEX "RentalDocumentGeneration_docxStorageKey_key" ON "RentalDocumentGeneration"("docxStorageKey");
 CREATE UNIQUE INDEX "RentalDocumentGeneration_pdfStorageKey_key" ON "RentalDocumentGeneration"("pdfStorageKey");
+CREATE UNIQUE INDEX "RentalDocumentGeneration_claimToken_key" ON "RentalDocumentGeneration"("claimToken");
 CREATE INDEX "RentalDocumentGeneration_companyId_status_leaseExpiresAt_idx" ON "RentalDocumentGeneration"("companyId", "status", "leaseExpiresAt");
 CREATE INDEX "RentalDocumentGeneration_companyId_rentalId_status_idx" ON "RentalDocumentGeneration"("companyId", "rentalId", "status");
 

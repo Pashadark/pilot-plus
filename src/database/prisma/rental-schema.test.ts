@@ -153,8 +153,10 @@ describe('доменная схема аренды', () => {
     const generation = schema.match(/model RentalDocumentGeneration \{[\s\S]*?\n\}/)?.[0] ?? '';
     const template = schema.match(/model ContractTemplateVersion \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(schema).toContain('enum RentalDocumentGenerationStatus {');
+    expect(schema).toMatch(/RentalDocumentGenerationStatus \{[\s\S]*\bCLEANING\b/);
     expect(generation).toMatch(/status\s+RentalDocumentGenerationStatus\s+@default\(PENDING\)/);
     expect(generation).toMatch(/leaseExpiresAt\s+DateTime\?/);
+    expect(generation).toMatch(/claimToken\s+String\?\s+@unique/);
     expect(generation).toMatch(/docxQuarantineKey\s+String\s+@unique/);
     expect(generation).toMatch(/pdfQuarantineKey\s+String\s+@unique/);
     expect(generation).toMatch(/docxStorageKey\s+String\s+@unique/);
@@ -166,6 +168,8 @@ describe('доменная схема аренды', () => {
     const migration = readFileSync(rentalDocumentGenerationMigrationPath, 'utf8');
     expect(migration).toContain('CREATE TABLE "RentalDocumentGeneration"');
     expect(migration).toContain('CREATE TYPE "RentalDocumentGenerationStatus"');
+    expect(migration).toContain("'CLEANING'");
+    expect(migration).toContain('"claimToken" TEXT');
     expect(migration).toContain('ADD COLUMN "legalContentVersion" TEXT NOT NULL DEFAULT');
     expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
   });

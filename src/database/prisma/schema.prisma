@@ -203,6 +203,7 @@ enum RentalDocumentFormat {
 enum RentalDocumentGenerationStatus {
   PENDING
   PROMOTED
+  CLEANING
   COMMITTED
   ERROR
 }
@@ -718,6 +719,7 @@ model RentalDocumentGeneration {
   docxSignatureVersion  String?
   pdfSignatureVersion   String?
   leaseExpiresAt        DateTime?                      @db.Timestamptz(3)
+  claimToken            String?                        @unique
   retryCount            Int                            @default(0)
   lastErrorCode         String?
   promotedAt            DateTime?                      @db.Timestamptz(3)

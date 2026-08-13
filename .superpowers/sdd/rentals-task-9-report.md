@@ -43,3 +43,12 @@ Verification after fixes: `npx prisma format`, `npx prisma generate`, `npx prism
 validation URL only), `npm run typecheck`, focused Vitest 55/55, targeted Prettier, `git diff --check` and
 Compose profile config all pass. Migration was not applied; local LibreOffice visual smoke remains the
 documented environment gap.
+
+## Final lifecycle race fix
+
+- Added `CLEANING` and unique `claimToken` to the same unapplied additive lifecycle migration/model.
+  Reconciliation first performs an exact expired-state CAS claim; it performs no filesystem operation when
+  the count is zero. Terminal/retry updates require the same claim token.
+- Generation renewal, promotion and metadata commit all require an unclaimed lifecycle row. The deterministic
+  selected-candidate-versus-generator-renewal test proves a losing reconciler claim does not delete either
+  private or quarantine artifact.

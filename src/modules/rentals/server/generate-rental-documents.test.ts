@@ -98,6 +98,7 @@ function repository(commit: DocumentPairRepository['commit']): DocumentPairRepos
     reserveGeneration: vi
       .fn()
       .mockResolvedValue({ generationId: 'generation-default', version: 1 }),
+    renewGeneration: vi.fn(),
     markPromoted: vi.fn(),
     markError: vi.fn(),
     commit,
