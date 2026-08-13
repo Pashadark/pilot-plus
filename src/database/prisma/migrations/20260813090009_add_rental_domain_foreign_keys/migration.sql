@@ -1,9 +1,9 @@
--- This transactional wave follows every supporting legacy-table key. Foreign-key validation is
--- safe to retry through normal prisma migrate deploy because a failed migration is rolled back.
+-- This transactional wave follows every supporting legacy-table key. The populated Vehicle
+-- foreign key is attached without scanning historic rows; 20260813090010 validates it later.
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '60s';
 
-ALTER TABLE "public"."Vehicle" ADD CONSTRAINT "Vehicle_archivedByUserId_fkey" FOREIGN KEY ("archivedByUserId") REFERENCES "public"."User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "public"."Vehicle" ADD CONSTRAINT "Vehicle_archivedByUserId_fkey" FOREIGN KEY ("archivedByUserId") REFERENCES "public"."User"("id") ON DELETE SET NULL ON UPDATE CASCADE NOT VALID;
 ALTER TABLE "public"."ContractTemplateVersion" ADD CONSTRAINT "ContractTemplateVersion_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "public"."Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "public"."ContractTemplateVersion" ADD CONSTRAINT "ContractTemplateVersion_createdByUserId_fkey" FOREIGN KEY ("createdByUserId") REFERENCES "public"."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "public"."Rental" ADD CONSTRAINT "Rental_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "public"."Company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

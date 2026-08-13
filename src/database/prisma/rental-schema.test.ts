@@ -19,6 +19,14 @@ const foreignKeysMigrationPath = new URL(
   './migrations/20260813090009_add_rental_domain_foreign_keys/migration.sql',
   import.meta.url,
 );
+const foreignKeyValidationMigrationPath = new URL(
+  './migrations/20260813090010_validate_vehicle_archived_by_user_foreign_key/migration.sql',
+  import.meta.url,
+);
+const migrationRecoveryRunbookPath = new URL(
+  '../../../docs/runbooks/rental-migration-recovery.md',
+  import.meta.url,
+);
 const concurrentIndexMigrationPaths = [
   './migrations/20260813090002_add_vehicle_company_id_key_concurrently/migration.sql',
   './migrations/20260813090003_add_vehicle_registration_number_key_concurrently/migration.sql',
@@ -156,6 +164,20 @@ describe('доменная схема аренды', () => {
     expect(migration).toContain(`tstzrange("startsAt", "endsAt", '[)')`);
     expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
     expect(migration).not.toContain('SET NOT NULL');
+    expect(
+      migration.match(/CONSTRAINT "RentalDocumentVersion_clientDocumentVersionId_key" UNIQUE/g),
+    ).toHaveLength(1);
+    expect(
+      migration.match(
+        /CONSTRAINT "RentalDocumentVersion_clientDocumentId_clientDocumentVersionId_key" UNIQUE/g,
+      ),
+    ).toHaveLength(1);
+    expect(migration).not.toContain(
+      'CREATE UNIQUE INDEX "RentalDocumentVersion_clientDocumentVersionId_key"',
+    );
+    expect(migration).not.toContain(
+      'CREATE UNIQUE INDEX "RentalDocumentVersion_clientDocumentId_clientDocumentVersionId_key"',
+    );
   });
 
   it('фиксирует rental-документ в tenant-scoped истории CONTRACT без дублирования метаданных файла', () => {
@@ -260,6 +282,13 @@ describe('доменная схема аренды', () => {
     expect(migration).toContain('IF OLD."confirmedAt" IS NOT NULL AND (');
     expect(migration).toContain('OR NEW."dailyRateMinor" IS DISTINCT FROM OLD."dailyRateMinor"');
     expect(migration).toContain('OR NEW."totalPriceMinor" IS DISTINCT FROM OLD."totalPriceMinor"');
+    expect(migration).toContain('OR NEW."createdByUserId" IS DISTINCT FROM OLD."createdByUserId"');
+    expect(migration).toContain('OR NEW."confirmedAt" IS DISTINCT FROM OLD."confirmedAt"');
+    expect(migration).toContain('OLD."status" = \'CONFIRMED\' AND NEW."status" = \'ACTIVE\'');
+    expect(migration).toContain('OLD."status" = \'ACTIVE\' AND NEW."status" = \'COMPLETED\'');
+    expect(migration).toContain(
+      "OLD.\"status\" IN ('CONFIRMED', 'ACTIVE') AND NEW.\"status\" = 'CANCELLED'",
+    );
   });
 
   it('uses one-statement Prisma-deploy-compatible concurrent migrations and a later FK wave', () => {
@@ -282,6 +311,26 @@ describe('доменная схема аренды', () => {
     expect(readFileSync(foreignKeysMigrationPath, 'utf8')).toContain(
       'Rental_companyId_clientId_fkey',
     );
+    const foreignKeysMigration = readFileSync(foreignKeysMigrationPath, 'utf8');
+    expect(foreignKeysMigration).toContain(
+      'Vehicle_archivedByUserId_fkey" FOREIGN KEY ("archivedByUserId")',
+    );
+    expect(foreignKeysMigration).toContain('NOT VALID');
+    expect(existsSync(foreignKeyValidationMigrationPath)).toBe(true);
+    expect(readFileSync(foreignKeyValidationMigrationPath, 'utf8')).toContain(
+      'VALIDATE CONSTRAINT "Vehicle_archivedByUserId_fkey"',
+    );
+    expect(readFileSync(foreignKeyValidationMigrationPath, 'utf8')).toContain(
+      'SET LOCAL lock_timeout',
+    );
+
+    expect(existsSync(migrationRecoveryRunbookPath)).toBe(true);
+    const runbook = readFileSync(migrationRecoveryRunbookPath, 'utf8');
+    expect(runbook).toContain('pg_index');
+    expect(runbook).toContain('indisvalid');
+    expect(runbook).toContain('DROP INDEX CONCURRENTLY IF EXISTS');
+    expect(runbook).toContain('npx prisma migrate resolve --rolled-back <migration_name>');
+    expect(runbook).toContain('npx prisma migrate deploy');
   });
 
   it('models the populated-row guards: VIN canonicalization and non-override calculation reject invalid legacy values', () => {

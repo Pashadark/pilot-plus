@@ -121,8 +121,6 @@ CREATE INDEX "Rental_companyId_clientId_startsAt_idx" ON "public"."Rental"("comp
 CREATE UNIQUE INDEX "RentalDriver_rentalId_sortOrder_key" ON "public"."RentalDriver"("rentalId", "sortOrder");
 CREATE INDEX "RentalDriver_companyId_clientId_idx" ON "public"."RentalDriver"("companyId", "clientId");
 CREATE UNIQUE INDEX "RentalDocumentVersion_rentalId_version_format_key" ON "public"."RentalDocumentVersion"("rentalId", "version", "format");
-CREATE UNIQUE INDEX "RentalDocumentVersion_clientDocumentVersionId_key" ON "public"."RentalDocumentVersion"("clientDocumentVersionId");
-CREATE UNIQUE INDEX "RentalDocumentVersion_clientDocumentId_clientDocumentVersionId_key" ON "public"."RentalDocumentVersion"("clientDocumentId", "clientDocumentVersionId");
 CREATE INDEX "RentalDocumentVersion_companyId_clientId_rentalId_idx" ON "public"."RentalDocumentVersion"("companyId", "clientId", "rentalId");
 
 -- Rental records always represent a forward UTC interval and non-negative minor-unit amounts.
@@ -285,6 +283,7 @@ BEGIN
     OR NEW."snapshotVersion" IS DISTINCT FROM OLD."snapshotVersion"
     OR NEW."snapshot" IS DISTINCT FROM OLD."snapshot"
     OR NEW."templateVersionId" IS DISTINCT FROM OLD."templateVersionId"
+    OR NEW."createdByUserId" IS DISTINCT FROM OLD."createdByUserId"
     OR NEW."currency" IS DISTINCT FROM OLD."currency"
     OR NEW."dailyRateMinor" IS DISTINCT FROM OLD."dailyRateMinor"
     OR NEW."billableDays" IS DISTINCT FROM OLD."billableDays"
@@ -297,6 +296,25 @@ BEGIN
     OR NEW."overageMileagePriceMinor" IS DISTINCT FROM OLD."overageMileagePriceMinor"
     OR NEW."missingFuelPriceMinor" IS DISTINCT FROM OLD."missingFuelPriceMinor"
     OR NEW."priceOverrideReason" IS DISTINCT FROM OLD."priceOverrideReason"
+    OR NEW."confirmedAt" IS DISTINCT FROM OLD."confirmedAt"
+    OR (OLD."activatedAt" IS NOT NULL AND NEW."activatedAt" IS DISTINCT FROM OLD."activatedAt")
+    OR (
+      OLD."activatedAt" IS NULL
+      AND NEW."activatedAt" IS NOT NULL
+      AND NOT (OLD."status" = 'CONFIRMED' AND NEW."status" = 'ACTIVE')
+    )
+    OR (OLD."completedAt" IS NOT NULL AND NEW."completedAt" IS DISTINCT FROM OLD."completedAt")
+    OR (
+      OLD."completedAt" IS NULL
+      AND NEW."completedAt" IS NOT NULL
+      AND NOT (OLD."status" = 'ACTIVE' AND NEW."status" = 'COMPLETED')
+    )
+    OR (OLD."cancelledAt" IS NOT NULL AND NEW."cancelledAt" IS DISTINCT FROM OLD."cancelledAt")
+    OR (
+      OLD."cancelledAt" IS NULL
+      AND NEW."cancelledAt" IS NOT NULL
+      AND NOT (OLD."status" IN ('CONFIRMED', 'ACTIVE') AND NEW."status" = 'CANCELLED')
+    )
   ) THEN
     RAISE EXCEPTION 'Confirmed rental legal snapshot fields are immutable.';
   END IF;

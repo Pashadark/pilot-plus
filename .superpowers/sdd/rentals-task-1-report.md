@@ -10,7 +10,7 @@
 ## Changed files
 
 - `src/database/prisma/schema.prisma`: rental enums and models; tenant-scoped composite relations; versioned JSON snapshots; legal/bank/contract company fields; vehicle legal/rental/insurance/archive fields; compound keys and indexes.
-- `src/database/prisma/migrations/20260813090000_add_rentals_and_vehicle_legal_fields/migration.sql` and `20260813090100_add_rentals_and_vehicle_legal_indexes/migration.sql`: sequential add-only structural and concurrent-index waves, foreign keys, checks, triggers, and a partial GiST exclusion constraint for confirmed/active rentals.
+- `src/database/prisma/migrations/20260813090000_add_vehicle_legal_columns` through `20260813090010_validate_vehicle_archived_by_user_foreign_key`: ordered add-only rolling waves for vehicle metadata/backfill, one-index concurrent legacy operations, rental structures, foreign keys, and deferred Vehicle FK validation.
 - `src/database/prisma/rental-schema.test.ts`: focused schema/migration contract tests.
 - `src/database/prisma/schema.test.ts`: whitespace-sensitive legacy assertions changed to semantic regex assertions because Prisma formatting realigns columns after fields are added.
 
@@ -52,9 +52,7 @@ All commands exited with code 0 in the rental worktree:
 
 ### Corrected rolling plan
 
-- The original one-file migration plan is superseded for correctness because PostgreSQL rejects `CREATE INDEX CONCURRENTLY` inside a transaction block. The un-applied migration was split additively into ordered paths `20260813090000` (explicit `BEGIN`, local five-second lock timeout and ten-minute statement timeout, structural DDL/backfill/preflights/triggers) and `20260813090100` (no `BEGIN`/`COMMIT`, concurrent index wave and restart-aware foreign-key guards).
-- The second path must be executed by a runner that does not surround the migration SQL with a transaction. Standard Prisma migration execution behavior must be verified against the deployment runner before production; if it wraps migration SQL, run this explicitly documented path with a PostgreSQL non-transactional runner and reconcile migration history according to the deployment procedure.
-- The concurrent wave uses `IF NOT EXISTS` for valid indexes, detects any invalid interrupted index by name before retry, and requires a deliberate `DROP INDEX CONCURRENTLY` of that invalid index. It never deletes or resolves duplicate vehicle data. Foreign-key creation is guarded by `pg_constraint` checks; it still has short lock-timeout operational risk and should be deployed during low write volume.
+- This historical two-wave description is superseded by the current numbered sequence documented below and in `docs/runbooks/rental-migration-recovery.md`.
 
 ### Final invariants
 
@@ -82,7 +80,7 @@ Prettier was run only on TypeScript tests: the repository does not configure Pri
 - PASS: `npx vitest run src/database/prisma/rental-schema.test.ts src/database/prisma/schema.test.ts` — 2 test files, 30/30 tests passed (16 rental-schema and 14 legacy-schema assertions).
 - PASS: `npx prettier --check src/database/prisma/rental-schema.test.ts src/database/prisma/schema.test.ts`. The initial targeted check found a Prettier-only deviation in `rental-schema.test.ts`; it was mechanically formatted with `npx prettier --write src/database/prisma/rental-schema.test.ts`, then the check passed.
 - PASS: `git -C <rental worktree> diff --check`.
-- The current diff retains the deliberate two-wave rolling layout: `20260813090000` is transactional structural/backfill/guard DDL; `20260813090100` contains the non-transactional `CREATE INDEX CONCURRENTLY` wave and must be run by a compatible deployment runner.
+- The current diff uses the numbered `20260813090000`–`20260813090010` sequence; its failure recovery is documented in the rental migration recovery runbook.
 - Docker-based disposable-PostgreSQL validation remains unavailable: the prior Docker API approval attempt was interrupted. No Docker command was retried, no shared database was touched, and migration execution remains an integration gap rather than a claimed verification result.
 
 ## Prisma-deploy rolling split fix wave
@@ -97,11 +95,12 @@ Prettier was run only on TypeScript tests: the repository does not configure Pri
 
 1. `20260813090000_add_vehicle_legal_columns`: short transactional Vehicle metadata ALTER plus normalizer functions/trigger. `SET LOCAL lock_timeout = '5s'` and `SET LOCAL statement_timeout = '60s'` bound this short migration only.
 2. `20260813090001_backfill_vehicle_legal_identifiers`: committed separately, performs the deterministic identifier backfill and duplicate preflight with a ten-minute statement timeout. It no longer holds the earlier Vehicle `ALTER TABLE` ACCESS EXCLUSIVE lock.
-3. `20260813090002` through `20260813090007`: each migration contains exactly one concurrent index statement for a populated legacy table. They are applied in order by the canonical `prisma migrate deploy` flow and are independently resumable through that same flow.
+3. `20260813090002` through `20260813090007`: each migration contains exactly one concurrent index statement for a populated legacy table. If one fails, use the explicit targeted recovery runbook before rerunning `prisma migrate deploy`; do not treat a failed concurrent build as an automatic retry.
 4. `20260813090008_add_rental_domain_structures`: transactional company legal fields, rental enums/tables, constraints, immutable-history functions/triggers, and ordinary indexes only on newly created empty tables.
-5. `20260813090009_add_rental_domain_foreign_keys`: short transactional foreign-key wave after all required legacy supporting keys exist, with five-second lock and sixty-second statement timeouts. A failure rolls back its whole migration and is retried normally by `prisma migrate deploy`.
+5. `20260813090009_add_rental_domain_foreign_keys`: short transactional foreign-key wave after all required legacy supporting keys exist, with five-second lock and sixty-second statement timeouts. The populated Vehicle FK is attached `NOT VALID`.
+6. `20260813090010_validate_vehicle_archived_by_user_foreign_key`: separately validates that Vehicle FK with five-second lock and ten-minute statement timeouts.
 
-The previous multi-statement `20260813090100` concurrent wave and monolithic `20260813090000` wave were removed before deployment; they were never applied to any database. There is no longer a custom non-transactional runner, migration-history reconciliation procedure, or invalid-index repair branch claimed by this task.
+The previous multi-statement `20260813090100` concurrent wave and monolithic `20260813090000` wave were removed before deployment; they were never applied to any database. There is no custom runner, but a failed concurrent index requires the targeted Prisma migration-history recovery in the runbook.
 
 ### Final constraints and concern
 
@@ -128,7 +127,14 @@ Review findings were addressed in a separate fix wave without applying the migra
 
 - Deterministic plate and VIN normalizers plus `BEFORE INSERT OR UPDATE OF registrationNumber, vin` trigger preserve derived values for legacy writers.
 - Existing rows are backfilled before uniqueness. A `DO` preflight aborts with a clear message if normalized plates or case/whitespace-insensitive VINs are duplicated; it never resolves or deletes rows automatically.
-- The rolling plan is now explicitly split: the transactional structural wave has `SET LOCAL lock_timeout` and `SET LOCAL statement_timeout`; the subsequent no-`BEGIN` wave builds all indexes with `CREATE INDEX CONCURRENTLY`. Its runner must not wrap the script in a transaction; interrupted invalid concurrent indexes require the explicitly documented `DROP INDEX CONCURRENTLY` repair before retry.
+- Superseded by the final numbered sequence and targeted recovery runbook above.
+
+## Recovery and FK safeguard fix wave
+
+- RED: focused tests failed because the rental-document unique constraints had duplicate explicit indexes, confirmed history did not freeze creator/timestamps, Vehicle FK attachment was fully validating, and no targeted concurrent-index recovery runbook existed.
+- GREEN: the duplicate index declarations were removed; the table's named `UNIQUE` constraints remain the only definitions. The immutable trigger now freezes `createdByUserId`, `confirmedAt`, and any historical lifecycle timestamp once set, while permitting exactly the valid `CONFIRMED → ACTIVE`, `ACTIVE → COMPLETED`, or confirmed/active → cancelled timestamp assignment.
+- `Vehicle_archivedByUserId_fkey` is now attached `NOT VALID` in `20260813090009`; `20260813090010` validates it separately with bounded lock/statement timeouts. New rental-table FKs remain normal because their tables are empty at creation.
+- Added `docs/runbooks/rental-migration-recovery.md`. It requires inspecting the exact named `pg_index` row and `indisvalid`, dropping only an invalid/partial target index concurrently, resolving only the named migration as rolled back, rerunning `npx prisma migrate deploy`, and verifying both migration history and index readiness. No shared-DB automation is introduced.
 
 ### Type and invariant hardening
 
