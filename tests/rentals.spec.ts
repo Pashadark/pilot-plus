@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createCipheriv, randomBytes, randomUUID } from 'node:crypto';
 
 import { expect, test, type Page } from '@playwright/test';
 
@@ -17,10 +17,18 @@ const created = {
   userIds: [] as string[],
   clientIds: [] as string[],
   vehicleIds: [] as string[],
+  templateIds: [] as string[],
 };
 const password = `E2E-${randomUUID()}-safe`;
 const fixture: {
-  admin: { email: string; companyId: string; clientId: string; vehicleId: string };
+  admin: {
+    email: string;
+    companyId: string;
+    clientId: string;
+    vehicleId: string;
+    userId: string;
+    templateId: string;
+  };
   dispatcher: { email: string; clientId: string };
   driver: { email: string };
   foreign: { email: string; companyId: string };
@@ -32,20 +40,43 @@ function requireDisposableDatabase() {
   if (!/e2e|test/i.test(url))
     throw new Error('PILOT_RENTALS_E2E допускается только с отдельной test/e2e DATABASE_URL.');
 }
+function encryptedFixture(value: string) {
+  const key = process.env.CLIENT_DATA_ENCRYPTION_KEY;
+  if (!key) throw new Error('Для rental E2E нужен CLIENT_DATA_ENCRYPTION_KEY тестовой БД.');
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', Buffer.from(key, 'base64'), iv);
+  const ciphertext = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+  return [
+    'v1',
+    iv.toString('base64url'),
+    cipher.getAuthTag().toString('base64url'),
+    ciphertext.toString('base64url'),
+  ].join('.');
+}
 
 async function createTenant(role: 'COMPANY_ADMIN' | 'DISPATCHER' | 'DRIVER', companyId?: string) {
   const tenantId = companyId ?? randomUUID();
+  const newCompany = !created.companyIds.includes(tenantId);
   const userId = randomUUID();
   const clientId = randomUUID();
   const vehicleId = randomUUID();
-  await prisma.company.create({
-    data: {
-      id: tenantId,
-      name: `E2E ${marker}`,
-      slug: `${marker}-${tenantId.slice(0, 8)}`,
-      isDemo: true,
-    },
-  });
+  if (newCompany)
+    await prisma.company.create({
+      data: {
+        id: tenantId,
+        name: `E2E ${marker}`,
+        slug: `${marker}-${tenantId.slice(0, 8)}`,
+        isDemo: true,
+        legalName: `ООО ${marker}`,
+        inn: '7700000000',
+        legalAddress: 'Москва',
+        contractCity: 'Москва',
+        defaultPickupAddress: 'Москва, E2E выдача',
+        defaultReturnAddress: 'Москва, E2E возврат',
+        signatoryName: 'E2E подписант',
+        signatoryAuthority: 'Устав',
+      },
+    });
   await prisma.user.create({
     data: {
       id: userId,
@@ -63,18 +94,49 @@ async function createTenant(role: 'COMPANY_ADMIN' | 'DISPATCHER' | 'DRIVER', com
       companyId: tenantId,
       firstName: 'E2E',
       lastName: marker,
-      phoneEncrypted: 'fixture',
+      phoneEncrypted: encryptedFixture('+79990000000'),
       phoneIndex: `${marker}-${clientId}`,
+      passportEncrypted: encryptedFixture('4500 000000'),
+      registrationAddressEncrypted: encryptedFixture('Москва'),
+      driverLicenseEncrypted: encryptedFixture('E2E-DRIVER'),
+      birthDate: new Date('1990-01-01'),
       driverCategories: [],
       createdByUserId: userId,
     },
   });
+  for (const category of ['PASSPORT', 'DRIVER_LICENSE'] as const) {
+    const documentId = randomUUID();
+    await prisma.clientDocument.create({
+      data: {
+        id: documentId,
+        companyId: tenantId,
+        clientId,
+        category,
+        title: `E2E ${category}`,
+        status: 'CLEAN',
+        createdByUserId: userId,
+        versions: {
+          create: {
+            id: randomUUID(),
+            version: 1,
+            storageKey: `e2e/${marker}/${documentId}`,
+            originalName: `${category}.txt`,
+            verifiedMime: 'text/plain',
+            bytes: 1,
+            sha256: '0'.repeat(64),
+            scanVerdict: 'CLEAN',
+            scannedAt: new Date(),
+          },
+        },
+      },
+    });
+  }
   await prisma.vehicle.create({
     data: {
       id: vehicleId,
       companyId: tenantId,
       sourceKey: `${marker}-${vehicleId}`,
-      internalNumber: marker,
+      internalNumber: `${marker}-${userId.slice(0, 6)}`,
       model: 'E2E',
       city: 'Москва',
       transmission: 'AUTOMATIC',
@@ -83,18 +145,53 @@ async function createTenant(role: 'COMPANY_ADMIN' | 'DISPATCHER' | 'DRIVER', com
       dailyPriceMinor: 100000,
       currency: 'RUB',
       originalPrice: '1000 ₽/сутки',
+      make: 'E2E',
+      modelName: 'Rental',
+      registrationNumber: `Е${vehicleId.slice(0, 3)}Е2E`,
+      vin: `E2E${vehicleId.replaceAll('-', '').slice(0, 14)}`,
+      depositMinor: BigInt(100000),
+      includedMileageKm: 300,
+      overageMileagePriceMinor: BigInt(1000),
+      missingFuelPriceMinor: BigInt(5000),
+      isRentalReady: true,
+      registrationCertificateNumber: 'E2E-STS',
+      vehiclePassportNumber: 'E2E-PTS',
+      osagoInsurer: 'E2E',
+      osagoPolicyNumber: 'E2E-OSAGO',
+      osagoStartsAt: new Date('2026-01-01'),
+      osagoEndsAt: new Date('2027-01-01'),
+      cascoInsurer: 'E2E',
+      cascoPolicyNumber: 'E2E-CASCO',
+      cascoStartsAt: new Date('2026-01-01'),
+      cascoEndsAt: new Date('2027-01-01'),
     },
   });
   if (!created.companyIds.includes(tenantId)) created.companyIds.push(tenantId);
   created.userIds.push(userId);
   created.clientIds.push(clientId);
   created.vehicleIds.push(vehicleId);
+  const template = newCompany
+    ? await prisma.contractTemplateVersion.create({
+        data: {
+          companyId: tenantId,
+          version: 1,
+          title: 'E2E',
+          content: 'E2E',
+          documentSchemaVersion: 1,
+          isPublished: true,
+          publishedAt: new Date(),
+          createdByUserId: userId,
+        },
+      })
+    : { id: created.templateIds[0]! };
+  if (newCompany) created.templateIds.push(template.id);
   return {
     companyId: tenantId,
     userId,
     clientId,
     vehicleId,
     email: `${marker}-${userId}@example.test`,
+    templateId: template.id,
   };
 }
 
@@ -105,12 +202,32 @@ test.beforeAll(async () => {
   const dispatcher = await createTenant('DISPATCHER', admin.companyId);
   const driver = await createTenant('DRIVER', admin.companyId);
   const foreign = await createTenant('COMPANY_ADMIN');
+  const existing = await prisma.rental.create({
+    data: {
+      companyId: admin.companyId,
+      clientId: admin.clientId,
+      vehicleId: admin.vehicleId,
+      templateVersionId: admin.templateId,
+      startsAt: new Date('2026-08-20T07:00:00.000Z'),
+      endsAt: new Date('2026-08-22T07:00:00.000Z'),
+      currency: 'RUB',
+      dailyRateMinor: BigInt(100000),
+      billableDays: 2,
+      basePriceMinor: BigInt(200000),
+      discountMinor: BigInt(0),
+      servicesMinor: BigInt(0),
+      totalPriceMinor: BigInt(200000),
+      snapshotVersion: 1,
+      snapshot: { schemaVersion: 1, draft: true },
+      createdByUserId: admin.userId,
+    },
+  });
   Object.assign(fixture, {
     admin,
     dispatcher,
     driver,
     foreign,
-    foreignRentalId: `missing-${randomUUID()}`,
+    foreignRentalId: existing.id,
   });
 });
 test.afterAll(async () => {
@@ -122,6 +239,7 @@ test.afterAll(async () => {
     where: { companyId: { in: created.companyIds } },
   });
   await prisma.rental.deleteMany({ where: { companyId: { in: created.companyIds } } });
+  await prisma.contractTemplateVersion.deleteMany({ where: { id: { in: created.templateIds } } });
   await prisma.vehicle.deleteMany({ where: { id: { in: created.vehicleIds } } });
   await prisma.client.deleteMany({ where: { id: { in: created.clientIds } } });
   await prisma.company.deleteMany({ where: { id: { in: created.companyIds } } });
