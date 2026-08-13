@@ -48,7 +48,11 @@ export default async function NewVehiclePage({
           </p>
         </div>
         <VehicleForm
-          companies={companies.map((company) => ({ id: company.id, label: company.name }))}
+          companies={companies.map((company) => ({
+            id: company.id,
+            label: company.name,
+            canArchive: false,
+          }))}
         />
       </main>
     </AppShell>

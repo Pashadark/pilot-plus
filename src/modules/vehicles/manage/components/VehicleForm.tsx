@@ -8,7 +8,7 @@ import { useToast } from '@/shared/providers/ToastProvider';
 
 const initialState: VehicleActionState = { ok: false, code: 'IDLE', message: '' };
 
-export type ManageableCompany = { id: string; label: string };
+export type ManageableCompany = { id: string; label: string; canArchive: boolean };
 
 export function VehicleForm({ companies }: { companies: readonly ManageableCompany[] }) {
   const [state, action, pending] = useActionState(createVehicleAction, initialState);

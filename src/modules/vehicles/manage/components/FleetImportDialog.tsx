@@ -112,43 +112,62 @@ export function FleetImportDialog({ companies }: { companies: readonly Manageabl
                         </span>
                       </td>
                       <td>{row.row.year}</td>
-                      <td>
+                      <td
+                        className={
+                          row.operation === 'ERROR'
+                            ? 'font-semibold text-[var(--color-danger)]'
+                            : ''
+                        }
+                      >
                         {row.operation === 'ADD'
                           ? 'Добавить'
                           : row.operation === 'UPDATE'
                             ? 'Обновить'
-                            : 'Без изменений'}
+                            : row.operation === 'ERROR'
+                              ? 'Ошибка импорта'
+                              : 'Без изменений'}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            {preview.optionalArchives.length > 0 && (
-              <fieldset className="grid gap-2">
-                <legend className="font-semibold">Архивировать отсутствующие автомобили</legend>
-                {preview.optionalArchives.map((vehicle) => (
-                  <label key={vehicle.id} className="flex min-h-11 items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={archiveIds.includes(vehicle.id)}
-                      onChange={(event) =>
-                        setArchiveIds((ids) =>
-                          event.target.checked
-                            ? [...ids, vehicle.id]
-                            : ids.filter((id) => id !== vehicle.id),
-                        )
-                      }
-                    />{' '}
-                    {vehicle.internalNumber}
-                  </label>
-                ))}
-              </fieldset>
-            )}
+            {preview.optionalArchives.length > 0 &&
+              companies.some((company) => company.canArchive) && (
+                <fieldset className="grid gap-2">
+                  <legend className="font-semibold">Архивировать отсутствующие автомобили</legend>
+                  {preview.optionalArchives.map((vehicle) => (
+                    <label key={vehicle.id} className="flex min-h-11 items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={archiveIds.includes(vehicle.id)}
+                        onChange={(event) =>
+                          setArchiveIds((ids) =>
+                            event.target.checked
+                              ? [...ids, vehicle.id]
+                              : ids.filter((id) => id !== vehicle.id),
+                          )
+                        }
+                      />{' '}
+                      {vehicle.internalNumber}
+                    </label>
+                  ))}
+                </fieldset>
+              )}
             <form action={applyAction}>
               <input type="hidden" name="token" value={preview.token} />
-              <input type="hidden" name="archiveIds" value={JSON.stringify(archiveIds)} />
-              <Button type="submit" loading={applyPending}>
+              <input
+                type="hidden"
+                name="archiveIds"
+                value={JSON.stringify(
+                  companies.some((company) => company.canArchive) ? archiveIds : [],
+                )}
+              />
+              <Button
+                type="submit"
+                loading={applyPending}
+                disabled={preview.rows.some((row) => row.operation === 'ERROR')}
+              >
                 Применить импорт
               </Button>
             </form>

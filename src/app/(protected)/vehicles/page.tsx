@@ -16,6 +16,13 @@ export default async function VehiclesPage() {
         orderBy: { name: 'asc' },
       })
     : [];
+  const memberships =
+    access?.scope === 'COMPANY'
+      ? await prisma.companyMember.findMany({
+          where: { userId: access.user.id, companyId: { in: [...access.companyIds] } },
+          select: { companyId: true, role: true },
+        })
+      : [];
 
   return (
     <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Автомобили' }]}>
@@ -24,6 +31,12 @@ export default async function VehiclesPage() {
         manageableCompanies={manageableCompanies.map((company) => ({
           id: company.id,
           label: company.name,
+          canArchive:
+            access?.scope === 'SYSTEM' ||
+            memberships.some(
+              (membership) =>
+                membership.companyId === company.id && membership.role === 'COMPANY_ADMIN',
+            ),
         }))}
       />
     </AppShell>

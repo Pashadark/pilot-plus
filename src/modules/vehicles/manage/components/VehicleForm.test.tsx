@@ -12,7 +12,7 @@ afterEach(cleanup);
 
 describe('VehicleForm', () => {
   it('renders Russian labelled inputs and a 44px save action', () => {
-    render(<VehicleForm companies={[{ id: 'company-1', label: 'Компания' }]} />);
+    render(<VehicleForm companies={[{ id: 'company-1', label: 'Компания', canArchive: true }]} />);
 
     expect(document.querySelector('input[name="make"]')).toBeTruthy();
     expect(document.querySelector('input[name="registrationNumber"]')).toBeTruthy();
@@ -25,8 +25,8 @@ describe('VehicleForm', () => {
     render(
       <VehicleForm
         companies={[
-          { id: 'company-1', label: 'Первая компания' },
-          { id: 'company-2', label: 'Вторая компания' },
+          { id: 'company-1', label: 'Первая компания', canArchive: true },
+          { id: 'company-2', label: 'Вторая компания', canArchive: false },
         ]}
       />,
     );

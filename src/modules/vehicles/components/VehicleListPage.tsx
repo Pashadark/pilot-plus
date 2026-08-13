@@ -16,7 +16,7 @@ export function VehicleListPage({
   manageableCompanies = [],
 }: {
   vehicles: readonly VehicleCardDto[];
-  manageableCompanies?: readonly { id: string; label: string }[];
+  manageableCompanies?: readonly { id: string; label: string; canArchive: boolean }[];
 }) {
   const [filters, setFilters] = useState(initialVehicleFilters);
   const filtered = useMemo(() => filterVehicles(vehicles, filters), [filters, vehicles]);
