@@ -22,7 +22,7 @@ export default async function NewRentalRoute({ params }: { params: Promise<{ id:
   const client = await getClientById(clientAccess, id);
   if (!client) notFound();
   await requireRentalAccess(client.companyId);
-  const [vehicles, template] = await Promise.all([
+  const [vehicles, template, clientDocuments] = await Promise.all([
     prisma.vehicle.findMany({
       where: { companyId: client.companyId },
       select: {
@@ -31,10 +31,21 @@ export default async function NewRentalRoute({ params }: { params: Promise<{ id:
         modelName: true,
         model: true,
         registrationNumber: true,
+        vin: true,
         dailyPriceMinor: true,
         archivedAt: true,
         isRentalReady: true,
         status: true,
+        registrationCertificateNumber: true,
+        vehiclePassportNumber: true,
+        osagoInsurer: true,
+        osagoPolicyNumber: true,
+        osagoStartsAt: true,
+        osagoEndsAt: true,
+        cascoInsurer: true,
+        cascoPolicyNumber: true,
+        cascoStartsAt: true,
+        cascoEndsAt: true,
         rentals: { select: { startsAt: true, endsAt: true, status: true } },
         washRecords: {
           where: { status: { in: ['PLANNED', 'IN_PROGRESS'] } },
@@ -48,7 +59,28 @@ export default async function NewRentalRoute({ params }: { params: Promise<{ id:
       orderBy: { publishedAt: 'desc' },
       select: { id: true },
     }),
+    prisma.clientDocument.findMany({
+      where: {
+        companyId: client.companyId,
+        clientId: client.id,
+        archivedAt: null,
+        category: { in: ['PASSPORT', 'DRIVER_LICENSE'] },
+        status: 'CLEAN',
+      },
+      select: {
+        category: true,
+        currentVersion: true,
+        versions: { where: { scanVerdict: 'CLEAN' }, select: { version: true } },
+      },
+    }),
   ]);
+  const documentsReady = new Set(
+    clientDocuments
+      .filter((document) =>
+        document.versions.some((version) => version.version === document.currentVersion),
+      )
+      .map((document) => document.category),
+  );
   const vehicleOptions: RentalWizardVehicle[] = vehicles.map((vehicle) => {
     const availability = getAvailability(
       {
@@ -70,6 +102,20 @@ export default async function NewRentalRoute({ params }: { params: Promise<{ id:
       dailyMinor: vehicle.dailyPriceMinor,
       available: reasons.length === 0,
       reasons,
+      legalReady: Boolean(
+        vehicle.registrationNumber &&
+        vehicle.vin &&
+        vehicle.registrationCertificateNumber &&
+        vehicle.vehiclePassportNumber &&
+        vehicle.osagoInsurer &&
+        vehicle.osagoPolicyNumber &&
+        vehicle.osagoStartsAt &&
+        vehicle.osagoEndsAt &&
+        vehicle.cascoInsurer &&
+        vehicle.cascoPolicyNumber &&
+        vehicle.cascoStartsAt &&
+        vehicle.cascoEndsAt,
+      ),
       rentalIntervals: vehicle.rentals.map((rental) => ({
         ...rental,
         startsAt: rental.startsAt.toISOString(),
@@ -87,7 +133,10 @@ export default async function NewRentalRoute({ params }: { params: Promise<{ id:
       ]}
     >
       <RentalWizard
-        client={client}
+        client={{
+          ...client,
+          documentsReady: documentsReady.has('PASSPORT') && documentsReady.has('DRIVER_LICENSE'),
+        }}
         templateVersionId={template?.id ?? null}
         vehicles={vehicleOptions}
       />

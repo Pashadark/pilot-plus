@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 const { confirmRental } = vi.hoisted(() => ({ confirmRental: vi.fn() }));
@@ -6,9 +6,17 @@ vi.mock('./confirm-rental', () => ({ confirmRental }));
 const { generateRentalDocumentPair } = vi.hoisted(() => ({ generateRentalDocumentPair: vi.fn() }));
 vi.mock('./generate-rental-documents', () => ({ generateRentalDocumentPair }));
 
-import { confirmAndGenerateRentalAction, confirmRentalAction } from './actions';
+import {
+  confirmAndGenerateRentalAction,
+  confirmRentalAction,
+  generateRentalDocumentsAction,
+} from './actions';
 
 describe('rental actions', () => {
+  beforeEach(() => {
+    confirmRental.mockReset();
+    generateRentalDocumentPair.mockReset();
+  });
   it('reserves cancellation for draft and confirmed states', () => {
     expect(['DRAFT', 'CONFIRMED']).toContain('CONFIRMED');
     expect(['DRAFT', 'CONFIRMED']).not.toContain('ACTIVE');
@@ -63,5 +71,36 @@ describe('rental actions', () => {
       companyId: 'company-1',
       rentalId: 'rental-1',
     });
+  });
+
+  it('keeps the confirmed rental addressable when pair generation fails', async () => {
+    confirmRental.mockResolvedValueOnce({
+      rentalId: 'rental-1',
+      contractNumber: 'ME-2026-0001-BK',
+    });
+    generateRentalDocumentPair.mockRejectedValueOnce(new Error('converter failed'));
+    const form = new FormData();
+    form.set('companyId', 'company-1');
+    form.set('rentalId', 'rental-1');
+
+    await expect(confirmAndGenerateRentalAction(null, form)).resolves.toMatchObject({
+      ok: false,
+      code: 'DOCUMENT_FAILED',
+      confirmedNeedsDocuments: true,
+      rentalId: 'rental-1',
+    });
+  });
+
+  it('retries only durable pair generation for an already confirmed rental', async () => {
+    generateRentalDocumentPair.mockResolvedValueOnce({ version: 3 });
+    const form = new FormData();
+    form.set('companyId', 'company-1');
+    form.set('rentalId', 'rental-1');
+    await expect(generateRentalDocumentsAction(null, form)).resolves.toMatchObject({
+      ok: true,
+      rentalId: 'rental-1',
+      documentVersion: 3,
+    });
+    expect(confirmRental).not.toHaveBeenCalled();
   });
 });

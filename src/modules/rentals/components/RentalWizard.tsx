@@ -16,6 +16,7 @@ import { intervalsOverlap } from '@/modules/rentals/domain/availability';
 import {
   confirmAndGenerateRentalAction,
   createRentalDraftAction,
+  generateRentalDocumentsAction,
   type RentalActionResult,
   updateRentalDraftAction,
 } from '@/modules/rentals/server/actions';
@@ -28,6 +29,7 @@ export type RentalWizardVehicle = {
   dailyMinor: number;
   available: boolean;
   reasons: readonly string[];
+  legalReady?: boolean;
   rentalIntervals?: readonly { startsAt: string; endsAt: string; status: string }[];
 };
 
@@ -40,6 +42,7 @@ type Props = {
     passport: string | null;
     driverLicense: string | null;
     driverLicenseExpiresAt: string | null;
+    documentsReady?: boolean;
   };
   templateVersionId: string | null;
   vehicles: readonly RentalWizardVehicle[];
@@ -58,9 +61,7 @@ function rubles(minor: number) {
   return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(minor / 100);
 }
 function legalReady(client: Props['client'], templateVersionId: string | null) {
-  return Boolean(
-    templateVersionId && client.passport && client.driverLicense && client.driverLicenseExpiresAt,
-  );
+  return Boolean(templateVersionId && client.documentsReady);
 }
 
 export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
@@ -70,6 +71,9 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
   const [endsAt, setEndsAt] = useState('');
   const [discountMinor, setDiscountMinor] = useState(0);
   const [servicesMinor, setServicesMinor] = useState(0);
+  const [pickupAddress, setPickupAddress] = useState('');
+  const [returnAddress, setReturnAddress] = useState('');
+  const [conditions, setConditions] = useState('');
   const [rentalId, setRentalId] = useState<string | null>(null);
   const [localError, setLocalError] = useState('');
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -107,7 +111,12 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
       return null;
     }
   }, [discountMinor, endsAt, selectedVehicle, servicesMinor, startsAt]);
-  const ready = Boolean(selectedAvailable && calculation && legalReady(client, templateVersionId));
+  const ready = Boolean(
+    selectedAvailable &&
+    selectedVehicle?.legalReady !== false &&
+    calculation &&
+    legalReady(client, templateVersionId),
+  );
   const saveAction = useCallback(
     (previous: RentalActionResult | null, formData: FormData) =>
       rentalId
@@ -118,6 +127,10 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
   const [draftState, draftFormAction, saving] = useActionState(saveAction, initialState);
   const [confirmState, confirmFormAction, confirming] = useActionState(
     confirmAndGenerateRentalAction,
+    initialState,
+  );
+  const [retryState, retryFormAction, retrying] = useActionState(
+    generateRentalDocumentsAction,
     initialState,
   );
 
@@ -135,6 +148,13 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
       title: confirmState.ok ? 'Договор подтверждён, документы готовы.' : confirmState.message,
     });
   }, [confirmState, showToast]);
+  useEffect(() => {
+    if (!retryState) return;
+    showToast({
+      tone: retryState.ok ? 'success' : 'danger',
+      title: retryState.ok ? 'Файлы договора готовы.' : retryState.message,
+    });
+  }, [retryState, showToast]);
   useEffect(() => {
     headingRef.current?.focus();
   }, [step]);
@@ -154,7 +174,16 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
   }
   const serverError =
     (!draftState?.ok && draftState?.message) || (!confirmState?.ok && confirmState?.message);
-  const documentVersion = confirmState?.ok ? confirmState.documentVersion : undefined;
+  const documentVersion = confirmState?.ok
+    ? confirmState.documentVersion
+    : retryState?.ok
+      ? retryState.documentVersion
+      : undefined;
+  const confirmedNeedsDocuments =
+    Boolean(confirmState && !confirmState.ok && confirmState.confirmedNeedsDocuments) ||
+    Boolean(retryState && !retryState.ok && retryState.confirmedNeedsDocuments);
+  const confirmedRentalId = confirmState && !confirmState.ok ? confirmState.rentalId : rentalId;
+  const confirmReady = ready && Boolean(rentalId);
 
   return (
     <main
@@ -210,6 +239,9 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
             <input type="hidden" name="dailyMinor" value={selectedVehicle?.dailyMinor ?? ''} />
             <input type="hidden" name="discountMinor" value={discountMinor} />
             <input type="hidden" name="servicesMinor" value={servicesMinor} />
+            <input type="hidden" name="pickupAddress" value={pickupAddress} />
+            <input type="hidden" name="returnAddress" value={returnAddress} />
+            <input type="hidden" name="conditions" value={conditions} />
             {rentalId ? <input type="hidden" name="rentalId" value={rentalId} /> : null}
             {step === 0 ? (
               <section aria-labelledby="step-client">
@@ -228,9 +260,7 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                   <div>
                     <dt className="text-[var(--color-text-secondary)]">Реквизиты</dt>
                     <dd>
-                      {client.passport && client.driverLicense
-                        ? 'Заполнены'
-                        : 'Нужно заполнить в карточке клиента'}
+                      {client.documentsReady ? 'Заполнены' : 'Нужно заполнить в карточке клиента'}
                     </dd>
                   </div>
                 </dl>
@@ -283,6 +313,46 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                     required
                   />
                 </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Input
+                    label="Адрес выдачи"
+                    value={pickupAddress}
+                    onChange={(event) => setPickupAddress(event.target.value)}
+                  />
+                  <Input
+                    label="Адрес возврата"
+                    value={returnAddress}
+                    onChange={(event) => setReturnAddress(event.target.value)}
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Input
+                    label="Пробег при выдаче, км"
+                    name="startMileageKm"
+                    type="number"
+                    min="0"
+                  />
+                  <Input
+                    label="Пробег при возврате, км"
+                    name="returnMileageKm"
+                    type="number"
+                    min="0"
+                  />
+                  <Input
+                    label="Топливо при выдаче, %"
+                    name="startFuelPercent"
+                    type="number"
+                    min="0"
+                    max="100"
+                  />
+                  <Input
+                    label="Топливо при возврате, %"
+                    name="returnFuelPercent"
+                    type="number"
+                    min="0"
+                    max="100"
+                  />
+                </div>
               </section>
             ) : null}
             {step === 3 ? (
@@ -314,6 +384,29 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                     }
                   />
                 </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Input label="Залог, ₽" name="depositRubles" type="number" min="0" />
+                  <Input
+                    label="Условия оплаты"
+                    name="paymentTerms"
+                    placeholder="При выдаче, картой или наличными"
+                  />
+                  <Input
+                    label="Территория использования"
+                    name="territory"
+                    placeholder="Москва и Московская область"
+                  />
+                  <Input
+                    label="Допущенные водители"
+                    name="allowedDrivers"
+                    placeholder="ФИО, при наличии"
+                  />
+                </div>
+                <Input
+                  label="Условия, примечания и причина ручной цены"
+                  value={conditions}
+                  onChange={(event) => setConditions(event.target.value)}
+                />
                 {calculation ? (
                   <p className="rounded-[var(--radius-md)] bg-[var(--color-primary-soft)] p-4 font-semibold">
                     {calculation.days} суток · {rubles(calculation.agreedTotalMinor)}
@@ -337,7 +430,7 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                       : 'text-[var(--color-danger)]'
                   }
                 >
-                  {legalReady(client, templateVersionId)
+                  {legalReady(client, templateVersionId) && selectedVehicle?.legalReady !== false
                     ? 'Паспорт, водительское удостоверение и версия договора готовы.'
                     : 'Не хватает обязательных реквизитов клиента или опубликованной версии договора.'}
                 </p>
@@ -410,7 +503,7 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                   <Button
                     formAction={confirmFormAction}
                     type="submit"
-                    disabled={!ready}
+                    disabled={!confirmReady}
                     loading={confirming}
                   >
                     Подтвердить и занять автомобиль
@@ -419,7 +512,24 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
               </div>
             </div>
           </form>
-          {documentVersion && confirmState?.ok ? (
+          {confirmedNeedsDocuments && confirmedRentalId ? (
+            <div
+              role="alert"
+              className="mt-5 grid gap-3 rounded-[var(--radius-md)] bg-[var(--color-warning-soft)] p-4"
+            >
+              <p className="font-semibold">
+                Договор подтверждён и автомобиль занят, но файлы ещё не готовы.
+              </p>
+              <form action={retryFormAction}>
+                <input type="hidden" name="companyId" value={client.companyId} />
+                <input type="hidden" name="rentalId" value={confirmedRentalId} />
+                <Button type="submit" loading={retrying}>
+                  Повторить создание документов
+                </Button>
+              </form>
+            </div>
+          ) : null}
+          {documentVersion && (confirmState?.ok || retryState?.ok) ? (
             <div
               aria-live="polite"
               className="mt-5 grid gap-3 rounded-[var(--radius-md)] bg-[var(--color-success-soft)] p-4"
@@ -428,14 +538,14 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Link
                   className="inline-flex min-h-11 items-center gap-2 text-[var(--color-primary)] hover:underline"
-                  href={`/rentals/${confirmState.rentalId}/documents/${documentVersion}/DOCX`}
+                  href={`/rentals/${(confirmState?.ok ? confirmState.rentalId : retryState?.rentalId) ?? rentalId}/documents/${documentVersion}/DOCX`}
                 >
                   <FiDownload aria-hidden="true" />
                   Скачать DOCX
                 </Link>
                 <Link
                   className="inline-flex min-h-11 items-center gap-2 text-[var(--color-primary)] hover:underline"
-                  href={`/rentals/${confirmState.rentalId}/documents/${documentVersion}/PDF`}
+                  href={`/rentals/${(confirmState?.ok ? confirmState.rentalId : retryState?.rentalId) ?? rentalId}/documents/${documentVersion}/PDF`}
                 >
                   <FiDownload aria-hidden="true" />
                   Скачать PDF

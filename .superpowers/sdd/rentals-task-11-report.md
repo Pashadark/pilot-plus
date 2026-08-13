@@ -33,3 +33,16 @@
   only informs UX and cannot bypass confirmation validation or document-generation authorization.
 - Known scope boundary: route tests cover the wizard and client entry; no browser E2E is included in
   Task 11's focused suite.
+
+## Review follow-up
+
+- Draft persistence now reads `dailyPriceMinor` and rental policy money from the tenant-scoped vehicle
+  inside the transaction; hidden form tariff data is ignored.
+- The route checks required passport and licence documents as current `CLEAN` document versions and
+  carries vehicle legal/policy readiness separately from client PII.
+- A confirmation that succeeds before pair generation now returns an explicit recoverable
+  `confirmedNeedsDocuments` result with the rental id. The wizard displays the occupied/incomplete
+  state and invokes the idempotent generator-only retry action.
+- Issuance/return addresses, mileage, fuel, territory, payment, drivers and notes are collected in
+  the six fixed steps; schema-supported price/deposit/policy values are persisted on the draft and
+  operational notes are retained in its draft JSON snapshot.

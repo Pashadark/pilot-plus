@@ -9,7 +9,14 @@ import { generateRentalDocumentPair } from './generate-rental-documents';
 
 export type RentalActionResult =
   | { ok: true; rentalId: string; contractNumber?: string; documentVersion?: number }
-  | { ok: false; code: string; message: string };
+  | {
+      ok: false;
+      code: string;
+      message: string;
+      confirmedNeedsDocuments?: boolean;
+      rentalId?: string;
+      contractNumber?: string;
+    };
 const forbidden = {
   ok: false as const,
   code: 'FORBIDDEN',
@@ -33,9 +40,22 @@ function draftValues(formData: FormData) {
   const templateVersionId = String(formData.get('templateVersionId') ?? '').trim();
   const startsAt = new Date(String(formData.get('startsAt') ?? ''));
   const endsAt = new Date(String(formData.get('endsAt') ?? ''));
-  const dailyMinor = Number(formData.get('dailyMinor'));
   const discountMinor = Number(formData.get('discountMinor') ?? 0);
   const servicesMinor = Number(formData.get('servicesMinor') ?? 0);
+  const issuance = Object.fromEntries(
+    [
+      'pickupAddress',
+      'returnAddress',
+      'startMileageKm',
+      'returnMileageKm',
+      'startFuelPercent',
+      'returnFuelPercent',
+      'territory',
+      'paymentTerms',
+      'allowedDrivers',
+      'conditions',
+    ].map((key) => [key, String(formData.get(key) ?? '').trim() || null]),
+  );
   if (!companyId || !clientId || !vehicleId || !templateVersionId) throw new Error('VALIDATION');
   return {
     companyId,
@@ -44,9 +64,9 @@ function draftValues(formData: FormData) {
     templateVersionId,
     startsAt,
     endsAt,
-    dailyMinor,
     discountMinor,
     servicesMinor,
+    issuance,
   };
 }
 
@@ -54,7 +74,6 @@ async function saveDraft(formData: FormData, rentalId?: string): Promise<RentalA
   try {
     const value = draftValues(formData);
     const access = await requireRentalAccess(value.companyId);
-    const calculation = calculateRental(value);
     const result = await prisma.$transaction(async (tx) => {
       const [client, vehicle, template] = await Promise.all([
         tx.client.findFirst({
@@ -68,7 +87,14 @@ async function saveDraft(formData: FormData, rentalId?: string): Promise<RentalA
             archivedAt: null,
             isRentalReady: true,
           },
-          select: { id: true },
+          select: {
+            id: true,
+            dailyPriceMinor: true,
+            depositMinor: true,
+            includedMileageKm: true,
+            overageMileagePriceMinor: true,
+            missingFuelPriceMinor: true,
+          },
         }),
         tx.contractTemplateVersion.findFirst({
           where: { id: value.templateVersionId, companyId: value.companyId, isPublished: true },
@@ -76,6 +102,13 @@ async function saveDraft(formData: FormData, rentalId?: string): Promise<RentalA
         }),
       ]);
       if (!client || !vehicle || !template) throw new Error('NOT_FOUND');
+      const calculation = calculateRental({
+        startsAt: value.startsAt,
+        endsAt: value.endsAt,
+        dailyMinor: vehicle.dailyPriceMinor,
+        discountMinor: value.discountMinor,
+        serviceMinor: value.servicesMinor,
+      });
       const data = {
         clientId: client.id,
         vehicleId: vehicle.id,
@@ -83,14 +116,18 @@ async function saveDraft(formData: FormData, rentalId?: string): Promise<RentalA
         startsAt: value.startsAt,
         endsAt: value.endsAt,
         currency: 'RUB',
-        dailyRateMinor: BigInt(value.dailyMinor),
+        dailyRateMinor: BigInt(vehicle.dailyPriceMinor),
         billableDays: calculation.days,
-        basePriceMinor: BigInt(calculation.days) * BigInt(value.dailyMinor),
+        basePriceMinor: BigInt(calculation.days) * BigInt(vehicle.dailyPriceMinor),
         discountMinor: BigInt(calculation.discountMinor),
         servicesMinor: BigInt(calculation.servicesMinor),
         totalPriceMinor: BigInt(calculation.agreedTotalMinor),
+        depositMinor: vehicle.depositMinor,
+        includedMileageKm: vehicle.includedMileageKm,
+        overageMileagePriceMinor: vehicle.overageMileagePriceMinor,
+        missingFuelPriceMinor: vehicle.missingFuelPriceMinor,
         snapshotVersion: 1,
-        snapshot: { schemaVersion: 1, draft: true },
+        snapshot: { schemaVersion: 1, draft: true, issuance: value.issuance },
       };
       let savedId: string;
       if (rentalId) {
@@ -181,6 +218,28 @@ export async function confirmAndGenerateRentalAction(
       ok: false,
       code: 'DOCUMENT_FAILED',
       message: 'Договор подтверждён, но файлы не готовы. Повторите создание документов безопасно.',
+      confirmedNeedsDocuments: true,
+      rentalId: confirmed.rentalId,
+      contractNumber: confirmed.contractNumber,
+    };
+  }
+}
+
+export async function generateRentalDocumentsAction(
+  _state: RentalActionResult | null,
+  formData: FormData,
+): Promise<RentalActionResult> {
+  try {
+    const value = input(formData);
+    const document = await generateRentalDocumentPair(value);
+    return { ok: true, rentalId: value.rentalId, documentVersion: document.version };
+  } catch {
+    return {
+      ok: false,
+      code: 'DOCUMENT_FAILED',
+      message: 'Не удалось подготовить файлы договора. Повторите попытку.',
+      confirmedNeedsDocuments: true,
+      rentalId: String(formData.get('rentalId') ?? '').trim() || undefined,
     };
   }
 }
