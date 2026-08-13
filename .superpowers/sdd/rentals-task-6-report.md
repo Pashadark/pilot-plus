@@ -16,3 +16,9 @@
 - Moscow local input now round-trips through `Europe/Moscow`, rejecting normalized impossible calendar dates.
 - Price arithmetic uses `BigInt` for multiplication/subtraction/addition and only returns a verified safe integer; calculation exposes discount and services minor-unit breakdowns.
 - Snapshot input and frozen output now cover company requisites/signatory, client identity/license/addresses, vehicle legal/policy/spec/tariff details and rental billable amounts, conditions, timestamps and creator.
+
+## Completeness review
+
+- All `*Minor` monetary inputs in vehicle and rental data are validated as nonnegative safe integers.
+- Output has an explicit `completeness` state. Missing conditional legal fields are represented as `null` for drafts; confirmed-ready snapshots fail closed when mandatory contract fields are absent.
+- Snapshot sections use a fixed serializable field set, preventing `undefined` values from escaping into a legal document payload.

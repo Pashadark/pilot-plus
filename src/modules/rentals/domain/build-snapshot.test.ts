@@ -34,4 +34,90 @@ describe('rental legal snapshot', () => {
     expect(Object.isFrozen(snapshot)).toBe(true);
     expect(snapshot.rental.startsAt).toBe('2026-01-01T09:00:00.000Z');
   });
+
+  it('has no undefined values and rejects unsafe money or incomplete confirmed legal snapshots', () => {
+    expect(() =>
+      buildRentalSnapshot({
+        company: { id: 'company', legalName: 'ООО Пилот', inn: '123', address: 'Москва' },
+        client: {
+          id: 'client',
+          fullName: 'Иван Иванов',
+          phone: '+79990000000',
+          passport: 'safe-value',
+        },
+        vehicle: {
+          id: 'vehicle',
+          make: 'Volkswagen',
+          model: 'Polo',
+          registrationNumber: 'А156АХ997',
+          vin: 'VIN',
+          dailyMinor: 1,
+          depositMinor: 0,
+        },
+        rental: {
+          id: 'rental',
+          startsAt: new Date(),
+          endsAt: new Date(Date.now() + 1),
+          calculatedTotalMinor: 1,
+          agreedTotalMinor: 1,
+          currency: 'RUB',
+          discountMinor: -1,
+        },
+      }),
+    ).toThrow('безопас');
+    const draft = buildRentalSnapshot({
+      company: { id: 'company', legalName: 'ООО Пилот', inn: '123', address: 'Москва' },
+      client: {
+        id: 'client',
+        fullName: 'Иван Иванов',
+        phone: '+79990000000',
+        passport: 'safe-value',
+      },
+      vehicle: {
+        id: 'vehicle',
+        make: 'Volkswagen',
+        model: 'Polo',
+        registrationNumber: 'А156АХ997',
+        vin: 'VIN',
+        dailyMinor: 1,
+        depositMinor: 0,
+      },
+      rental: {
+        id: 'rental',
+        startsAt: new Date(),
+        endsAt: new Date(Date.now() + 1),
+        calculatedTotalMinor: 1,
+        agreedTotalMinor: 1,
+        currency: 'RUB',
+      },
+    });
+    expect(JSON.stringify(draft)).not.toContain('undefined');
+    expect(draft.completeness.warnings.length).toBeGreaterThan(0);
+    expect(() =>
+      buildRentalSnapshot({
+        ...{
+          company: { id: 'c', legalName: '', inn: '', address: '' },
+          client: { id: 'p', fullName: '', phone: '', passport: '' },
+          vehicle: {
+            id: 'v',
+            make: '',
+            model: '',
+            registrationNumber: '',
+            vin: '',
+            dailyMinor: 1,
+            depositMinor: 0,
+          },
+          rental: {
+            id: 'r',
+            startsAt: new Date(),
+            endsAt: new Date(Date.now() + 1),
+            calculatedTotalMinor: 1,
+            agreedTotalMinor: 1,
+            currency: 'RUB',
+          },
+        },
+        confirmedReady: true,
+      }),
+    ).toThrow('обязательные');
+  });
 });
