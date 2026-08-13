@@ -10,3 +10,5 @@
 ## Second wave
 
 - Added tenant-scoped rental list query and cancellation action. Cancellation reauthorizes, limits state transitions to DRAFT/CONFIRMED, and records a sanitized audit entry atomically.
+
+- Added create/update draft actions with server-side company ownership checks for client, rental-ready vehicle and published template, deterministic calculation and atomic audit.
