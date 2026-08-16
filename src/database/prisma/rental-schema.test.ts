@@ -425,6 +425,12 @@ describe('доменная схема аренды', () => {
       'Rental_companyId_clientId_fkey',
     );
     const foreignKeysMigration = readFileSync(foreignKeysMigrationPath, 'utf8');
+    const constraintNames = Array.from(
+      foreignKeysMigration.matchAll(/ADD CONSTRAINT "([^"]+)"/g),
+      (match) => match[1],
+    );
+    expect(constraintNames.every((name) => Buffer.byteLength(name, 'utf8') <= 63)).toBe(true);
+    expect(foreignKeysMigration).toContain('"RentalDocVersion_clientDoc_version_fkey"');
     expect(foreignKeysMigration).toContain(
       'Vehicle_archivedByUserId_fkey" FOREIGN KEY ("archivedByUserId")',
     );

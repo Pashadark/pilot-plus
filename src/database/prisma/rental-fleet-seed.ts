@@ -114,7 +114,7 @@ export async function seedApprovedRentalFleet(
       cascoEndsAt: new Date('2030-12-31'),
       originalPrice: 'Демо-тариф',
       features: ['Демо-автопарк'],
-      status: 'AVAILABLE' as VehicleStatus,
+      status: 'IDLE' as VehicleStatus,
       isDemoImport: true,
       isRentalReady: true,
       rentalReadyAt: new Date(),

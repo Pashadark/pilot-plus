@@ -62,6 +62,7 @@ describe('approved rental fleet seed', () => {
       expect(vehicle.cascoStartsAt).toEqual(new Date('2026-01-01'));
       expect(vehicle.cascoEndsAt).toEqual(new Date('2030-12-31'));
       expect(vehicle.isRentalReady).toBe(true);
+      expect(vehicle.status).toBe('IDLE');
       expect(vehicle.dailyPriceMinor).toBeGreaterThan(0);
       expect(vehicle.depositMinor).toBeGreaterThan(BigInt(0));
     }
