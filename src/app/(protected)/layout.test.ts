@@ -61,7 +61,10 @@ describe('ProtectedLayout', () => {
         total: 4,
         checkedAt: '2026-07-20T12:00:00.000Z',
       },
-      user: expect.objectContaining({ canAccessAdmin: true, capabilities: ['CLIENTS', 'RENTALS'] }),
+      user: expect.objectContaining({
+        canAccessAdmin: true,
+        capabilities: ['CLIENTS', 'RENTALS', 'FINES'],
+      }),
     });
   });
 

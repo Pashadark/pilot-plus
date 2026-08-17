@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { FiDroplet, FiFileText, FiTool, FiUsers } from 'react-icons/fi';
+import { FiAlertCircle, FiDroplet, FiFileText, FiTool, FiUsers } from 'react-icons/fi';
 import { describe, expect, it, vi } from 'vitest';
 
 const route = vi.hoisted(() => ({ pathname: '/' }));
@@ -33,6 +33,7 @@ describe('Sidebar health summary', () => {
       '/vehicles',
       '/clients',
       '/rentals',
+      '/fines',
       '/maintenance',
       '/wash',
       '/devices',
@@ -47,6 +48,7 @@ describe('Sidebar health summary', () => {
         { label: 'Мойка', href: '/wash', icon: FiDroplet },
         { label: 'Клиенты', href: '/clients', icon: FiUsers, requiredCapability: 'CLIENTS' },
         { label: 'Аренда', href: '/rentals', icon: FiFileText, requiredCapability: 'RENTALS' },
+        { label: 'Штрафы', href: '/fines', icon: FiAlertCircle, requiredCapability: 'FINES' },
       ]),
     );
   });
@@ -111,6 +113,22 @@ describe('Sidebar health summary', () => {
     expect(denied).not.toContain('href="/rentals"');
     expect(permitted).toContain('href="/rentals"');
     expect(permitted).toContain('Аренда');
+  });
+
+  it('показывает штрафы только при server-derived fines capability', () => {
+    const denied = renderToStaticMarkup(
+      createElement(Sidebar, { expanded: true, user: member, systemHealthSummary: summary }),
+    );
+    const permitted = renderToStaticMarkup(
+      createElement(Sidebar, {
+        expanded: true,
+        user: { ...member, capabilities: ['FINES'] },
+        systemHealthSummary: summary,
+      }),
+    );
+    expect(denied).not.toContain('href="/fines"');
+    expect(permitted).toContain('href="/fines"');
+    expect(permitted).toContain('Штрафы');
   });
 
   it('даёт раскрытым подписям доступную ширину и перенос строк', () => {

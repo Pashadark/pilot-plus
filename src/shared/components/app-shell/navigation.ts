@@ -1,6 +1,7 @@
 import {
   FiActivity,
   FiAlertTriangle,
+  FiAlertCircle,
   FiCpu,
   FiDroplet,
   FiHome,
@@ -19,7 +20,7 @@ export interface NavigationItem {
   href: string;
   icon: IconType;
   adminOnly?: boolean;
-  requiredCapability?: 'CLIENTS' | 'RENTALS';
+  requiredCapability?: 'CLIENTS' | 'RENTALS' | 'FINES';
 }
 
 export const navigation: readonly NavigationItem[] = [
@@ -28,6 +29,7 @@ export const navigation: readonly NavigationItem[] = [
   { label: 'Автопарк', href: '/vehicles', icon: FiTruck },
   { label: 'Клиенты', href: '/clients', icon: FiUsers, requiredCapability: 'CLIENTS' },
   { label: 'Аренда', href: '/rentals', icon: FiFileText, requiredCapability: 'RENTALS' },
+  { label: 'Штрафы', href: '/fines', icon: FiAlertCircle, requiredCapability: 'FINES' },
   { label: 'Техническое обслуживание', href: '/maintenance', icon: FiTool },
   { label: 'Мойка', href: '/wash', icon: FiDroplet },
   { label: 'Устройства', href: '/devices', icon: FiCpu },
