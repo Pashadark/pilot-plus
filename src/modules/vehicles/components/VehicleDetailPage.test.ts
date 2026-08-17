@@ -63,6 +63,27 @@ const vehicle: VehicleDetailDto = {
 };
 
 describe('VehicleDetailPage', () => {
+  it('не подменяет отсутствующие данные автомобиля демонстрационными значениями', () => {
+    const markup = renderToStaticMarkup(
+      createElement(VehicleDetailPage, { vehicle, activeTab: 'overview' }),
+    );
+
+    expect(markup).toContain('Нет данных');
+    expect(markup).not.toContain('45 680 км');
+    expect(markup).not.toContain('Ленинградский пр-т, 32, Москва');
+    expect(markup).not.toContain('XTA1234567890ABC');
+    expect(markup).not.toContain('А 123 МР 77');
+  });
+
+  it('не создаёт вымышленные поездки при пустой истории', () => {
+    const markup = renderToStaticMarkup(
+      createElement(VehicleDetailPage, { vehicle, activeTab: 'trips' }),
+    );
+
+    expect(markup).toContain('Поездки ещё не поступали');
+    expect(markup).not.toContain('45.6 км');
+  });
+
   it('показывает типизированные истории ТО и мойки с русскими статусами', () => {
     const markup = renderToStaticMarkup(
       createElement(VehicleDetailPage, { vehicle, activeTab: 'maintenance' }),

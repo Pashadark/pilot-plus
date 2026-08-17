@@ -15,7 +15,9 @@ afterEach(cleanup);
 
 describe('FleetImportDialog', () => {
   it('offers an accessible Excel import action', () => {
-    render(<FleetImportDialog companies={[{ id: 'company-1', label: 'Компания', canArchive: true }]} />);
+    render(
+      <FleetImportDialog companies={[{ id: 'company-1', label: 'Компания', canArchive: true }]} />,
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Импортировать Excel' }));
     expect(screen.getByLabelText('Файл Excel')).toBeTruthy();

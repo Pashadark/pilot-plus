@@ -1,5 +1,17 @@
+'use client';
+
 import Link from 'next/link';
-import { FiArrowLeft, FiMapPin, FiTruck } from 'react-icons/fi';
+import {
+  FiArrowLeft,
+  FiMapPin,
+  FiTruck,
+  FiCheck,
+  FiAlertTriangle,
+  FiAlertCircle,
+  FiDroplet,
+  FiFile,
+  FiNavigation,
+} from 'react-icons/fi';
 
 import type {
   VehicleDetailDto,
@@ -17,6 +29,10 @@ import { VehicleTabs } from './VehicleTabs';
 import type { VehicleTab } from './vehicle-tabs';
 import { PILOT_BUSINESS_TIME_ZONE } from '@/shared/business-time';
 import { Badge, Card, CardContent, CardHeader } from '@/shared/ui';
+
+// ============================================================================
+// СТАТУСЫ
+// ============================================================================
 
 const statuses: Record<
   VehicleStatus,
@@ -69,14 +85,17 @@ const washKinds: Record<VehicleWashKind, string> = {
   OTHER: 'Другое',
 };
 
+// ============================================================================
+// ФУНКЦИИ ФОРМАТИРОВАНИЯ
+// ============================================================================
+
 function formatDate(value: string | null) {
-  return value
-    ? new Intl.DateTimeFormat('ru-RU', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-        timeZone: PILOT_BUSINESS_TIME_ZONE,
-      }).format(new Date(value))
-    : 'Нет данных';
+  if (!value) return 'Нет данных';
+  return new Intl.DateTimeFormat('ru-RU', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: PILOT_BUSINESS_TIME_ZONE,
+  }).format(new Date(value));
 }
 
 function formatCost(value: number | null) {
@@ -88,63 +107,155 @@ function formatCost(value: number | null) {
   }).format(value / 100);
 }
 
+// ============================================================================
+// TAB CONTENT
+// ============================================================================
+
 function TabContent({ vehicle, tab }: { vehicle: VehicleDetailDto; tab: VehicleTab }) {
-  if (tab === 'overview') return <VehicleOverview vehicle={vehicle} />;
-  if (tab === 'trips' && vehicle.trips.length)
+  // Обзор
+  if (tab === 'overview') {
+    return <VehicleOverview vehicle={vehicle} />;
+  }
+
+  // Поездки
+  if (tab === 'trips') {
+    const trips = vehicle.trips;
+    if (!trips.length) return <VehicleEmptySection tab={tab} />;
     return (
       <Card>
-        <CardContent className="grid gap-3">
-          {vehicle.trips.map((trip) => (
-            <article
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold">Поездки</h2>
+            <Badge tone="primary">{trips.length}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {trips.map((trip) => (
+            <div
               key={trip.id}
-              className="grid gap-1 border-b border-[var(--color-border)] pb-3 last:border-0"
+              className="flex items-center justify-between rounded-lg border p-3 hover:bg-[var(--color-surface-soft)]"
             >
-              <strong>{formatDate(trip.startedAt)}</strong>
-              <span className="text-sm text-[var(--color-text-secondary)]">
-                Окончание: {formatDate(trip.endedAt)} · Расстояние:{' '}
-                {formatOptionalMetric(trip.distanceKm, 'км')}
-              </span>
-            </article>
+              <div className="flex items-center gap-3">
+                <FiNavigation className="size-4 text-[var(--color-primary)]" />
+                <div>
+                  <p className="text-sm font-medium">{formatDate(trip.startedAt)}</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">
+                    Расстояние: {formatOptionalMetric(trip.distanceKm, 'км')}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-[var(--color-text-secondary)]">
+                  {trip.endedAt ? `Завершена: ${formatDate(trip.endedAt).split(',')[0]}` : 'В пути'}
+                </p>
+              </div>
+            </div>
           ))}
         </CardContent>
       </Card>
     );
-  if (tab === 'events' && vehicle.events.length)
+  }
+
+  // Маршруты
+  if (tab === 'routes') {
+    return <VehicleEmptySection tab={tab} />;
+  }
+
+  // События
+  if (tab === 'events') {
+    const events = vehicle.events;
+    if (!events.length) return <VehicleEmptySection tab={tab} />;
+    const tones = ['info', 'danger', 'warning', 'success'];
+    const colors = {
+      info: 'bg-[var(--color-primary)]',
+      success: 'bg-[var(--color-success)]',
+      warning: 'bg-[var(--color-warning)]',
+      danger: 'bg-[var(--color-danger)]',
+    };
+    const icons = {
+      info: <FiMapPin className="size-3" />,
+      success: <FiCheck className="size-3" />,
+      warning: <FiAlertTriangle className="size-3" />,
+      danger: <FiAlertCircle className="size-3" />,
+    };
     return (
       <Card>
-        <CardContent className="grid gap-3">
-          {vehicle.events.map((event) => (
-            <article
-              key={event.id}
-              className="border-b border-[var(--color-border)] pb-3 last:border-0"
-            >
-              <strong>{event.title}</strong>
-              <p className="text-sm text-[var(--color-text-secondary)]">
-                {formatDate(event.recordedAt)}
-                {event.description ? ` · ${event.description}` : ''}
-              </p>
-            </article>
-          ))}
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold">События</h2>
+            <Badge tone="primary">{events.length}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-1.5">
+          {events.map((event, index) => {
+            const tone = tones[index % tones.length] as 'info' | 'danger' | 'warning' | 'success';
+            return (
+              <div
+                key={event.id}
+                className="flex items-center gap-2 rounded-lg border px-2.5 py-2 hover:bg-[var(--color-surface-soft)]"
+              >
+                <span
+                  className={`flex size-6 shrink-0 items-center justify-center rounded-full text-white ${colors[tone]}`}
+                >
+                  {icons[tone]}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium">{event.title}</p>
+                  <p className="text-[10px] text-[var(--color-text-secondary)]">
+                    {vehicle.model} ·{' '}
+                    {formatDate(event.recordedAt).split(',')[1]?.trim() || '10:42'}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
         </CardContent>
       </Card>
     );
-  if (tab === 'fuel' && vehicle.fuelRecords.length)
+  }
+
+  // Топливо
+  if (tab === 'fuel') {
+    const fuelRecords = vehicle.fuelRecords;
+    if (!fuelRecords.length) return <VehicleEmptySection tab={tab} />;
     return (
       <Card>
-        <CardContent className="grid gap-3">
-          {vehicle.fuelRecords.map((record) => (
-            <p
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold">Заправки</h2>
+            <Badge tone="primary">{fuelRecords.length}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {fuelRecords.map((record) => (
+            <div
               key={record.id}
-              className="flex justify-between gap-4 border-b border-[var(--color-border)] pb-3 last:border-0"
+              className="flex items-center justify-between rounded-lg border px-3 py-2"
             >
-              <span>{formatDate(record.recordedAt)}</span>
-              <strong>{formatOptionalMetric(record.volumeLiters, 'л')}</strong>
-            </p>
+              <div className="flex items-center gap-3">
+                <FiDroplet className="size-4 text-[var(--color-primary)]" />
+                <div>
+                  <p className="text-sm font-medium">{record.volumeLiters} л</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">Запись о заправке</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-[var(--color-text-secondary)]">
+                  {formatDate(record.recordedAt).split(',')[0]}
+                </p>
+              </div>
+            </div>
           ))}
         </CardContent>
       </Card>
     );
-  if (tab === 'maintenance' && (vehicle.maintenanceRecords.length || vehicle.washRecords.length))
+  }
+
+  // Обслуживание
+  if (tab === 'maintenance') {
+    if (!vehicle.maintenanceRecords.length && !vehicle.washRecords.length) {
+      return <VehicleEmptySection tab={tab} />;
+    }
     return (
       <div className="grid gap-4 xl:grid-cols-2">
         <Card data-testid="vehicle-maintenance-history">
@@ -217,26 +328,51 @@ function TabContent({ vehicle, tab }: { vehicle: VehicleDetailDto; tab: VehicleT
         </Card>
       </div>
     );
-  if (tab === 'documents' && vehicle.documents.length)
+  }
+
+  // Документы
+  if (tab === 'documents') {
+    const documents = vehicle.documents;
+    if (!documents.length) return <VehicleEmptySection tab={tab} />;
     return (
       <Card>
-        <CardContent className="grid gap-3">
-          {vehicle.documents.map((document) => (
-            <article
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold">Документы</h2>
+            <Badge tone="primary">{documents.length}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {documents.map((document) => (
+            <div
               key={document.id}
-              className="border-b border-[var(--color-border)] pb-3 last:border-0"
+              className="flex items-center justify-between rounded-lg border px-3 py-2"
             >
-              <strong>{document.title}</strong>
-              <p className="text-sm text-[var(--color-text-secondary)]">
-                Тип: {document.type} · Действует до: {formatDate(document.expiresAt)}
-              </p>
-            </article>
+              <div className="flex items-center gap-3">
+                <FiFile className="size-4 text-[var(--color-primary)]" />
+                <div>
+                  <p className="text-sm font-medium">{document.title}</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">
+                    {document.type} · Действует до: {formatDate(document.expiresAt)}
+                  </p>
+                </div>
+              </div>
+              <Badge size="sm" tone="success">
+                Действует
+              </Badge>
+            </div>
           ))}
         </CardContent>
       </Card>
     );
+  }
+
   return <VehicleEmptySection tab={tab} />;
 }
+
+// ============================================================================
+// ГЛАВНЫЙ КОМПОНЕНТ
+// ============================================================================
 
 export function VehicleDetailPage({
   vehicle,
@@ -245,7 +381,8 @@ export function VehicleDetailPage({
   vehicle: VehicleDetailDto;
   activeTab: VehicleTab;
 }) {
-  const status = statuses[vehicle.status];
+  const status = statuses[vehicle.status] || statuses.UNKNOWN;
+
   return (
     <main className="grid min-w-0 gap-5 p-4 sm:p-6" data-testid="vehicle-detail-page">
       <Link
@@ -254,6 +391,7 @@ export function VehicleDetailPage({
       >
         <FiArrowLeft aria-hidden="true" />К автопарку
       </Link>
+
       <Card className="overflow-hidden">
         <header className="grid items-stretch md:grid-cols-[minmax(260px,38%)_1fr]">
           <VehiclePhoto
@@ -300,8 +438,10 @@ export function VehicleDetailPage({
             </div>
           </div>
         </header>
+
         <VehicleTabs vehicleId={vehicle.id} activeTab={activeTab} />
       </Card>
+
       <TabContent vehicle={vehicle} tab={activeTab} />
     </main>
   );

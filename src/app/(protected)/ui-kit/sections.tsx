@@ -27,7 +27,6 @@ import {
   FiArrowUp,
   FiArrowDown,
   FiAlertTriangle,
-  FiInfo,
   FiSun,
   FiCloudRain,
   FiTool,
@@ -37,6 +36,61 @@ import {
   FiStopCircle,
   FiPlay,
   FiCamera,
+  FiCloud,
+  FiCloudSnow,
+  FiWind,
+  FiThermometer,
+  FiWifi,
+  FiWifiOff,
+  FiVolume2,
+  FiCheckCircle,
+  FiDollarSign,
+  FiShield,
+  FiSliders,
+  FiClock,
+  FiClipboard,
+  FiList,
+  FiBarChart2,
+  FiPlus,
+  FiTrendingUp,
+  FiTrendingDown,
+  FiRefreshCw,
+  FiFilter,
+  FiUsers,
+  FiStar,
+  FiBattery,
+  FiLock,
+  FiUnlock,
+  FiPower,
+  FiEye,
+  FiEyeOff,
+  FiCloudOff,
+  FiServer,
+  FiDatabase,
+  FiDownload,
+  FiUpload,
+  FiPrinter,
+  FiPieChart,
+  FiFile,
+  FiFolder,
+  FiPaperclip,
+  FiEdit2,
+  FiMessageSquare,
+  FiMail,
+  FiSend,
+  FiPhone,
+  FiHeadphones,
+  FiHelpCircle,
+  FiSmile,
+  FiThumbsUp,
+  FiLink,
+  FiCode,
+  FiGlobe,
+  FiMoon,
+  FiAward,
+  FiTarget,
+  FiCompass,
+  FiXCircle,
 } from 'react-icons/fi';
 
 import {
@@ -64,7 +118,6 @@ import {
   Popover,
   Progress,
   Radio,
-  StatCard,
   StatusIndicator,
   Table,
   TableBody,
@@ -669,34 +722,31 @@ function AnimatedToggle({ label, defaultOn }: { label: string; defaultOn?: boole
    ========================================================================== */
 
 function EventCard({
+  icon: Icon,
   title,
   vehicleName,
   timeLabel,
   tone = 'info',
 }: {
+  icon: React.ElementType;
   title: string;
   vehicleName: string;
   timeLabel: string;
-  tone?: 'info' | 'success' | 'warning' | 'danger';
+  tone?: 'info' | 'success' | 'warning' | 'danger' | 'neutral';
 }) {
   const colors: Record<string, string> = {
     info: 'bg-[var(--color-primary)]',
     success: 'bg-[var(--color-success)]',
     warning: 'bg-[var(--color-warning)]',
     danger: 'bg-[var(--color-danger)]',
-  };
-  const icons: Record<string, ReactNode> = {
-    info: <FiInfo className="size-3" />,
-    success: <FiCheck className="size-3" />,
-    warning: <FiAlertTriangle className="size-3" />,
-    danger: <FiAlertCircle className="size-3" />,
+    neutral: 'bg-[var(--color-text-secondary)]',
   };
   return (
     <div className="flex items-center gap-2 rounded-[var(--radius-md)] border px-2.5 py-2">
       <span
         className={`flex size-6 shrink-0 items-center justify-center rounded-full text-white ${colors[tone]}`}
       >
-        {icons[tone]}
+        <Icon className="size-3" aria-hidden="true" />
       </span>
       <div className="min-w-0">
         <p className="truncate text-xs font-medium">{title}</p>
@@ -2125,45 +2175,98 @@ export function UiKitSections() {
       </KitSectionFull>
 
       {/* ================================================================ */}
-      {/* 8. КАРТОЧКИ ПОКАЗАТЕЛЕЙ */}
+      {/* 8. КАРТОЧКИ ПОКАЗАТЕЛЕЙ — 100+ КАРТОЧЕК (РАЗНЫЕ ДИЗАЙНЫ) */}
       {/* ================================================================ */}
       <KitSectionFull
         id="stat-cards"
         title="Карточки показателей"
-        description="Базовый, с трендом, с иконкой, погода, топливо, ТО, пробег."
+        description="Базовый, с трендом, с иконкой, погода, топливо, ТО, пробег, датчики, персонал, заказы, события, безопасность, фильтры, скорость, мойка, двигатель, аккумулятор, шины, тормоза, кондиционер, трансмиссия, подвеска, электрика, освещение, тест-драйв."
       >
         <div className="space-y-8">
+          {/* ===== 1. БАЗОВЫЙ (с цветной полосой слева) ===== */}
           <div>
             <h3 className="mb-2 text-sm font-semibold">Базовый</h3>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatCard label="На линии" value="184" />
-              <StatCard label="В движении" value="42" />
-              <StatCard label="Стоянка" value="128" />
-              <StatCard label="Тревог" value="3" />
+              {[
+                {
+                  label: 'На линии',
+                  value: '184',
+                  color: 'border-l-4 border-l-[var(--color-primary)]',
+                },
+                {
+                  label: 'В движении',
+                  value: '42',
+                  color: 'border-l-4 border-l-[var(--color-success)]',
+                },
+                {
+                  label: 'Стоянка',
+                  value: '128',
+                  color: 'border-l-4 border-l-[var(--color-warning)]',
+                },
+                { label: 'Тревог', value: '3', color: 'border-l-4 border-l-[var(--color-danger)]' },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-lg border bg-[var(--color-surface)] p-4 ${item.color}`}
+                >
+                  <p className="text-sm text-[var(--color-text-secondary)]">{item.label}</p>
+                  <p className="text-2xl font-bold">{item.value}</p>
+                </div>
+              ))}
             </div>
           </div>
+
+          {/* ===== 2. С ТРЕНДОМ (с градиентными фонами) ===== */}
           <div>
             <h3 className="mb-2 text-sm font-semibold">С трендом</h3>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               {[
-                { l: 'Пробег за день', v: '1 245', u: 'км', t: 'up', p: '12%' },
-                { l: 'Расход топлива', v: '8.4', u: 'л/100', t: 'down', p: '3%' },
-                { l: 'Время в пути', v: '142', u: 'ч', t: 'up', p: '5%' },
-                { l: 'Простой', v: '18', u: '%', t: 'down', p: '↓' },
+                {
+                  l: 'Пробег за день',
+                  v: '1 245',
+                  u: 'км',
+                  t: 'up',
+                  p: '+12%',
+                  color: 'from-blue-50 to-blue-100',
+                },
+                {
+                  l: 'Расход топлива',
+                  v: '8.4',
+                  u: 'л',
+                  t: 'down',
+                  p: '-3%',
+                  color: 'from-orange-50 to-orange-100',
+                },
+                {
+                  l: 'Время в пути',
+                  v: '142',
+                  u: 'ч',
+                  t: 'up',
+                  p: '+5%',
+                  color: 'from-green-50 to-green-100',
+                },
+                {
+                  l: 'Простой',
+                  v: '18',
+                  u: '%',
+                  t: 'down',
+                  p: '-2%',
+                  color: 'from-red-50 to-red-100',
+                },
               ].map((c) => (
-                <div key={c.l} className="rounded-[var(--radius-md)] border p-3">
+                <div key={c.l} className={`rounded-xl border bg-gradient-to-br p-4 ${c.color}`}>
                   <p className="text-xs text-[var(--color-text-secondary)]">{c.l}</p>
-                  <div className="mt-0.5 flex items-end gap-1">
-                    <span className="text-xl font-bold">{c.v}</span>
-                    <span className="text-xs text-[var(--color-text-secondary)]">{c.u}</span>
+                  <div className="mt-1 flex items-end gap-1">
+                    <span className="text-2xl font-bold">{c.v}</span>
+                    <span className="text-sm text-[var(--color-text-secondary)]">{c.u}</span>
                   </div>
                   <div
-                    className={`mt-0.5 flex items-center gap-0.5 text-xs ${c.t === 'up' ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}`}
+                    className={`mt-1 flex items-center gap-1 text-sm ${c.t === 'up' ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}`}
                   >
                     {c.t === 'up' ? (
-                      <FiArrowUp className="size-3" />
+                      <FiArrowUp className="size-4" />
                     ) : (
-                      <FiArrowDown className="size-3" />
+                      <FiArrowDown className="size-4" />
                     )}
                     {c.p}
                   </div>
@@ -2171,99 +2274,1476 @@ export function UiKitSections() {
               ))}
             </div>
           </div>
+
+          {/* ===== 3. С ИКОНКОЙ (цветные иконки в круге) ===== */}
           <div>
             <h3 className="mb-2 text-sm font-semibold">С иконкой</h3>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               {[
-                { l: 'Автомобилей', v: '245', c: 'primary', i: <FiTruck className="size-4" /> },
-                { l: 'Активных', v: '231', c: 'success', i: <FiCheck className="size-4" /> },
-                { l: 'На ТО', v: '12', c: 'warning', i: <FiTool className="size-4" /> },
-                { l: 'Тревог', v: '7', c: 'danger', i: <FiAlertTriangle className="size-4" /> },
+                {
+                  l: 'Автомобилей',
+                  v: '245',
+                  color: 'bg-blue-500',
+                  icon: <FiTruck className="size-5 text-white" />,
+                  bg: 'from-blue-50 to-blue-100',
+                },
+                {
+                  l: 'Активных',
+                  v: '231',
+                  color: 'bg-green-500',
+                  icon: <FiCheck className="size-5 text-white" />,
+                  bg: 'from-green-50 to-green-100',
+                },
+                {
+                  l: 'На ТО',
+                  v: '12',
+                  color: 'bg-yellow-500',
+                  icon: <FiTool className="size-5 text-white" />,
+                  bg: 'from-yellow-50 to-yellow-100',
+                },
+                {
+                  l: 'Тревог',
+                  v: '7',
+                  color: 'bg-red-500',
+                  icon: <FiAlertTriangle className="size-5 text-white" />,
+                  bg: 'from-red-50 to-red-100',
+                },
               ].map((c) => (
-                <div key={c.l} className="rounded-[var(--radius-md)] border p-3">
-                  <div
-                    className={`size-7 rounded-[var(--radius-sm)] bg-[var(--color-${c.c}-soft)] mb-1.5 flex items-center justify-center text-[var(--color-${c.c})]`}
-                  >
-                    {c.i}
+                <div key={c.l} className={`rounded-xl border bg-gradient-to-br p-4 ${c.bg}`}>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-sm text-[var(--color-text-secondary)]">{c.l}</p>
+                      <p className="text-2xl font-bold">{c.v}</p>
+                    </div>
+                    <div
+                      className={`flex size-11 items-center justify-center rounded-full ${c.color} shadow-lg`}
+                    >
+                      {c.icon}
+                    </div>
                   </div>
-                  <p className="text-xs text-[var(--color-text-secondary)]">{c.l}</p>
-                  <p className="mt-0.5 text-xl font-bold">{c.v}</p>
                 </div>
               ))}
             </div>
           </div>
+
+          {/* ===== 4. ПОГОДА (с анимацией солнца/луны) ===== */}
           <div>
-            <h3 className="mb-2 text-sm font-semibold">Погода и топливо</h3>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <div className="rounded-[var(--radius-md)] border bg-gradient-to-br from-blue-50 to-blue-100 p-3 dark:from-blue-950 dark:to-blue-900">
-                <div className="mb-2 flex items-center gap-2">
-                  <FiSun className="size-5 text-amber-500" />
-                  <span className="text-xs font-medium">Москва</span>
-                </div>
-                <p className="text-2xl font-bold">+24°</p>
-                <p className="text-xs text-[var(--color-text-secondary)]">Ясно, ветер 3 м/с</p>
-              </div>
-              <div className="rounded-[var(--radius-md)] border bg-gradient-to-br from-gray-50 to-gray-100 p-3 dark:from-gray-900 dark:to-gray-800">
-                <div className="mb-2 flex items-center gap-2">
-                  <FiCloudRain className="size-5 text-blue-500" />
-                  <span className="text-xs font-medium">Питер</span>
-                </div>
-                <p className="text-2xl font-bold">+17°</p>
-                <p className="text-xs text-[var(--color-text-secondary)]">Дождь, ветер 5 м/с</p>
-              </div>
-              <div className="rounded-[var(--radius-md)] border bg-gradient-to-br from-emerald-50 to-emerald-100 p-3 dark:from-emerald-950 dark:to-emerald-900">
-                <div className="mb-2 flex items-center gap-2">
-                  <FiDroplet className="size-5 text-emerald-500" />
-                  <span className="text-xs font-medium">Всего топлива</span>
-                </div>
-                <p className="text-2xl font-bold">2 840 л</p>
-                <p className="text-xs text-[var(--color-text-secondary)]">Заправлено за месяц</p>
-              </div>
-              <div className="rounded-[var(--radius-md)] border bg-gradient-to-br from-orange-50 to-orange-100 p-3 dark:from-orange-950 dark:to-orange-900">
-                <div className="mb-2 flex items-center gap-2">
-                  <FiActivity className="size-5 text-orange-500" />
-                  <span className="text-xs font-medium">Расход</span>
-                </div>
-                <p className="text-2xl font-bold">8.4 л</p>
-                <p className="text-xs text-[var(--color-text-secondary)]">На 100 км в среднем</p>
-              </div>
+            <h3 className="mb-2 text-sm font-semibold">Погода</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+              {[
+                {
+                  city: 'Москва',
+                  temp: '+24°',
+                  icon: FiSun,
+                  desc: 'Ясно, ветер 3 м/с',
+                  color: 'from-amber-400 to-yellow-300',
+                  time: 'day',
+                },
+                {
+                  city: 'Питер',
+                  temp: '+17°',
+                  icon: FiCloudRain,
+                  desc: 'Дождь, ветер 5 м/с',
+                  color: 'from-blue-400 to-slate-300',
+                  time: 'day',
+                },
+                {
+                  city: 'Сочи',
+                  temp: '+28°',
+                  icon: FiSun,
+                  desc: 'Солнечно, ветер 2 м/с',
+                  color: 'from-orange-400 to-red-300',
+                  time: 'day',
+                },
+                {
+                  city: 'Новосибирск',
+                  temp: '-12°',
+                  icon: FiCloudSnow,
+                  desc: 'Снегопад, ветер 6 м/с',
+                  color: 'from-blue-200 to-cyan-100',
+                  time: 'night',
+                },
+                {
+                  city: 'Владивосток',
+                  temp: '+8°',
+                  icon: FiCloud,
+                  desc: 'Ночь, ветер 4 м/с',
+                  color: 'from-indigo-400 to-purple-300',
+                  time: 'night',
+                },
+              ].map((w) => (
+                <motion.div
+                  key={w.city}
+                  whileHover={{ scale: 1.03, y: -4 }}
+                  transition={{ type: 'spring', stiffness: 300 }}
+                  className={`rounded-2xl bg-gradient-to-br ${w.color} p-4 text-white shadow-lg`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium opacity-90">{w.city}</span>
+                    <motion.div
+                      animate={{ rotate: [0, 360] }}
+                      transition={{ repeat: Infinity, duration: 20, ease: 'linear' }}
+                    >
+                      <w.icon className="size-8" />
+                    </motion.div>
+                  </div>
+                  <p className="mt-2 text-3xl font-bold">{w.temp}</p>
+                  <p className="text-sm opacity-80">{w.desc}</p>
+                  {w.time === 'day' ? (
+                    <motion.div
+                      animate={{ scale: [1, 1.1, 1] }}
+                      transition={{ repeat: Infinity, duration: 3 }}
+                      className="mt-1 text-xs opacity-60"
+                    >
+                      ☀️ День
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      animate={{ opacity: [0.5, 1, 0.5] }}
+                      transition={{ repeat: Infinity, duration: 2 }}
+                      className="mt-1 text-xs opacity-60"
+                    >
+                      🌙 Ночь
+                    </motion.div>
+                  )}
+                </motion.div>
+              ))}
             </div>
           </div>
+
+          {/* ===== 5. ТОПЛИВО (с иконками на градиенте) ===== */}
           <div>
-            <h3 className="mb-2 text-sm font-semibold">Обслуживание и пробег</h3>
+            <h3 className="mb-2 text-sm font-semibold">Топливо</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+              {[
+                {
+                  label: 'Всего топлива',
+                  value: '2 840 л',
+                  desc: 'Заправлено за месяц',
+                  icon: FiDroplet,
+                  color: 'from-emerald-400 to-green-300',
+                  text: 'text-white',
+                },
+                {
+                  label: 'Средний расход',
+                  value: '8.4 л',
+                  desc: 'На 100 км',
+                  icon: FiActivity,
+                  color: 'from-orange-400 to-amber-300',
+                  text: 'text-white',
+                },
+                {
+                  label: 'Заправок',
+                  value: '32',
+                  desc: '+5 к прошлому',
+                  icon: FiPlus,
+                  color: 'from-blue-400 to-sky-300',
+                  text: 'text-white',
+                },
+                {
+                  label: 'Цена',
+                  value: '54.7 ₽',
+                  desc: 'За литр',
+                  icon: FiDollarSign,
+                  color: 'from-green-400 to-emerald-300',
+                  text: 'text-white',
+                },
+                {
+                  label: 'Экономия',
+                  value: '12 400 ₽',
+                  desc: 'Оптимизация',
+                  icon: FiTrendingDown,
+                  color: 'from-purple-400 to-violet-300',
+                  text: 'text-white',
+                },
+              ].map((item) => (
+                <motion.div
+                  key={item.label}
+                  whileHover={{ scale: 1.02 }}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 shadow-md ${item.text}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-white/30 p-2 backdrop-blur">
+                      <item.icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium opacity-90">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 6. АВТОМОБИЛИ (с цветными кружками) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Автомобили</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+              {[
+                {
+                  label: 'В пути',
+                  value: '42',
+                  desc: '+5 за час',
+                  icon: FiTruck,
+                  color: 'from-blue-500 to-indigo-600',
+                  bg: 'from-blue-50 to-indigo-50',
+                },
+                {
+                  label: 'На стоянке',
+                  value: '128',
+                  desc: '-3 за час',
+                  icon: FiStopCircle,
+                  color: 'from-gray-500 to-slate-600',
+                  bg: 'from-gray-50 to-slate-50',
+                },
+                {
+                  label: 'В ремонте',
+                  value: '12',
+                  desc: '4 срочных',
+                  icon: FiTool,
+                  color: 'from-red-500 to-rose-600',
+                  bg: 'from-red-50 to-rose-50',
+                },
+                {
+                  label: 'Онлайн',
+                  value: '184',
+                  desc: '75% от всех',
+                  icon: FiWifi,
+                  color: 'from-green-500 to-emerald-600',
+                  bg: 'from-green-50 to-emerald-50',
+                },
+                {
+                  label: 'Офлайн',
+                  value: '26',
+                  desc: '11% от всех',
+                  icon: FiWifiOff,
+                  color: 'from-gray-500 to-neutral-600',
+                  bg: 'from-gray-50 to-neutral-50',
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-xl border bg-gradient-to-br p-4 ${item.bg}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`rounded-full bg-gradient-to-br ${item.color} p-2.5 text-white shadow-md`}
+                    >
+                      <item.icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-[var(--color-text-secondary)]">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs text-[var(--color-text-secondary)]">{item.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 7. ДАТЧИКИ (с анимацией значений) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Датчики</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+              {[
+                {
+                  label: 'Температура',
+                  value: '87°C',
+                  desc: 'Норма',
+                  icon: FiThermometer,
+                  color: 'from-red-400 to-orange-300',
+                },
+                {
+                  label: 'Давление масла',
+                  value: '4.2 бар',
+                  desc: 'Оптимально',
+                  icon: FiActivity,
+                  color: 'from-green-400 to-emerald-300',
+                },
+                {
+                  label: 'Скорость ветра',
+                  value: '12 м/с',
+                  desc: 'Штиль',
+                  icon: FiWind,
+                  color: 'from-blue-400 to-cyan-300',
+                },
+                {
+                  label: 'Влажность',
+                  value: '65%',
+                  desc: 'Комфортно',
+                  icon: FiDroplet,
+                  color: 'from-cyan-400 to-sky-300',
+                },
+                {
+                  label: 'Уровень шума',
+                  value: '42 дБ',
+                  desc: 'Норма',
+                  icon: FiVolume2,
+                  color: 'from-purple-400 to-violet-300',
+                },
+                {
+                  label: 'Вибрация',
+                  value: '0.3 мм/с',
+                  desc: 'Норма',
+                  icon: FiActivity,
+                  color: 'from-indigo-400 to-blue-300',
+                },
+              ].map((item) => (
+                <motion.div
+                  key={item.label}
+                  whileHover={{ scale: 1.03 }}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-3 shadow-md`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-full bg-white/30 p-1.5 backdrop-blur">
+                      <item.icon className="size-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium opacity-80">{item.label}</p>
+                      <motion.p
+                        animate={{ scale: [1, 1.05, 1] }}
+                        transition={{ repeat: Infinity, duration: 2 }}
+                        className="text-lg font-bold"
+                      >
+                        {item.value}
+                      </motion.p>
+                      <p className="text-[10px] opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 8. ТЕХНИЧЕСКОЕ ОБСЛУЖИВАНИЕ (с цветной полосой слева) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Техническое обслуживание</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+              {[
+                {
+                  label: 'Ближайшее ТО',
+                  value: '3',
+                  desc: 'До 500 км',
+                  icon: FiTool,
+                  color: 'border-l-4 border-l-yellow-500 bg-yellow-50',
+                },
+                {
+                  label: 'Просрочено ТО',
+                  value: '2',
+                  desc: 'Срочно!',
+                  icon: FiAlertCircle,
+                  color: 'border-l-4 border-l-red-500 bg-red-50',
+                },
+                {
+                  label: 'Общий пробег',
+                  value: '1.2M',
+                  desc: 'км',
+                  icon: FiNavigation,
+                  color: 'border-l-4 border-l-blue-500 bg-blue-50',
+                },
+                {
+                  label: 'ТО в месяце',
+                  value: '8',
+                  desc: 'Запланировано',
+                  icon: FiCalendar,
+                  color: 'border-l-4 border-l-green-500 bg-green-50',
+                },
+                {
+                  label: 'Замен масла',
+                  value: '14',
+                  desc: 'За месяц',
+                  icon: FiRefreshCw,
+                  color: 'border-l-4 border-l-orange-500 bg-orange-50',
+                },
+                {
+                  label: 'Ремонтов',
+                  value: '6',
+                  desc: 'За месяц',
+                  icon: FiTool,
+                  color: 'border-l-4 border-l-purple-500 bg-purple-50',
+                },
+              ].map((item) => (
+                <div key={item.label} className={`rounded-xl border p-4 ${item.color}`}>
+                  <div className="flex items-center gap-2">
+                    <item.icon className="size-5 text-[var(--color-text-secondary)]" />
+                    <div>
+                      <p className="text-xs text-[var(--color-text-secondary)]">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs text-[var(--color-text-secondary)]">{item.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 9. ФИНАНСЫ (тёмные градиенты с белым текстом) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Финансы</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+              {[
+                {
+                  label: 'Доход',
+                  value: '845 000 ₽',
+                  desc: '+12%',
+                  icon: FiTrendingUp,
+                  color: 'from-green-600 to-emerald-700',
+                },
+                {
+                  label: 'Расход',
+                  value: '234 000 ₽',
+                  desc: '-5%',
+                  icon: FiTrendingDown,
+                  color: 'from-red-600 to-rose-700',
+                },
+                {
+                  label: 'Прибыль',
+                  value: '611 000 ₽',
+                  desc: '+18%',
+                  icon: FiBarChart2,
+                  color: 'from-blue-600 to-indigo-700',
+                },
+                {
+                  label: 'Средний чек',
+                  value: '2 250 ₽',
+                  desc: '+150 ₽',
+                  icon: FiDollarSign,
+                  color: 'from-purple-600 to-violet-700',
+                },
+                {
+                  label: 'Оплачено',
+                  value: '342',
+                  desc: 'Заказов',
+                  icon: FiCheckCircle,
+                  color: 'from-green-600 to-emerald-700',
+                },
+                {
+                  label: 'Должников',
+                  value: '14',
+                  desc: 'Просрочка',
+                  icon: FiAlertTriangle,
+                  color: 'from-red-600 to-rose-700',
+                },
+              ].map((item) => (
+                <motion.div
+                  key={item.label}
+                  whileHover={{ scale: 1.03, y: -4 }}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 text-white shadow-lg`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs opacity-80">{item.label}</p>
+                      <p className="text-xl font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                    <div className="rounded-full bg-white/20 p-2 backdrop-blur">
+                      <item.icon className="size-5" />
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 10. ПЕРСОНАЛ (с эмодзи вместо иконок) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Персонал</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+              {[
+                {
+                  label: 'Водителей',
+                  value: '48',
+                  desc: '+3',
+                  emoji: '👤',
+                  color: 'from-blue-400 to-blue-300',
+                },
+                {
+                  label: 'Механиков',
+                  value: '12',
+                  desc: '6 в смене',
+                  emoji: '🔧',
+                  color: 'from-orange-400 to-amber-300',
+                },
+                {
+                  label: 'Диспетчеров',
+                  value: '8',
+                  desc: '5 в смене',
+                  emoji: '📡',
+                  color: 'from-green-400 to-emerald-300',
+                },
+                {
+                  label: 'Администраторов',
+                  value: '4',
+                  desc: '3 в смене',
+                  emoji: '🛡️',
+                  color: 'from-purple-400 to-violet-300',
+                },
+                {
+                  label: 'На линии',
+                  value: '36',
+                  desc: '75%',
+                  emoji: '✅',
+                  color: 'from-green-400 to-emerald-300',
+                },
+                {
+                  label: 'В отпуске',
+                  value: '6',
+                  desc: '12%',
+                  emoji: '🏖️',
+                  color: 'from-gray-400 to-slate-300',
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 shadow-md`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-3xl">{item.emoji}</span>
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 11. ЗАКАЗЫ (с цветной нижней полосой) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Заказы</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+              {[
+                {
+                  label: 'Активных',
+                  value: '18',
+                  desc: '+3',
+                  icon: FiClock,
+                  color: 'border-b-4 border-b-blue-500 bg-blue-50',
+                },
+                {
+                  label: 'Выполнено',
+                  value: '142',
+                  desc: '+12%',
+                  icon: FiCheck,
+                  color: 'border-b-4 border-b-green-500 bg-green-50',
+                },
+                {
+                  label: 'Отменено',
+                  value: '12',
+                  desc: '-4',
+                  icon: FiX,
+                  color: 'border-b-4 border-b-red-500 bg-red-50',
+                },
+                {
+                  label: 'Среднее время',
+                  value: '2.5 ч',
+                  desc: 'От заказа',
+                  icon: FiClock,
+                  color: 'border-b-4 border-b-purple-500 bg-purple-50',
+                },
+                {
+                  label: 'Постоянных',
+                  value: '34',
+                  desc: '+5',
+                  icon: FiUsers,
+                  color: 'border-b-4 border-b-amber-500 bg-amber-50',
+                },
+                {
+                  label: 'Новых',
+                  value: '8',
+                  desc: 'За день',
+                  icon: FiPlus,
+                  color: 'border-b-4 border-b-green-500 bg-green-50',
+                },
+              ].map((item) => (
+                <div key={item.label} className={`rounded-xl border p-4 ${item.color}`}>
+                  <div className="flex items-center gap-2">
+                    <item.icon className="size-5 text-[var(--color-text-secondary)]" />
+                    <div>
+                      <p className="text-xs text-[var(--color-text-secondary)]">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs text-[var(--color-text-secondary)]">{item.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 12. СОБЫТИЯ (с пульсирующими иконками) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">События</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+              {[
+                {
+                  label: 'Тревог',
+                  value: '3',
+                  desc: '-2',
+                  icon: FiAlertTriangle,
+                  color: 'from-red-500 to-rose-600',
+                  pulse: true,
+                },
+                {
+                  label: 'Геозоны',
+                  value: '12',
+                  desc: 'Активных',
+                  icon: FiMapPin,
+                  color: 'from-blue-500 to-indigo-600',
+                  pulse: false,
+                },
+                {
+                  label: 'Уведомлений',
+                  value: '27',
+                  desc: 'Новых',
+                  icon: FiBell,
+                  color: 'from-yellow-500 to-amber-600',
+                  pulse: true,
+                },
+                {
+                  label: 'Давлений',
+                  value: '5',
+                  desc: 'За час',
+                  icon: FiActivity,
+                  color: 'from-orange-500 to-amber-600',
+                  pulse: false,
+                },
+                {
+                  label: 'Сработало',
+                  value: '8',
+                  desc: 'За час',
+                  icon: FiAlertCircle,
+                  color: 'from-red-500 to-rose-600',
+                  pulse: true,
+                },
+              ].map((item) => (
+                <motion.div
+                  key={item.label}
+                  whileHover={{ scale: 1.03 }}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 text-white shadow-lg`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs opacity-80">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                    {item.pulse ? (
+                      <motion.div
+                        animate={{ scale: [1, 1.3, 1] }}
+                        transition={{ repeat: Infinity, duration: 1.5 }}
+                        className="flex size-10 items-center justify-center rounded-full bg-white/20 backdrop-blur"
+                      >
+                        <item.icon className="size-5" />
+                      </motion.div>
+                    ) : (
+                      <div className="flex size-10 items-center justify-center rounded-full bg-white/20 backdrop-blur">
+                        <item.icon className="size-5" />
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 13. ПРОБЕГ (с иконками на градиенте) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Пробег</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+              {[
+                {
+                  label: 'Общий',
+                  value: '1 234 567 км',
+                  desc: 'За всё время',
+                  icon: FiNavigation,
+                  color: 'from-blue-500 to-indigo-600',
+                },
+                {
+                  label: 'Средний',
+                  value: '45 680 км',
+                  desc: 'На авто',
+                  icon: FiTruck,
+                  color: 'from-green-500 to-emerald-600',
+                },
+                {
+                  label: 'За день',
+                  value: '1 245 км',
+                  desc: '+5%',
+                  icon: FiTrendingUp,
+                  color: 'from-amber-500 to-orange-600',
+                },
+                {
+                  label: 'За месяц',
+                  value: '37 350 км',
+                  desc: '+8%',
+                  icon: FiCalendar,
+                  color: 'from-purple-500 to-violet-600',
+                },
+                {
+                  label: 'ТО по пробегу',
+                  value: '14',
+                  desc: 'Требуют',
+                  icon: FiTool,
+                  color: 'from-red-500 to-rose-600',
+                },
+              ].map((item) => (
+                <motion.div
+                  key={item.label}
+                  whileHover={{ scale: 1.03 }}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 text-white shadow-lg`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-white/20 p-2 backdrop-blur">
+                      <item.icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs opacity-80">{item.label}</p>
+                      <p className="text-lg font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 14. ФИЛЬТРЫ (прозрачные с блюром) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Фильтры</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+              {[
+                {
+                  label: 'Активных фильтров',
+                  value: '3',
+                  desc: 'По умолчанию',
+                  icon: FiFilter,
+                  color: 'bg-white/80 backdrop-blur border',
+                },
+                {
+                  label: 'Типов моек',
+                  value: '6',
+                  desc: 'Доступно',
+                  icon: FiList,
+                  color: 'bg-white/80 backdrop-blur border',
+                },
+                {
+                  label: 'Статусов',
+                  value: '4',
+                  desc: 'Фильтрация',
+                  icon: FiSliders,
+                  color: 'bg-white/80 backdrop-blur border',
+                },
+              ].map((item) => (
+                <div key={item.label} className={`rounded-xl ${item.color} p-4 shadow-sm`}>
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-[var(--color-primary-soft)] p-2 text-[var(--color-primary)]">
+                      <item.icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-[var(--color-text-secondary)]">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs text-[var(--color-text-secondary)]">{item.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 15. СКОРОСТЬ (с градиентами) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Скорость</h3>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <div className="rounded-[var(--radius-md)] border p-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <FiTool className="size-4 text-[var(--color-warning)]" />
-                  <span className="text-xs font-medium">Ближайшее ТО</span>
+              {[
+                {
+                  label: 'Средняя',
+                  value: '62 км/ч',
+                  desc: 'По всем',
+                  icon: FiActivity,
+                  color: 'from-blue-500 to-indigo-600',
+                },
+                {
+                  label: 'Максимальная',
+                  value: '94 км/ч',
+                  desc: 'Lada Vesta',
+                  icon: FiTruck,
+                  color: 'from-red-500 to-rose-600',
+                },
+                {
+                  label: 'Минимальная',
+                  value: '12 км/ч',
+                  desc: 'Kia Rio',
+                  icon: FiTruck,
+                  color: 'from-green-500 to-emerald-600',
+                },
+                {
+                  label: 'Превышений',
+                  value: '7',
+                  desc: 'За час',
+                  icon: FiAlertTriangle,
+                  color: 'from-red-500 to-rose-600',
+                },
+              ].map((item) => (
+                <motion.div
+                  key={item.label}
+                  whileHover={{ scale: 1.03 }}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 text-white shadow-lg`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-white/20 p-2 backdrop-blur">
+                      <item.icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs opacity-80">{item.label}</p>
+                      <p className="text-xl font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 16. БЕЗОПАСНОСТЬ (с цветными рамками) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Безопасность</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {[
+                {
+                  label: 'Аварий',
+                  value: '0',
+                  desc: 'За день',
+                  icon: FiAlertTriangle,
+                  color: 'border-2 border-green-500 bg-green-50',
+                },
+                {
+                  label: 'Штрафов',
+                  value: '3',
+                  desc: 'За месяц',
+                  icon: FiAlertCircle,
+                  color: 'border-2 border-yellow-500 bg-yellow-50',
+                },
+                {
+                  label: 'Инспекций',
+                  value: '12',
+                  desc: 'Проведено',
+                  icon: FiClipboard,
+                  color: 'border-2 border-blue-500 bg-blue-50',
+                },
+                {
+                  label: 'Нарушений',
+                  value: '5',
+                  desc: 'За месяц',
+                  icon: FiAlertTriangle,
+                  color: 'border-2 border-red-500 bg-red-50',
+                },
+              ].map((item) => (
+                <div key={item.label} className={`rounded-xl p-4 ${item.color}`}>
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-white p-2 shadow">
+                      <item.icon className="size-5 text-[var(--color-text-secondary)]" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-[var(--color-text-secondary)]">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs text-[var(--color-text-secondary)]">{item.desc}</p>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-2xl font-bold text-[var(--color-warning)]">3</p>
-                <p className="text-xs text-[var(--color-text-secondary)]">Машины до 500 км</p>
-              </div>
-              <div className="rounded-[var(--radius-md)] border p-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <FiAlertCircle className="size-4 text-[var(--color-danger)]" />
-                  <span className="text-xs font-medium">Просрочено ТО</span>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 17. МОЙКА (с иконками на градиенте) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Мойка</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {[
+                {
+                  label: 'Всего моек',
+                  value: '47',
+                  desc: 'За месяц',
+                  icon: FiDroplet,
+                  color: 'from-blue-400 to-cyan-300',
+                },
+                {
+                  label: 'Сегодня',
+                  value: '3',
+                  desc: '+2',
+                  icon: FiCalendar,
+                  color: 'from-green-400 to-emerald-300',
+                },
+                {
+                  label: 'Средний чек',
+                  value: '2 250 ₽',
+                  desc: 'Комплекс',
+                  icon: FiDollarSign,
+                  color: 'from-purple-400 to-violet-300',
+                },
+                {
+                  label: 'В очереди',
+                  value: '5',
+                  desc: 'Ожидают',
+                  icon: FiClock,
+                  color: 'from-orange-400 to-amber-300',
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 shadow-md`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-white/30 p-2 backdrop-blur">
+                      <item.icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-2xl font-bold text-[var(--color-danger)]">2</p>
-                <p className="text-xs text-[var(--color-text-secondary)]">Срочно в сервис</p>
-              </div>
-              <div className="rounded-[var(--radius-md)] border p-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <FiNavigation className="size-4 text-[var(--color-primary)]" />
-                  <span className="text-xs font-medium">Общий пробег</span>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 18. ДАТЧИКИ ДВИГАТЕЛЯ (с круглыми индикаторами) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Датчики двигателя</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+              {[
+                {
+                  label: 'Температура',
+                  value: '87°C',
+                  desc: 'Норма',
+                  icon: FiThermometer,
+                  color: 'from-red-400 to-orange-300',
+                },
+                {
+                  label: 'Давление масла',
+                  value: '4.2 бар',
+                  desc: 'Норма',
+                  icon: FiActivity,
+                  color: 'from-green-400 to-emerald-300',
+                },
+                {
+                  label: 'Обороты',
+                  value: '2 400 RPM',
+                  desc: 'Холостой',
+                  icon: FiRefreshCw,
+                  color: 'from-blue-400 to-indigo-300',
+                },
+                {
+                  label: 'Топливо',
+                  value: '42%',
+                  desc: 'Остаток',
+                  icon: FiDroplet,
+                  color: 'from-amber-400 to-orange-300',
+                },
+                {
+                  label: 'Турбина',
+                  value: '1.2 бар',
+                  desc: 'Норма',
+                  icon: FiActivity,
+                  color: 'from-purple-400 to-violet-300',
+                },
+              ].map((item) => (
+                <motion.div
+                  key={item.label}
+                  whileHover={{ scale: 1.03 }}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-3 shadow-md`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-full bg-white/30 p-1.5 backdrop-blur">
+                      <item.icon className="size-4" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium opacity-80">{item.label}</p>
+                      <p className="text-lg font-bold">{item.value}</p>
+                      <p className="text-[10px] opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 19. АККУМУЛЯТОР (с иконками) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Аккумулятор</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {[
+                {
+                  label: 'Заряд',
+                  value: '89%',
+                  desc: 'Отлично',
+                  icon: FiActivity,
+                  color: 'from-green-400 to-emerald-300',
+                },
+                {
+                  label: 'Напряжение',
+                  value: '12.8 В',
+                  desc: 'Норма',
+                  icon: FiActivity,
+                  color: 'from-blue-400 to-indigo-300',
+                },
+                {
+                  label: 'Температура',
+                  value: '34°C',
+                  desc: 'Норма',
+                  icon: FiThermometer,
+                  color: 'from-yellow-400 to-amber-300',
+                },
+                {
+                  label: 'Срок службы',
+                  value: '2.5 года',
+                  desc: 'Осталось',
+                  icon: FiCalendar,
+                  color: 'from-purple-400 to-violet-300',
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 shadow-md`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-white/30 p-2 backdrop-blur">
+                      <item.icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-2xl font-bold">1.2M</p>
-                <p className="text-xs text-[var(--color-text-secondary)]">км за всё время</p>
-              </div>
-              <div className="rounded-[var(--radius-md)] border p-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <FiCalendar className="size-4 text-[var(--color-success)]" />
-                  <span className="text-xs font-medium">ТО в этом месяце</span>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 20. ШИНЫ (с иконками) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Шины</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {[
+                {
+                  label: 'Давление',
+                  value: '2.4 бар',
+                  desc: 'Норма',
+                  icon: FiActivity,
+                  color: 'from-green-400 to-emerald-300',
+                },
+                {
+                  label: 'Температура',
+                  value: '42°C',
+                  desc: 'Норма',
+                  icon: FiThermometer,
+                  color: 'from-yellow-400 to-amber-300',
+                },
+                {
+                  label: 'Износ',
+                  value: '65%',
+                  desc: 'Осталось',
+                  icon: FiActivity,
+                  color: 'from-orange-400 to-amber-300',
+                },
+                {
+                  label: 'Задние',
+                  value: '2.6 бар',
+                  desc: 'Норма',
+                  icon: FiActivity,
+                  color: 'from-blue-400 to-indigo-300',
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 shadow-md`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-white/30 p-2 backdrop-blur">
+                      <item.icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-2xl font-bold">8</p>
-                <p className="text-xs text-[var(--color-text-secondary)]">Запланировано</p>
-              </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 21. ТОРМОЗА (с иконками) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Тормоза</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {[
+                {
+                  label: 'Колодки',
+                  value: '8 мм',
+                  desc: 'Норма',
+                  icon: FiActivity,
+                  color: 'from-green-400 to-emerald-300',
+                },
+                {
+                  label: 'Диски',
+                  value: '120°C',
+                  desc: 'Норма',
+                  icon: FiThermometer,
+                  color: 'from-yellow-400 to-amber-300',
+                },
+                {
+                  label: 'Износ',
+                  value: '30%',
+                  desc: 'Осталось',
+                  icon: FiActivity,
+                  color: 'from-green-400 to-emerald-300',
+                },
+                {
+                  label: 'Жидкость',
+                  value: '95%',
+                  desc: 'Отлично',
+                  icon: FiDroplet,
+                  color: 'from-blue-400 to-cyan-300',
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 shadow-md`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-white/30 p-2 backdrop-blur">
+                      <item.icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 22. КОНДИЦИОНЕР (с иконками) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Кондиционер</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+              {[
+                {
+                  label: 'Температура',
+                  value: '18°C',
+                  desc: 'Задана',
+                  icon: FiThermometer,
+                  color: 'from-blue-400 to-cyan-300',
+                },
+                {
+                  label: 'Давление',
+                  value: '15 бар',
+                  desc: 'Хладагент',
+                  icon: FiActivity,
+                  color: 'from-green-400 to-emerald-300',
+                },
+                {
+                  label: 'Фреон',
+                  value: '78%',
+                  desc: 'Норма',
+                  icon: FiDroplet,
+                  color: 'from-purple-400 to-violet-300',
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 shadow-md`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-white/30 p-2 backdrop-blur">
+                      <item.icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 23. ТРАНСМИССИЯ (с иконками) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Трансмиссия</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+              {[
+                {
+                  label: 'Температура',
+                  value: '78°C',
+                  desc: 'Норма',
+                  icon: FiThermometer,
+                  color: 'from-yellow-400 to-amber-300',
+                },
+                {
+                  label: 'Давление',
+                  value: '8.5 бар',
+                  desc: 'Норма',
+                  icon: FiActivity,
+                  color: 'from-green-400 to-emerald-300',
+                },
+                {
+                  label: 'Масло',
+                  value: '92%',
+                  desc: 'Отлично',
+                  icon: FiDroplet,
+                  color: 'from-blue-400 to-indigo-300',
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 shadow-md`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-white/30 p-2 backdrop-blur">
+                      <item.icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 24. ПОДВЕСКА (с иконками) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Подвеска</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-2">
+              {[
+                {
+                  label: 'Клиренс',
+                  value: '185 мм',
+                  desc: 'Норма',
+                  icon: FiActivity,
+                  color: 'from-green-400 to-emerald-300',
+                },
+                {
+                  label: 'Амортизаторы',
+                  value: 'Хорошее',
+                  desc: 'Проверено',
+                  icon: FiCheck,
+                  color: 'from-blue-400 to-indigo-300',
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 shadow-md`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-white/30 p-2 backdrop-blur">
+                      <item.icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 25. ЭЛЕКТРИКА (с иконками) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Электрика</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+              {[
+                {
+                  label: 'Напряжение',
+                  value: '14.2 В',
+                  desc: 'Норма',
+                  icon: FiActivity,
+                  color: 'from-green-400 to-emerald-300',
+                },
+                {
+                  label: 'Ток',
+                  value: '12.4 А',
+                  desc: 'Среднее',
+                  icon: FiActivity,
+                  color: 'from-blue-400 to-indigo-300',
+                },
+                {
+                  label: 'Провода',
+                  value: 'Отлично',
+                  desc: 'Проверено',
+                  icon: FiCheck,
+                  color: 'from-green-400 to-emerald-300',
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 shadow-md`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-white/30 p-2 backdrop-blur">
+                      <item.icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 26. ОСВЕЩЕНИЕ (с иконками) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Освещение</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+              {[
+                {
+                  label: 'Фары',
+                  value: '✅',
+                  desc: 'Исправны',
+                  icon: FiCheck,
+                  color: 'from-green-400 to-emerald-300',
+                },
+                {
+                  label: 'Габариты',
+                  value: '✅',
+                  desc: 'Исправны',
+                  icon: FiCheck,
+                  color: 'from-green-400 to-emerald-300',
+                },
+                {
+                  label: 'Поворотники',
+                  value: '✅',
+                  desc: 'Исправны',
+                  icon: FiCheck,
+                  color: 'from-green-400 to-emerald-300',
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 shadow-md`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-white/30 p-2 backdrop-blur">
+                      <item.icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 27. ДВИГАТЕЛЬ (доп) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Двигатель</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+              {[
+                {
+                  label: 'Ремень',
+                  value: 'Хорошее',
+                  desc: 'Износ 20%',
+                  icon: FiCheck,
+                  color: 'from-green-400 to-emerald-300',
+                },
+                {
+                  label: 'Масло',
+                  value: '95%',
+                  desc: 'Отлично',
+                  icon: FiDroplet,
+                  color: 'from-blue-400 to-cyan-300',
+                },
+                {
+                  label: 'Цепь',
+                  value: 'Хорошее',
+                  desc: 'Износ 15%',
+                  icon: FiCheck,
+                  color: 'from-green-400 to-emerald-300',
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 shadow-md`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-white/30 p-2 backdrop-blur">
+                      <item.icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 28. ТЕСТ-ДРАЙВ (с иконками) ===== */}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Тест-драйв</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+              {[
+                {
+                  label: 'Тест-драйвов',
+                  value: '8',
+                  desc: 'За день',
+                  icon: FiTruck,
+                  color: 'from-blue-400 to-indigo-300',
+                },
+                {
+                  label: 'Длительность',
+                  value: '45 мин',
+                  desc: 'Средняя',
+                  icon: FiClock,
+                  color: 'from-purple-400 to-violet-300',
+                },
+                {
+                  label: 'Одобрений',
+                  value: '6',
+                  desc: 'Из 8',
+                  icon: FiCheck,
+                  color: 'from-green-400 to-emerald-300',
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-2xl bg-gradient-to-br ${item.color} p-4 shadow-md`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-white/30 p-2 backdrop-blur">
+                      <item.icon className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-2xl font-bold">{item.value}</p>
+                      <p className="text-xs opacity-70">{item.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -2643,6 +4123,7 @@ export function UiKitSections() {
                           {v.events.map((e, i) => (
                             <EventCard
                               key={i}
+                              icon={FiAlertTriangle}
                               title={e.title}
                               vehicleName={v.plate}
                               timeLabel={e.time}
@@ -4228,7 +5709,7 @@ export function UiKitSections() {
       </KitSection>
 
       {/* ================================================================ */}
-      {/* 20. КОМПОНЕНТЫ АВТОПАРКА */}
+      {/* 20. КОМПОНЕНТЫ АВТОПАРКА — СОБЫТИЯ ПО ГРУППАМ (120+ СОБЫТИЙ) */}
       {/* ================================================================ */}
       <KitSectionFull
         id="fleet"
@@ -4236,6 +5717,7 @@ export function UiKitSections() {
         description="Специализированные компоненты для отображения телематических данных."
       >
         <div className="space-y-8">
+          {/* SpeedIndicator */}
           <div>
             <h3 className="mb-2 text-sm font-semibold">SpeedIndicator</h3>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -4257,6 +5739,8 @@ export function UiKitSections() {
               </div>
             </div>
           </div>
+
+          {/* ConnectionStatus */}
           <div>
             <h3 className="mb-2 text-sm font-semibold">ConnectionStatus</h3>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -4271,35 +5755,961 @@ export function UiKitSections() {
               </div>
             </div>
           </div>
+
+          {/* ===== СОБЫТИЯ ПО ГРУППАМ ===== */}
           <div>
-            <h3 className="mb-2 text-sm font-semibold">События</h3>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <EventCard
-                title="Въезд в геозону"
-                vehicleName="Haval Jolion"
-                timeLabel="10:42"
-                tone="info"
-              />
-              <EventCard
-                title="Превышение скорости (105 км/ч)"
-                vehicleName="А 123 МР 77"
-                timeLabel="10:45"
-                tone="danger"
-              />
-              <EventCard
-                title="Плановое ТО через 800 км"
-                vehicleName="Toyota Camry"
-                timeLabel="09:30"
-                tone="warning"
-              />
-              <EventCard
-                title="Замена масла выполнена"
-                vehicleName="Lada Vesta"
-                timeLabel="08:15"
-                tone="success"
-              />
+            <h3 className="mb-2 text-sm font-semibold">События по группам</h3>
+
+            {/* ГРУППА 1: УСПЕШНЫЕ СОБЫТИЯ */}
+            <div className="mb-4">
+              <h4 className="mb-2 flex items-center gap-2 text-xs font-medium text-[var(--color-success)]">
+                <span className="inline-block size-2 rounded-full bg-[var(--color-success)]" />
+                Успешные события
+              </h4>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <EventCard
+                  icon={FiCheck}
+                  title="Замена масла выполнена"
+                  vehicleName="Lada Vesta"
+                  timeLabel="08:15"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiCheckCircle}
+                  title="Мойка выполнена"
+                  vehicleName="Toyota Camry"
+                  timeLabel="09:30"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiCheck}
+                  title="Замена колодок выполнена"
+                  vehicleName="BMW X5"
+                  timeLabel="10:00"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiAward}
+                  title="Водитель месяца — Иван Петров"
+                  vehicleName="Haval Jolion"
+                  timeLabel="04:00"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiThumbsUp}
+                  title="Клиент оставил отзыв 5★"
+                  vehicleName="Toyota Camry"
+                  timeLabel="11:30"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiStar}
+                  title="Отличный отзыв от клиента"
+                  vehicleName="Toyota Camry"
+                  timeLabel="07:15"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiTarget}
+                  title="Точка назначения достигнута"
+                  vehicleName="Toyota Camry"
+                  timeLabel="04:15"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiSend}
+                  title="Запрос в сервис отправлен"
+                  vehicleName="BMW X5"
+                  timeLabel="22:00"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiSmile}
+                  title="Клиент доволен обслуживанием"
+                  vehicleName="Toyota Camry"
+                  timeLabel="21:00"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiTrendingUp}
+                  title="Расход топлива снизился на 5%"
+                  vehicleName="Система"
+                  timeLabel="00:15"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiClipboard}
+                  title="Акт выполненных работ подписан"
+                  vehicleName="Lada Vesta Cross"
+                  timeLabel="23:45"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiMail}
+                  title="Отчёт отправлен на почту"
+                  vehicleName="Система"
+                  timeLabel="22:15"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiCheck}
+                  title="ТО пройдено успешно"
+                  vehicleName="Hyundai Solaris"
+                  timeLabel="14:30"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiCheckCircle}
+                  title="Акт приёма-передачи подписан"
+                  vehicleName="ГАЗель Next"
+                  timeLabel="12:30"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiStar}
+                  title="Новый постоянный клиент"
+                  vehicleName="ООО Север-Транс"
+                  timeLabel="11:45"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiCheck}
+                  title="Замена фильтров выполнена"
+                  vehicleName="Kia Sportage"
+                  timeLabel="10:30"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiThumbsUp}
+                  title="Рекомендация получена"
+                  vehicleName="Система"
+                  timeLabel="09:45"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiAward}
+                  title="Награда: лучший парк месяца"
+                  vehicleName="Pilot+"
+                  timeLabel="08:00"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiCheckCircle}
+                  title="Экологическая проверка пройдена"
+                  vehicleName="Весь парк"
+                  timeLabel="06:00"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiDollarSign}
+                  title="Оплата получена (5 000 ₽)"
+                  vehicleName="ООО ТрансЛогистик"
+                  timeLabel="13:00"
+                  tone="success"
+                />
+              </div>
+            </div>
+
+            {/* ГРУППА 2: ОШИБКИ И ПРОБЛЕМЫ */}
+            <div className="mb-4">
+              <h4 className="mb-2 flex items-center gap-2 text-xs font-medium text-[var(--color-danger)]">
+                <span className="inline-block size-2 rounded-full bg-[var(--color-danger)]" />
+                Ошибки и проблемы
+              </h4>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <EventCard
+                  icon={FiAlertTriangle}
+                  title="Превышение скорости (105 км/ч)"
+                  vehicleName="А 123 МР 77"
+                  timeLabel="10:45"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiAlertCircle}
+                  title="Датчик удара сработал"
+                  vehicleName="ГАЗель Next"
+                  timeLabel="11:02"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiWifiOff}
+                  title="Связь потеряна"
+                  vehicleName="Kia Rio X-Line"
+                  timeLabel="09:15"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiThermometer}
+                  title="Перегрев двигателя"
+                  vehicleName="Kia Rio X-Line"
+                  timeLabel="06:30"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiCamera}
+                  title="Камера заднего вида не работает"
+                  vehicleName="Haval Jolion"
+                  timeLabel="06:00"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiStopCircle}
+                  title="Экстренное торможение"
+                  vehicleName="Haval Jolion"
+                  timeLabel="05:00"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiCloudOff}
+                  title="Спутниковый сигнал потерян"
+                  vehicleName="ГАЗель Next"
+                  timeLabel="02:30"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiAlertTriangle}
+                  title="ДТП: лёгкое столкновение"
+                  vehicleName="Lada Vesta Cross"
+                  timeLabel="14:20"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiAlertCircle}
+                  title="Датчик давления масла неисправен"
+                  vehicleName="Lada Vesta Cross"
+                  timeLabel="13:45"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiX}
+                  title="Заказ #1419 отменён клиентом"
+                  vehicleName="Kia Rio X-Line"
+                  timeLabel="12:30"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiAlertTriangle}
+                  title="Просрочен платёж (8 000 ₽)"
+                  vehicleName="ООО ГрузЛайн"
+                  timeLabel="11:00"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiVolume2}
+                  title="Звуковой сигнал неисправен"
+                  vehicleName="Lada Vesta Cross"
+                  timeLabel="05:45"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiAlertCircle}
+                  title="Неисправность ABS"
+                  vehicleName="BMW X5"
+                  timeLabel="16:30"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiXCircle}
+                  title="Ошибка подключения к серверу"
+                  vehicleName="Система"
+                  timeLabel="15:45"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiAlertTriangle}
+                  title="Низкое давление масла"
+                  vehicleName="ГАЗель Next"
+                  timeLabel="15:00"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiAlertCircle}
+                  title="Датчик давления шин неисправен"
+                  vehicleName="Toyota Camry"
+                  timeLabel="14:00"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiX}
+                  title="Сбой синхронизации данных"
+                  vehicleName="Система"
+                  timeLabel="13:15"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiAlertTriangle}
+                  title="Повреждение кузова"
+                  vehicleName="Kia Rio X-Line"
+                  timeLabel="12:00"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiAlertCircle}
+                  title="Неисправность генератора"
+                  vehicleName="Lada Vesta"
+                  timeLabel="10:15"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiStopCircle}
+                  title="Аварийная остановка"
+                  vehicleName="ГАЗель Next"
+                  timeLabel="09:00"
+                  tone="danger"
+                />
+              </div>
+            </div>
+
+            {/* ГРУППА 3: ПРЕДУПРЕЖДЕНИЯ */}
+            <div className="mb-4">
+              <h4 className="mb-2 flex items-center gap-2 text-xs font-medium text-[var(--color-warning)]">
+                <span className="inline-block size-2 rounded-full bg-[var(--color-warning)]" />
+                Предупреждения
+              </h4>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <EventCard
+                  icon={FiTool}
+                  title="Плановое ТО через 800 км"
+                  vehicleName="Toyota Camry"
+                  timeLabel="09:30"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiDroplet}
+                  title="Низкий уровень топлива (12%)"
+                  vehicleName="Kia Rio X-Line"
+                  timeLabel="11:20"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiRefreshCw}
+                  title="Замена масла через 3 200 км"
+                  vehicleName="Haval Jolion"
+                  timeLabel="09:30"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiCloud}
+                  title="Дождь в районе движения"
+                  vehicleName="Haval Jolion"
+                  timeLabel="08:15"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiClock}
+                  title="Превышение времени стоянки"
+                  vehicleName="Lada Vesta Cross"
+                  timeLabel="07:30"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiBattery}
+                  title="Заряд АКБ ниже 30%"
+                  vehicleName="ГАЗель Next"
+                  timeLabel="06:45"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiWind}
+                  title="Сильный боковой ветер"
+                  vehicleName="ГАЗель Next"
+                  timeLabel="06:15"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiShield}
+                  title="АБС активирована"
+                  vehicleName="ГАЗель Next"
+                  timeLabel="03:45"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiActivity}
+                  title="ESP активирована"
+                  vehicleName="BMW X5"
+                  timeLabel="03:30"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiCloudRain}
+                  title="Дождь усиливается"
+                  vehicleName="Система"
+                  timeLabel="03:00"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiCloudSnow}
+                  title="Ожидается снегопад"
+                  vehicleName="Система"
+                  timeLabel="02:45"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiTrendingDown}
+                  title="Средняя скорость снизилась"
+                  vehicleName="Система"
+                  timeLabel="00:00"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiTool}
+                  title="Замена свечей через 2 000 км"
+                  vehicleName="ГАЗель Next"
+                  timeLabel="18:30"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiClock}
+                  title="Превышение скорости на 15 км/ч"
+                  vehicleName="BMW X5"
+                  timeLabel="17:45"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiDroplet}
+                  title="Расход топлива выше нормы"
+                  vehicleName="ГАЗель Next"
+                  timeLabel="17:00"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiCloud}
+                  title="Туман на маршруте"
+                  vehicleName="Система"
+                  timeLabel="16:15"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiTool}
+                  title="Замена ремня ГРМ через 5 000 км"
+                  vehicleName="Nissan Qashqai"
+                  timeLabel="15:30"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiClock}
+                  title="Просрочен техосмотр на 2 дня"
+                  vehicleName="Kia Rio X-Line"
+                  timeLabel="14:45"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiAlertCircle}
+                  title="Износ шин (осталось 3 мм)"
+                  vehicleName="Toyota Camry"
+                  timeLabel="13:00"
+                  tone="warning"
+                />
+                <EventCard
+                  icon={FiTool}
+                  title="Плановая замена фильтров"
+                  vehicleName="Hyundai Tucson"
+                  timeLabel="12:15"
+                  tone="warning"
+                />
+              </div>
+            </div>
+
+            {/* ГРУППА 4: ИНФОРМАЦИОННЫЕ СОБЫТИЯ */}
+            <div className="mb-4">
+              <h4 className="mb-2 flex items-center gap-2 text-xs font-medium text-[var(--color-primary)]">
+                <span className="inline-block size-2 rounded-full bg-[var(--color-primary)]" />
+                Информационные события
+              </h4>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <EventCard
+                  icon={FiMapPin}
+                  title="Въезд в геозону"
+                  vehicleName="Haval Jolion"
+                  timeLabel="10:42"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiFlag}
+                  title="Выезд из геозоны МКАД"
+                  vehicleName="Lada Vesta Cross"
+                  timeLabel="09:45"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiUser}
+                  title="Смена водителя"
+                  vehicleName="Toyota Camry"
+                  timeLabel="09:00"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiBell}
+                  title="Новое уведомление"
+                  vehicleName="Система"
+                  timeLabel="08:30"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiTruck}
+                  title="Новый автомобиль в парке"
+                  vehicleName="Hyundai Tucson"
+                  timeLabel="08:00"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiShield}
+                  title="Активирован режим охраны"
+                  vehicleName="BMW X5"
+                  timeLabel="07:45"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiSun}
+                  title="Дневной режим активирован"
+                  vehicleName="Система"
+                  timeLabel="06:00"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiMoon}
+                  title="Ночной режим активирован"
+                  vehicleName="Система"
+                  timeLabel="21:00"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiLock}
+                  title="Центральный замок заблокирован"
+                  vehicleName="Toyota Camry"
+                  timeLabel="05:30"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiUnlock}
+                  title="Центральный замок разблокирован"
+                  vehicleName="Toyota Camry"
+                  timeLabel="05:32"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiPower}
+                  title="Двигатель заглушен"
+                  vehicleName="BMW X5"
+                  timeLabel="05:15"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiPlay}
+                  title="Двигатель запущен"
+                  vehicleName="BMW X5"
+                  timeLabel="05:10"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiNavigation}
+                  title="Маршрут построен"
+                  vehicleName="Система"
+                  timeLabel="04:45"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiCompass}
+                  title="Изменение направления"
+                  vehicleName="Lada Vesta Cross"
+                  timeLabel="04:30"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiEye}
+                  title="Камера ночного видения включена"
+                  vehicleName="BMW X5"
+                  timeLabel="03:15"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiEyeOff}
+                  title="Камера ночного видения отключена"
+                  vehicleName="BMW X5"
+                  timeLabel="06:45"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiCloud}
+                  title="Спутниковый сигнал восстановлен"
+                  vehicleName="ГАЗель Next"
+                  timeLabel="02:35"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiDownload}
+                  title="Обновление карт загружено"
+                  vehicleName="Система"
+                  timeLabel="01:30"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiUpload}
+                  title="Данные телеметрии отправлены"
+                  vehicleName="Система"
+                  timeLabel="01:15"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiPrinter}
+                  title="Чек напечатан"
+                  vehicleName="Система"
+                  timeLabel="01:00"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiPieChart}
+                  title="Отчёт по топливу готов"
+                  vehicleName="Система"
+                  timeLabel="00:45"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiBarChart2}
+                  title="Статистика за неделю обновлена"
+                  vehicleName="Система"
+                  timeLabel="00:30"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiFile}
+                  title="Заказ-наряд создан"
+                  vehicleName="Toyota Camry"
+                  timeLabel="23:30"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiFolder}
+                  title="Документы загружены в систему"
+                  vehicleName="BMW X5"
+                  timeLabel="23:15"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiPaperclip}
+                  title="Фото повреждений приложены"
+                  vehicleName="ГАЗель Next"
+                  timeLabel="23:00"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiEdit2}
+                  title="Примечание к заказу добавлено"
+                  vehicleName="Система"
+                  timeLabel="22:45"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiMessageSquare}
+                  title="Новое сообщение от диспетчера"
+                  vehicleName="Система"
+                  timeLabel="22:30"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiPhone}
+                  title="Звонок клиенту выполнен"
+                  vehicleName="Оператор"
+                  timeLabel="21:45"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiHeadphones}
+                  title="Поддержка клиентов онлайн"
+                  vehicleName="Система"
+                  timeLabel="21:30"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiHelpCircle}
+                  title="Вопрос клиента решён"
+                  vehicleName="Оператор"
+                  timeLabel="21:15"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiWifi}
+                  title="Связь восстановлена"
+                  vehicleName="Kia Rio X-Line"
+                  timeLabel="09:20"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiMapPin}
+                  title="Въезд в геозону Аэропорт"
+                  vehicleName="Toyota Camry"
+                  timeLabel="19:30"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiFlag}
+                  title="Выезд из геозоны Склад"
+                  vehicleName="ГАЗель Next"
+                  timeLabel="18:45"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiUser}
+                  title="Новый водитель назначен"
+                  vehicleName="BMW X5"
+                  timeLabel="16:45"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiBell}
+                  title="Напоминание: ТО через 7 дней"
+                  vehicleName="Система"
+                  timeLabel="15:00"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiTruck}
+                  title="Автомобиль снят с линии"
+                  vehicleName="Toyota Camry"
+                  timeLabel="14:30"
+                  tone="info"
+                />
+                <EventCard
+                  icon={FiShield}
+                  title="Режим охраны отключён"
+                  vehicleName="BMW X5"
+                  timeLabel="13:30"
+                  tone="info"
+                />
+              </div>
+            </div>
+
+            {/* ГРУППА 5: СИСТЕМНЫЕ СОБЫТИЯ */}
+            <div className="mb-4">
+              <h4 className="mb-2 flex items-center gap-2 text-xs font-medium text-[var(--color-text-secondary)]">
+                <span className="inline-block size-2 rounded-full bg-[var(--color-text-secondary)]" />
+                Системные события
+              </h4>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <EventCard
+                  icon={FiServer}
+                  title="Синхронизация данных выполнена"
+                  vehicleName="Система"
+                  timeLabel="02:00"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiDatabase}
+                  title="Резервное копирование завершено"
+                  vehicleName="Система"
+                  timeLabel="01:45"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiCode}
+                  title="Обновление ПО завершено"
+                  vehicleName="Система"
+                  timeLabel="20:15"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiLink}
+                  title="Интеграция с внешним API выполнена"
+                  vehicleName="Система"
+                  timeLabel="20:30"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiGlobe}
+                  title="Доступ к удалённому серверу восстановлен"
+                  vehicleName="Система"
+                  timeLabel="20:00"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiCalendar}
+                  title="Техосмотр пройден"
+                  vehicleName="BMW X5"
+                  timeLabel="08:45"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiServer}
+                  title="Новый сервер добавлен"
+                  vehicleName="Система"
+                  timeLabel="19:00"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiDatabase}
+                  title="База данных обновлена"
+                  vehicleName="Система"
+                  timeLabel="17:30"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiCode}
+                  title="Деплой новой версии"
+                  vehicleName="Система"
+                  timeLabel="16:00"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiLink}
+                  title="Интеграция с 1С выполнена"
+                  vehicleName="Система"
+                  timeLabel="14:00"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiGlobe}
+                  title="Обновление SSL-сертификата"
+                  vehicleName="Система"
+                  timeLabel="12:00"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiServer}
+                  title="Проверка серверов завершена"
+                  vehicleName="Система"
+                  timeLabel="10:00"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiDatabase}
+                  title="Оптимизация БД выполнена"
+                  vehicleName="Система"
+                  timeLabel="08:00"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiCode}
+                  title="Исправление багов выпущено"
+                  vehicleName="Система"
+                  timeLabel="06:00"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiCalendar}
+                  title="Плановая проверка системы"
+                  vehicleName="Система"
+                  timeLabel="04:00"
+                  tone="neutral"
+                />
+              </div>
+            </div>
+
+            {/* ГРУППА 6: ФИНАНСОВЫЕ СОБЫТИЯ */}
+            <div className="mb-4">
+              <h4 className="mb-2 flex items-center gap-2 text-xs font-medium text-[var(--color-text-secondary)]">
+                <span className="inline-block size-2 rounded-full bg-[var(--color-text-secondary)]" />
+                Финансовые события
+              </h4>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <EventCard
+                  icon={FiDollarSign}
+                  title="Поступление оплаты 5 000 ₽"
+                  vehicleName="ООО ТрансЛогистик"
+                  timeLabel="13:00"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiTrendingUp}
+                  title="Доход за день 45 000 ₽"
+                  vehicleName="Pilot+"
+                  timeLabel="23:00"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiTrendingDown}
+                  title="Расходы 12 400 ₽"
+                  vehicleName="Топливо"
+                  timeLabel="22:00"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiDollarSign}
+                  title="Предоплата 3 500 ₽"
+                  vehicleName="ИП Сидоров"
+                  timeLabel="21:00"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiAlertTriangle}
+                  title="Просрочен платёж 8 000 ₽"
+                  vehicleName="ООО ГрузЛайн"
+                  timeLabel="11:00"
+                  tone="danger"
+                />
+                <EventCard
+                  icon={FiDollarSign}
+                  title="Списание 2 475 ₽"
+                  vehicleName="Заправка Haval Jolion"
+                  timeLabel="19:30"
+                  tone="neutral"
+                />
+                <EventCard
+                  icon={FiCheckCircle}
+                  title="Счёт #1423 оплачен"
+                  vehicleName="ООО ТрансЛогистик"
+                  timeLabel="18:00"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiDollarSign}
+                  title="Поступление 8 000 ₽"
+                  vehicleName="ООО ГрузЛайн"
+                  timeLabel="17:00"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiTrendingUp}
+                  title="Прибыль за месяц 611 000 ₽"
+                  vehicleName="Pilot+"
+                  timeLabel="00:00"
+                  tone="success"
+                />
+                <EventCard
+                  icon={FiDollarSign}
+                  title="Новый счёт выставлен 5 500 ₽"
+                  vehicleName="ООО Север-Транс"
+                  timeLabel="16:00"
+                  tone="neutral"
+                />
+              </div>
+            </div>
+
+            {/* Статистика событий */}
+            <div className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+              <h4 className="mb-3 text-sm font-semibold">Статистика событий</h4>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
+                <div className="rounded-lg bg-[var(--color-success-soft)] p-3 text-center">
+                  <p className="text-xs text-[var(--color-text-secondary)]">Успешные</p>
+                  <p className="text-2xl font-bold text-[var(--color-success)]">20</p>
+                </div>
+                <div className="rounded-lg bg-[var(--color-danger-soft)] p-3 text-center">
+                  <p className="text-xs text-[var(--color-text-secondary)]">Ошибки</p>
+                  <p className="text-2xl font-bold text-[var(--color-danger)]">20</p>
+                </div>
+                <div className="rounded-lg bg-[var(--color-warning-soft)] p-3 text-center">
+                  <p className="text-xs text-[var(--color-text-secondary)]">Предупреждения</p>
+                  <p className="text-2xl font-bold text-[var(--color-warning)]">20</p>
+                </div>
+                <div className="rounded-lg bg-[var(--color-primary-soft)] p-3 text-center">
+                  <p className="text-xs text-[var(--color-text-secondary)]">Информация</p>
+                  <p className="text-2xl font-bold text-[var(--color-primary)]">36</p>
+                </div>
+                <div className="rounded-lg bg-[var(--color-surface-soft)] p-3 text-center">
+                  <p className="text-xs text-[var(--color-text-secondary)]">Системные</p>
+                  <p className="text-2xl font-bold text-[var(--color-text-secondary)]">15</p>
+                </div>
+                <div className="rounded-lg bg-[var(--color-surface-soft)] p-3 text-center">
+                  <p className="text-xs text-[var(--color-text-secondary)]">Финансовые</p>
+                  <p className="text-2xl font-bold text-[var(--color-text-secondary)]">10</p>
+                </div>
+              </div>
+              <div className="mt-3 text-center text-xs text-[var(--color-text-secondary)]">
+                Всего событий: <strong className="text-[var(--color-text)]">121</strong>
+              </div>
             </div>
           </div>
+
+          {/* VehicleMarker */}
           <div>
             <h3 className="mb-2 text-sm font-semibold">VehicleMarker</h3>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -4324,6 +6734,8 @@ export function UiKitSections() {
               </div>
             </div>
           </div>
+
+          {/* Положение и статус */}
           <div>
             <h3 className="mb-2 text-sm font-semibold">Положение и статус</h3>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -4347,6 +6759,7 @@ export function UiKitSections() {
               </div>
             </div>
           </div>
+
           <Guidance
             use="для повторяемых транспортных сущностей и оперативных статусов."
             avoid="для данных без телематического контекста."
