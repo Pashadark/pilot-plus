@@ -26,6 +26,7 @@ CREATE TABLE "public"."ExternalVehicleLink" (
   "vehicleId" TEXT,
   "provider" TEXT NOT NULL DEFAULT 'DRIVER_HELPER',
   "externalId" TEXT NOT NULL,
+  "providerVehicleId" TEXT,
   "registrationNumberNormalized" TEXT,
   "registrationCertificateIndex" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -85,6 +86,7 @@ CREATE INDEX "ExternalVehicleLink_companyId_vehicleId_idx" ON "public"."External
 CREATE UNIQUE INDEX "Fine_companyId_provider_externalId_key" ON "public"."Fine"("companyId", "provider", "externalId");
 CREATE INDEX "Fine_companyId_status_offenseAt_idx" ON "public"."Fine"("companyId", "status", "offenseAt");
 CREATE INDEX "Fine_companyId_vehicleId_offenseAt_idx" ON "public"."Fine"("companyId", "vehicleId", "offenseAt");
+CREATE INDEX "Fine_companyId_providerVehicleId_idx" ON "public"."Fine"("companyId", "providerVehicleId");
 CREATE INDEX "Fine_companyId_clientId_offenseAt_idx" ON "public"."Fine"("companyId", "clientId", "offenseAt");
 CREATE INDEX "FineAssignmentHistory_companyId_fineId_createdAt_idx" ON "public"."FineAssignmentHistory"("companyId", "fineId", "createdAt");
 CREATE INDEX "FineAssignmentHistory_actorUserId_createdAt_idx" ON "public"."FineAssignmentHistory"("actorUserId", "createdAt");

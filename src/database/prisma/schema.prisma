@@ -684,6 +684,7 @@ model Fine {
   client              Client?                 @relation(fields: [clientId], references: [id], onDelete: SetNull)
   provider            String                  @default("DRIVER_HELPER")
   externalId          String
+  providerVehicleId   String?
   uin                 String?
   decreeNumber        String
   decreeAt            DateTime?               @db.Timestamptz(3)
@@ -710,6 +711,7 @@ model Fine {
   @@unique([companyId, provider, externalId])
   @@index([companyId, status, offenseAt])
   @@index([companyId, vehicleId, offenseAt])
+  @@index([companyId, providerVehicleId])
   @@index([companyId, clientId, offenseAt])
 }
 
