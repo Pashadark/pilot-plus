@@ -7,7 +7,7 @@ import {
 } from './rental-fleet-seed';
 
 describe('approved rental fleet seed', () => {
-  it('is idempotent, keeps exactly four active marked fixtures and never archives a manual vehicle', async () => {
+  it('is idempotent, keeps the nine real fleet vehicles and never archives a manual vehicle', async () => {
     const records = new Map<string, Record<string, unknown>>([
       ['manual', { id: 'manual', sourceKey: 'manual:1', isDemoImport: false, archivedAt: null }],
       [
@@ -36,6 +36,23 @@ describe('approved rental fleet seed', () => {
           });
           return { id: where.sourceKey };
         },
+        findFirst: async ({ where }: { where: { registrationNumberNormalized: string } }) => {
+          const found = [...records.values()].find(
+            (item) => item.registrationNumberNormalized === where.registrationNumberNormalized,
+          );
+          return found ? { id: String(found.id) } : null;
+        },
+        update: async ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: Record<string, unknown>;
+        }) => {
+          const current = records.get(where.id);
+          if (current) Object.assign(current, data);
+          return { id: where.id };
+        },
         updateMany: async ({ where, data }: FleetUpdateArgs) => {
           for (const item of records.values())
             if (where.id.in.includes(String(item.id))) Object.assign(item, data);
@@ -46,32 +63,28 @@ describe('approved rental fleet seed', () => {
     await seedApprovedRentalFleet(database as unknown as RentalFleetSeedDatabase, 'demo-company');
     await seedApprovedRentalFleet(database as unknown as RentalFleetSeedDatabase, 'demo-company');
     const active = [...records.values()].filter(
-      (item) => item.isDemoImport && item.archivedAt === null,
+      (item) => String(item.sourceKey).startsWith('real-fleet:') && item.archivedAt === null,
     );
-    expect(active).toHaveLength(4);
-    expect(new Set(active.map((item) => item.registrationNumberNormalized))).toHaveLength(4);
-    expect(new Set(active.map((item) => String(item.vin)))).toHaveLength(4);
+    expect(active).toHaveLength(9);
+    expect(new Set(active.map((item) => item.registrationNumberNormalized))).toHaveLength(9);
     for (const vehicle of active) {
-      expect(vehicle.vin).toMatch(/^DEMO[A-Z0-9]{13}$/u);
-      expect(vehicle.registrationCertificateNumber).toMatch(/^DEMO-STS-\d{2}$/u);
-      expect(vehicle.vehiclePassportNumber).toMatch(/^DEMO-PTS-\d{2}$/u);
-      expect(vehicle.osagoInsurer).toBe('DEMO ONLY Insurance');
-      expect(vehicle.cascoInsurer).toBe('DEMO ONLY Insurance');
-      expect(vehicle.osagoStartsAt).toEqual(new Date('2026-01-01'));
-      expect(vehicle.osagoEndsAt).toEqual(new Date('2030-12-31'));
-      expect(vehicle.cascoStartsAt).toEqual(new Date('2026-01-01'));
-      expect(vehicle.cascoEndsAt).toEqual(new Date('2030-12-31'));
-      expect(vehicle.isRentalReady).toBe(true);
+      expect(vehicle.sourceKey).toMatch(/^real-fleet:/u);
       expect(vehicle.status).toBe('IDLE');
       expect(vehicle.dailyPriceMinor).toBeGreaterThan(0);
       expect(vehicle.depositMinor).toBeGreaterThan(BigInt(0));
+      expect(vehicle.isDemoImport).toBe(false);
     }
     expect(records.get('manual')?.archivedAt).toBeNull();
     expect(approvedRentalFleet.map((item) => item[3])).toEqual([
-      'А429АУ97',
+      'А429АУ997',
       'Е435АН997',
       'М283АМ997',
+      'С886АУ997',
+      'Н26АХ550',
       'А156АХ997',
+      'В342НР797',
+      'Р400АМ997',
+      'Т949АМ997',
     ]);
   });
 
