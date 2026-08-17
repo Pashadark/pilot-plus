@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { Badge, Card, CardContent, PageHeader, StatCard } from '@/shared/ui';
+import { syncFinesAction } from '../server/sync-action';
 
 interface FineItem {
   id: string;
@@ -24,6 +25,9 @@ interface FinesPageProps {
     unassignedCount: number;
   };
   fines: readonly FineItem[];
+  companies: readonly { id: string; name: string }[];
+  selectedCompanyId?: string;
+  canSync: boolean;
 }
 
 const statusPresentation = {
@@ -42,7 +46,13 @@ function money(minor: string) {
   }).format(Number(BigInt(minor)) / 100);
 }
 
-export function FinesPage({ summary, fines }: FinesPageProps) {
+export function FinesPage({
+  summary,
+  fines,
+  companies,
+  selectedCompanyId,
+  canSync,
+}: FinesPageProps) {
   return (
     <div className="space-y-6">
       <PageHeader
@@ -50,6 +60,45 @@ export function FinesPage({ summary, fines }: FinesPageProps) {
         title="Штрафы"
         description="Штрафы Driver Helper, связанные с автомобилями, арендами и клиентами."
       />
+
+      <Card>
+        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
+          <form
+            action="/fines"
+            method="get"
+            className="flex min-w-0 flex-1 flex-col gap-2 sm:max-w-md"
+          >
+            <label htmlFor="fine-company" className="text-sm font-medium">
+              Фирма
+            </label>
+            <select
+              id="fine-company"
+              name="companyId"
+              defaultValue={selectedCompanyId ?? ''}
+              className="min-h-11 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3"
+              onChange={undefined}
+            >
+              {companies.length > 1 && <option value="">Все доступные фирмы</option>}
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name}
+                </option>
+              ))}
+            </select>
+            <button className="min-h-11 rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 font-semibold">
+              Показать
+            </button>
+          </form>
+          {canSync && selectedCompanyId && (
+            <form action={syncFinesAction}>
+              <input type="hidden" name="companyId" value={selectedCompanyId} />
+              <button className="min-h-11 w-full rounded-[var(--radius-md)] bg-[var(--color-primary)] px-5 font-semibold text-white sm:w-auto">
+                Обновить штрафы
+              </button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
 
       <section aria-label="Сводка по штрафам" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Новые" value={String(summary.newCount)} />

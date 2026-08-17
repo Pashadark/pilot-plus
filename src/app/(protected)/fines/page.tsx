@@ -11,7 +11,13 @@ export default async function FinesRoute({
   const data = await listFinesForCurrentUser(filters);
   return (
     <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Штрафы' }]}>
-      <FinesPage summary={data.summary} fines={data.fines} />
+      <FinesPage
+        summary={data.summary}
+        fines={data.fines}
+        companies={data.companies}
+        selectedCompanyId={data.selectedCompanyId}
+        canSync={data.canSync}
+      />
     </AppShell>
   );
 }

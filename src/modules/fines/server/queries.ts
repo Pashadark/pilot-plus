@@ -22,11 +22,20 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
       ? (filters.status as FineStatus)
       : undefined;
   const query = filters.query?.trim();
-  const companyWhere =
-    access.scope === 'SYSTEM'
-      ? filters.companyId
-        ? { companyId: filters.companyId }
-        : {}
+  const companies = await prisma.company.findMany({
+    where: access.scope === 'SYSTEM' ? {} : { id: { in: [...access.companyIds] } },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+  const requestedCompanyId = companies.some(({ id }) => id === filters.companyId)
+    ? filters.companyId
+    : undefined;
+  const selectedCompanyId =
+    requestedCompanyId ?? (companies.length === 1 ? companies[0]?.id : undefined);
+  const companyWhere = selectedCompanyId
+    ? { companyId: selectedCompanyId }
+    : access.scope === 'SYSTEM'
+      ? {}
       : { companyId: { in: [...access.companyIds] } };
   const where: Prisma.FineWhereInput = {
     ...companyWhere,
@@ -93,6 +102,14 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
     ['NEW', 'UNPAID', 'OVERDUE'].includes(itemStatus),
   );
   return {
+    companies,
+    selectedCompanyId,
+    canSync: Boolean(
+      selectedCompanyId &&
+      (access.scope === 'SYSTEM' ||
+        access.rolesByCompany[selectedCompanyId] === 'COMPANY_ADMIN' ||
+        access.rolesByCompany[selectedCompanyId] === 'DISPATCHER'),
+    ),
     fines,
     summary: {
       newCount: fines.filter(({ status: itemStatus }) => itemStatus === 'NEW').length,

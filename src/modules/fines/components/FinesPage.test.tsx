@@ -7,6 +7,9 @@ describe('FinesPage', () => {
   it('renders a fine with vehicle, amount, status and photo action', () => {
     const markup = renderToStaticMarkup(
       <FinesPage
+        companies={[{ id: 'company-a', name: 'Компания А' }]}
+        selectedCompanyId="company-a"
+        canSync
         summary={{ newCount: 1, unpaidCount: 1, unpaidAmountMinor: '25000', unassignedCount: 0 }}
         fines={[
           {
