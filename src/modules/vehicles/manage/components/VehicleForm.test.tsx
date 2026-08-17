@@ -3,7 +3,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../actions', () => ({ createVehicleAction: vi.fn() }));
+vi.mock('../actions', () => ({ createVehicleAction: vi.fn(), updateVehicleAction: vi.fn() }));
 vi.mock('@/shared/providers/ToastProvider', () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 
 import { VehicleForm } from './VehicleForm';
@@ -32,5 +32,36 @@ describe('VehicleForm', () => {
     );
 
     expect(document.querySelector('select[name="companyId"]')).toBeTruthy();
+  });
+
+  it('renders existing values and submits the vehicle id in edit mode', () => {
+    render(
+      <VehicleForm
+        companies={[{ id: 'company-1', label: 'Компания', canArchive: true }]}
+        vehicle={{
+          id: 'vehicle-1',
+          companyId: 'company-1',
+          internalNumber: 'ПАРК-01',
+          registrationNumber: 'А429АУ997',
+          make: 'Kia',
+          model: "Cee'd",
+          year: 2020,
+          vin: 'XWEH4816BL0002046',
+          city: 'Москва',
+          dailyPriceRubles: '3350',
+          transmission: 'Автомат',
+          fuelType: 'PETROL',
+          seats: 5,
+          status: 'IDLE',
+          isRentalReady: false,
+        }}
+      />,
+    );
+
+    expect(document.querySelector('input[name="vehicleId"]')?.getAttribute('value')).toBe(
+      'vehicle-1',
+    );
+    expect((document.querySelector('input[name="make"]') as HTMLInputElement).value).toBe('Kia');
+    expect(screen.getByRole('button', { name: 'Сохранить изменения' })).toBeTruthy();
   });
 });

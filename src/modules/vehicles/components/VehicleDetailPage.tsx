@@ -291,6 +291,12 @@ export function VehicleDetailPage({
               <strong className="text-lg">
                 {formatDailyPrice(vehicle.dailyPriceMinor, vehicle.currency)}
               </strong>
+              <Link
+                href={`/vehicles/${vehicle.id}/edit`}
+                className="mt-3 inline-flex min-h-11 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-primary)] px-4 text-sm font-semibold text-[var(--color-primary)] hover:bg-[var(--color-primary-soft)]"
+              >
+                Редактировать
+              </Link>
             </div>
           </div>
         </header>
