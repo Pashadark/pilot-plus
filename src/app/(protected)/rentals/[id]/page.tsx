@@ -14,15 +14,51 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
     .join(' ');
   const history = await listRentalAuditForCurrentUser(rental.companyId, rental.id);
   const detail = rentalDetailPresentation({
+    id: rental.id,
+    contractNumber: rental.contractNumber,
     status: rental.status,
     snapshot: rental.snapshot,
+    clientId: rental.clientId,
     clientLabel: client,
+    vehicleId: rental.vehicleId,
     vehicleLabel: [rental.vehicle.make, rental.vehicle.modelName, rental.vehicle.registrationNumber]
       .filter(Boolean)
       .join(' · '),
     startsAt: rental.startsAt.toISOString(),
     endsAt: rental.endsAt.toISOString(),
+    createdAt: rental.createdAt.toISOString(),
+    updatedAt: rental.updatedAt.toISOString(),
+    confirmedAt: rental.confirmedAt?.toISOString() ?? null,
+    activatedAt: rental.activatedAt?.toISOString() ?? null,
+    completedAt: rental.completedAt?.toISOString() ?? null,
+    cancelledAt: rental.cancelledAt?.toISOString() ?? null,
+    currency: rental.currency,
+    dailyRateMinor: rental.dailyRateMinor,
+    billableDays: rental.billableDays,
+    basePriceMinor: rental.basePriceMinor,
+    discountMinor: rental.discountMinor,
+    servicesMinor: rental.servicesMinor,
     totalPriceMinor: rental.totalPriceMinor,
+    depositMinor: rental.depositMinor,
+    includedMileageKm: rental.includedMileageKm,
+    overageMileagePriceMinor: rental.overageMileagePriceMinor,
+    missingFuelPriceMinor: rental.missingFuelPriceMinor,
+    priceOverrideReason: rental.priceOverrideReason,
+    drivers: rental.drivers.map((driver) => {
+      const snapshot =
+        typeof driver.snapshot === 'object' &&
+        driver.snapshot !== null &&
+        !Array.isArray(driver.snapshot)
+          ? (driver.snapshot as Record<string, unknown>)
+          : null;
+      return {
+        id: driver.id,
+        label:
+          typeof snapshot?.fullName === 'string' && snapshot.fullName.trim()
+            ? snapshot.fullName
+            : 'Допущенный водитель',
+      };
+    }),
   });
   return (
     <AppShell
@@ -37,38 +73,48 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
         <dl className="grid gap-3 rounded-[var(--radius-md)] border p-4">
           <div>
             <dt>Источник данных</dt>
-            <dd>{detail.source}</dd>
+            <dd>{detail.source.label}</dd>
           </div>
           <div>
             <dt>Клиент</dt>
-            <dd>{detail.client}</dd>
+            <dd>{detail.client.label}</dd>
           </div>
           <div>
             <dt>Автомобиль</dt>
-            <dd>{detail.vehicle}</dd>
+            <dd>{detail.vehicle.label}</dd>
           </div>
           <div>
             <dt>Статус</dt>
-            <dd>{rental.status}</dd>
+            <dd>{detail.status.label}</dd>
           </div>
           <div>
             <dt>Срок</dt>
-            <dd>{detail.term}</dd>
+            <dd>
+              {detail.term.startsAt} — {detail.term.endsAt}
+            </dd>
           </div>
           <div>
             <dt>Итог</dt>
-            <dd>{(detail.totalMinor / 100).toLocaleString('ru-RU')} ₽</dd>
+            <dd>{detail.finance.total}</dd>
           </div>
           <div>
             <dt>Выдача / возврат</dt>
             <dd>
-              {detail.pickupAddress ?? '—'} / {detail.returnAddress ?? '—'}
+              {detail.operations.pickupAddress} / {detail.operations.returnAddress}
             </dd>
           </div>
-          {detail.issuance ? (
+          {Object.values(detail.operations).some((value) => value !== 'Не указано') ? (
             <div>
               <dt>Условия выдачи</dt>
-              <dd>{Object.values(detail.issuance).map(String).join(' · ') || '—'}</dd>
+              <dd>
+                {Object.entries(detail.operations)
+                  .filter(
+                    ([, value]) =>
+                      value !== 'Не указано' && (!Array.isArray(value) || value.length),
+                  )
+                  .map(([, value]) => (Array.isArray(value) ? value.join(', ') : value))
+                  .join(' · ') || 'Не указано'}
+              </dd>
             </div>
           ) : null}
         </dl>
