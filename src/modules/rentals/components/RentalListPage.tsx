@@ -13,7 +13,14 @@ const status: Record<string, string> = {
   COMPLETED: 'Завершён',
   CANCELLED: 'Отменён',
 };
-export function RentalListPage({ rentals }: { rentals: readonly Row[] }) {
+type Filters = { query?: string; status?: string; from?: string; to?: string };
+export function RentalListPage({
+  rentals,
+  filters = {},
+}: {
+  rentals: readonly Row[];
+  filters?: Filters;
+}) {
   return (
     <main className="grid min-w-0 gap-5 p-4 sm:p-6" data-testid="rental-list-page">
       <header>
@@ -25,12 +32,14 @@ export function RentalListPage({ rentals }: { rentals: readonly Row[] }) {
           name="query"
           aria-label="Поиск клиента или автомобиля"
           className="min-h-11 rounded-[var(--radius-md)] border px-3"
-          placeholder="Клиент или автомобиль"
+          placeholder="Фамилия, договор, машина или госномер"
+          defaultValue={filters.query ?? ''}
         />
         <select
           name="status"
           aria-label="Статус"
           className="min-h-11 rounded-[var(--radius-md)] border px-3"
+          defaultValue={filters.status ?? ''}
         >
           <option value="">Все статусы</option>
           {Object.entries(status).map(([v, l]) => (
@@ -44,12 +53,14 @@ export function RentalListPage({ rentals }: { rentals: readonly Row[] }) {
           aria-label="Дата с"
           type="date"
           className="min-h-11 rounded-[var(--radius-md)] border px-3"
+          defaultValue={filters.from ?? ''}
         />
         <input
           name="to"
           aria-label="Дата по"
           type="date"
           className="min-h-11 rounded-[var(--radius-md)] border px-3"
+          defaultValue={filters.to ?? ''}
         />
         <button className="min-h-11 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-3 text-white">
           Применить
@@ -86,9 +97,21 @@ export function RentalListPage({ rentals }: { rentals: readonly Row[] }) {
           <RentalCalendar month={new Date().toISOString().slice(0, 7)} rentals={rentals} />
         </>
       ) : (
-        <p className="rounded-[var(--radius-md)] border p-6 text-[var(--color-text-secondary)]">
-          Договоров аренды пока нет.
-        </p>
+        <div className="grid justify-items-start gap-3 rounded-[var(--radius-md)] border p-6 text-[var(--color-text-secondary)]">
+          <p>
+            {Object.values(filters).some(Boolean)
+              ? 'По заданным условиям договоры не найдены.'
+              : 'Договоров аренды пока нет.'}
+          </p>
+          {Object.values(filters).some(Boolean) ? (
+            <Link
+              href="/rentals"
+              className="min-h-11 content-center font-semibold text-[var(--color-primary)]"
+            >
+              Сбросить фильтры
+            </Link>
+          ) : null}
+        </div>
       )}
     </main>
   );

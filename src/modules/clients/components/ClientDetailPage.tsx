@@ -4,10 +4,15 @@ import { FiArrowLeft, FiFileText, FiPhone } from 'react-icons/fi';
 import { DocumentsPanel } from '@/modules/client-documents/components/DocumentsPanel';
 import type { ClientDocumentListItem } from '@/modules/client-documents/types';
 import type { ClientDetailDto, ClientStatus } from '../types';
+import type { ClientRentalWorkspaceDto } from '../types';
+import type { ClientCommentDto } from '@/modules/client-comments/types';
+import { ClientCommentsPanel } from '@/modules/client-comments/components/ClientCommentsPanel';
 import { Badge, Card, CardContent, CardHeader } from '@/shared/ui';
 
 import { ClientForm } from './ClientForm';
 import { ClientPhoto } from './ClientPhoto';
+import { ClientRentalHistory } from './ClientRentalHistory';
+import { ClientWorkspaceTabs } from './ClientWorkspaceTabs';
 
 const labels: Record<ClientStatus, string> = {
   DRAFT: 'Черновик',
@@ -17,6 +22,10 @@ const labels: Record<ClientStatus, string> = {
   REGULAR: 'Постоянный',
   BLOCKED: 'Заблокирован',
   ARCHIVED: 'В архиве',
+};
+const emptyRentalWorkspace: ClientRentalWorkspaceDto = {
+  summary: { total: 0, active: 0, completed: 0, totalMinor: '0' },
+  rentals: [],
 };
 function date(value: string | null) {
   return value
@@ -39,6 +48,10 @@ export function ClientDetailPage({
   documents,
   companies,
   canCreateRental = false,
+  rentalWorkspace = emptyRentalWorkspace,
+  comments = [],
+  currentUserId = '',
+  canHideAnyComment = false,
 }: {
   client: ClientDetailDto;
   canManage: boolean;
@@ -46,6 +59,10 @@ export function ClientDetailPage({
   documents: readonly ClientDocumentListItem[];
   companies: readonly { id: string; name: string }[];
   canCreateRental?: boolean;
+  rentalWorkspace?: ClientRentalWorkspaceDto;
+  comments?: ClientCommentDto[];
+  currentUserId?: string;
+  canHideAnyComment?: boolean;
 }) {
   return (
     <main className="grid min-w-0 gap-5 p-4 sm:p-6" data-testid="client-detail-page">
@@ -93,46 +110,72 @@ export function ClientDetailPage({
           </div>
         </CardContent>
       </Card>
-      <div className="grid min-w-0 gap-5 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <h2 className="font-bold">Обзор</h2>
-          </CardHeader>
-          <CardContent>
-            <dl>
-              <DetailRow label="Email">{client.email ?? 'Нет данных'}</DetailRow>
-              <DetailRow label="Дата рождения">{date(client.birthDate)}</DetailRow>
-              <DetailRow label="Создана карточка">{date(client.createdAt)}</DetailRow>
-            </dl>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <h2 className="flex items-center gap-2 font-bold">
-              <FiFileText aria-hidden="true" />
-              Реквизиты документов
-            </h2>
-          </CardHeader>
-          <CardContent>
-            <dl>
-              <DetailRow label="Паспорт">{client.passport ?? 'Нет данных'}</DetailRow>
-              <DetailRow label="Водительское удостоверение">
-                {client.driverLicense ?? 'Нет данных'}
-              </DetailRow>
-              <DetailRow label="Выдано">{date(client.driverLicenseIssuedAt)}</DetailRow>
-              <DetailRow label="Действует до">{date(client.driverLicenseExpiresAt)}</DetailRow>
-            </dl>
-          </CardContent>
-        </Card>
-      </div>
-      <DocumentsPanel
-        clientId={client.id}
-        clientName={client.fullName}
-        documents={documents}
-        canManage={canManage}
-        canArchive={canArchiveDocuments}
+      <ClientWorkspaceTabs
+        rentalCount={rentalWorkspace.summary.total}
+        commentCount={comments.length}
+        overview={
+          <div className="grid min-w-0 gap-5 xl:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <h2 className="font-bold">Обзор</h2>
+              </CardHeader>
+              <CardContent>
+                <dl>
+                  <DetailRow label="Email">{client.email ?? 'Нет данных'}</DetailRow>
+                  <DetailRow label="Дата рождения">{date(client.birthDate)}</DetailRow>
+                  <DetailRow label="Создана карточка">{date(client.createdAt)}</DetailRow>
+                </dl>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <h2 className="flex items-center gap-2 font-bold">
+                  <FiFileText aria-hidden="true" />
+                  Реквизиты документов
+                </h2>
+              </CardHeader>
+              <CardContent>
+                <dl>
+                  <DetailRow label="Паспорт">{client.passport ?? 'Нет данных'}</DetailRow>
+                  <DetailRow label="Водительское удостоверение">
+                    {client.driverLicense ?? 'Нет данных'}
+                  </DetailRow>
+                  <DetailRow label="Выдано">{date(client.driverLicenseIssuedAt)}</DetailRow>
+                  <DetailRow label="Действует до">{date(client.driverLicenseExpiresAt)}</DetailRow>
+                </dl>
+              </CardContent>
+            </Card>
+            {canManage ? (
+              <div className="xl:col-span-2">
+                <ClientForm companies={companies} client={client} />
+              </div>
+            ) : null}
+          </div>
+        }
+        rentals={<ClientRentalHistory workspace={rentalWorkspace} />}
+        documents={
+          <DocumentsPanel
+            clientId={client.id}
+            clientName={client.fullName}
+            documents={documents}
+            canManage={canManage}
+            canArchive={canArchiveDocuments}
+          />
+        }
+        comments={
+          <ClientCommentsPanel
+            clientId={client.id}
+            comments={comments}
+            rentals={rentalWorkspace.rentals.map((rental) => ({
+              id: rental.id,
+              label: rental.contractNumber ?? rental.vehicle.label,
+            }))}
+            canManage={canManage}
+            currentUserId={currentUserId}
+            canHideAny={canHideAnyComment}
+          />
+        }
       />
-      {canManage ? <ClientForm companies={companies} client={client} /> : null}
     </main>
   );
 }

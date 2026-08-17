@@ -6,7 +6,8 @@ export default async function RentalsPage({
 }: {
   searchParams: Promise<{ status?: string; query?: string; from?: string; to?: string }>;
 }) {
-  const records = await listFilteredRentalsForCurrentUser(await searchParams);
+  const filters = await searchParams;
+  const records = await listFilteredRentalsForCurrentUser(filters);
   return (
     <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Аренда' }]}>
       <RentalListPage
@@ -25,6 +26,7 @@ export default async function RentalsPage({
             .filter(Boolean)
             .join(' '),
         }))}
+        filters={filters}
       />
     </AppShell>
   );

@@ -17,6 +17,15 @@ export default function ClientLoading() {
             <Skeleton className="h-5 w-1/2 motion-reduce:animate-none" />
           </div>
         </Card>
+        <div className="flex gap-2 overflow-hidden border-b pb-2">
+          {[24, 28, 30, 32].map((width) => (
+            <Skeleton
+              key={width}
+              className="h-11 shrink-0 motion-reduce:animate-none"
+              style={{ width: `${width / 4}rem` }}
+            />
+          ))}
+        </div>
         <div className="grid gap-5 xl:grid-cols-2">
           <Skeleton className="h-72 motion-reduce:animate-none" />
           <Skeleton className="h-72 motion-reduce:animate-none" />
