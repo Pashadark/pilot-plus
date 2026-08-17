@@ -2,7 +2,11 @@ import 'server-only';
 
 import type { z } from 'zod';
 
-import { driverHelperCarsPageSchema, driverHelperFinesPageSchema } from './schemas';
+import {
+  driverHelperCarsPageSchema,
+  driverHelperFinePhotosSchema,
+  driverHelperFinesPageSchema,
+} from './schemas';
 
 const BASE_URL = 'https://api.driver-helper.ru';
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -86,5 +90,10 @@ export class DriverHelperClient {
   listUnpaidFines(page: number) {
     if (!Number.isInteger(page) || page < 1) throw new DriverHelperError('INVALID_RESPONSE');
     return this.get(`/v1.0/fines?page=${page}&perPage=50`, driverHelperFinesPageSchema);
+  }
+
+  getFinePhotos(fineId: string) {
+    if (!/^\d+$/u.test(fineId)) throw new DriverHelperError('INVALID_RESPONSE');
+    return this.get(`/v1.0/fine/${fineId}/photo/base64`, driverHelperFinePhotosSchema);
   }
 }

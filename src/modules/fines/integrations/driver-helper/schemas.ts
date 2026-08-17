@@ -17,6 +17,17 @@ export const driverHelperFineSchema = z
     fine_date: z.string(),
     suma: z.union([z.string(), z.number()]),
     total_suma: z.union([z.string(), z.number()]),
+    post_date: z.string().nullish(),
+    discount_size: z.coerce.number().int().min(0).max(100).nullish(),
+    discount_date: z.string().nullish(),
+    koap_code: z.string().nullish(),
+    koap_text: z.string().nullish(),
+    address: z.string().nullish(),
+    paid: z.coerce.boolean().default(false),
+    cancelled: z.coerce.boolean().default(false),
+    to_bailiff: z.coerce.boolean().default(false),
+    photo_urls: z.array(z.string()).nullish(),
+    car: driverHelperCarSchema.nullish(),
   })
   .passthrough();
 
@@ -33,3 +44,8 @@ export function paginatedSchema<T extends z.ZodTypeAny>(item: T) {
 
 export const driverHelperCarsPageSchema = paginatedSchema(driverHelperCarSchema);
 export const driverHelperFinesPageSchema = paginatedSchema(driverHelperFineSchema);
+
+export const driverHelperFinePhotosSchema = z.object({
+  status: z.enum(['photo_exists', 'photo_no', 'photo_in_process']),
+  photos: z.array(z.string()).default([]),
+});

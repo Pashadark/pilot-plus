@@ -46,4 +46,20 @@ describe('Driver Helper API client', () => {
       expect.objectContaining<Partial<DriverHelperError>>({ code: 'INVALID_RESPONSE' }),
     );
   });
+
+  it('loads fine photo metadata without exposing the token', async () => {
+    const transport = vi
+      .fn()
+      .mockResolvedValue(
+        response({ status: 'photo_exists', photos: ['data:image/jpeg;base64,AA=='] }),
+      );
+    const client = new DriverHelperClient({ token: 'secret-token', transport });
+
+    await expect(client.getFinePhotos('91')).resolves.toEqual({
+      status: 'photo_exists',
+      photos: ['data:image/jpeg;base64,AA=='],
+    });
+    const request = transport.mock.calls[0]?.[0] as Request;
+    expect(request.url).toBe('https://api.driver-helper.ru/v1.0/fine/91/photo/base64');
+  });
 });
