@@ -20,7 +20,7 @@ vi.mock('@/modules/rentals/server/actions', () => ({
 import { RentalDetailPanel } from './RentalDetailPanel';
 
 describe('RentalDetailPanel', () => {
-  it('shows sanitized history, contract formats and a confirmed missing-documents retry', () => {
+  it('показывает защищённые документы и переводит безопасный аудит', () => {
     render(
       <RentalDetailPanel
         rental={{
@@ -31,6 +31,7 @@ describe('RentalDetailPanel', () => {
         }}
         documents={[{ version: 2, format: 'PDF' }]}
         generations={[{ version: 3, status: 'ERROR', updatedAt: '2026-08-13T09:00:00.000Z' }]}
+        source="Снимок подтверждённого договора"
         history={[
           {
             id: 'a1',
@@ -43,14 +44,37 @@ describe('RentalDetailPanel', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'История действий' })).toBeTruthy();
-    expect(screen.getByText(/Документ договора/u)).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Скачать PDF v2' }).getAttribute('href')).toBe(
+    expect(screen.getByText('Документ скачан')).toBeTruthy();
+    expect(screen.queryByText('DOWNLOAD')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Скачать PDF, версия 2' }).getAttribute('href')).toBe(
       '/rentals/rental-1/documents/2/PDF',
     );
     expect(screen.getByRole('button', { name: 'Повторить создание документов' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Отменить договор' })).toBeTruthy();
-    expect(screen.getByText('Версия 3: ошибка подготовки')).toBeTruthy();
+    expect(screen.getByText('Версия 3: Не удалось подготовить')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Отменить договор' }));
     expect(screen.getByText('Отменить подтверждённый договор?')).toBeTruthy();
+  });
+
+  it('честно объясняет отсутствие файлов и аудита у импортированного договора', () => {
+    render(
+      <RentalDetailPanel
+        rental={{
+          id: 'rental-1',
+          companyId: 'company-1',
+          status: 'COMPLETED',
+          contractNumber: 'ME-2026-0001-BK',
+        }}
+        documents={[]}
+        generations={[]}
+        history={[]}
+        source="Импортированный договор"
+      />,
+    );
+
+    expect(screen.getByText('Для импортированного договора файлы не формировались.')).toBeTruthy();
+    expect(
+      screen.getByText('Для этого договора действия пользователей не зафиксированы.'),
+    ).toBeTruthy();
   });
 });

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useActionState, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { FiDownload, FiFileText } from 'react-icons/fi';
 
 import {
   cancelRentalAction,
@@ -11,21 +12,44 @@ import {
 } from '@/modules/rentals/server/actions';
 import { useToast } from '@/shared/providers/ToastProvider';
 import { Button } from '@/shared/ui/Button';
+import { Card, CardContent, CardHeader } from '@/shared/ui/Card';
 
 type DocumentItem = { version: number; format: 'DOCX' | 'PDF' };
 type HistoryItem = { id: string; action: string; label: string | null; createdAt: string };
 type GenerationItem = { version: number; status: string; updatedAt: string };
+
+const generationLabels: Record<string, string> = {
+  PENDING: 'Ожидает подготовки',
+  PROMOTED: 'Проверяется',
+  COMMITTED: 'Готово',
+  ERROR: 'Не удалось подготовить',
+  CLEANING: 'Удаляется',
+};
+
+const auditLabels: Record<string, string> = {
+  CREATE: 'Черновик создан',
+  UPDATE: 'Договор изменён',
+  CONFIRM: 'Договор подтверждён',
+  CANCEL: 'Договор отменён',
+  GENERATE_DOCUMENTS: 'Документы сформированы',
+  DOWNLOAD: 'Документ скачан',
+};
+
+const documentLinkClass =
+  'inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-primary)] bg-transparent px-4 text-sm font-semibold text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]';
 
 export function RentalDetailPanel({
   rental,
   documents,
   history,
   generations = [],
+  source = 'Текущие данные черновика',
 }: {
   rental: { id: string; companyId: string; status: string; contractNumber: string | null };
   documents: readonly DocumentItem[];
   history: readonly HistoryItem[];
   generations?: readonly GenerationItem[];
+  source?: string;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -53,8 +77,8 @@ export function RentalDetailPanel({
 
   return (
     <div className="grid min-w-0 gap-5">
-      <section className="grid gap-3" aria-labelledby="rental-documents">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <Card className="min-w-0" role="region" aria-labelledby="rental-documents">
+        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="rental-documents" className="text-lg font-bold">
             Документы
           </h2>
@@ -65,37 +89,47 @@ export function RentalDetailPanel({
               <Button type="submit">Повторить создание документов</Button>
             </form>
           ) : null}
-        </div>
-        {documents.length ? (
-          <div className="flex flex-wrap gap-3">
-            {documents.map((document) => (
-              <Link
-                key={`${document.version}-${document.format}`}
-                className="inline-flex min-h-11 items-center text-[var(--color-primary)] focus-visible:outline-2"
-                href={`/rentals/${rental.id}/documents/${document.version}/${document.format}`}
-              >
-                Скачать {document.format} v{document.version}
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <p className="text-[var(--color-text-secondary)]">Файлы ещё не готовы.</p>
-        )}
-        {generations.length ? (
-          <ul className="grid gap-1 text-sm text-[var(--color-text-secondary)]">
-            {generations.map((item) => (
-              <li key={`${item.version}-${item.status}`}>
-                Версия {item.version}:{' '}
-                {item.status === 'COMMITTED'
-                  ? 'готова'
-                  : item.status === 'ERROR'
-                    ? 'ошибка подготовки'
-                    : 'подготавливается'}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </section>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          {documents.length ? (
+            <div className="flex flex-wrap gap-3">
+              {documents.map((document) => (
+                <Link
+                  key={`${document.version}-${document.format}`}
+                  className={documentLinkClass}
+                  href={`/rentals/${rental.id}/documents/${document.version}/${document.format}`}
+                  aria-label={`Скачать ${document.format}, версия ${document.version}`}
+                >
+                  <FiDownload aria-hidden="true" />
+                  Скачать {document.format}
+                  <span className="text-xs opacity-75">v{document.version}</span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-start gap-3 rounded-[var(--radius-md)] bg-[var(--color-elevated)] p-4">
+              <FiFileText
+                className="mt-0.5 shrink-0 text-[var(--color-text-secondary)]"
+                aria-hidden="true"
+              />
+              <p className="text-sm text-[var(--color-text-secondary)]">
+                {source === 'Импортированный договор'
+                  ? 'Для импортированного договора файлы не формировались.'
+                  : 'Файлы договора ещё не готовы.'}
+              </p>
+            </div>
+          )}
+          {generations.length ? (
+            <ul className="grid gap-1 text-sm text-[var(--color-text-secondary)]">
+              {generations.map((item) => (
+                <li key={`${item.version}-${item.status}`}>
+                  Версия {item.version}: {generationLabels[item.status] ?? 'Состояние обновляется'}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </CardContent>
+      </Card>
       {canCancel ? (
         <section
           aria-label="Отмена договора"
@@ -124,28 +158,36 @@ export function RentalDetailPanel({
           </div>
         </section>
       ) : null}
-      <section aria-labelledby="rental-history" className="grid gap-3">
-        <h2 id="rental-history" className="text-lg font-bold">
-          История действий
-        </h2>
-        {history.length ? (
-          <ol className="grid gap-2">
-            {history.map((item) => (
-              <li key={item.id} className="rounded-[var(--radius-md)] border p-3 text-sm">
-                <span className="font-semibold">{item.action}</span> ·{' '}
-                {item.label ?? 'Действие с договором'} ·{' '}
-                {new Intl.DateTimeFormat('ru-RU', {
-                  dateStyle: 'short',
-                  timeStyle: 'short',
-                  timeZone: 'Europe/Moscow',
-                }).format(new Date(item.createdAt))}
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="text-[var(--color-text-secondary)]">История пока отсутствует.</p>
-        )}
-      </section>
+      <Card className="min-w-0" role="region" aria-labelledby="rental-history">
+        <CardHeader>
+          <h2 id="rental-history" className="text-lg font-bold">
+            История действий
+          </h2>
+        </CardHeader>
+        <CardContent>
+          {history.length ? (
+            <ol className="grid gap-2">
+              {history.map((item) => (
+                <li key={item.id} className="rounded-[var(--radius-md)] border p-3 text-sm">
+                  <span className="font-semibold">
+                    {auditLabels[item.action] ?? 'Действие с договором'}
+                  </span>{' '}
+                  ·{' '}
+                  {new Intl.DateTimeFormat('ru-RU', {
+                    dateStyle: 'short',
+                    timeStyle: 'short',
+                    timeZone: 'Europe/Moscow',
+                  }).format(new Date(item.createdAt))}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="text-sm text-[var(--color-text-secondary)]">
+              Для этого договора действия пользователей не зафиксированы.
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
