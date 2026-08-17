@@ -66,3 +66,20 @@ export type ClientActionState =
   | { status: 'idle' }
   | { status: 'success'; message: string; clientId: string }
   | { status: 'error'; message: string; fieldErrors?: Record<string, string> };
+
+export type ClientRentalWorkspaceDto = {
+  summary: { total: number; active: number; completed: number; totalMinor: string };
+  rentals: Array<{
+    id: string;
+    contractNumber: string | null;
+    status: 'DRAFT' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+    startsAt: string;
+    endsAt: string;
+    billableDays: number;
+    totalPriceMinor: string;
+    depositMinor: string;
+    currency: string;
+    vehicle: { label: string; registrationNumber: string | null };
+    documents: Array<{ version: number; format: 'DOCX' | 'PDF' }>;
+  }>;
+};
