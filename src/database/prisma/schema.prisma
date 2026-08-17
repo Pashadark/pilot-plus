@@ -53,6 +53,21 @@ enum ClientDocumentCategory {
   OTHER
 }
 
+enum ClientCommentCategory {
+  GENERAL
+  POSITIVE
+  PROBLEM
+  DAMAGE
+  PAYMENT
+  VIOLATION
+}
+
+enum ClientCommentSeverity {
+  INFO
+  WARNING
+  DANGER
+}
+
 enum DocumentScanStatus {
   UPLOADING
   PENDING
@@ -228,6 +243,8 @@ model User {
   confirmedRentals         Rental[]                  @relation("RentalConfirmedBy")
   createdContractTemplates ContractTemplateVersion[] @relation("ContractTemplateCreatedBy")
   archivedVehicles         Vehicle[]                 @relation("VehicleArchivedBy")
+  authoredClientComments   ClientComment[]           @relation("ClientCommentAuthor")
+  hiddenClientComments     ClientComment[]           @relation("ClientCommentHiddenBy")
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
 }
@@ -295,6 +312,7 @@ model Company {
   rentalDocumentVersions    RentalDocumentVersion[]
   rentalDocumentGenerations RentalDocumentGeneration[]
   contractTemplates         ContractTemplateVersion[]
+  clientComments            ClientComment[]
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
 }
@@ -355,6 +373,7 @@ model Client {
   photoUploads                 ClientPhotoUpload[]
   rentals                      Rental[]            @relation("ClientRentals")
   rentalDriverLinks            RentalDriver[]      @relation("ClientRentalDriver")
+  comments                     ClientComment[]
 
   @@unique([companyId, phoneIndex])
   @@unique([companyId, id])
@@ -386,6 +405,30 @@ model ClientPhotoUpload {
 
   @@index([status, leaseExpiresAt])
   @@index([companyId, clientId, status])
+}
+
+model ClientComment {
+  id             String                @id @default(cuid())
+  companyId      String
+  company        Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  clientId       String
+  client         Client                @relation(fields: [companyId, clientId], references: [companyId, id], onDelete: Cascade)
+  rentalId       String?
+  rental         Rental?               @relation(fields: [companyId, rentalId], references: [companyId, id], onDelete: Restrict)
+  authorUserId   String
+  author         User                  @relation("ClientCommentAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  category       ClientCommentCategory @default(GENERAL)
+  severity       ClientCommentSeverity @default(INFO)
+  text           String
+  isPinned       Boolean               @default(false)
+  hiddenAt       DateTime?
+  hiddenByUserId String?
+  hiddenBy       User?                 @relation("ClientCommentHiddenBy", fields: [hiddenByUserId], references: [id], onDelete: Restrict)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([companyId, clientId, isPinned, createdAt])
+  @@index([companyId, rentalId, createdAt])
 }
 
 model ClientDocument {
@@ -636,6 +679,7 @@ model Rental {
   drivers                  RentalDriver[]
   documentVersions         RentalDocumentVersion[]
   documentGenerations      RentalDocumentGeneration[]
+  clientComments           ClientComment[]
 
   @@unique([companyId, id])
   @@unique([companyId, clientId, id])
