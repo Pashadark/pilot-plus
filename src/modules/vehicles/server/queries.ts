@@ -326,7 +326,7 @@ export function createVehicleQueries(repository: VehicleRepository) {
   return {
     async listVehiclesForUser(userId: string) {
       const vehicles = await repository.findMany({
-        where: { company: { members: { some: { userId } } } },
+        where: { archivedAt: null, company: { members: { some: { userId } } } },
         select: vehicleCardSelect,
         orderBy: [{ city: 'asc' }, { model: 'asc' }, { internalNumber: 'asc' }],
       });
@@ -334,7 +334,7 @@ export function createVehicleQueries(repository: VehicleRepository) {
     },
     async listVehicleOptionsForUser(userId: string): Promise<VehicleOptionDto[]> {
       const vehicles = await repository.findMany({
-        where: { company: { members: { some: { userId } } } },
+        where: { archivedAt: null, company: { members: { some: { userId } } } },
         select: vehicleOptionSelect,
         orderBy: [{ model: 'asc' }, { internalNumber: 'asc' }],
       });
@@ -349,7 +349,11 @@ export function createVehicleQueries(repository: VehicleRepository) {
     },
     async getVehicleForUser(userId: string, vehicleId: string, referenceTime = new Date()) {
       const vehicle = await repository.findFirst({
-        where: { id: vehicleId, company: { members: { some: { userId } } } },
+        where: {
+          id: vehicleId,
+          archivedAt: null,
+          company: { members: { some: { userId } } },
+        },
         select: vehicleDetailSelect,
       });
       return vehicle ? mapDetail(vehicle as RawVehicle, referenceTime) : null;

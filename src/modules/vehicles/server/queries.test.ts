@@ -83,7 +83,7 @@ describe('запросы автопарка', () => {
     const vehicles = await queries.listVehiclesForUser('user-1');
 
     expect(fake.calls.list).toMatchObject({
-      where: { company: { members: { some: { userId: 'user-1' } } } },
+      where: { archivedAt: null, company: { members: { some: { userId: 'user-1' } } } },
     });
     expect(vehicles[0]).toMatchObject({
       id: 'vehicle-1',
@@ -129,6 +129,7 @@ describe('запросы автопарка', () => {
     expect(fake.calls.detail).toMatchObject({
       where: {
         id: 'vehicle-1',
+        archivedAt: null,
         company: { members: { some: { userId: 'user-1' } } },
       },
     });
@@ -260,7 +261,7 @@ describe('запросы автопарка', () => {
     const options = await queries.listVehicleOptionsForUser('user-1');
 
     expect(fake.calls.list).toMatchObject({
-      where: { company: { members: { some: { userId: 'user-1' } } } },
+      where: { archivedAt: null, company: { members: { some: { userId: 'user-1' } } } },
       select: {
         id: true,
         internalNumber: true,
