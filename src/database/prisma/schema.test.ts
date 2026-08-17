@@ -38,6 +38,10 @@ const clientUploadHardeningMigrationPath = new URL(
   './migrations/20260810190000_harden_client_upload_lifecycle/migration.sql',
   import.meta.url,
 );
+const driverHelperFinesMigrationPath = new URL(
+  './migrations/20260817150000_add_driver_helper_fines/migration.sql',
+  import.meta.url,
+);
 
 describe('доменная схема автопарка', () => {
   it('описывает роли, точечные разрешения и журнал аудита центра администрирования', () => {
@@ -252,6 +256,26 @@ describe('доменная схема автопарка', () => {
     expect(migration).toContain('ClientUploadPermit_companyId_status_leaseExpiresAt_idx');
     expect(migration).toContain('ClientUploadPermit_userId_createdAt_idx');
     expect(migration).toContain('DROP CONSTRAINT IF EXISTS "ClientDocument_clientId_fkey"');
+    expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
+    expect(migration).not.toMatch(/^\s*UPDATE\b/im);
+  });
+
+  it('добавляет tenant-safe домен штрафов Driver Helper add-only миграцией', () => {
+    expect(existsSync(driverHelperFinesMigrationPath)).toBe(true);
+    if (!existsSync(driverHelperFinesMigrationPath)) return;
+
+    const migration = readFileSync(driverHelperFinesMigrationPath, 'utf8');
+    expect(schema).toContain('VIEW_FINES');
+    expect(schema).toContain('MANAGE_FINES');
+    expect(schema).toContain('model FineIntegration {');
+    expect(schema).toContain('model ExternalVehicleLink {');
+    expect(schema).toContain('model Fine {');
+    expect(schema).toContain('model FineAssignmentHistory {');
+    expect(schema).toContain('@@unique([companyId, provider, externalId])');
+    expect(schema).toMatch(/tokenEncrypted\s+String/);
+    expect(schema).not.toMatch(/token\s+String/);
+    expect(migration).toContain('CREATE TABLE "public"."FineIntegration"');
+    expect(migration).toContain('CREATE TABLE "public"."Fine"');
     expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
     expect(migration).not.toMatch(/^\s*UPDATE\b/im);
   });

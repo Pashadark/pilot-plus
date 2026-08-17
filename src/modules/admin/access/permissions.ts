@@ -11,7 +11,9 @@ export type CompanyPermissionValue =
   | 'MANAGE_MAINTENANCE'
   | 'MANAGE_WASH'
   | 'VIEW_REPORTS'
-  | 'VIEW_AUDIT';
+  | 'VIEW_AUDIT'
+  | 'VIEW_FINES'
+  | 'MANAGE_FINES';
 
 const allCompanyPermissions: readonly CompanyPermissionValue[] = [
   'MANAGE_USERS',
@@ -25,6 +27,8 @@ const allCompanyPermissions: readonly CompanyPermissionValue[] = [
   'MANAGE_WASH',
   'VIEW_REPORTS',
   'VIEW_AUDIT',
+  'VIEW_FINES',
+  'MANAGE_FINES',
 ];
 
 const permissionsByRole: Record<CompanyRole, readonly CompanyPermissionValue[]> = {
@@ -37,6 +41,8 @@ const permissionsByRole: Record<CompanyRole, readonly CompanyPermissionValue[]> 
     'MANAGE_MAINTENANCE',
     'MANAGE_WASH',
     'VIEW_REPORTS',
+    'VIEW_FINES',
+    'MANAGE_FINES',
   ],
   DRIVER: [],
   VIEWER: ['VIEW_CLIENTS', 'VIEW_REPORTS'],

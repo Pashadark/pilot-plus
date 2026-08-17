@@ -17,6 +17,8 @@ describe('политика прав компании', () => {
         'MANAGE_WASH',
         'VIEW_REPORTS',
         'VIEW_AUDIT',
+        'VIEW_FINES',
+        'MANAGE_FINES',
       ]),
     );
   });
@@ -32,6 +34,8 @@ describe('политика прав компании', () => {
         'MANAGE_WASH',
         'VIEW_CLIENTS',
         'VIEW_REPORTS',
+        'VIEW_FINES',
+        'MANAGE_FINES',
       ],
     ],
     ['DRIVER', []],
@@ -64,5 +68,11 @@ describe('политика прав компании', () => {
     expect(hasCompanyPermission('DISPATCHER', [], 'MANAGE_CLIENTS')).toBe(true);
     expect(hasCompanyPermission('VIEWER', [], 'VIEW_CLIENTS')).toBe(true);
     expect(hasCompanyPermission('DRIVER', [], 'VIEW_CLIENTS')).toBe(false);
+  });
+
+  it('выдаёт управление штрафами администратору и диспетчеру', () => {
+    expect(hasCompanyPermission('COMPANY_ADMIN', [], 'MANAGE_FINES')).toBe(true);
+    expect(hasCompanyPermission('DISPATCHER', [], 'VIEW_FINES')).toBe(true);
+    expect(hasCompanyPermission('DISPATCHER', [], 'MANAGE_FINES')).toBe(true);
   });
 });
