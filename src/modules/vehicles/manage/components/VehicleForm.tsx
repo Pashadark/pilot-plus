@@ -25,6 +25,28 @@ export type EditableVehicle = {
   seats: number;
   status: 'MOVING' | 'IDLE' | 'OFFLINE' | 'MAINTENANCE' | 'UNKNOWN';
   isRentalReady: boolean;
+  color?: string | null;
+  category?: string | null;
+  bodyType?: string | null;
+  engineLiters?: string | null;
+  odometerKm?: string | null;
+  valueRubles?: string;
+  rangePriceRubles?: string;
+  depositRubles?: string;
+  includedMileageKm?: number | null;
+  overageMileagePriceRubles?: string;
+  missingFuelPriceRubles?: string;
+  office?: string | null;
+  registrationCertificateNumber?: string | null;
+  vehiclePassportNumber?: string | null;
+  osagoInsurer?: string | null;
+  osagoPolicyNumber?: string | null;
+  osagoStartsAt?: string;
+  osagoEndsAt?: string;
+  cascoInsurer?: string | null;
+  cascoPolicyNumber?: string | null;
+  cascoStartsAt?: string;
+  cascoEndsAt?: string;
 };
 
 export function VehicleForm({
@@ -108,11 +130,35 @@ export function VehicleForm({
         />
         <Input name="vin" label="VIN" defaultValue={vehicle?.vin ?? ''} error={fieldError('vin')} />
         <Input
+          name="color"
+          label="Цвет"
+          defaultValue={vehicle?.color ?? ''}
+          error={fieldError('color')}
+        />
+        <Input
+          name="category"
+          label="Категория"
+          defaultValue={vehicle?.category ?? ''}
+          error={fieldError('category')}
+        />
+        <Input
+          name="bodyType"
+          label="Тип кузова"
+          defaultValue={vehicle?.bodyType ?? ''}
+          error={fieldError('bodyType')}
+        />
+        <Input
           name="city"
           label="Город"
           required
           defaultValue={vehicle?.city}
           error={fieldError('city')}
+        />
+        <Input
+          name="office"
+          label="Офис / площадка"
+          defaultValue={vehicle?.office ?? ''}
+          error={fieldError('office')}
         />
         <Input
           name="dailyPriceRubles"
@@ -154,6 +200,67 @@ export function VehicleForm({
           required
           error={fieldError('seats')}
         />
+        <Input
+          name="engineLiters"
+          type="number"
+          min="0"
+          step="0.1"
+          label="Объём двигателя, л"
+          defaultValue={vehicle?.engineLiters ?? ''}
+          error={fieldError('engineLiters')}
+        />
+        <Input
+          name="odometerKm"
+          type="number"
+          min="0"
+          step="0.1"
+          label="Пробег, км"
+          defaultValue={vehicle?.odometerKm ?? ''}
+          error={fieldError('odometerKm')}
+        />
+        <Input
+          name="valueRubles"
+          inputMode="decimal"
+          label="Стоимость автомобиля, ₽"
+          defaultValue={vehicle?.valueRubles ?? ''}
+          error={fieldError('valueRubles')}
+        />
+        <Input
+          name="rangePriceRubles"
+          inputMode="decimal"
+          label="Тариф диапазона, ₽"
+          defaultValue={vehicle?.rangePriceRubles ?? ''}
+          error={fieldError('rangePriceRubles')}
+        />
+        <Input
+          name="depositRubles"
+          inputMode="decimal"
+          label="Залог, ₽"
+          defaultValue={vehicle?.depositRubles ?? ''}
+          error={fieldError('depositRubles')}
+        />
+        <Input
+          name="includedMileageKm"
+          type="number"
+          min="0"
+          label="Включённый пробег, км"
+          defaultValue={vehicle?.includedMileageKm ?? ''}
+          error={fieldError('includedMileageKm')}
+        />
+        <Input
+          name="overageMileagePriceRubles"
+          inputMode="decimal"
+          label="Перепробег, ₽/км"
+          defaultValue={vehicle?.overageMileagePriceRubles ?? ''}
+          error={fieldError('overageMileagePriceRubles')}
+        />
+        <Input
+          name="missingFuelPriceRubles"
+          inputMode="decimal"
+          label="Недостающее топливо, ₽/л"
+          defaultValue={vehicle?.missingFuelPriceRubles ?? ''}
+          error={fieldError('missingFuelPriceRubles')}
+        />
         <Select
           name="status"
           label="Статус"
@@ -167,6 +274,71 @@ export function VehicleForm({
           <option value="OFFLINE">Нет связи</option>
           <option value="MOVING">В пути</option>
         </Select>
+        <h2 className="pt-2 text-lg font-bold sm:col-span-2">Документы и страхование</h2>
+        <Input
+          name="registrationCertificateNumber"
+          label="СТС"
+          defaultValue={vehicle?.registrationCertificateNumber ?? ''}
+          error={fieldError('registrationCertificateNumber')}
+        />
+        <Input
+          name="vehiclePassportNumber"
+          label="ПТС"
+          defaultValue={vehicle?.vehiclePassportNumber ?? ''}
+          error={fieldError('vehiclePassportNumber')}
+        />
+        <Input
+          name="osagoInsurer"
+          label="Страховая ОСАГО"
+          defaultValue={vehicle?.osagoInsurer ?? ''}
+          error={fieldError('osagoInsurer')}
+        />
+        <Input
+          name="osagoPolicyNumber"
+          label="Полис ОСАГО"
+          defaultValue={vehicle?.osagoPolicyNumber ?? ''}
+          error={fieldError('osagoPolicyNumber')}
+        />
+        <Input
+          name="osagoStartsAt"
+          type="date"
+          label="ОСАГО действует с"
+          defaultValue={vehicle?.osagoStartsAt ?? ''}
+          error={fieldError('osagoStartsAt')}
+        />
+        <Input
+          name="osagoEndsAt"
+          type="date"
+          label="ОСАГО действует до"
+          defaultValue={vehicle?.osagoEndsAt ?? ''}
+          error={fieldError('osagoEndsAt')}
+        />
+        <Input
+          name="cascoInsurer"
+          label="Страховая КАСКО"
+          defaultValue={vehicle?.cascoInsurer ?? ''}
+          error={fieldError('cascoInsurer')}
+        />
+        <Input
+          name="cascoPolicyNumber"
+          label="Полис КАСКО"
+          defaultValue={vehicle?.cascoPolicyNumber ?? ''}
+          error={fieldError('cascoPolicyNumber')}
+        />
+        <Input
+          name="cascoStartsAt"
+          type="date"
+          label="КАСКО действует с"
+          defaultValue={vehicle?.cascoStartsAt ?? ''}
+          error={fieldError('cascoStartsAt')}
+        />
+        <Input
+          name="cascoEndsAt"
+          type="date"
+          label="КАСКО действует до"
+          defaultValue={vehicle?.cascoEndsAt ?? ''}
+          error={fieldError('cascoEndsAt')}
+        />
         <label className="flex min-h-11 items-center gap-3 text-sm font-medium sm:col-span-2">
           <Switch name="isRentalReady" value="true" defaultChecked={vehicle?.isRentalReady} /> Готов
           к аренде

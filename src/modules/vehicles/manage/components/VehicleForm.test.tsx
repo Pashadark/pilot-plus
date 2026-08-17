@@ -62,6 +62,9 @@ describe('VehicleForm', () => {
       'vehicle-1',
     );
     expect((document.querySelector('input[name="make"]') as HTMLInputElement).value).toBe('Kia');
+    expect(document.querySelector('input[name="registrationCertificateNumber"]')).toBeTruthy();
+    expect(document.querySelector('input[name="osagoPolicyNumber"]')).toBeTruthy();
+    expect(document.querySelector('input[name="depositRubles"]')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Сохранить изменения' })).toBeTruthy();
   });
 });

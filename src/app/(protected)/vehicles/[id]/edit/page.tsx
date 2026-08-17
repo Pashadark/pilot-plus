@@ -4,7 +4,15 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@/database/prisma/client';
 import { requireVehicleManagementAccess } from '@/modules/vehicles/manage/access';
 import { VehicleForm } from '@/modules/vehicles/manage/components/VehicleForm';
+import { VehicleGallery } from '@/modules/vehicles/manage/components/VehicleGallery';
 import { AppShell } from '@/shared/components/app-shell/AppShell';
+
+function moneyFromMinor(value: bigint | null) {
+  if (value === null) return '';
+  const rubles = value / BigInt(100);
+  const kopecks = (value % BigInt(100)).toString().padStart(2, '0');
+  return `${rubles}.${kopecks}`;
+}
 
 export default async function EditVehiclePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -26,7 +34,33 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
       seats: true,
       status: true,
       isRentalReady: true,
+      color: true,
+      category: true,
+      bodyType: true,
+      engineLiters: true,
+      odometerKm: true,
+      valueMinor: true,
+      rangePriceMinor: true,
+      depositMinor: true,
+      includedMileageKm: true,
+      overageMileagePriceMinor: true,
+      missingFuelPriceMinor: true,
+      office: true,
+      registrationCertificateNumber: true,
+      vehiclePassportNumber: true,
+      osagoInsurer: true,
+      osagoPolicyNumber: true,
+      osagoStartsAt: true,
+      osagoEndsAt: true,
+      cascoInsurer: true,
+      cascoPolicyNumber: true,
+      cascoStartsAt: true,
+      cascoEndsAt: true,
       company: { select: { name: true } },
+      images: {
+        select: { id: true, localPath: true, alt: true, isPrimary: true },
+        orderBy: { position: 'asc' },
+      },
     },
   });
   if (!vehicle) notFound();
@@ -81,8 +115,31 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
             seats: vehicle.seats,
             status: vehicle.status,
             isRentalReady: vehicle.isRentalReady,
+            color: vehicle.color,
+            category: vehicle.category,
+            bodyType: vehicle.bodyType,
+            engineLiters: vehicle.engineLiters?.toString() ?? null,
+            odometerKm: vehicle.odometerKm?.toString() ?? null,
+            valueRubles: moneyFromMinor(vehicle.valueMinor),
+            rangePriceRubles: moneyFromMinor(vehicle.rangePriceMinor),
+            depositRubles: moneyFromMinor(vehicle.depositMinor),
+            includedMileageKm: vehicle.includedMileageKm,
+            overageMileagePriceRubles: moneyFromMinor(vehicle.overageMileagePriceMinor),
+            missingFuelPriceRubles: moneyFromMinor(vehicle.missingFuelPriceMinor),
+            office: vehicle.office,
+            registrationCertificateNumber: vehicle.registrationCertificateNumber,
+            vehiclePassportNumber: vehicle.vehiclePassportNumber,
+            osagoInsurer: vehicle.osagoInsurer,
+            osagoPolicyNumber: vehicle.osagoPolicyNumber,
+            osagoStartsAt: vehicle.osagoStartsAt?.toISOString().slice(0, 10) ?? '',
+            osagoEndsAt: vehicle.osagoEndsAt?.toISOString().slice(0, 10) ?? '',
+            cascoInsurer: vehicle.cascoInsurer,
+            cascoPolicyNumber: vehicle.cascoPolicyNumber,
+            cascoStartsAt: vehicle.cascoStartsAt?.toISOString().slice(0, 10) ?? '',
+            cascoEndsAt: vehicle.cascoEndsAt?.toISOString().slice(0, 10) ?? '',
           }}
         />
+        <VehicleGallery vehicleId={vehicle.id} images={vehicle.images} />
       </main>
     </AppShell>
   );
