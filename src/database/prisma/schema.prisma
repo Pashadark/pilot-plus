@@ -731,6 +731,7 @@ model Fine {
   updatedAt                   DateTime                @updatedAt
 
   @@unique([companyId, provider, externalId])
+  @@unique([companyId, id])
   @@index([companyId, status, offenseAt])
   @@index([companyId, vehicleId, offenseAt])
   @@index([companyId, providerVehicleId])
@@ -751,25 +752,28 @@ model FineInvoice {
   initiatedByUserId     String
   initiatedByUser       User              @relation("FineInvoiceInitiatedBy", fields: [initiatedByUserId], references: [id], onDelete: Restrict)
   idempotencyKey        String            @unique
-  paymentHost           String?
+  paymentHost           String?           @db.VarChar(253)
   createdAt             DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime          @updatedAt @db.Timestamptz(3)
   items                 FineInvoiceItem[]
 
+  @@unique([companyId, id])
   @@index([companyId, status])
   @@index([initiatedByUserId, createdAt])
 }
 
 model FineInvoiceItem {
   id        String      @id @default(cuid())
+  companyId String
   invoiceId String
-  invoice   FineInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice   FineInvoice @relation(fields: [companyId, invoiceId], references: [companyId, id], onDelete: Cascade)
   fineId    String
-  fine      Fine        @relation(fields: [fineId], references: [id], onDelete: Restrict)
+  fine      Fine        @relation(fields: [companyId, fineId], references: [companyId, id], onDelete: Restrict)
   createdAt DateTime    @default(now()) @db.Timestamptz(3)
 
   @@unique([invoiceId, fineId])
-  @@index([fineId])
+  @@index([companyId, invoiceId])
+  @@index([companyId, fineId])
 }
 
 model FineAssignmentHistory {
