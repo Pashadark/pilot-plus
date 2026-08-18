@@ -120,6 +120,7 @@ export async function syncCompanyFines(companyId: string) {
               where: { companyId_provider_externalId: uniqueFine },
               select: {
                 id: true,
+                vehicleId: true,
                 rentalId: true,
                 clientId: true,
                 assignmentSource: true,
@@ -143,10 +144,13 @@ export async function syncCompanyFines(companyId: string) {
             const exactChanged = Boolean(
               attribution.kind === 'MATCHED' &&
               existing?.assignmentSource !== 'MANUAL' &&
-              (existing?.rentalId !== attribution.rentalId ||
+              (existing?.vehicleId !== vehicleId ||
+                existing?.rentalId !== attribution.rentalId ||
                 existing?.clientId !== attribution.clientId),
             );
+            const hasPreservedRentalAssignment = Boolean(existing?.rentalId || existing?.clientId);
             const preservedAssignment = {
+              vehicleId: hasPreservedRentalAssignment ? (existing?.vehicleId ?? null) : vehicleId,
               rentalId: existing?.rentalId ?? null,
               clientId: existing?.clientId ?? null,
               assignmentSource: existing?.assignmentSource ?? null,
@@ -156,6 +160,7 @@ export async function syncCompanyFines(companyId: string) {
             const assignment =
               attribution.kind === 'MATCHED' && (!existing || exactChanged)
                 ? {
+                    vehicleId,
                     rentalId: attribution.rentalId,
                     clientId: attribution.clientId,
                     assignmentSource: 'AUTO_EXACT' as const,
@@ -165,7 +170,6 @@ export async function syncCompanyFines(companyId: string) {
                 : preservedAssignment;
             const data = {
               providerVehicleId: fine.providerVehicleId,
-              vehicleId,
               ...assignment,
               decreeNumber: fine.decreeNumber,
               decreeAt: fine.decreeAt,

@@ -48,3 +48,22 @@ No migration, seed, live provider request, or full test suite was run.
 ## Concerns
 
 - Candidate display labels round to whole minutes while `distanceMs` remains exact for ordering and programmatic use.
+
+## Review fix — coherent assignment tuples
+
+### RED evidence
+
+- `npx vitest run src/modules/fines/sync/attribute-fine.test.ts src/modules/fines/sync/sync-company-fines.server.test.ts` — 4 expected failures: five zero-distance boundary hints placed the unique exact rental last; provider relinking changed a manual assignment from vehicle A to vehicle B; an ambiguous automatic result changed vehicle A to vehicle B; and an unmatched provider link changed a manual assignment from vehicle A to `null` while retaining its rental/client.
+
+### Policy and implementation
+
+- A persisted rental assignment is a coherent `vehicleId/rentalId/clientId` tuple. Later sync preserves the full tuple for `MANUAL`, and for `AUTO_EXACT` when the new result is ambiguous or unmatched.
+- A new unique exact rental may replace the complete automatic tuple. A vehicle-only change is part of the assignment change comparison, so the replacement writes one `AUTO_EXACT` history row with the new coherent tuple.
+- An unassigned fine continues to follow the latest provider vehicle link; preserving a tuple does not freeze provider matching when no rental/client assignment exists.
+- Candidate ordering now prioritizes `DURING` after absolute distance comparison. Therefore the unique exact rental wins every zero-distance boundary tie and cannot be evicted by the five-candidate cap; remaining ties use the existing deterministic start-time/ID ordering.
+
+### Review-fix verification
+
+- Focused attribution, sync, assignment-action, and query suites passed.
+- Typecheck, scoped Prettier, and diff-check passed.
+- No full suite, migration, seed, or live provider request was run.

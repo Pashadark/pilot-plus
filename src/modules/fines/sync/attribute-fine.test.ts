@@ -106,4 +106,31 @@ describe('fine attribution', () => {
       ],
     });
   });
+
+  it('keeps the unique exact rental first and inside the limit on zero-distance ties', () => {
+    const exact = {
+      id: 'exact',
+      clientId: 'client-exact',
+      startsAt: new Date('2026-08-16T08:00:00.000Z'),
+      endsAt: new Date('2026-08-16T10:00:00.000Z'),
+    };
+    const ended = [1, 2, 3, 4, 5].map((hours) => ({
+      id: `ended-${hours}`,
+      clientId: `client-ended-${hours}`,
+      startsAt: new Date(offenseAt.getTime() - hours * 60 * 60 * 1000),
+      endsAt: offenseAt,
+    }));
+
+    const result = selectFineAttribution(offenseAt, [...ended, exact]);
+
+    expect(result).toMatchObject({ kind: 'MATCHED', rentalId: 'exact' });
+    expect(result.candidates).toHaveLength(5);
+    expect(result.candidates.map(({ id }) => id)).toEqual([
+      'exact',
+      'ended-5',
+      'ended-4',
+      'ended-3',
+      'ended-2',
+    ]);
+  });
 });

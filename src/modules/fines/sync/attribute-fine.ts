@@ -54,6 +54,8 @@ export function selectFineAttribution(
     .sort(
       (left, right) =>
         left.distanceMs - right.distanceMs ||
+        Number(left.relativeToOffense !== 'DURING') -
+          Number(right.relativeToOffense !== 'DURING') ||
         left.startsAt.getTime() - right.startsAt.getTime() ||
         left.id.localeCompare(right.id),
     )

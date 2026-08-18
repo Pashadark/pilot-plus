@@ -104,6 +104,7 @@ describe('production company fine sync', () => {
   it('preserves an existing manual assignment during later synchronization', async () => {
     findFine.mockResolvedValue({
       id: 'fine-db-1',
+      vehicleId: 'manual-vehicle',
       rentalId: 'manual-rental',
       clientId: 'manual-client',
       assignmentSource: 'MANUAL',
@@ -120,6 +121,7 @@ describe('production company fine sync', () => {
     await syncCompanyFines('company-1');
 
     expect(upsertFine.mock.calls[0]?.[0].update).toMatchObject({
+      vehicleId: 'manual-vehicle',
       rentalId: 'manual-rental',
       clientId: 'manual-client',
     });
@@ -129,6 +131,7 @@ describe('production company fine sync', () => {
   it('records AUTO_EXACT history when synchronization changes an exact assignment', async () => {
     findFine.mockResolvedValue({
       id: 'fine-db-1',
+      vehicleId: 'old-vehicle',
       rentalId: 'old-rental',
       clientId: 'old-client',
       assignmentSource: 'AUTO_EXACT',
@@ -146,6 +149,7 @@ describe('production company fine sync', () => {
 
     expect(transaction).toHaveBeenCalledOnce();
     expect(upsertFine.mock.calls[0]?.[0].update).toMatchObject({
+      vehicleId: 'vehicle-1',
       rentalId: 'exact-rental',
       clientId: 'exact-client',
       assignmentSource: 'AUTO_EXACT',
@@ -167,6 +171,7 @@ describe('production company fine sync', () => {
   it('does not replace an existing automatic assignment with an ambiguous result', async () => {
     findFine.mockResolvedValue({
       id: 'fine-db-1',
+      vehicleId: 'old-vehicle',
       rentalId: 'old-rental',
       clientId: 'old-client',
       assignmentSource: 'AUTO_EXACT',
@@ -183,6 +188,7 @@ describe('production company fine sync', () => {
     await syncCompanyFines('company-1');
 
     expect(upsertFine.mock.calls[0]?.[0].update).toMatchObject({
+      vehicleId: 'old-vehicle',
       rentalId: 'old-rental',
       clientId: 'old-client',
     });
@@ -192,6 +198,7 @@ describe('production company fine sync', () => {
   it('does not duplicate AUTO_EXACT history when the exact assignment is unchanged', async () => {
     findFine.mockResolvedValue({
       id: 'fine-db-1',
+      vehicleId: 'vehicle-1',
       rentalId: 'exact-rental',
       clientId: 'exact-client',
       assignmentSource: 'AUTO_EXACT',
@@ -210,6 +217,63 @@ describe('production company fine sync', () => {
     expect(upsertFine.mock.calls[0]?.[0].update).toMatchObject({
       rentalId: 'exact-rental',
       clientId: 'exact-client',
+      assignmentSource: 'AUTO_EXACT',
+    });
+    expect(createAssignmentHistory).not.toHaveBeenCalled();
+  });
+
+  it('preserves the full manual tuple when the provider vehicle becomes unmatched', async () => {
+    findFine.mockResolvedValue({
+      id: 'fine-db-1',
+      vehicleId: 'manual-vehicle',
+      rentalId: 'manual-rental',
+      clientId: 'manual-client',
+      assignmentSource: 'MANUAL',
+    });
+    runSync.mockImplementationOnce(
+      async (
+        companyId: string,
+        dependencies: {
+          upsertFine(
+            tenantId: string,
+            fine: typeof normalizedFine,
+            vehicleId: string | null,
+          ): Promise<{ created: boolean }>;
+        },
+      ) => {
+        await dependencies.upsertFine(companyId, normalizedFine, null);
+        return { ok: true, received: 1, created: 0, updated: 1, unmatched: 1 };
+      },
+    );
+
+    await syncCompanyFines('company-1');
+
+    expect(upsertFine.mock.calls[0]?.[0].update).toMatchObject({
+      vehicleId: 'manual-vehicle',
+      rentalId: 'manual-rental',
+      clientId: 'manual-client',
+      assignmentSource: 'MANUAL',
+    });
+    expect(findRentals).not.toHaveBeenCalled();
+    expect(createAssignmentHistory).not.toHaveBeenCalled();
+  });
+
+  it('preserves the full AUTO_EXACT tuple when no new exact rental exists', async () => {
+    findFine.mockResolvedValue({
+      id: 'fine-db-1',
+      vehicleId: 'old-vehicle',
+      rentalId: 'old-rental',
+      clientId: 'old-client',
+      assignmentSource: 'AUTO_EXACT',
+    });
+    findRentals.mockResolvedValue([]);
+
+    await syncCompanyFines('company-1');
+
+    expect(upsertFine.mock.calls[0]?.[0].update).toMatchObject({
+      vehicleId: 'old-vehicle',
+      rentalId: 'old-rental',
+      clientId: 'old-client',
       assignmentSource: 'AUTO_EXACT',
     });
     expect(createAssignmentHistory).not.toHaveBeenCalled();
