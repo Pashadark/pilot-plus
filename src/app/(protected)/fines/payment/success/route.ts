@@ -1,35 +1,34 @@
-import { NextResponse } from 'next/server';
-
 import { requireFinePaymentAccess } from '@/modules/fines/server/payment-actions';
 import {
   consumeFinePaymentCallback,
   verifyFinePaymentState,
 } from '@/modules/fines/server/payment-state';
 
-function redirect(request: Request, result: 'success' | 'invalid', companyId?: string) {
-  const base = process.env.FINE_PAYMENT_CALLBACK_BASE_URL ?? new URL(request.url).origin;
-  const destination = new URL('/fines', base);
-  if (companyId) destination.searchParams.set('companyId', companyId);
-  destination.searchParams.set('payment', result);
-  return NextResponse.redirect(destination, 303);
-}
+import { paymentResultRedirect, trustedPaymentBase } from '../payment-redirect';
 
 export async function GET(request: Request) {
+  const configuredBase = trustedPaymentBase();
+  if (!configuredBase.ok) return configuredBase.response;
+
   const state = verifyFinePaymentState(new URL(request.url).searchParams.get('state'), {
     secret: process.env.FINE_PAYMENT_STATE_SECRET,
     expectedOutcome: 'success',
   });
-  if (!state) return redirect(request, 'invalid');
+  if (!state) return paymentResultRedirect(configuredBase.base, 'invalid');
 
   try {
     const access = await requireFinePaymentAccess(state.companyId);
-    if (access.user.id !== state.userId) return redirect(request, 'invalid');
+    if (access.user.id !== state.userId) {
+      return paymentResultRedirect(configuredBase.base, 'invalid');
+    }
     const consumed = await consumeFinePaymentCallback(state, {
-      actor: { id: access.user.id, email: access.user.email },
+      actor: { id: access.user.id },
       status: 'SUCCEEDED',
     });
-    return consumed ? redirect(request, 'success', state.companyId) : redirect(request, 'invalid');
+    return consumed
+      ? paymentResultRedirect(configuredBase.base, 'success', state.companyId)
+      : paymentResultRedirect(configuredBase.base, 'invalid');
   } catch {
-    return redirect(request, 'invalid');
+    return paymentResultRedirect(configuredBase.base, 'invalid');
   }
 }

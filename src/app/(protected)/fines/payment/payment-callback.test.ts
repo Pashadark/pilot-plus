@@ -26,6 +26,7 @@ describe('fine payment callbacks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.FINE_PAYMENT_STATE_SECRET = 'test-only-state-secret-with-at-least-thirty-two-bytes';
+    process.env.FINE_PAYMENT_CALLBACK_BASE_URL = 'https://pilot.example.test';
     verifyFinePaymentState.mockReturnValue(verified);
     requireFinePaymentAccess.mockResolvedValue({
       user: { id: 'admin-1', email: 'admin@example.test' },
@@ -44,7 +45,7 @@ describe('fine payment callbacks', () => {
     });
     expect(requireFinePaymentAccess).toHaveBeenCalledWith('company-1');
     expect(consumeFinePaymentCallback).toHaveBeenCalledWith(verified, {
-      actor: { id: 'admin-1', email: 'admin@example.test' },
+      actor: { id: 'admin-1' },
       status: 'SUCCEEDED',
     });
     expect(response.status).toBe(303);
@@ -84,11 +85,50 @@ describe('fine payment callbacks', () => {
       expectedOutcome: 'fail',
     });
     expect(consumeFinePaymentCallback).toHaveBeenCalledWith(failedState, {
-      actor: { id: 'admin-1', email: 'admin@example.test' },
+      actor: { id: 'admin-1' },
       status: 'FAILED',
     });
     expect(response.headers.get('location')).toBe(
       'https://pilot.example.test/fines?companyId=company-1&payment=failed',
     );
+  });
+
+  it('redirects only to the configured trusted origin even with a hostile request Host', async () => {
+    process.env.FINE_PAYMENT_CALLBACK_BASE_URL = 'https://pilot.example.test';
+
+    const response = await successCallback(
+      new Request('https://attacker.example.test/fines/payment/success?state=signed'),
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe(
+      'https://pilot.example.test/fines?companyId=company-1&payment=success',
+    );
+  });
+
+  it('returns 503 without redirect when the trusted callback base is missing', async () => {
+    delete process.env.FINE_PAYMENT_CALLBACK_BASE_URL;
+
+    const response = await successCallback(
+      new Request('https://attacker.example.test/fines/payment/success?state=signed'),
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('location')).toBeNull();
+    expect(requireFinePaymentAccess).not.toHaveBeenCalled();
+    expect(consumeFinePaymentCallback).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 without redirect when the trusted callback base is invalid', async () => {
+    process.env.FINE_PAYMENT_CALLBACK_BASE_URL = 'https://user:password@pilot.example.test/path';
+
+    const response = await failCallback(
+      new Request('https://attacker.example.test/fines/payment/fail?state=signed-fail'),
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get('location')).toBeNull();
+    expect(requireFinePaymentAccess).not.toHaveBeenCalled();
+    expect(consumeFinePaymentCallback).not.toHaveBeenCalled();
   });
 });

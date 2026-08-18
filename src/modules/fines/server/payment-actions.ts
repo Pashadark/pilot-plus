@@ -11,6 +11,7 @@ import { decryptField } from '@/services/security/field-encryption';
 import { FineAccessDeniedError, requireFineViewAccess } from '../access';
 import { DriverHelperClient } from '../integrations/driver-helper/client';
 import { validateDriverHelperPaymentUrl } from '../integrations/driver-helper/payment-url';
+import { PAYMENT_AUDIT_ACTOR_SNAPSHOT } from './payment-audit';
 import { createFinePaymentState } from './payment-state';
 
 type PaymentErrorCode =
@@ -225,7 +226,7 @@ export async function createSandboxFineInvoiceAction(
             data: {
               companyId: selection.input.companyId,
               actorUserId: selection.access.user.id,
-              actorEmailSnapshot: selection.access.user.email,
+              actorEmailSnapshot: PAYMENT_AUDIT_ACTOR_SNAPSHOT,
               action: 'CREATE',
               entityType: 'FINE',
               entityId: invoice.id,
@@ -300,7 +301,7 @@ export async function createSandboxFineInvoiceAction(
           data: {
             companyId: selection.input.companyId,
             actorUserId: selection.access.user.id,
-            actorEmailSnapshot: selection.access.user.email,
+            actorEmailSnapshot: PAYMENT_AUDIT_ACTOR_SNAPSHOT,
             action: 'UPDATE',
             entityType: 'FINE',
             entityId: pending.id,
@@ -339,7 +340,7 @@ export async function createSandboxFineInvoiceAction(
               data: {
                 companyId: selection.input.companyId,
                 actorUserId: selection.access.user.id,
-                actorEmailSnapshot: selection.access.user.email,
+                actorEmailSnapshot: PAYMENT_AUDIT_ACTOR_SNAPSHOT,
                 action: 'UPDATE',
                 entityType: 'FINE',
                 entityId: failedInvoice.id,

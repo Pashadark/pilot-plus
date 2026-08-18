@@ -53,3 +53,28 @@ The Task 2 client gained only server-supplied `successState`/`failState` handlin
 
 - Deployment must provide a trusted HTTPS `FINE_PAYMENT_CALLBACK_BASE_URL` and a high-entropy `FINE_PAYMENT_STATE_SECRET` of at least 32 UTF-8 bytes before invoice creation can succeed.
 - Full operational configuration/runbook and stale-`PENDING` reconciliation remain explicitly scoped to Task 6.
+
+## Review fix: payment audit PII and trusted redirects
+
+### RED evidence
+
+`npx vitest run src/modules/fines/server/payment-actions.test.ts src/modules/fines/server/payment-state.test.ts 'src/app/(protected)/fines/payment/payment-callback.test.ts'` failed 7 of 21 tests before production changes:
+
+- payment create/ERROR/callback audit arguments contained the authenticated actor email (or an undefined snapshot after the test removed it);
+- success/fail handlers redirected through the request origin when `FINE_PAYMENT_CALLBACK_BASE_URL` was absent;
+- invalid configured bases were not rejected.
+
+### Fix
+
+- Payment audit rows keep `actorUserId` but use the constant non-PII snapshot `redacted@audit.invalid`; the real actor email is no longer passed to payment audit persistence.
+- Both callback routes validate `FINE_PAYMENT_CALLBACK_BASE_URL` before state verification or authorization. Trusted HTTPS origins are required; non-production loopback `http://localhost[:port]` and `http://127.0.0.1[:port]` remain available for local development. Credentials, paths, query strings, fragments, non-loopback HTTP, and HTTPS custom ports fail closed.
+- Missing configuration returns a non-redirecting `503`; invalid configuration returns a non-redirecting `400`. Redirect destinations are built only from the validated configured base and ignore the request Host/origin.
+
+### Verification
+
+- Focused review tests: 3 files, 21 tests passed after GREEN.
+- Final Task 4 focused tests: 4 files, 44 tests passed.
+- `npm run typecheck`: passed.
+- Scoped Prettier check: passed.
+- `git diff --check`: passed.
+- No live Driver Helper call, migration, or seed command was run.

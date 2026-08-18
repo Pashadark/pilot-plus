@@ -75,7 +75,7 @@ describe('fine payment callback state', () => {
       expiresAt: new Date('2026-08-18T10:10:00.000Z'),
     };
     const options = {
-      actor: { id: 'user-1', email: 'admin@example.test' },
+      actor: { id: 'user-1' },
       status: 'SUCCEEDED' as const,
     };
 
@@ -95,6 +95,8 @@ describe('fine payment callback state', () => {
     expect(database.auditLog.create).toHaveBeenCalledTimes(1);
     expect(database.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        actorUserId: 'user-1',
+        actorEmailSnapshot: 'redacted@audit.invalid',
         changes: {
           status: 'SUCCEEDED',
           fineIds: ['fine-1'],
@@ -108,6 +110,7 @@ describe('fine payment callback state', () => {
       select: { id: true },
     });
     expect(database).not.toHaveProperty('fine');
+    expect(JSON.stringify(database.auditLog.create.mock.calls)).not.toContain('admin@example.test');
   });
 
   it('rejects tampering, expiry, an outcome swap and malformed input', () => {

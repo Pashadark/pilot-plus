@@ -187,6 +187,15 @@ describe('fine payment actions', () => {
     });
     expect(JSON.stringify(database.auditLog.create.mock.calls)).not.toContain('paymentUrl');
     expect(JSON.stringify(database.auditLog.create.mock.calls)).not.toContain('state');
+    expect(JSON.stringify(database.auditLog.create.mock.calls)).not.toContain('admin@example.test');
+    expect(database.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          actorUserId: 'admin-1',
+          actorEmailSnapshot: 'redacted@audit.invalid',
+        }),
+      }),
+    );
   });
 
   it('converges on the active invoice after a P2002 race without a second external call', async () => {
@@ -243,6 +252,8 @@ describe('fine payment actions', () => {
     });
     expect(database.auditLog.create).toHaveBeenLastCalledWith({
       data: expect.objectContaining({
+        actorUserId: 'admin-1',
+        actorEmailSnapshot: 'redacted@audit.invalid',
         changes: expect.objectContaining({ status: 'ERROR', sandbox: true }),
       }),
       select: { id: true },

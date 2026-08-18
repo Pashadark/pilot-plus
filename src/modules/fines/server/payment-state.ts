@@ -5,6 +5,8 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { FineInvoiceStatus, Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 
+import { PAYMENT_AUDIT_ACTOR_SNAPSHOT } from './payment-audit';
+
 export type FinePaymentOutcome = 'success' | 'fail';
 
 export interface FinePaymentState {
@@ -124,7 +126,7 @@ type CallbackStatus = Extract<FineInvoiceStatus, 'SUCCEEDED' | 'FAILED'>;
 
 export async function consumeFinePaymentCallback(
   state: FinePaymentState,
-  options: { actor: { id: string; email: string }; status: CallbackStatus },
+  options: { actor: { id: string }; status: CallbackStatus },
 ): Promise<boolean> {
   if (state.userId !== options.actor.id) return false;
 
@@ -165,7 +167,7 @@ export async function consumeFinePaymentCallback(
         data: {
           companyId: state.companyId,
           actorUserId: options.actor.id,
-          actorEmailSnapshot: options.actor.email,
+          actorEmailSnapshot: PAYMENT_AUDIT_ACTOR_SNAPSHOT,
           action: 'UPDATE',
           entityType: 'FINE',
           entityId: invoice.id,
