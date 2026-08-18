@@ -33,11 +33,7 @@ export type CreateFineInvoiceActionResult =
   | { ok: false; code: PaymentErrorCode; message: string };
 
 const MAX_FINE_IDS = 50;
-const ACTIVE_INVOICE_STATUSES: readonly FineInvoiceStatus[] = [
-  'PENDING',
-  'CREATED',
-  'RETURNED_PENDING_CHECK',
-];
+const ACTIVE_INVOICE_STATUSES: readonly FineInvoiceStatus[] = ['PENDING', 'CREATED'];
 const messages: Record<PaymentErrorCode, string> = {
   VALIDATION: 'Выберите от одного до 50 штрафов.',
   FORBIDDEN: 'Оплата штрафов запрещена.',

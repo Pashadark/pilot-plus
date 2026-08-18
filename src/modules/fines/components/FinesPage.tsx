@@ -142,8 +142,8 @@ export function FinesPage({
           role="status"
           className="rounded-[var(--radius-md)] border border-blue-300 bg-blue-50 p-4 text-sm text-blue-900"
         >
-          <strong>Возврат из платёжного сервиса получен.</strong> Ожидаем подтверждение Driver
-          Helper; штрафы пока остаются неоплаченными.
+          <strong>Возврат из тестовой платёжной страницы получен.</strong> Оплата не подтверждена:
+          Driver Helper не проверяет sandbox-платёж, штраф остаётся неоплаченным.
         </div>
       ) : null}
       {syncOutcome ? (

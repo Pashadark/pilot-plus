@@ -46,7 +46,7 @@ describe('fine payment callbacks', () => {
     expect(requireFinePaymentAccess).toHaveBeenCalledWith('company-1');
     expect(consumeFinePaymentCallback).toHaveBeenCalledWith(verified, {
       actor: { id: 'admin-1' },
-      status: 'RETURNED_PENDING_CHECK',
+      status: 'SANDBOX_RETURNED',
     });
     expect(response.status).toBe(303);
     expect(response.headers.get('location')).toBe(

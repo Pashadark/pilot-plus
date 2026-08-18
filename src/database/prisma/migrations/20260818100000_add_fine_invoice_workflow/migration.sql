@@ -1,6 +1,6 @@
 ALTER TYPE "public"."FineAssignmentSource" ADD VALUE IF NOT EXISTS 'AUTO_EXACT';
 
-CREATE TYPE "public"."FineInvoiceStatus" AS ENUM ('PENDING', 'CREATED', 'RETURNED_PENDING_CHECK', 'SUCCEEDED', 'FAILED', 'ERROR');
+CREATE TYPE "public"."FineInvoiceStatus" AS ENUM ('PENDING', 'CREATED', 'SANDBOX_RETURNED', 'SUCCEEDED', 'FAILED', 'ERROR');
 
 ALTER TABLE "public"."Fine"
   ADD COLUMN "comment" TEXT,

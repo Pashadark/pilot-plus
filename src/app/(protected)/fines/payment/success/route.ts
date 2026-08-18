@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     }
     const consumed = await consumeFinePaymentCallback(state, {
       actor: { id: access.user.id },
-      status: 'RETURNED_PENDING_CHECK',
+      status: 'SANDBOX_RETURNED',
     });
     return consumed
       ? paymentResultRedirect(configuredBase.base, 'returned', state.companyId)

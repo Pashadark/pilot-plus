@@ -122,7 +122,7 @@ export function verifyFinePaymentState(
   }
 }
 
-type CallbackStatus = Extract<FineInvoiceStatus, 'RETURNED_PENDING_CHECK' | 'FAILED'>;
+type CallbackStatus = Extract<FineInvoiceStatus, 'SANDBOX_RETURNED' | 'FAILED'>;
 
 export async function consumeFinePaymentCallback(
   state: FinePaymentState,
@@ -163,12 +163,10 @@ export async function consumeFinePaymentCallback(
       });
       if (updated.count !== 1) return false;
 
-      if (options.status === 'FAILED') {
-        await transaction.fineInvoiceItem.updateMany({
-          where: { companyId: state.companyId, invoiceId: state.invoiceId, active: true },
-          data: { active: false },
-        });
-      }
+      await transaction.fineInvoiceItem.updateMany({
+        where: { companyId: state.companyId, invoiceId: state.invoiceId, active: true },
+        data: { active: false },
+      });
 
       await transaction.auditLog.create({
         data: {

@@ -14,8 +14,9 @@ describe('FinesPage', () => {
         paymentOutcome="returned"
       />,
     );
-    expect(markup).toContain('Возврат из платёжного сервиса получен');
-    expect(markup).toContain('Ожидаем подтверждение Driver Helper');
+    expect(markup).toContain('Возврат из тестовой платёжной страницы получен');
+    expect(markup).toContain('Оплата не подтверждена');
+    expect(markup).toContain('штраф остаётся неоплаченным');
   });
   it('renders a fine with vehicle, amount, status and photo action', () => {
     const markup = renderToStaticMarkup(

@@ -77,7 +77,7 @@ describe('fine payment callback state', () => {
     };
     const options = {
       actor: { id: 'user-1' },
-      status: 'RETURNED_PENDING_CHECK' as const,
+      status: 'SANDBOX_RETURNED' as const,
     };
 
     await expect(consumeFinePaymentCallback(state, options)).resolves.toBe(true);
@@ -91,7 +91,7 @@ describe('fine payment callback state', () => {
         status: 'CREATED',
         sandbox: true,
       },
-      data: { status: 'RETURNED_PENDING_CHECK' },
+      data: { status: 'SANDBOX_RETURNED' },
     });
     expect(database.auditLog.create).toHaveBeenCalledTimes(1);
     expect(database.auditLog.create).toHaveBeenCalledWith({
@@ -99,7 +99,7 @@ describe('fine payment callback state', () => {
         actorUserId: 'user-1',
         actorEmailSnapshot: 'redacted@audit.invalid',
         changes: {
-          status: 'RETURNED_PENDING_CHECK',
+          status: 'SANDBOX_RETURNED',
           fineIds: ['fine-1'],
           fineCount: 1,
           fineAmountMinor: '10000',
@@ -111,7 +111,10 @@ describe('fine payment callback state', () => {
       select: { id: true },
     });
     expect(database).not.toHaveProperty('fine');
-    expect(database.fineInvoiceItem.updateMany).not.toHaveBeenCalled();
+    expect(database.fineInvoiceItem.updateMany).toHaveBeenCalledWith({
+      where: { companyId: 'company-1', invoiceId: 'invoice-1', active: true },
+      data: { active: false },
+    });
     expect(JSON.stringify(database.auditLog.create.mock.calls)).not.toContain('admin@example.test');
   });
 

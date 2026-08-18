@@ -47,7 +47,7 @@ enum FineStatus {
 enum FineInvoiceStatus {
   PENDING
   CREATED
-  RETURNED_PENDING_CHECK
+  SANDBOX_RETURNED
   SUCCEEDED
   FAILED
   ERROR

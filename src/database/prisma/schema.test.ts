@@ -294,7 +294,8 @@ describe('доменная схема автопарка', () => {
     const fineInvoiceItemModel = schema.match(/model FineInvoiceItem \{([\s\S]*?)\n\}/)?.[1];
 
     expect(schema).toContain('enum FineInvoiceStatus {');
-    expect(schema).toContain('RETURNED_PENDING_CHECK');
+    expect(schema).toContain('SANDBOX_RETURNED');
+    expect(schema).not.toContain('RETURNED_PENDING_CHECK');
     expect(schema).toContain('model FineInvoice {');
     expect(schema).toContain('model FineInvoiceItem {');
     expect(fineModel).toBeDefined();
@@ -346,7 +347,8 @@ describe('доменная схема автопарка', () => {
     expect(migration).toContain('FineInvoiceItem_companyId_invoiceId_fkey');
     expect(migration).toContain('FineInvoiceItem_companyId_fineId_fkey');
     expect(migration).toContain('FineInvoice_companyId_status_idx');
-    expect(migration).toContain("'RETURNED_PENDING_CHECK'");
+    expect(migration).toContain("'SANDBOX_RETURNED'");
+    expect(migration).not.toContain("'RETURNED_PENDING_CHECK'");
     expect(migration).toContain(
       'CREATE UNIQUE INDEX "FineInvoiceItem_one_active_invoice_per_fine_key"',
     );
