@@ -23,3 +23,9 @@
 - Payment links are never stored in component props or query DTOs; the server action returns one only to the immediate authorised client response, which renders a vetted navigation link.
 - The panel clearly states sandbox-only behavior and shows invoice creation/reuse, status/history guidance, and retry guidance. A persisted invoice-history list remains intentionally out of scope for this UI task because Task 3/4 exposes no list interface.
 - No live integration, migrations, seed, or full suite was run.
+
+## Follow-up: filtered KPI aggregation
+
+- Added a page-two regression with 49 filtered fines and a one-card second page. It proves the six summary values remain full-result values (including amount, assignment, discount, and bailiff metrics).
+- The query now keeps the exact tenant and URL filter `where` inside an `AND` for separate database counts and an aggregate. It does not load all fines to calculate summary cards.
+- Follow-up focused test command passed: 4 files, 8 tests.

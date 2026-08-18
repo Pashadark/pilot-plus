@@ -7,6 +7,7 @@ const rentalFindManyMock = vi.hoisted(() => vi.fn());
 const vehicleFindManyMock = vi.hoisted(() => vi.fn());
 const clientFindManyMock = vi.hoisted(() => vi.fn());
 const fineCountMock = vi.hoisted(() => vi.fn());
+const fineAggregateMock = vi.hoisted(() => vi.fn());
 
 vi.mock('server-only', () => ({}));
 vi.mock('../access', () => ({
@@ -15,7 +16,7 @@ vi.mock('../access', () => ({
 }));
 vi.mock('@/database/prisma/client', () => ({
   prisma: {
-    fine: { findMany: findManyMock, count: fineCountMock },
+    fine: { findMany: findManyMock, count: fineCountMock, aggregate: fineAggregateMock },
     company: { findMany: companyFindManyMock },
     rental: { findMany: rentalFindManyMock },
     vehicle: { findMany: vehicleFindManyMock },
@@ -31,6 +32,10 @@ describe('fine queries', () => {
     vehicleFindManyMock.mockResolvedValue([]);
     clientFindManyMock.mockResolvedValue([]);
     fineCountMock.mockResolvedValue(0);
+    fineAggregateMock.mockResolvedValue({
+      _count: { _all: 0 },
+      _sum: { currentAmountMinor: null },
+    });
   });
 
   it('forces exact tenant IDs for company users', async () => {
@@ -186,6 +191,75 @@ describe('fine queries', () => {
     expect(findManyMock).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ companyId: { in: ['company-a', 'company-b'] } }),
+      }),
+    );
+  });
+
+  it('aggregates the full filtered tenant result instead of the second page', async () => {
+    getFineAccessMock.mockResolvedValue({
+      scope: 'COMPANY',
+      companyIds: ['company-a'],
+      rolesByCompany: { 'company-a': 'COMPANY_ADMIN' },
+      user: { role: 'MEMBER' },
+    });
+    companyFindManyMock.mockResolvedValue([{ id: 'company-a', name: 'Компания А' }]);
+    findManyMock.mockResolvedValue([
+      {
+        id: 'fine-page-two',
+        companyId: 'company-a',
+        decreeNumber: '188101',
+        offenseAt: new Date('2026-08-16T09:30:00.000Z'),
+        currentAmountMinor: BigInt(10000),
+        originalAmountMinor: BigInt(10000),
+        status: 'UNPAID',
+        description: null,
+        address: null,
+        comment: null,
+        discountExpiresAt: null,
+        toBailiff: false,
+        photoState: null,
+        vehicleId: 'vehicle-1',
+        rentalId: null,
+        clientId: null,
+        assignmentSource: null,
+        rental: null,
+        vehicle: null,
+        client: null,
+      },
+    ]);
+    fineCountMock.mockImplementation(({ where }) => {
+      if (!('AND' in where)) return 49;
+      const [base, constraint] = where.AND as [{ companyId: string }, Record<string, unknown>];
+      if (base.companyId !== 'company-a') return 0;
+      if (constraint.status === 'NEW') return 4;
+      if (constraint.toBailiff === true) return 2;
+      if ('discountExpiresAt' in constraint) return 3;
+      if ('OR' in constraint) return 5;
+      return 0;
+    });
+    fineAggregateMock.mockResolvedValue({
+      _count: { _all: 17 },
+      _sum: { currentAmountMinor: BigInt(345600) },
+    });
+
+    const result = await listFinesForCurrentUser({ companyId: 'company-a', page: '2' });
+
+    expect(result.pagination).toEqual({ page: 2, pageSize: 24, total: 49, totalPages: 3 });
+    expect(result.fines).toHaveLength(1);
+    expect(result.summary).toEqual({
+      newCount: 4,
+      unpaidCount: 17,
+      unpaidAmountMinor: '345600',
+      unassignedCount: 5,
+      discountEndingSoonCount: 3,
+      bailiffRiskCount: 2,
+    });
+    expect(findManyMock).toHaveBeenCalledWith(expect.objectContaining({ skip: 24, take: 24 }));
+    expect(fineAggregateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        _count: { _all: true },
+        _sum: { currentAmountMinor: true },
+        where: expect.objectContaining({ AND: expect.any(Array) }),
       }),
     );
   });

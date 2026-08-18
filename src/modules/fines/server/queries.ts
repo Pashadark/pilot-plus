@@ -114,8 +114,21 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
         }
       : {}),
   };
+  const now = new Date();
+  const discountSoon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const withinFilteredScope = (constraint: Prisma.FineWhereInput): Prisma.FineWhereInput => ({
+    AND: [where, constraint],
+  });
 
-  const [records, total] = await Promise.all([
+  const [
+    records,
+    total,
+    newCount,
+    unpaidMetrics,
+    unassignedCount,
+    discountEndingSoonCount,
+    bailiffRiskCount,
+  ] = await Promise.all([
     prisma.fine.findMany({
       where,
       select: {
@@ -137,7 +150,9 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
         clientId: true,
         assignmentSource: true,
         rental: { select: { contractNumber: true } },
-        vehicle: { select: { make: true, modelName: true, model: true, registrationNumber: true } },
+        vehicle: {
+          select: { make: true, modelName: true, model: true, registrationNumber: true },
+        },
         client: { select: { firstName: true, middleName: true, lastName: true } },
       },
       orderBy: [{ offenseAt: 'desc' }, { id: 'desc' }],
@@ -145,6 +160,19 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
       take: pageSize,
     }),
     prisma.fine.count({ where }),
+    prisma.fine.count({ where: withinFilteredScope({ status: 'NEW' }) }),
+    prisma.fine.aggregate({
+      where: withinFilteredScope({ status: { in: ['NEW', 'UNPAID', 'OVERDUE'] } }),
+      _count: { _all: true },
+      _sum: { currentAmountMinor: true },
+    }),
+    prisma.fine.count({
+      where: withinFilteredScope({ OR: [{ vehicleId: null }, { clientId: null }] }),
+    }),
+    prisma.fine.count({
+      where: withinFilteredScope({ discountExpiresAt: { gte: now, lte: discountSoon } }),
+    }),
+    prisma.fine.count({ where: withinFilteredScope({ toBailiff: true }) }),
   ]);
 
   const attributableFines = records.filter((fine): fine is typeof fine & { vehicleId: string } =>
@@ -234,11 +262,6 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
       assignmentCandidates,
     };
   });
-  const unpaid = fines.filter(({ status: itemStatus }) =>
-    ['NEW', 'UNPAID', 'OVERDUE'].includes(itemStatus),
-  );
-  const now = Date.now();
-  const discountSoon = now + 7 * 24 * 60 * 60 * 1000;
   const selectedRole = selectedCompanyId ? access.rolesByCompany[selectedCompanyId] : undefined;
   const canManage = Boolean(
     selectedCompanyId &&
@@ -275,17 +298,12 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
     ),
     fines,
     summary: {
-      newCount: fines.filter(({ status: itemStatus }) => itemStatus === 'NEW').length,
-      unpaidCount: unpaid.length,
-      unpaidAmountMinor: unpaid
-        .reduce((total, fine) => total + BigInt(fine.currentAmountMinor), BigInt(0))
-        .toString(),
-      unassignedCount: fines.filter(({ assigned }) => !assigned).length,
-      discountEndingSoonCount: fines.filter(({ discountExpiresAt }) => {
-        const expires = discountExpiresAt ? new Date(discountExpiresAt).getTime() : 0;
-        return expires >= now && expires <= discountSoon;
-      }).length,
-      bailiffRiskCount: fines.filter(({ toBailiff }) => toBailiff).length,
+      newCount,
+      unpaidCount: unpaidMetrics._count._all,
+      unpaidAmountMinor: unpaidMetrics._sum.currentAmountMinor?.toString() ?? '0',
+      unassignedCount,
+      discountEndingSoonCount,
+      bailiffRiskCount,
     },
   };
 }
