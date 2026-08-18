@@ -61,6 +61,7 @@ describe('fine payment callback state', () => {
         }),
         updateMany: vi.fn().mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 }),
       },
+      fineInvoiceItem: { updateMany: vi.fn() },
       auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
     };
     transaction.mockImplementation(
@@ -76,7 +77,7 @@ describe('fine payment callback state', () => {
     };
     const options = {
       actor: { id: 'user-1' },
-      status: 'SUCCEEDED' as const,
+      status: 'RETURNED_PENDING_CHECK' as const,
     };
 
     await expect(consumeFinePaymentCallback(state, options)).resolves.toBe(true);
@@ -90,7 +91,7 @@ describe('fine payment callback state', () => {
         status: 'CREATED',
         sandbox: true,
       },
-      data: { status: 'SUCCEEDED' },
+      data: { status: 'RETURNED_PENDING_CHECK' },
     });
     expect(database.auditLog.create).toHaveBeenCalledTimes(1);
     expect(database.auditLog.create).toHaveBeenCalledWith({
@@ -98,7 +99,7 @@ describe('fine payment callback state', () => {
         actorUserId: 'user-1',
         actorEmailSnapshot: 'redacted@audit.invalid',
         changes: {
-          status: 'SUCCEEDED',
+          status: 'RETURNED_PENDING_CHECK',
           fineIds: ['fine-1'],
           fineCount: 1,
           fineAmountMinor: '10000',
@@ -110,6 +111,7 @@ describe('fine payment callback state', () => {
       select: { id: true },
     });
     expect(database).not.toHaveProperty('fine');
+    expect(database.fineInvoiceItem.updateMany).not.toHaveBeenCalled();
     expect(JSON.stringify(database.auditLog.create.mock.calls)).not.toContain('admin@example.test');
   });
 

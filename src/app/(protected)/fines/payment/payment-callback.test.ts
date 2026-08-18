@@ -46,11 +46,11 @@ describe('fine payment callbacks', () => {
     expect(requireFinePaymentAccess).toHaveBeenCalledWith('company-1');
     expect(consumeFinePaymentCallback).toHaveBeenCalledWith(verified, {
       actor: { id: 'admin-1' },
-      status: 'SUCCEEDED',
+      status: 'RETURNED_PENDING_CHECK',
     });
     expect(response.status).toBe(303);
     expect(response.headers.get('location')).toBe(
-      'https://pilot.example.test/fines?companyId=company-1&payment=success',
+      'https://pilot.example.test/fines?companyId=company-1&payment=returned',
     );
   });
 
@@ -102,7 +102,7 @@ describe('fine payment callbacks', () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get('location')).toBe(
-      'https://pilot.example.test/fines?companyId=company-1&payment=success',
+      'https://pilot.example.test/fines?companyId=company-1&payment=returned',
     );
   });
 

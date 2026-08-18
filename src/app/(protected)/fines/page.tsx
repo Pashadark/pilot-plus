@@ -15,6 +15,7 @@ export default async function FinesRoute({
     vehicleId?: string;
     clientId?: string;
     page?: string;
+    payment?: string;
   }>;
 }) {
   const filters = await searchParams;
@@ -35,6 +36,15 @@ export default async function FinesRoute({
         pagination={data.pagination}
         syncOutcome={
           filters.sync === 'success' ? 'success' : filters.sync === 'error' ? 'error' : undefined
+        }
+        paymentOutcome={
+          filters.payment === 'returned'
+            ? 'returned'
+            : filters.payment === 'failed'
+              ? 'failed'
+              : filters.payment === 'invalid'
+                ? 'invalid'
+                : undefined
         }
       />
     </AppShell>

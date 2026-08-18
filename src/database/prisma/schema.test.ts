@@ -294,6 +294,7 @@ describe('доменная схема автопарка', () => {
     const fineInvoiceItemModel = schema.match(/model FineInvoiceItem \{([\s\S]*?)\n\}/)?.[1];
 
     expect(schema).toContain('enum FineInvoiceStatus {');
+    expect(schema).toContain('RETURNED_PENDING_CHECK');
     expect(schema).toContain('model FineInvoice {');
     expect(schema).toContain('model FineInvoiceItem {');
     expect(fineModel).toBeDefined();
@@ -318,6 +319,7 @@ describe('доменная схема автопарка', () => {
     expect(fineInvoiceItemModel).toMatch(/companyId\s+String/);
     expect(fineInvoiceItemModel).toMatch(/invoiceId\s+String/);
     expect(fineInvoiceItemModel).toMatch(/fineId\s+String/);
+    expect(fineInvoiceItemModel).toMatch(/active\s+Boolean\s+@default\(true\)/);
     expect(fineInvoiceItemModel).toMatch(
       /invoice\s+FineInvoice\s+@relation\(fields: \[companyId, invoiceId\], references: \[companyId, id\], onDelete: Cascade\)/,
     );
@@ -344,6 +346,11 @@ describe('доменная схема автопарка', () => {
     expect(migration).toContain('FineInvoiceItem_companyId_invoiceId_fkey');
     expect(migration).toContain('FineInvoiceItem_companyId_fineId_fkey');
     expect(migration).toContain('FineInvoice_companyId_status_idx');
+    expect(migration).toContain("'RETURNED_PENDING_CHECK'");
+    expect(migration).toContain(
+      'CREATE UNIQUE INDEX "FineInvoiceItem_one_active_invoice_per_fine_key"',
+    );
+    expect(migration).toContain('WHERE "active" = true');
     expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
     expect(migration).not.toMatch(/^\s*UPDATE\b/im);
   });

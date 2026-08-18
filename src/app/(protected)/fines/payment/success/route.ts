@@ -23,10 +23,10 @@ export async function GET(request: Request) {
     }
     const consumed = await consumeFinePaymentCallback(state, {
       actor: { id: access.user.id },
-      status: 'SUCCEEDED',
+      status: 'RETURNED_PENDING_CHECK',
     });
     return consumed
-      ? paymentResultRedirect(configuredBase.base, 'success', state.companyId)
+      ? paymentResultRedirect(configuredBase.base, 'returned', state.companyId)
       : paymentResultRedirect(configuredBase.base, 'invalid');
   } catch {
     return paymentResultRedirect(configuredBase.base, 'invalid');

@@ -33,7 +33,11 @@ export type CreateFineInvoiceActionResult =
   | { ok: false; code: PaymentErrorCode; message: string };
 
 const MAX_FINE_IDS = 50;
-const ACTIVE_INVOICE_STATUSES: readonly FineInvoiceStatus[] = ['PENDING', 'CREATED'];
+const ACTIVE_INVOICE_STATUSES: readonly FineInvoiceStatus[] = [
+  'PENDING',
+  'CREATED',
+  'RETURNED_PENDING_CHECK',
+];
 const messages: Record<PaymentErrorCode, string> = {
   VALIDATION: 'Выберите от одного до 50 штрафов.',
   FORBIDDEN: 'Оплата штрафов запрещена.',
@@ -148,8 +152,13 @@ function idempotencyKey(companyId: string, userId: string, fineIds: string[]): s
     .digest('hex');
 }
 
-function isP2002(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
+function isConcurrencyConflict(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error.code === 'P2002' || error.code === 'P2034')
+  );
 }
 
 async function activeInvoice(key: string) {
@@ -201,7 +210,37 @@ export async function createSandboxFineInvoiceAction(
           if (existing && ACTIVE_INVOICE_STATUSES.includes(existing.status)) {
             return { ...existing, reused: true };
           }
-          if (existing) throw new Error('Inactive idempotency key');
+          if (existing) {
+            const rotated = await transaction.fineInvoice.updateMany({
+              where: { id: existing.id, idempotencyKey: key, status: existing.status },
+              data: { idempotencyKey: `${key}:inactive:${existing.id}` },
+            });
+            if (rotated.count !== 1) throw { code: 'P2002' };
+            await transaction.fineInvoiceItem.updateMany({
+              where: {
+                companyId: selection.input.companyId,
+                invoiceId: existing.id,
+                active: true,
+              },
+              data: { active: false },
+            });
+          }
+
+          const currentFines = await transaction.fine.findMany({
+            where: { companyId: selection.input.companyId, id: { in: selection.input.fineIds } },
+            select: { id: true, companyId: true, externalId: true, status: true },
+          });
+          if (
+            currentFines.length !== selection.input.fineIds.length ||
+            currentFines.some(
+              (fine) =>
+                fine.companyId !== selection.input.companyId ||
+                fine.status === 'PAID' ||
+                fine.status === 'CANCELLED',
+            )
+          ) {
+            throw new Error('Fine selection changed');
+          }
 
           const invoice = await transaction.fineInvoice.create({
             data: {
@@ -217,6 +256,7 @@ export async function createSandboxFineInvoiceAction(
                 create: selection.input.fineIds.map((fineId) => ({
                   companyId: selection.input.companyId,
                   fineId,
+                  active: true,
                 })),
               },
             },
@@ -246,7 +286,7 @@ export async function createSandboxFineInvoiceAction(
         { isolationLevel: 'Serializable' },
       );
     } catch (error) {
-      if (!isP2002(error)) throw error;
+      if (!isConcurrencyConflict(error)) throw error;
       const existing = await activeInvoice(key);
       if (!existing) throw error;
       pending = { ...existing, reused: true };
@@ -336,6 +376,14 @@ export async function createSandboxFineInvoiceAction(
               data: { status: 'ERROR' },
             });
             if (updated.count !== 1) return;
+            await transaction.fineInvoiceItem.updateMany({
+              where: {
+                companyId: selection.input.companyId,
+                invoiceId: failedInvoice.id,
+                active: true,
+              },
+              data: { active: false },
+            });
             await transaction.auditLog.create({
               data: {
                 companyId: selection.input.companyId,

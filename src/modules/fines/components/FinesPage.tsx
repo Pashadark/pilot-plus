@@ -67,6 +67,7 @@ interface FinesPageProps {
   filters?: FineFilters;
   pagination?: { page: number; pageSize: number; total: number; totalPages: number };
   syncOutcome?: 'success' | 'error';
+  paymentOutcome?: 'returned' | 'failed' | 'invalid';
 }
 
 const statusPresentation = {
@@ -117,6 +118,7 @@ export function FinesPage({
   filters = {},
   pagination,
   syncOutcome,
+  paymentOutcome,
 }: FinesPageProps) {
   const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
   const selectedFines = useMemo(
@@ -135,6 +137,15 @@ export function FinesPage({
         title="Штрафы"
         description="Штрафы Driver Helper, связанные с автомобилями, арендами и клиентами."
       />
+      {paymentOutcome === 'returned' ? (
+        <div
+          role="status"
+          className="rounded-[var(--radius-md)] border border-blue-300 bg-blue-50 p-4 text-sm text-blue-900"
+        >
+          <strong>Возврат из платёжного сервиса получен.</strong> Ожидаем подтверждение Driver
+          Helper; штрафы пока остаются неоплаченными.
+        </div>
+      ) : null}
       {syncOutcome ? (
         <div
           role="status"

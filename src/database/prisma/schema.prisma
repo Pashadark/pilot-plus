@@ -47,6 +47,7 @@ enum FineStatus {
 enum FineInvoiceStatus {
   PENDING
   CREATED
+  RETURNED_PENDING_CHECK
   SUCCEEDED
   FAILED
   ERROR
@@ -769,6 +770,7 @@ model FineInvoiceItem {
   invoice   FineInvoice @relation(fields: [companyId, invoiceId], references: [companyId, id], onDelete: Cascade)
   fineId    String
   fine      Fine        @relation(fields: [companyId, fineId], references: [companyId, id], onDelete: Restrict)
+  active    Boolean     @default(true)
   createdAt DateTime    @default(now()) @db.Timestamptz(3)
 
   @@unique([invoiceId, fineId])

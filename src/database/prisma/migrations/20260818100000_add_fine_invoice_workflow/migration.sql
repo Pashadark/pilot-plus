@@ -1,6 +1,6 @@
 ALTER TYPE "public"."FineAssignmentSource" ADD VALUE IF NOT EXISTS 'AUTO_EXACT';
 
-CREATE TYPE "public"."FineInvoiceStatus" AS ENUM ('PENDING', 'CREATED', 'SUCCEEDED', 'FAILED', 'ERROR');
+CREATE TYPE "public"."FineInvoiceStatus" AS ENUM ('PENDING', 'CREATED', 'RETURNED_PENDING_CHECK', 'SUCCEEDED', 'FAILED', 'ERROR');
 
 ALTER TABLE "public"."Fine"
   ADD COLUMN "comment" TEXT,
@@ -40,6 +40,7 @@ CREATE TABLE "public"."FineInvoiceItem" (
   "companyId" TEXT NOT NULL,
   "invoiceId" TEXT NOT NULL,
   "fineId" TEXT NOT NULL,
+  "active" BOOLEAN NOT NULL DEFAULT true,
   "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "FineInvoiceItem_pkey" PRIMARY KEY ("id")
 );
@@ -52,6 +53,7 @@ CREATE INDEX "FineInvoice_initiatedByUserId_createdAt_idx" ON "public"."FineInvo
 CREATE UNIQUE INDEX "FineInvoiceItem_invoiceId_fineId_key" ON "public"."FineInvoiceItem"("invoiceId", "fineId");
 CREATE INDEX "FineInvoiceItem_companyId_invoiceId_idx" ON "public"."FineInvoiceItem"("companyId", "invoiceId");
 CREATE INDEX "FineInvoiceItem_companyId_fineId_idx" ON "public"."FineInvoiceItem"("companyId", "fineId");
+CREATE UNIQUE INDEX "FineInvoiceItem_one_active_invoice_per_fine_key" ON "public"."FineInvoiceItem"("companyId", "fineId") WHERE "active" = true;
 CREATE UNIQUE INDEX "Fine_companyId_id_key" ON "public"."Fine"("companyId", "id");
 
 ALTER TABLE "public"."Fine"

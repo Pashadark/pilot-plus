@@ -4,6 +4,19 @@ import { describe, expect, it } from 'vitest';
 import { FinesPage } from './FinesPage';
 
 describe('FinesPage', () => {
+  it('explains that a browser return still awaits provider verification', () => {
+    const markup = renderToStaticMarkup(
+      <FinesPage
+        summary={{ newCount: 0, unpaidCount: 0, unpaidAmountMinor: '0', unassignedCount: 0 }}
+        fines={[]}
+        companies={[]}
+        canSync={false}
+        paymentOutcome="returned"
+      />,
+    );
+    expect(markup).toContain('Возврат из платёжного сервиса получен');
+    expect(markup).toContain('Ожидаем подтверждение Driver Helper');
+  });
   it('renders a fine with vehicle, amount, status and photo action', () => {
     const markup = renderToStaticMarkup(
       <FinesPage

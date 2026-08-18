@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const findMany = vi.hoisted(() => vi.fn());
 const updateMany = vi.hoisted(() => vi.fn());
+const itemUpdateMany = vi.hoisted(() => vi.fn());
 const auditCreate = vi.hoisted(() => vi.fn());
 const transaction = vi.hoisted(() => vi.fn());
 
@@ -28,9 +29,14 @@ describe('reconcileStaleFineInvoices', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     transaction.mockImplementation(async (operation) =>
-      operation({ fineInvoice: { updateMany }, auditLog: { create: auditCreate } }),
+      operation({
+        fineInvoice: { updateMany },
+        fineInvoiceItem: { updateMany: itemUpdateMany },
+        auditLog: { create: auditCreate },
+      }),
     );
     updateMany.mockResolvedValue({ count: 1 });
+    itemUpdateMany.mockResolvedValue({ count: 1 });
     auditCreate.mockResolvedValue({ id: 'audit-1' });
   });
 
@@ -63,6 +69,10 @@ describe('reconcileStaleFineInvoices', () => {
         updatedAt: new Date('2026-08-18T11:00:00.000Z'),
       },
       data: { status: 'ERROR' },
+    });
+    expect(itemUpdateMany).toHaveBeenCalledWith({
+      where: { companyId: 'company-1', invoiceId: 'invoice-stale', active: true },
+      data: { active: false },
     });
     expect(auditCreate).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -78,3 +78,23 @@ The Task 2 client gained only server-supplied `successState`/`failState` handlin
 - Scoped Prettier check: passed.
 - `git diff --check`: passed.
 - No live Driver Helper call, migration, or seed command was run.
+
+## Final review fix: provider return and invoice race invariants
+
+### RED evidence
+
+The focused schema/payment/callback/reconciler/UI run failed 7 of 44 tests before production changes. Failures proved that a browser return still requested `SUCCEEDED`, stale/error paths did not release fine reservations, inactive idempotency keys blocked retries, the schema lacked a database-backed active-fine invariant, and the UI did not explain pending provider verification.
+
+### Fix
+
+- Added `RETURNED_PENDING_CHECK`: the success browser callback can only move `CREATED` to this non-success state. The callback remains one-time through the conditional state transition, and fines remain unchanged.
+- Added `FineInvoiceItem.active` plus a PostgreSQL partial unique index on `(companyId, fineId) WHERE active = true`. `PENDING`, `CREATED`, and `RETURNED_PENDING_CHECK` keep the reservation; `ERROR` and `FAILED` release it atomically.
+- Added an exact same-tenant fine reload inside the Serializable invoice-create transaction. Database `P2002` conflicts converge only when the same canonical active invoice won; overlapping selections otherwise fail safely before external invoice creation.
+- Inactive canonical invoices rotate their old idempotency key inside the transaction, allowing a fresh canonical retry. Concurrent `P2002`/`P2034` retries reread and reuse the winning active invoice.
+- Added a fines-page return banner stating that Driver Helper verification is still pending and fines remain unpaid.
+
+### Verification
+
+- Focused schema/payment/callback/reconciler/UI suites: 9 files, 76 tests passed after GREEN.
+- Prisma format/generate passed; Prisma validate passed with a non-connecting local validation URL; typecheck passed.
+- No migration deploy, seed, or live Driver Helper request was run.

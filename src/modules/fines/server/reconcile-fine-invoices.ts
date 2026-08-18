@@ -18,6 +18,9 @@ type FineInvoiceReconciliationTransaction = {
   fineInvoice: {
     updateMany(args: Prisma.FineInvoiceUpdateManyArgs): Promise<Count>;
   };
+  fineInvoiceItem: {
+    updateMany(args: Prisma.FineInvoiceItemUpdateManyArgs): Promise<Count>;
+  };
   auditLog: {
     create(args: Prisma.AuditLogCreateArgs): Promise<unknown>;
   };
@@ -103,6 +106,11 @@ export async function reconcileStaleFineInvoices(
         data: { status: 'ERROR' },
       });
       if (claimed.count !== 1) return false;
+
+      await transaction.fineInvoiceItem.updateMany({
+        where: { companyId: candidate.companyId, invoiceId: candidate.id, active: true },
+        data: { active: false },
+      });
 
       await transaction.auditLog.create({
         data: {

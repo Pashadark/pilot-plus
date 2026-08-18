@@ -125,6 +125,7 @@ describe('fine payment actions', () => {
   it('persists PENDING serializably before the external create and settles CREATED atomically', async () => {
     const events: string[] = [];
     const database = {
+      fine: { findMany: vi.fn().mockResolvedValue(fines) },
       fineInvoice: {
         findUnique: vi.fn().mockResolvedValue(null),
         create: vi.fn(async () => {
@@ -133,6 +134,7 @@ describe('fine payment actions', () => {
         }),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
+      fineInvoiceItem: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
       auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
     };
     transaction.mockImplementation(
@@ -170,8 +172,8 @@ describe('fine payment actions', () => {
           fineAmountMinor: BigInt(10000),
           items: {
             create: [
-              { companyId: 'company-1', fineId: 'fine-1' },
-              { companyId: 'company-1', fineId: 'fine-2' },
+              { companyId: 'company-1', fineId: 'fine-1', active: true },
+              { companyId: 'company-1', fineId: 'fine-2', active: true },
             ],
           },
         }),
@@ -229,11 +231,13 @@ describe('fine payment actions', () => {
 
   it('settles a persisted PENDING invoice to ERROR atomically when external create fails', async () => {
     const database = {
+      fine: { findMany: vi.fn().mockResolvedValue(fines) },
       fineInvoice: {
         findUnique: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue({ id: 'invoice-1', status: 'PENDING' }),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
+      fineInvoiceItem: { updateMany: vi.fn().mockResolvedValue({ count: 2 }) },
       auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
     };
     transaction.mockImplementation(
@@ -250,6 +254,10 @@ describe('fine payment actions', () => {
       where: { id: 'invoice-1', companyId: 'company-1', status: 'PENDING' },
       data: { status: 'ERROR' },
     });
+    expect(database.fineInvoiceItem.updateMany).toHaveBeenCalledWith({
+      where: { companyId: 'company-1', invoiceId: 'invoice-1', active: true },
+      data: { active: false },
+    });
     expect(database.auditLog.create).toHaveBeenLastCalledWith({
       data: expect.objectContaining({
         actorUserId: 'admin-1',
@@ -258,5 +266,73 @@ describe('fine payment actions', () => {
       }),
       select: { id: true },
     });
+  });
+
+  it('rotates an inactive ERROR idempotency key and creates a fresh retry', async () => {
+    const database = {
+      fine: { findMany: vi.fn().mockResolvedValue(fines) },
+      fineInvoice: {
+        findUnique: vi.fn().mockResolvedValue({ id: 'invoice-error', status: 'ERROR' }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        create: vi.fn().mockResolvedValue({ id: 'invoice-retry', status: 'PENDING' }),
+      },
+      fineInvoiceItem: { updateMany: vi.fn().mockResolvedValue({ count: 2 }) },
+      auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
+    };
+    invoiceFindUnique.mockResolvedValue(null);
+    transaction.mockImplementation(
+      async (operation: (client: typeof database) => Promise<unknown>) => operation(database),
+    );
+    createSandboxInvoice.mockResolvedValue({
+      providerInvoiceId: 'provider-retry',
+      paymentUrl: 'https://pay.driver-helper.ru/invoices/provider-retry',
+      paymentHost: 'pay.driver-helper.ru',
+      fineAmountMinor: '10000',
+      commissionAmountMinor: '800',
+      totalAmountMinor: '10800',
+    });
+
+    await expect(createSandboxFineInvoiceAction(null, paymentForm())).resolves.toMatchObject({
+      ok: true,
+      invoiceId: 'invoice-retry',
+      reused: false,
+    });
+
+    expect(database.fineInvoice.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'invoice-error', status: 'ERROR' }),
+        data: { idempotencyKey: expect.stringContaining(':inactive:invoice-error') },
+      }),
+    );
+    expect(database.fineInvoiceItem.updateMany).toHaveBeenCalledWith({
+      where: { companyId: 'company-1', invoiceId: 'invoice-error', active: true },
+      data: { active: false },
+    });
+  });
+
+  it('converges a concurrent ERROR retry after a serialization conflict', async () => {
+    transaction.mockRejectedValueOnce({ code: 'P2034' });
+    invoiceFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'invoice-retry-winner', status: 'PENDING' });
+
+    await expect(createSandboxFineInvoiceAction(null, paymentForm())).resolves.toEqual({
+      ok: true,
+      invoiceId: 'invoice-retry-winner',
+      paymentUrl: null,
+      reused: true,
+    });
+    expect(createSandboxInvoice).not.toHaveBeenCalled();
+  });
+
+  it('rejects an overlapping active fine reservation after a database P2002', async () => {
+    fineFindMany.mockResolvedValue([fines[0]]);
+    invoiceFindUnique.mockResolvedValue(null);
+    transaction.mockRejectedValueOnce({ code: 'P2002' });
+
+    await expect(
+      createSandboxFineInvoiceAction(null, paymentForm(['fine-1'])),
+    ).resolves.toMatchObject({ ok: false, code: 'PAYMENT_UNAVAILABLE' });
+    expect(createSandboxInvoice).not.toHaveBeenCalled();
   });
 });

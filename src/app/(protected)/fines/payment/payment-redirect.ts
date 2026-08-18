@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextResponse } from 'next/server';
 
-type PaymentResult = 'success' | 'failed' | 'invalid';
+type PaymentResult = 'returned' | 'failed' | 'invalid';
 
 export type TrustedPaymentBaseResult = { ok: true; base: URL } | { ok: false; response: Response };
 
