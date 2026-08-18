@@ -109,70 +109,109 @@ export async function syncCompanyFines(companyId: string) {
         });
       },
       upsertFine: async (tenantId, fine, vehicleId) => {
-        const existing = await prisma.fine.findUnique({
-          where: {
-            companyId_provider_externalId: {
+        return prisma.$transaction(
+          async (transaction) => {
+            const uniqueFine = {
               companyId: tenantId,
               provider: 'DRIVER_HELPER',
               externalId: fine.externalId,
-            },
-          },
-          select: { id: true },
-        });
-        const rentals = vehicleId
-          ? await prisma.rental.findMany({
-              where: {
-                companyId: tenantId,
-                vehicleId,
-                startsAt: { lte: fine.offenseAt },
-                endsAt: { gt: fine.offenseAt },
+            } as const;
+            const existing = await transaction.fine.findUnique({
+              where: { companyId_provider_externalId: uniqueFine },
+              select: {
+                id: true,
+                rentalId: true,
+                clientId: true,
+                assignmentSource: true,
+                assignmentConfirmedAt: true,
+                assignmentConfirmedByUserId: true,
               },
-              select: { id: true, clientId: true, startsAt: true, endsAt: true },
-              take: 2,
-            })
-          : [];
-        const attribution = selectFineAttribution(fine.offenseAt, rentals);
-        const assignment =
-          attribution.kind === 'MATCHED'
-            ? { rentalId: attribution.rentalId, clientId: attribution.clientId }
-            : { rentalId: null, clientId: null };
-        const data = {
-          providerVehicleId: fine.providerVehicleId,
-          vehicleId,
-          ...assignment,
-          decreeNumber: fine.decreeNumber,
-          decreeAt: fine.decreeAt,
-          offenseAt: fine.offenseAt,
-          discountExpiresAt: fine.discountExpiresAt,
-          originalAmountMinor: fine.originalAmountMinor,
-          currentAmountMinor: fine.currentAmountMinor,
-          discountPercent: fine.discountPercent,
-          articleCode: fine.articleCode,
-          description: fine.description,
-          address: fine.address,
-          status: fine.status,
-          toBailiff: fine.toBailiff,
-          photoState: fine.photoState,
-          lastSyncedAt: now,
-        };
-        await prisma.fine.upsert({
-          where: {
-            companyId_provider_externalId: {
-              companyId: tenantId,
-              provider: 'DRIVER_HELPER',
-              externalId: fine.externalId,
-            },
+            });
+            const rentals = vehicleId
+              ? await transaction.rental.findMany({
+                  where: {
+                    companyId: tenantId,
+                    vehicleId,
+                    startsAt: { lte: fine.offenseAt },
+                    endsAt: { gt: fine.offenseAt },
+                  },
+                  select: { id: true, clientId: true, startsAt: true, endsAt: true },
+                  take: 2,
+                })
+              : [];
+            const attribution = selectFineAttribution(fine.offenseAt, rentals);
+            const exactChanged = Boolean(
+              attribution.kind === 'MATCHED' &&
+              existing?.assignmentSource !== 'MANUAL' &&
+              (existing?.rentalId !== attribution.rentalId ||
+                existing?.clientId !== attribution.clientId),
+            );
+            const preservedAssignment = {
+              rentalId: existing?.rentalId ?? null,
+              clientId: existing?.clientId ?? null,
+              assignmentSource: existing?.assignmentSource ?? null,
+              assignmentConfirmedAt: existing?.assignmentConfirmedAt ?? null,
+              assignmentConfirmedByUserId: existing?.assignmentConfirmedByUserId ?? null,
+            };
+            const assignment =
+              attribution.kind === 'MATCHED' && (!existing || exactChanged)
+                ? {
+                    rentalId: attribution.rentalId,
+                    clientId: attribution.clientId,
+                    assignmentSource: 'AUTO_EXACT' as const,
+                    assignmentConfirmedAt: null,
+                    assignmentConfirmedByUserId: null,
+                  }
+                : preservedAssignment;
+            const data = {
+              providerVehicleId: fine.providerVehicleId,
+              vehicleId,
+              ...assignment,
+              decreeNumber: fine.decreeNumber,
+              decreeAt: fine.decreeAt,
+              offenseAt: fine.offenseAt,
+              discountExpiresAt: fine.discountExpiresAt,
+              originalAmountMinor: fine.originalAmountMinor,
+              currentAmountMinor: fine.currentAmountMinor,
+              discountPercent: fine.discountPercent,
+              articleCode: fine.articleCode,
+              description: fine.description,
+              address: fine.address,
+              status: fine.status,
+              toBailiff: fine.toBailiff,
+              photoState: fine.photoState,
+              lastSyncedAt: now,
+            };
+            const saved = await transaction.fine.upsert({
+              where: { companyId_provider_externalId: uniqueFine },
+              create: {
+                companyId: tenantId,
+                provider: 'DRIVER_HELPER',
+                externalId: fine.externalId,
+                ...data,
+              },
+              update: data,
+              select: { id: true },
+            });
+            if (attribution.kind === 'MATCHED' && (!existing || exactChanged)) {
+              await transaction.fineAssignmentHistory.create({
+                data: {
+                  companyId: tenantId,
+                  fineId: saved.id,
+                  vehicleId,
+                  rentalId: attribution.rentalId,
+                  clientId: attribution.clientId,
+                  source: 'AUTO_EXACT',
+                  reason: 'Единственное точное совпадение интервала аренды.',
+                  actorUserId: null,
+                },
+                select: { id: true },
+              });
+            }
+            return { created: !existing };
           },
-          create: {
-            companyId: tenantId,
-            provider: 'DRIVER_HELPER',
-            externalId: fine.externalId,
-            ...data,
-          },
-          update: data,
-          select: { id: true },
-        });
-        return { created: !existing };
+          { isolationLevel: 'Serializable' },
+        );
       },
     });
     await prisma.fineIntegration.update({
