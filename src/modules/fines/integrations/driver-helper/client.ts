@@ -6,7 +6,11 @@ import {
   driverHelperCarsPageSchema,
   driverHelperFinePhotosSchema,
   driverHelperFinesPageSchema,
+  driverHelperInvoiceCheckSchema,
+  driverHelperInvoiceCreateSchema,
+  driverHelperMoneyToMinor,
 } from './schemas';
+import { validateDriverHelperPaymentUrl } from './payment-url';
 
 const BASE_URL = 'https://api.driver-helper.ru';
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -27,6 +31,13 @@ interface DriverHelperClientOptions {
   token: string;
   transport?: Transport;
   timeoutMs?: number;
+}
+
+export interface CreateSandboxInvoiceInput {
+  ids: string[];
+  successUrl: string;
+  failUrl: string;
+  sandbox?: true;
 }
 
 async function boundedJson(response: Response): Promise<unknown> {
@@ -60,12 +71,13 @@ export class DriverHelperClient {
     this.timeoutMs = options.timeoutMs ?? 10_000;
   }
 
-  private async get<T>(path: string, schema: z.ZodType<T>): Promise<T> {
+  private async request<T>(path: string, init: RequestInit, schema: z.ZodType<T>): Promise<T> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       const request = new Request(`${BASE_URL}${path}`, {
-        headers: { Authorization: `Bearer ${this.options.token}` },
+        ...init,
+        headers: { Authorization: `Bearer ${this.options.token}`, ...init.headers },
         signal: controller.signal,
       });
       const response = await this.transport(request);
@@ -82,6 +94,14 @@ export class DriverHelperClient {
     }
   }
 
+  private get<T>(path: string, schema: z.ZodType<T>): Promise<T> {
+    return this.request(path, {}, schema);
+  }
+
+  private postForm<T>(path: string, form: URLSearchParams, schema: z.ZodType<T>): Promise<T> {
+    return this.request(path, { method: 'POST', body: form }, schema);
+  }
+
   listCars(page: number) {
     if (!Number.isInteger(page) || page < 1) throw new DriverHelperError('INVALID_RESPONSE');
     return this.get(`/v1.0/cars?page=${page}&perPage=50`, driverHelperCarsPageSchema);
@@ -95,5 +115,65 @@ export class DriverHelperClient {
   getFinePhotos(fineId: string) {
     if (!/^\d+$/u.test(fineId)) throw new DriverHelperError('INVALID_RESPONSE');
     return this.get(`/v1.0/fine/${fineId}/photo/base64`, driverHelperFinePhotosSchema);
+  }
+
+  async checkInvoice(ids: string[]) {
+    const form = this.invoiceIdsForm(ids);
+    const invoice = await this.postForm(
+      '/v1.0/invoice/check',
+      form,
+      driverHelperInvoiceCheckSchema,
+    );
+    return {
+      fineAmountMinor: driverHelperMoneyToMinor(invoice.fineAmount),
+      commissionAmountMinor: driverHelperMoneyToMinor(invoice.commissionAmount),
+      totalAmountMinor: driverHelperMoneyToMinor(invoice.totalAmount),
+    };
+  }
+
+  async createSandboxInvoice(input: CreateSandboxInvoiceInput) {
+    if (Object.hasOwn(input, 'sandbox') && input.sandbox !== true) {
+      throw new DriverHelperError('INVALID_RESPONSE');
+    }
+    if (!this.isTrustedCallbackUrl(input.successUrl) || !this.isTrustedCallbackUrl(input.failUrl)) {
+      throw new DriverHelperError('INVALID_RESPONSE');
+    }
+    const form = this.invoiceIdsForm(input.ids);
+    form.set('success_url', input.successUrl);
+    form.set('fail_url', input.failUrl);
+    form.set('sandbox', '1');
+    const invoice = await this.postForm('/v1.0/invoice', form, driverHelperInvoiceCreateSchema);
+    const payment = validateDriverHelperPaymentUrl(invoice.paymentUrl);
+    if (!payment) throw new DriverHelperError('INVALID_RESPONSE');
+    return {
+      providerInvoiceId: invoice.providerInvoiceId,
+      ...payment,
+      fineAmountMinor: driverHelperMoneyToMinor(invoice.fineAmount),
+      commissionAmountMinor: driverHelperMoneyToMinor(invoice.commissionAmount),
+      totalAmountMinor: driverHelperMoneyToMinor(invoice.totalAmount),
+    };
+  }
+
+  private invoiceIdsForm(ids: string[]): URLSearchParams {
+    if (
+      !Array.isArray(ids) ||
+      ids.length === 0 ||
+      ids.some((id) => typeof id !== 'string' || !/^\d+$/u.test(id)) ||
+      new Set(ids).size !== ids.length
+    ) {
+      throw new DriverHelperError('INVALID_RESPONSE');
+    }
+    const form = new URLSearchParams();
+    for (const id of ids) form.append('fines[]', id);
+    return form;
+  }
+
+  private isTrustedCallbackUrl(value: string): boolean {
+    try {
+      const url = new URL(value);
+      return url.protocol === 'https:' && !url.username && !url.password && !url.hash;
+    } catch {
+      return false;
+    }
   }
 }
