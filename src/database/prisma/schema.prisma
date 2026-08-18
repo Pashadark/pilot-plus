@@ -44,8 +44,17 @@ enum FineStatus {
   OVERDUE
 }
 
+enum FineInvoiceStatus {
+  PENDING
+  CREATED
+  SUCCEEDED
+  FAILED
+  ERROR
+}
+
 enum FineAssignmentSource {
   AUTOMATIC
+  AUTO_EXACT
   MANUAL
 }
 
@@ -262,7 +271,10 @@ model User {
   archivedVehicles         Vehicle[]                 @relation("VehicleArchivedBy")
   authoredClientComments   ClientComment[]           @relation("ClientCommentAuthor")
   hiddenClientComments     ClientComment[]           @relation("ClientCommentHiddenBy")
+  authoredFineComments     Fine[]                    @relation("FineCommentAuthor")
+  confirmedFineAssignments Fine[]                    @relation("FineAssignmentConfirmedBy")
   fineAssignments          FineAssignmentHistory[]   @relation("FineAssignmentActor")
+  initiatedFineInvoices    FineInvoice[]             @relation("FineInvoiceInitiatedBy")
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
 }
@@ -335,6 +347,7 @@ model Company {
   externalVehicleLinks      ExternalVehicleLink[]
   fines                     Fine[]
   fineAssignmentHistory     FineAssignmentHistory[]
+  fineInvoices              FineInvoice[]
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
 }
@@ -673,46 +686,90 @@ model ExternalVehicleLink {
 }
 
 model Fine {
-  id                  String                  @id @default(cuid())
-  companyId           String
-  company             Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  vehicleId           String?
-  vehicle             Vehicle?                @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
-  rentalId            String?
-  rental              Rental?                 @relation(fields: [rentalId], references: [id], onDelete: SetNull)
-  clientId            String?
-  client              Client?                 @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  provider            String                  @default("DRIVER_HELPER")
-  externalId          String
-  providerVehicleId   String?
-  uin                 String?
-  decreeNumber        String
-  decreeAt            DateTime?               @db.Timestamptz(3)
-  offenseAt           DateTime                @db.Timestamptz(3)
-  discountExpiresAt   DateTime?               @db.Timestamptz(3)
-  originalAmountMinor BigInt
-  currentAmountMinor  BigInt
-  discountPercent     Int?
-  articleCode         String?
-  description         String?
-  address             String?
-  latitude            Decimal?                @db.Decimal(9, 6)
-  longitude           Decimal?                @db.Decimal(9, 6)
-  status              FineStatus              @default(NEW)
-  toBailiff           Boolean                 @default(false)
-  providerComment     String?
-  photoState          String?
-  providerUpdatedAt   DateTime?               @db.Timestamptz(3)
-  lastSyncedAt        DateTime                @db.Timestamptz(3)
-  assignmentHistory   FineAssignmentHistory[]
-  createdAt           DateTime                @default(now())
-  updatedAt           DateTime                @updatedAt
+  id                          String                  @id @default(cuid())
+  companyId                   String
+  company                     Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vehicleId                   String?
+  vehicle                     Vehicle?                @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  rentalId                    String?
+  rental                      Rental?                 @relation(fields: [rentalId], references: [id], onDelete: SetNull)
+  clientId                    String?
+  client                      Client?                 @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  provider                    String                  @default("DRIVER_HELPER")
+  externalId                  String
+  providerVehicleId           String?
+  uin                         String?
+  decreeNumber                String
+  decreeAt                    DateTime?               @db.Timestamptz(3)
+  offenseAt                   DateTime                @db.Timestamptz(3)
+  discountExpiresAt           DateTime?               @db.Timestamptz(3)
+  originalAmountMinor         BigInt
+  currentAmountMinor          BigInt
+  discountPercent             Int?
+  articleCode                 String?
+  description                 String?
+  address                     String?
+  latitude                    Decimal?                @db.Decimal(9, 6)
+  longitude                   Decimal?                @db.Decimal(9, 6)
+  status                      FineStatus              @default(NEW)
+  toBailiff                   Boolean                 @default(false)
+  providerComment             String?
+  comment                     String?
+  commentedAt                 DateTime?               @db.Timestamptz(3)
+  commentedByUserId           String?
+  commentedByUser             User?                   @relation("FineCommentAuthor", fields: [commentedByUserId], references: [id], onDelete: SetNull)
+  assignmentSource            FineAssignmentSource?
+  assignmentConfirmedAt       DateTime?               @db.Timestamptz(3)
+  assignmentConfirmedByUserId String?
+  assignmentConfirmedByUser   User?                   @relation("FineAssignmentConfirmedBy", fields: [assignmentConfirmedByUserId], references: [id], onDelete: SetNull)
+  photoState                  String?
+  providerUpdatedAt           DateTime?               @db.Timestamptz(3)
+  lastSyncedAt                DateTime                @db.Timestamptz(3)
+  assignmentHistory           FineAssignmentHistory[]
+  invoiceItems                FineInvoiceItem[]
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @updatedAt
 
   @@unique([companyId, provider, externalId])
   @@index([companyId, status, offenseAt])
   @@index([companyId, vehicleId, offenseAt])
   @@index([companyId, providerVehicleId])
   @@index([companyId, clientId, offenseAt])
+}
+
+model FineInvoice {
+  id                    String            @id @default(cuid())
+  companyId             String
+  company               Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  provider              String            @default("DRIVER_HELPER")
+  providerInvoiceId     String?           @unique
+  status                FineInvoiceStatus @default(PENDING)
+  sandbox               Boolean           @default(true)
+  fineAmountMinor       BigInt
+  commissionAmountMinor BigInt
+  totalAmountMinor      BigInt
+  initiatedByUserId     String
+  initiatedByUser       User              @relation("FineInvoiceInitiatedBy", fields: [initiatedByUserId], references: [id], onDelete: Restrict)
+  idempotencyKey        String            @unique
+  paymentHost           String?
+  createdAt             DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime          @updatedAt @db.Timestamptz(3)
+  items                 FineInvoiceItem[]
+
+  @@index([companyId, status])
+  @@index([initiatedByUserId, createdAt])
+}
+
+model FineInvoiceItem {
+  id        String      @id @default(cuid())
+  invoiceId String
+  invoice   FineInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  fineId    String
+  fine      Fine        @relation(fields: [fineId], references: [id], onDelete: Restrict)
+  createdAt DateTime    @default(now()) @db.Timestamptz(3)
+
+  @@unique([invoiceId, fineId])
+  @@index([fineId])
 }
 
 model FineAssignmentHistory {

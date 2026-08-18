@@ -42,6 +42,10 @@ const driverHelperFinesMigrationPath = new URL(
   './migrations/20260817150000_add_driver_helper_fines/migration.sql',
   import.meta.url,
 );
+const fineInvoiceWorkflowMigrationPath = new URL(
+  './migrations/20260818100000_add_fine_invoice_workflow/migration.sql',
+  import.meta.url,
+);
 
 describe('доменная схема автопарка', () => {
   it('описывает роли, точечные разрешения и журнал аудита центра администрирования', () => {
@@ -276,6 +280,48 @@ describe('доменная схема автопарка', () => {
     expect(schema).not.toMatch(/token\s+String/);
     expect(migration).toContain('CREATE TABLE "public"."FineIntegration"');
     expect(migration).toContain('CREATE TABLE "public"."Fine"');
+    expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
+    expect(migration).not.toMatch(/^\s*UPDATE\b/im);
+  });
+
+  it('хранит sandbox-счета штрафов tenant-scoped с идемпотентностью и безопасными суммами', () => {
+    expect(existsSync(fineInvoiceWorkflowMigrationPath)).toBe(true);
+    if (!existsSync(fineInvoiceWorkflowMigrationPath)) return;
+
+    const migration = readFileSync(fineInvoiceWorkflowMigrationPath, 'utf8');
+    const fineInvoiceModel = schema.match(/model FineInvoice \{([\s\S]*?)\n\}/)?.[1];
+    const fineInvoiceItemModel = schema.match(/model FineInvoiceItem \{([\s\S]*?)\n\}/)?.[1];
+
+    expect(schema).toContain('enum FineInvoiceStatus {');
+    expect(schema).toContain('model FineInvoice {');
+    expect(schema).toContain('model FineInvoiceItem {');
+    expect(fineInvoiceModel).toBeDefined();
+    expect(fineInvoiceItemModel).toBeDefined();
+    if (!fineInvoiceModel || !fineInvoiceItemModel) return;
+
+    expect(fineInvoiceModel).toMatch(/companyId\s+String/);
+    expect(fineInvoiceModel).toMatch(
+      /company\s+Company\s+@relation\(fields: \[companyId\], references: \[id\], onDelete: Cascade\)/,
+    );
+    expect(fineInvoiceModel).toMatch(/providerInvoiceId\s+String\?\s+@unique/);
+    expect(fineInvoiceModel).toMatch(/idempotencyKey\s+String\s+@unique/);
+    expect(fineInvoiceModel).toMatch(/fineAmountMinor\s+BigInt/);
+    expect(fineInvoiceModel).toMatch(/commissionAmountMinor\s+BigInt/);
+    expect(fineInvoiceModel).toMatch(/totalAmountMinor\s+BigInt/);
+    expect(fineInvoiceModel).toMatch(/sandbox\s+Boolean\s+@default\(true\)/);
+    expect(fineInvoiceModel).toContain('@@index([companyId, status])');
+    expect(fineInvoiceItemModel).toMatch(/invoiceId\s+String/);
+    expect(fineInvoiceItemModel).toMatch(/fineId\s+String/);
+    expect(fineInvoiceItemModel).toContain('@@unique([invoiceId, fineId])');
+    expect(schema).toMatch(/comment\s+String\?/);
+    expect(schema).toMatch(/commentedAt\s+DateTime\?/);
+    expect(schema).toMatch(/assignmentSource\s+FineAssignmentSource\?/);
+    expect(schema).toContain('AUTO_EXACT');
+
+    expect(migration).toContain('CREATE TYPE "public"."FineInvoiceStatus"');
+    expect(migration).toContain('CREATE TABLE "public"."FineInvoice"');
+    expect(migration).toContain('CREATE TABLE "public"."FineInvoiceItem"');
+    expect(migration).toContain('FineInvoice_companyId_status_idx');
     expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
     expect(migration).not.toMatch(/^\s*UPDATE\b/im);
   });
