@@ -4,6 +4,9 @@ const getFineAccessMock = vi.hoisted(() => vi.fn());
 const findManyMock = vi.hoisted(() => vi.fn());
 const companyFindManyMock = vi.hoisted(() => vi.fn());
 const rentalFindManyMock = vi.hoisted(() => vi.fn());
+const vehicleFindManyMock = vi.hoisted(() => vi.fn());
+const clientFindManyMock = vi.hoisted(() => vi.fn());
+const fineCountMock = vi.hoisted(() => vi.fn());
 
 vi.mock('server-only', () => ({}));
 vi.mock('../access', () => ({
@@ -12,16 +15,23 @@ vi.mock('../access', () => ({
 }));
 vi.mock('@/database/prisma/client', () => ({
   prisma: {
-    fine: { findMany: findManyMock },
+    fine: { findMany: findManyMock, count: fineCountMock },
     company: { findMany: companyFindManyMock },
     rental: { findMany: rentalFindManyMock },
+    vehicle: { findMany: vehicleFindManyMock },
+    client: { findMany: clientFindManyMock },
   },
 }));
 
 import { listFinesForCurrentUser } from './queries';
 
 describe('fine queries', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vehicleFindManyMock.mockResolvedValue([]);
+    clientFindManyMock.mockResolvedValue([]);
+    fineCountMock.mockResolvedValue(0);
+  });
 
   it('forces exact tenant IDs for company users', async () => {
     getFineAccessMock.mockResolvedValue({
@@ -32,7 +42,7 @@ describe('fine queries', () => {
     companyFindManyMock.mockResolvedValue([{ id: 'company-a', name: 'Компания А' }]);
     findManyMock.mockResolvedValue([]);
 
-    await expect(listFinesForCurrentUser({ status: 'UNPAID' })).resolves.toEqual({
+    await expect(listFinesForCurrentUser({ status: 'UNPAID' })).resolves.toMatchObject({
       companies: [{ id: 'company-a', name: 'Компания А' }],
       selectedCompanyId: 'company-a',
       canSync: true,

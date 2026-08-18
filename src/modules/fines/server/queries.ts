@@ -13,6 +13,19 @@ export interface FineListFilters {
   status?: string;
   query?: string;
   companyId?: string;
+  offenseFrom?: string;
+  offenseTo?: string;
+  vehicleId?: string;
+  clientId?: string;
+  page?: string;
+}
+
+const pageSize = 24;
+
+function parseDay(value: string | undefined, endOfDay = false) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) return undefined;
+  const parsed = new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
 function clientDisplayName(client: {
@@ -53,46 +66,86 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
   const selectedCompanyId =
     requestedCompanyId ?? (companies.length === 1 ? companies[0]?.id : undefined);
   const companyIds = companies.map(({ id }) => id);
+  const scopedCompanyIds = selectedCompanyId ? [selectedCompanyId] : companyIds;
+  const [vehicles, clients] = await Promise.all([
+    prisma.vehicle.findMany({
+      where: { companyId: { in: scopedCompanyIds }, archivedAt: null },
+      select: { id: true, make: true, modelName: true, model: true, registrationNumber: true },
+      orderBy: [{ registrationNumber: 'asc' }, { id: 'asc' }],
+    }),
+    prisma.client.findMany({
+      where: { companyId: { in: scopedCompanyIds }, archivedAt: null },
+      select: { id: true, firstName: true, middleName: true, lastName: true },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { id: 'asc' }],
+    }),
+  ]);
+  const vehicleId = vehicles.some(({ id }) => id === filters.vehicleId)
+    ? filters.vehicleId
+    : undefined;
+  const clientId = clients.some(({ id }) => id === filters.clientId) ? filters.clientId : undefined;
+  const offenseFrom = parseDay(filters.offenseFrom);
+  const offenseTo = parseDay(filters.offenseTo, true);
+  const parsedPage = Number.parseInt(filters.page ?? '1', 10);
+  const page = Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
   const companyWhere = selectedCompanyId
     ? { companyId: selectedCompanyId }
     : { companyId: { in: companyIds } };
   const where: Prisma.FineWhereInput = {
     ...companyWhere,
     ...(status ? { status } : {}),
+    ...(vehicleId ? { vehicleId } : {}),
+    ...(clientId ? { clientId } : {}),
+    ...(offenseFrom || offenseTo
+      ? {
+          offenseAt: {
+            ...(offenseFrom ? { gte: offenseFrom } : {}),
+            ...(offenseTo ? { lte: offenseTo } : {}),
+          },
+        }
+      : {}),
     ...(query
       ? {
           OR: [
             { decreeNumber: { contains: query, mode: 'insensitive' } },
             { vehicle: { registrationNumberNormalized: { contains: query } } },
             { client: { lastName: { contains: query, mode: 'insensitive' } } },
+            { rental: { contractNumber: { contains: query, mode: 'insensitive' } } },
           ],
         }
       : {}),
   };
 
-  const records = await prisma.fine.findMany({
-    where,
-    select: {
-      id: true,
-      companyId: true,
-      decreeNumber: true,
-      offenseAt: true,
-      currentAmountMinor: true,
-      originalAmountMinor: true,
-      status: true,
-      description: true,
-      address: true,
-      photoState: true,
-      vehicleId: true,
-      rentalId: true,
-      clientId: true,
-      assignmentSource: true,
-      vehicle: { select: { make: true, modelName: true, model: true, registrationNumber: true } },
-      client: { select: { firstName: true, middleName: true, lastName: true } },
-    },
-    orderBy: [{ offenseAt: 'desc' }, { id: 'desc' }],
-    take: 200,
-  });
+  const [records, total] = await Promise.all([
+    prisma.fine.findMany({
+      where,
+      select: {
+        id: true,
+        companyId: true,
+        decreeNumber: true,
+        offenseAt: true,
+        currentAmountMinor: true,
+        originalAmountMinor: true,
+        status: true,
+        description: true,
+        address: true,
+        comment: true,
+        discountExpiresAt: true,
+        toBailiff: true,
+        photoState: true,
+        vehicleId: true,
+        rentalId: true,
+        clientId: true,
+        assignmentSource: true,
+        rental: { select: { contractNumber: true } },
+        vehicle: { select: { make: true, modelName: true, model: true, registrationNumber: true } },
+        client: { select: { firstName: true, middleName: true, lastName: true } },
+      },
+      orderBy: [{ offenseAt: 'desc' }, { id: 'desc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.fine.count({ where }),
+  ]);
 
   const attributableFines = records.filter((fine): fine is typeof fine & { vehicleId: string } =>
     Boolean(fine.vehicleId),
@@ -152,6 +205,7 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
     });
     return {
       id: fine.id,
+      companyId: fine.companyId,
       decreeNumber: fine.decreeNumber,
       offenseAt: fine.offenseAt.toISOString(),
       currentAmountMinor: fine.currentAmountMinor.toString(),
@@ -159,6 +213,9 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
       status: fine.status,
       description: fine.description,
       address: fine.address,
+      comment: fine.comment,
+      discountExpiresAt: fine.discountExpiresAt?.toISOString() ?? null,
+      toBailiff: fine.toBailiff,
       vehicleLabel: fine.vehicle
         ? [
             fine.vehicle.make,
@@ -169,6 +226,7 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
             .join(' · ')
         : '',
       clientLabel: fine.client ? clientDisplayName(fine.client) : null,
+      rentalLabel: fine.rental?.contractNumber ?? null,
       photoAvailable: fine.photoState === 'AVAILABLE',
       assigned: Boolean(fine.vehicleId && fine.clientId),
       assignedRentalId: fine.rentalId,
@@ -179,14 +237,41 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
   const unpaid = fines.filter(({ status: itemStatus }) =>
     ['NEW', 'UNPAID', 'OVERDUE'].includes(itemStatus),
   );
+  const now = Date.now();
+  const discountSoon = now + 7 * 24 * 60 * 60 * 1000;
+  const selectedRole = selectedCompanyId ? access.rolesByCompany[selectedCompanyId] : undefined;
+  const canManage = Boolean(
+    selectedCompanyId &&
+    (access.scope === 'SYSTEM' ||
+      selectedRole === 'COMPANY_ADMIN' ||
+      selectedRole === 'DISPATCHER'),
+  );
   return {
     companies,
     selectedCompanyId,
-    canSync: Boolean(
+    vehicles: vehicles.map((vehicle) => ({
+      id: vehicle.id,
+      label:
+        [vehicle.make, vehicle.modelName ?? vehicle.model, vehicle.registrationNumber]
+          .filter(Boolean)
+          .join(' · ') || vehicle.id,
+    })),
+    clients: clients.map((client) => ({ id: client.id, label: clientDisplayName(client) })),
+    filters: {
+      status,
+      query,
+      companyId: selectedCompanyId,
+      offenseFrom: filters.offenseFrom,
+      offenseTo: filters.offenseTo,
+      vehicleId,
+      clientId,
+    },
+    pagination: { page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
+    canSync: canManage,
+    canManage,
+    canPay: Boolean(
       selectedCompanyId &&
-      (access.scope === 'SYSTEM' ||
-        access.rolesByCompany[selectedCompanyId] === 'COMPANY_ADMIN' ||
-        access.rolesByCompany[selectedCompanyId] === 'DISPATCHER'),
+      (access.user?.role === 'SUPER_ADMIN' || selectedRole === 'COMPANY_ADMIN'),
     ),
     fines,
     summary: {
@@ -196,6 +281,11 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
         .reduce((total, fine) => total + BigInt(fine.currentAmountMinor), BigInt(0))
         .toString(),
       unassignedCount: fines.filter(({ assigned }) => !assigned).length,
+      discountEndingSoonCount: fines.filter(({ discountExpiresAt }) => {
+        const expires = discountExpiresAt ? new Date(discountExpiresAt).getTime() : 0;
+        return expires >= now && expires <= discountSoon;
+      }).length,
+      bailiffRiskCount: fines.filter(({ toBailiff }) => toBailiff).length,
     },
   };
 }
