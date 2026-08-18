@@ -28,6 +28,7 @@ interface FinesPageProps {
   companies: readonly { id: string; name: string }[];
   selectedCompanyId?: string;
   canSync: boolean;
+  syncOutcome?: 'success' | 'error';
 }
 
 const statusPresentation = {
@@ -52,6 +53,7 @@ export function FinesPage({
   companies,
   selectedCompanyId,
   canSync,
+  syncOutcome,
 }: FinesPageProps) {
   return (
     <div className="space-y-6">
@@ -60,6 +62,17 @@ export function FinesPage({
         title="Штрафы"
         description="Штрафы Driver Helper, связанные с автомобилями, арендами и клиентами."
       />
+
+      {syncOutcome && (
+        <div
+          role="status"
+          className={`rounded-[var(--radius-md)] border p-4 text-sm font-medium ${syncOutcome === 'success' ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-red-300 bg-red-50 text-red-800'}`}
+        >
+          {syncOutcome === 'success'
+            ? 'Штрафы и автомобили обновлены из Driver Helper.'
+            : 'Не удалось обновить Driver Helper. Проверьте доступ к сервису и повторите.'}
+        </div>
+      )}
 
       <Card>
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end">

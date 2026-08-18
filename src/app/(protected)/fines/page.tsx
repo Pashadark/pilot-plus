@@ -5,7 +5,7 @@ import { listFinesForCurrentUser } from '@/modules/fines/server/queries';
 export default async function FinesRoute({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; query?: string; companyId?: string }>;
+  searchParams: Promise<{ status?: string; query?: string; companyId?: string; sync?: string }>;
 }) {
   const filters = await searchParams;
   const data = await listFinesForCurrentUser(filters);
@@ -17,6 +17,9 @@ export default async function FinesRoute({
         companies={data.companies}
         selectedCompanyId={data.selectedCompanyId}
         canSync={data.canSync}
+        syncOutcome={
+          filters.sync === 'success' ? 'success' : filters.sync === 'error' ? 'error' : undefined
+        }
       />
     </AppShell>
   );

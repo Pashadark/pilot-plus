@@ -42,6 +42,7 @@ CREATE TABLE "public"."Fine" (
   "clientId" TEXT,
   "provider" TEXT NOT NULL DEFAULT 'DRIVER_HELPER',
   "externalId" TEXT NOT NULL,
+  "providerVehicleId" TEXT,
   "uin" TEXT,
   "decreeNumber" TEXT NOT NULL,
   "decreeAt" TIMESTAMPTZ(3),
