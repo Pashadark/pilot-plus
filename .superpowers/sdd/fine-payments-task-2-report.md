@@ -52,3 +52,28 @@ The production endpoint protocol was deliberately not called. Before enabling a
 non-sandbox integration, confirm the provider's current payment-host allowlist and
 callback parameter names against its authenticated documentation; this release remains
 sandbox-only and has no caller wired to untrusted client input.
+
+## Transport hardening follow-up
+
+### RED evidence
+
+The focused client/payment-URL command initially reported eight failures after the
+adversarial tests were added: constructor callback configuration was ignored, supplied
+attacker callback URLs were sent in the form body, malformed configured callback URLs
+were accepted, and a no-`content-length` chunked response timed out because the old
+reader waited for the stream to close.
+
+### Fix and exact verification
+
+- `paymentCallbacks` is now constructor-only configuration. Public invoice input has
+  no callback fields, and the constructor validates the configured exact URLs as HTTPS
+  origin/path values without credentials, port, query, or fragment.
+- `boundedJson` now reads incrementally, accounts for each chunk before retaining it,
+  and cancels the reader immediately above the 2 MiB cap. The `content-length` cap is
+  retained as an early rejection.
+- `npx vitest run src/modules/fines/integrations/driver-helper/client.test.ts src/modules/fines/integrations/driver-helper/payment-url.test.ts` — passed: 2 files, 28 tests.
+- `npm run typecheck` — passed.
+- Scoped `npx prettier --check` — passed.
+- `git diff --check` — passed.
+
+No migration, seed, or live Driver Helper invoice call was run.

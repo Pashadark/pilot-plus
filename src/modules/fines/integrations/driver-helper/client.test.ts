@@ -38,13 +38,18 @@ describe('Driver Helper API client', () => {
         amount_total: '108.51',
       }),
     );
-    const client = new DriverHelperClient({ token: 'secret-token', transport });
+    const client = new DriverHelperClient({
+      token: 'secret-token',
+      transport,
+      paymentCallbacks: {
+        successUrl: 'https://pilot.example.test/fines/payment/success',
+        failUrl: 'https://pilot.example.test/fines/payment/fail',
+      },
+    });
 
     await expect(
       client.createSandboxInvoice({
         ids: ['17', '29'],
-        successUrl: 'https://pilot.example.test/fines/payment/success',
-        failUrl: 'https://pilot.example.test/fines/payment/fail',
       }),
     ).resolves.toEqual({
       providerInvoiceId: 'invoice-17',
@@ -60,6 +65,58 @@ describe('Driver Helper API client', () => {
     await expect(request.text()).resolves.toBe(
       'fines%5B%5D=17&fines%5B%5D=29&success_url=https%3A%2F%2Fpilot.example.test%2Ffines%2Fpayment%2Fsuccess&fail_url=https%3A%2F%2Fpilot.example.test%2Ffines%2Fpayment%2Ffail&sandbox=1',
     );
+  });
+
+  it('uses only constructor-configured callback URLs when untyped caller input includes an attacker URL', async () => {
+    const transport = vi.fn().mockResolvedValue(
+      response({
+        invoice_id: 'invoice-17',
+        pay_url: 'https://pay.driver-helper.ru/invoices/invoice-17',
+        amount_fines: '100.01',
+        amount_commission: '8.50',
+        amount_total: '108.51',
+      }),
+    );
+    const client = new DriverHelperClient({
+      token: 'secret-token',
+      transport,
+      paymentCallbacks: {
+        successUrl: 'https://pilot.example.test/fines/payment/success',
+        failUrl: 'https://pilot.example.test/fines/payment/fail',
+      },
+    });
+
+    await client.createSandboxInvoice({
+      ids: ['17'],
+      successUrl: 'https://attacker.example.test/collect',
+      failUrl: 'https://attacker.example.test/collect',
+    } as never);
+
+    const request = transport.mock.calls[0]?.[0] as Request;
+    const body = await request.text();
+    expect(body).toContain(
+      'success_url=https%3A%2F%2Fpilot.example.test%2Ffines%2Fpayment%2Fsuccess',
+    );
+    expect(body).not.toContain('attacker.example.test');
+  });
+
+  it.each([
+    'http://pilot.example.test/fines/payment/success',
+    'https://user:password@pilot.example.test/fines/payment/success',
+    'https://pilot.example.test:444/fines/payment/success',
+    'https://pilot.example.test/fines/payment/success?state=secret',
+    'https://pilot.example.test/fines/payment/success#fragment',
+  ])('rejects unsafe configured callback URL %s before any request', (successUrl) => {
+    expect(
+      () =>
+        new DriverHelperClient({
+          token: 'secret-token',
+          paymentCallbacks: {
+            successUrl,
+            failUrl: 'https://pilot.example.test/fines/payment/fail',
+          },
+        }),
+    ).toThrow(expect.objectContaining({ code: 'INVALID_RESPONSE' }));
   });
 
   it.each([
@@ -90,6 +147,28 @@ describe('Driver Helper API client', () => {
     await expect(client.checkInvoice(['17'])).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
   });
 
+  it('cancels a chunked response that exceeds the cap without a content-length header', async () => {
+    const cancel = vi.fn();
+    const megabyte = new Uint8Array(1024 * 1024);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(megabyte);
+        controller.enqueue(megabyte);
+        controller.enqueue(new Uint8Array([123]));
+      },
+      cancel,
+    });
+    const client = new DriverHelperClient({
+      token: 'secret-token',
+      transport: vi
+        .fn()
+        .mockResolvedValue(new Response(body, { headers: { 'content-type': 'application/json' } })),
+    });
+
+    await expect(client.checkInvoice(['17'])).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
   it.each([
     ['12.345', 'malformed fractional money'],
     ['1000000000000000.00', 'excessive money'],
@@ -118,8 +197,6 @@ describe('Driver Helper API client', () => {
     await expect(
       client.createSandboxInvoice({
         ids: ['17'],
-        successUrl: 'https://pilot.example.test/success',
-        failUrl: 'https://pilot.example.test/fail',
         sandbox: false as never,
       }),
     ).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });

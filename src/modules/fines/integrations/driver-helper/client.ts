@@ -31,12 +31,16 @@ interface DriverHelperClientOptions {
   token: string;
   transport?: Transport;
   timeoutMs?: number;
+  paymentCallbacks?: DriverHelperPaymentCallbacks;
+}
+
+export interface DriverHelperPaymentCallbacks {
+  successUrl: string;
+  failUrl: string;
 }
 
 export interface CreateSandboxInvoiceInput {
   ids: string[];
-  successUrl: string;
-  failUrl: string;
   sandbox?: true;
 }
 
@@ -44,10 +48,39 @@ async function boundedJson(response: Response): Promise<unknown> {
   if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
     throw new DriverHelperError('INVALID_RESPONSE');
   }
-  const length = Number(response.headers.get('content-length') ?? 0);
-  if (length > MAX_RESPONSE_BYTES) throw new DriverHelperError('INVALID_RESPONSE');
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.byteLength > MAX_RESPONSE_BYTES) throw new DriverHelperError('INVALID_RESPONSE');
+  const contentLength = response.headers.get('content-length');
+  if (
+    contentLength &&
+    (!/^\d+$/u.test(contentLength) || BigInt(contentLength) > BigInt(MAX_RESPONSE_BYTES))
+  ) {
+    throw new DriverHelperError('INVALID_RESPONSE');
+  }
+  if (!response.body) throw new DriverHelperError('INVALID_RESPONSE');
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      byteLength += value.byteLength;
+      if (byteLength > MAX_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw new DriverHelperError('INVALID_RESPONSE');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
   try {
     return JSON.parse(new TextDecoder().decode(bytes));
   } catch {
@@ -64,11 +97,15 @@ function httpError(status: number): DriverHelperError {
 export class DriverHelperClient {
   private readonly transport: Transport;
   private readonly timeoutMs: number;
+  private readonly paymentCallbacks: DriverHelperPaymentCallbacks | null;
 
   constructor(private readonly options: DriverHelperClientOptions) {
     if (!options.token.trim()) throw new DriverHelperError('AUTH_REJECTED');
     this.transport = options.transport ?? fetch;
     this.timeoutMs = options.timeoutMs ?? 10_000;
+    this.paymentCallbacks = options.paymentCallbacks
+      ? this.validatePaymentCallbacks(options.paymentCallbacks)
+      : null;
   }
 
   private async request<T>(path: string, init: RequestInit, schema: z.ZodType<T>): Promise<T> {
@@ -135,12 +172,10 @@ export class DriverHelperClient {
     if (Object.hasOwn(input, 'sandbox') && input.sandbox !== true) {
       throw new DriverHelperError('INVALID_RESPONSE');
     }
-    if (!this.isTrustedCallbackUrl(input.successUrl) || !this.isTrustedCallbackUrl(input.failUrl)) {
-      throw new DriverHelperError('INVALID_RESPONSE');
-    }
+    if (!this.paymentCallbacks) throw new DriverHelperError('INVALID_RESPONSE');
     const form = this.invoiceIdsForm(input.ids);
-    form.set('success_url', input.successUrl);
-    form.set('fail_url', input.failUrl);
+    form.set('success_url', this.paymentCallbacks.successUrl);
+    form.set('fail_url', this.paymentCallbacks.failUrl);
     form.set('sandbox', '1');
     const invoice = await this.postForm('/v1.0/invoice', form, driverHelperInvoiceCreateSchema);
     const payment = validateDriverHelperPaymentUrl(invoice.paymentUrl);
@@ -168,12 +203,34 @@ export class DriverHelperClient {
     return form;
   }
 
-  private isTrustedCallbackUrl(value: string): boolean {
+  private validatePaymentCallbacks(
+    callbacks: DriverHelperPaymentCallbacks,
+  ): DriverHelperPaymentCallbacks {
+    return {
+      successUrl: this.validatePaymentCallbackUrl(callbacks.successUrl),
+      failUrl: this.validatePaymentCallbackUrl(callbacks.failUrl),
+    };
+  }
+
+  private validatePaymentCallbackUrl(value: string): string {
     try {
       const url = new URL(value);
-      return url.protocol === 'https:' && !url.username && !url.password && !url.hash;
-    } catch {
-      return false;
+      if (
+        url.protocol !== 'https:' ||
+        !url.hostname ||
+        !url.pathname ||
+        url.username ||
+        url.password ||
+        url.port ||
+        url.search ||
+        url.hash
+      ) {
+        throw new DriverHelperError('INVALID_RESPONSE');
+      }
+      return url.toString();
+    } catch (error) {
+      if (error instanceof DriverHelperError) throw error;
+      throw new DriverHelperError('INVALID_RESPONSE');
     }
   }
 }
