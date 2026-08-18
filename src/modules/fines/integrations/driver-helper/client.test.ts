@@ -67,6 +67,39 @@ describe('Driver Helper API client', () => {
     );
   });
 
+  it('appends only server-supplied signed state to trusted callback URLs', async () => {
+    const transport = vi.fn().mockResolvedValue(
+      response({
+        invoice_id: 'invoice-17',
+        pay_url: 'https://pay.driver-helper.ru/invoices/invoice-17',
+        amount_fines: '100.00',
+        amount_commission: '8.00',
+        amount_total: '108.00',
+      }),
+    );
+    const client = new DriverHelperClient({
+      token: 'secret-token',
+      transport,
+      paymentCallbacks: {
+        successUrl: 'https://pilot.example.test/fines/payment/success',
+        failUrl: 'https://pilot.example.test/fines/payment/fail',
+        successState: 'signed-success.state',
+        failState: 'signed-fail.state',
+      },
+    });
+
+    await client.createSandboxInvoice({ ids: ['17'] });
+
+    const request = transport.mock.calls[0]?.[0] as Request;
+    const body = new URLSearchParams(await request.text());
+    expect(body.get('success_url')).toBe(
+      'https://pilot.example.test/fines/payment/success?state=signed-success.state',
+    );
+    expect(body.get('fail_url')).toBe(
+      'https://pilot.example.test/fines/payment/fail?state=signed-fail.state',
+    );
+  });
+
   it('uses only constructor-configured callback URLs when untyped caller input includes an attacker URL', async () => {
     const transport = vi.fn().mockResolvedValue(
       response({

@@ -37,6 +37,8 @@ interface DriverHelperClientOptions {
 export interface DriverHelperPaymentCallbacks {
   successUrl: string;
   failUrl: string;
+  successState?: string;
+  failState?: string;
 }
 
 export interface CreateSandboxInvoiceInput {
@@ -174,8 +176,17 @@ export class DriverHelperClient {
     }
     if (!this.paymentCallbacks) throw new DriverHelperError('INVALID_RESPONSE');
     const form = this.invoiceIdsForm(input.ids);
-    form.set('success_url', this.paymentCallbacks.successUrl);
-    form.set('fail_url', this.paymentCallbacks.failUrl);
+    form.set(
+      'success_url',
+      this.callbackUrlWithState(
+        this.paymentCallbacks.successUrl,
+        this.paymentCallbacks.successState,
+      ),
+    );
+    form.set(
+      'fail_url',
+      this.callbackUrlWithState(this.paymentCallbacks.failUrl, this.paymentCallbacks.failState),
+    );
     form.set('sandbox', '1');
     const invoice = await this.postForm('/v1.0/invoice', form, driverHelperInvoiceCreateSchema);
     const payment = validateDriverHelperPaymentUrl(invoice.paymentUrl);
@@ -209,7 +220,27 @@ export class DriverHelperClient {
     return {
       successUrl: this.validatePaymentCallbackUrl(callbacks.successUrl),
       failUrl: this.validatePaymentCallbackUrl(callbacks.failUrl),
+      ...(callbacks.successState
+        ? { successState: this.validatePaymentCallbackState(callbacks.successState) }
+        : {}),
+      ...(callbacks.failState
+        ? { failState: this.validatePaymentCallbackState(callbacks.failState) }
+        : {}),
     };
+  }
+
+  private callbackUrlWithState(url: string, state?: string): string {
+    if (!state) return url;
+    const callback = new URL(url);
+    callback.searchParams.set('state', state);
+    return callback.toString();
+  }
+
+  private validatePaymentCallbackState(value: string): string {
+    if (value.length > 2048 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u.test(value)) {
+      throw new DriverHelperError('INVALID_RESPONSE');
+    }
+    return value;
   }
 
   private validatePaymentCallbackUrl(value: string): string {
