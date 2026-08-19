@@ -51,6 +51,13 @@ class PilotApiClient:
     async def rentals(self, telegram_user_id: str) -> dict[str, Any]:
         return await self._json("GET", "/api/bot/v1/rentals", telegram_user_id=telegram_user_id)
 
+    async def availability(self, telegram_user_id: str, starts_at: str, ends_at: str) -> dict[str, Any]:
+        params = httpx.QueryParams({"startsAt": starts_at, "endsAt": ends_at})
+        return await self._json("GET", f"/api/bot/v1/availability?{params}", telegram_user_id=telegram_user_id)
+
+    async def rental_documents(self, telegram_user_id: str, rental_id: str) -> dict[str, Any]:
+        return await self._json("POST", f"/api/bot/v1/rentals/{rental_id}/documents", telegram_user_id=telegram_user_id)
+
     async def create_rental_request(self, telegram_user_id: str, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]:
         return await self._json("POST", "/api/bot/v1/rental-requests", telegram_user_id=telegram_user_id, json=payload, idempotency_key=idempotency_key)
 

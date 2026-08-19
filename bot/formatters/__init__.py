@@ -1,0 +1,1 @@
+"""Safe message formatters."""
