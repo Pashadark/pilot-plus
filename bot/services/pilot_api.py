@@ -61,6 +61,12 @@ class PilotApiClient:
     async def create_rental_request(self, telegram_user_id: str, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]:
         return await self._json("POST", "/api/bot/v1/rental-requests", telegram_user_id=telegram_user_id, json=payload, idempotency_key=idempotency_key)
 
+    async def claim_notifications(self, worker_id: str) -> dict[str, Any]:
+        return await self._json("POST", "/api/bot/v1/notifications/claim", telegram_user_id="", json={"workerId": worker_id})
+
+    async def ack_notification(self, job_id: str, claim_token: str, success: bool, error_code: str | None = None) -> dict[str, Any]:
+        return await self._json("POST", f"/api/bot/v1/notifications/{job_id}/ack", telegram_user_id="", json={"claimToken": claim_token, "success": success, "errorCode": error_code})
+
     async def close(self) -> None:
         if self._owned_http:
             await self._http.aclose()

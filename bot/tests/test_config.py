@@ -16,5 +16,6 @@ def test_settings_accept_valid_environment(monkeypatch):
     monkeypatch.setenv("PILOT_BOT_SERVICE_TOKEN", "service-secret-with-enough-entropy")
     monkeypatch.setenv("PILOT_API_BASE_URL", "https://pilot.example.com")
     monkeypatch.setenv("REDIS_URL", "redis://redis:6379/1")
+    monkeypatch.setenv("PILOT_STAFF_CHAT_ID", "-1001234567890")
     settings = Settings(_env_file=None)
     assert str(settings.pilot_api_base_url) == "https://pilot.example.com/"
