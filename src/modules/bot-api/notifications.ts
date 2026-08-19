@@ -1,12 +1,108 @@
 import { randomUUID } from 'node:crypto';
 
 import { prisma } from '@/database/prisma/client';
+import { decryptField } from '@/services/security/field-encryption';
 
 import { BotApiError } from './auth';
 
 type ClaimDb = Pick<typeof prisma, '$transaction'>;
 type UpdateDb = Pick<typeof prisma, 'botNotificationJob'>;
 const LEASE_MS = 60_000;
+
+export async function enqueueReturnReminders(now: Date, database = prisma) {
+  const horizon = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const rentals = await database.rental.findMany({
+    where: { status: { in: ['CONFIRMED', 'ACTIVE'] }, endsAt: { gt: now, lte: horizon } },
+    take: 500,
+    select: {
+      id: true,
+      companyId: true,
+      clientId: true,
+      endsAt: true,
+      client: { select: { telegramIdentity: { select: { id: true, isActive: true } } } },
+    },
+  });
+  const rows = rentals.flatMap((rental) => {
+    const suffix = rental.endsAt.toISOString();
+    const common = {
+      companyId: rental.companyId,
+      payload: { rentalId: rental.id },
+      availableAt: now,
+    };
+    const staff = {
+      ...common,
+      chatId: `staff:${rental.companyId}`,
+      eventKey: `rental-return:${rental.id}:${suffix}:24h:staff`,
+      template: 'RENTAL_RETURN_STAFF',
+    };
+    const identity = rental.client.telegramIdentity;
+    return identity?.isActive
+      ? [
+          staff,
+          {
+            ...common,
+            identityId: identity.id,
+            eventKey: `rental-return:${rental.id}:${suffix}:24h:client`,
+            template: 'RENTAL_RETURN_CLIENT',
+          },
+        ]
+      : [staff];
+  });
+  if (rows.length)
+    await database.botNotificationJob.createMany({ data: rows, skipDuplicates: true });
+  return rows.length;
+}
+
+async function hydrateJob(
+  tx: Parameters<Parameters<ClaimDb['$transaction']>[0]>[0],
+  job: {
+    id: string;
+    template: string;
+    payload: unknown;
+    chatId: string | null;
+    claimToken: string | null;
+    identity: { telegramUserId: string; isActive: boolean } | null;
+  },
+) {
+  if (job.template !== 'RENTAL_RETURN_STAFF' && job.template !== 'RENTAL_RETURN_CLIENT') return job;
+  const rentalId =
+    typeof job.payload === 'object' && job.payload !== null && 'rentalId' in job.payload
+      ? String(job.payload.rentalId)
+      : '';
+  const rental = await tx.rental.findFirst({
+    where: { id: rentalId, status: { in: ['CONFIRMED', 'ACTIVE'] } },
+    select: {
+      contractNumber: true,
+      endsAt: true,
+      client: { select: { firstName: true, middleName: true, phoneEncrypted: true } },
+      vehicle: { select: { make: true, modelName: true, model: true, registrationNumber: true } },
+    },
+  });
+  if (!rental) return { ...job, payload: { message: 'Аренда уже недоступна.' } };
+  const at = new Intl.DateTimeFormat('ru-RU', {
+    timeZone: 'Europe/Moscow',
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(rental.endsAt);
+  const vehicle =
+    `${rental.vehicle.make ?? ''} ${rental.vehicle.modelName ?? rental.vehicle.model} ${rental.vehicle.registrationNumber ?? ''}`.trim();
+  if (job.template === 'RENTAL_RETURN_CLIENT')
+    return {
+      ...job,
+      payload: {
+        message: `Напоминание: ${vehicle} нужно вернуть ${at}. Договор ${rental.contractNumber ?? 'без номера'}.`,
+      },
+    };
+  const key = process.env.CLIENT_DATA_ENCRYPTION_KEY;
+  const phone = key ? decryptField(rental.client.phoneEncrypted, key) : 'телефон недоступен';
+  const name = `${rental.client.firstName} ${rental.client.middleName ?? ''}`.trim();
+  return {
+    ...job,
+    payload: {
+      message: `Завтра возврат: ${vehicle}. ${name}, ${phone}. Договор ${rental.contractNumber ?? 'без номера'}, возврат ${at}.`,
+    },
+  };
+}
 
 export async function claimNotificationJobs(
   now: Date,
@@ -59,7 +155,7 @@ export async function claimNotificationJobs(
           identity: { select: { telegramUserId: true, isActive: true } },
         },
       });
-      if (job) claimed.push(job);
+      if (job) claimed.push(await hydrateJob(tx, job));
     }
     return claimed;
   });
