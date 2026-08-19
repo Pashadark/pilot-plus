@@ -250,6 +250,32 @@ describe('Driver Helper API client', () => {
     expect(request.headers.get('authorization')).toBe('Bearer secret-token');
   });
 
+  it('loads paid fines from the provider paid endpoint and normalizes paid amount fields', async () => {
+    const transport = vi.fn().mockResolvedValue(
+      response({
+        totalCount: 1,
+        current: 1,
+        last: 1,
+        items: [
+          {
+            id: 91,
+            post_mum: '0355431079217869900814347',
+            fine_date: '2026-08-13 09:51:00',
+            amount: '19',
+            total_suma: '19',
+          },
+        ],
+      }),
+    );
+    const client = new DriverHelperClient({ token: 'secret-token', transport });
+
+    await expect(client.listPaidFines(1)).resolves.toMatchObject({
+      items: [{ id: 91, suma: '19', paid: true }],
+    });
+    const request = transport.mock.calls[0]?.[0] as Request;
+    expect(request.url).toBe('https://api.driver-helper.ru/v1.0/fines/paid?page=1&perPage=50');
+  });
+
   it.each([
     [401, 'AUTH_REJECTED'],
     [402, 'SERVICE_PAYMENT_REQUIRED'],

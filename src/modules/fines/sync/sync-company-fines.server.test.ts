@@ -18,6 +18,7 @@ vi.mock('../integrations/driver-helper/client', () => ({
   DriverHelperClient: class {
     listCars = vi.fn();
     listUnpaidFines = vi.fn();
+    listPaidFines = vi.fn();
   },
 }));
 vi.mock('./sync-company-fines', () => ({ syncCompanyFinesWithDependencies: runSync }));

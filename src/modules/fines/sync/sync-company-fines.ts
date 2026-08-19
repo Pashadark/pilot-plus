@@ -9,6 +9,7 @@ interface ProviderPage<T> {
 interface SyncDependencies<Car, NormalizedCar, Fine, NormalizedFine> {
   listCars(page: number): Promise<ProviderPage<Car>>;
   listFines(page: number): Promise<ProviderPage<Fine>>;
+  listPaidFines(page: number): Promise<ProviderPage<Fine>>;
   normalizeCar(car: Car): NormalizedCar & { externalId: string };
   normalizeFine(fine: Fine): NormalizedFine & {
     externalId: string;
@@ -54,9 +55,16 @@ export async function syncCompanyFinesWithDependencies<Car, NormalizedCar, Fine,
   let created = 0;
   let updated = 0;
   let unmatched = 0;
-  const providerFines = await allPages(dependencies.listFines);
+  const providerFines = [
+    ...(await allPages(dependencies.listFines)),
+    ...(await allPages(dependencies.listPaidFines)),
+  ];
+  const normalizedFines = new Map<string, ReturnType<typeof dependencies.normalizeFine>>();
   for (const providerFine of providerFines) {
     const fine = dependencies.normalizeFine(providerFine);
+    normalizedFines.set(fine.externalId, fine);
+  }
+  for (const fine of normalizedFines.values()) {
     const vehicleId = fine.providerVehicleId
       ? (vehicleByExternalId.get(fine.providerVehicleId) ?? null)
       : null;
@@ -66,5 +74,5 @@ export async function syncCompanyFinesWithDependencies<Car, NormalizedCar, Fine,
     else updated += 1;
   }
 
-  return { ok: true as const, received: providerFines.length, created, updated, unmatched };
+  return { ok: true as const, received: normalizedFines.size, created, updated, unmatched };
 }

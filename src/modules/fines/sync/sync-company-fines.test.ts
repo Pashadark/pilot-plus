@@ -5,7 +5,10 @@ import { syncCompanyFinesWithDependencies } from './sync-company-fines';
 describe('company fine sync', () => {
   it('paginates, links a vehicle, and idempotently upserts fines', async () => {
     const upsertLink = vi.fn().mockResolvedValue({ vehicleId: 'vehicle-a' });
-    const upsertFine = vi.fn().mockResolvedValue({ created: true });
+    const upsertFine = vi
+      .fn()
+      .mockResolvedValueOnce({ created: true })
+      .mockResolvedValueOnce({ created: false });
     const dependencies = {
       listCars: vi.fn().mockResolvedValueOnce({ current: 1, last: 1, items: [{ id: 7 }] }),
       listFines: vi.fn().mockResolvedValueOnce({
@@ -13,21 +16,26 @@ describe('company fine sync', () => {
         last: 1,
         items: [{ id: 91, car: { id: 7 } }],
       }),
+      listPaidFines: vi.fn().mockResolvedValueOnce({
+        current: 1,
+        last: 1,
+        items: [{ id: 'fine-paid', carId: 'car-1', offenseAt: '2026-08-15', paid: true }],
+      }),
       normalizeCar: vi.fn().mockReturnValue({ externalId: '7' }),
-      normalizeFine: vi.fn().mockReturnValue({
-        externalId: '91',
+      normalizeFine: vi.fn((fine: { id: number | string }) => ({
+        externalId: String(fine.id),
         providerVehicleId: '7',
         offenseAt: new Date('2026-08-16T09:30:00.000Z'),
-      }),
+      })),
       upsertLink,
       upsertFine,
     };
 
     await expect(syncCompanyFinesWithDependencies('company-a', dependencies)).resolves.toEqual({
       ok: true,
-      received: 1,
+      received: 2,
       created: 1,
-      updated: 0,
+      updated: 1,
       unmatched: 0,
     });
     expect(upsertLink).toHaveBeenCalledWith('company-a', { externalId: '7' });
@@ -42,6 +50,7 @@ describe('company fine sync', () => {
     const dependencies = {
       listCars: vi.fn().mockResolvedValue({ current: 1, last: 999, items: [{ id: 7 }] }),
       listFines: vi.fn().mockResolvedValue({ current: 1, last: 1, items: [] }),
+      listPaidFines: vi.fn().mockResolvedValue({ current: 1, last: 1, items: [] }),
       normalizeCar: vi.fn().mockReturnValue({ externalId: '7' }),
       normalizeFine: vi.fn(),
       upsertLink: vi.fn().mockResolvedValue({ vehicleId: null }),

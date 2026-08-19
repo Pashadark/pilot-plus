@@ -45,6 +45,24 @@ export function paginatedSchema<T extends z.ZodTypeAny>(item: T) {
 export const driverHelperCarsPageSchema = paginatedSchema(driverHelperCarSchema);
 export const driverHelperFinesPageSchema = paginatedSchema(driverHelperFineSchema);
 
+export const driverHelperPaidFineSchema = driverHelperFineSchema
+  .omit({ suma: true, paid: true })
+  .extend({
+    suma: z.union([z.string(), z.number()]).optional(),
+    amount: z.union([z.string(), z.number()]).optional(),
+    paid: z.coerce.boolean().optional(),
+  })
+  .transform((fine, context) => {
+    const amount = fine.suma ?? fine.amount;
+    if (amount === undefined) {
+      context.addIssue({ code: 'custom', message: 'Missing paid fine amount' });
+      return z.NEVER;
+    }
+    return { ...fine, suma: amount, paid: true as const };
+  });
+
+export const driverHelperPaidFinesPageSchema = paginatedSchema(driverHelperPaidFineSchema);
+
 export const driverHelperFinePhotosSchema = z.object({
   status: z.enum(['photo_exists', 'photo_no', 'photo_in_process']),
   photos: z.array(z.string()).default([]),

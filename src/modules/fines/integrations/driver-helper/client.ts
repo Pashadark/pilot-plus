@@ -6,6 +6,7 @@ import {
   driverHelperCarsPageSchema,
   driverHelperFinePhotosSchema,
   driverHelperFinesPageSchema,
+  driverHelperPaidFinesPageSchema,
   driverHelperInvoiceCheckSchema,
   driverHelperInvoiceCreateSchema,
   driverHelperMoneyToMinor,
@@ -149,6 +150,11 @@ export class DriverHelperClient {
   listUnpaidFines(page: number) {
     if (!Number.isInteger(page) || page < 1) throw new DriverHelperError('INVALID_RESPONSE');
     return this.get(`/v1.0/fines?page=${page}&perPage=50`, driverHelperFinesPageSchema);
+  }
+
+  listPaidFines(page: number) {
+    if (!Number.isInteger(page) || page < 1) throw new DriverHelperError('INVALID_RESPONSE');
+    return this.get(`/v1.0/fines/paid?page=${page}&perPage=50`, driverHelperPaidFinesPageSchema);
   }
 
   getFinePhotos(fineId: string) {

@@ -42,6 +42,7 @@ export async function syncCompanyFines(companyId: string) {
     const result = await syncCompanyFinesWithDependencies(companyId, {
       listCars: (page) => client.listCars(page),
       listFines: (page) => client.listUnpaidFines(page),
+      listPaidFines: (page) => client.listPaidFines(page),
       normalizeCar: normalizeDriverHelperCar,
       normalizeFine: normalizeDriverHelperFine,
       upsertLink: async (tenantId, car) => {
