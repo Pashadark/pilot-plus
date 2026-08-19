@@ -9,3 +9,9 @@ class NewRentalForm(StatesGroup):
     delivery_address = State()
     comment = State()
     confirm = State()
+
+
+class ExtensionForm(StatesGroup):
+    rental = State()
+    ends_at = State()
+    confirm = State()

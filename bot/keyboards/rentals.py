@@ -32,3 +32,23 @@ def document_links(items: list[dict]) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=label, url=item["url"])]
         for label, item in zip(labels, items, strict=False)
     ])
+
+
+def extension_choices(rentals: list[dict]) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(
+            text=f"{item.get('contractNumber') or 'Договор'} · {item['vehicle']['registrationNumber']}",
+            callback_data=f"rental:extend:{item['id']}",
+        )]
+        for item in rentals
+        if item.get("status") in {"CONFIRMED", "ACTIVE"}
+    ]
+    rows.append([InlineKeyboardButton(text="Отмена", callback_data="rental:cancel")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def extension_confirmation() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Отправить продление", callback_data="rental:extend-submit")],
+        [InlineKeyboardButton(text="Отмена", callback_data="rental:cancel")],
+    ])

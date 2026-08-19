@@ -157,6 +157,7 @@ export async function createBotRentalRequest(
       });
       if (!currentIdentity) throw new BotApiError('IDENTITY_REQUIRED', 401);
 
+      let effectiveVehicleId = input.preferredVehicleId;
       if (input.rentalId) {
         const rental = await tx.rental.findFirst({
           where: {
@@ -165,21 +166,29 @@ export async function createBotRentalRequest(
             clientId,
             status: { in: ['CONFIRMED', 'ACTIVE'] },
           },
-          select: { id: true },
+          select: { id: true, vehicleId: true, endsAt: true },
         });
         if (!rental) throw new BotApiError('NOT_FOUND', 404);
+        if (startsAt.getTime() !== rental.endsAt.getTime()) {
+          throw new BotApiError('AVAILABILITY_CHANGED', 409);
+        }
+        if (effectiveVehicleId && effectiveVehicleId !== rental.vehicleId) {
+          throw new BotApiError('NOT_FOUND', 404);
+        }
+        effectiveVehicleId = rental.vehicleId;
       }
 
-      if (input.preferredVehicleId) {
+      if (effectiveVehicleId) {
         const vehicle = await tx.vehicle.findFirst({
           where: {
-            id: input.preferredVehicleId,
+            id: effectiveVehicleId,
             companyId: identity.companyId,
             archivedAt: null,
             isRentalReady: true,
             status: { not: 'MAINTENANCE' },
             rentals: {
               none: {
+                id: input.rentalId ? { not: input.rentalId } : undefined,
                 status: { in: ['CONFIRMED', 'ACTIVE'] },
                 startsAt: { lt: endsAt },
                 endsAt: { gt: startsAt },
@@ -203,7 +212,7 @@ export async function createBotRentalRequest(
           companyId: identity.companyId,
           clientId,
           rentalId: input.rentalId ?? undefined,
-          preferredVehicleId: input.preferredVehicleId ?? undefined,
+          preferredVehicleId: effectiveVehicleId ?? undefined,
           startsAt,
           endsAt,
           fulfillmentMode: input.fulfillmentMode,

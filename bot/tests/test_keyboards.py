@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from bot.keyboards.client import client_main_menu
+from bot.keyboards.rentals import extension_choices
 
 
 def test_client_menu_has_only_client_capabilities():
@@ -18,3 +19,13 @@ def test_markup_imports_exist_only_in_keyboards_package():
         if "InlineKeyboardButton" in text or "InlineKeyboardMarkup" in text:
             offenders.append(path.name)
     assert offenders == []
+
+
+def test_extension_menu_contains_only_active_or_confirmed_own_rentals():
+    markup = extension_choices([
+        {"id": "r1", "status": "ACTIVE", "contractNumber": "ME-1", "vehicle": {"registrationNumber": "A001AA"}},
+        {"id": "r2", "status": "CANCELLED", "contractNumber": "ME-2", "vehicle": {"registrationNumber": "B002BB"}},
+    ])
+    callbacks = [button.callback_data for row in markup.inline_keyboard for button in row]
+    assert "rental:extend:r1" in callbacks
+    assert "rental:extend:r2" not in callbacks
