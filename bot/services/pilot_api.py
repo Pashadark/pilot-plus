@@ -45,6 +45,9 @@ class PilotApiClient:
     async def profile(self, telegram_user_id: str) -> dict[str, Any]:
         return await self._json("GET", "/api/bot/v1/me", telegram_user_id=telegram_user_id)
 
+    async def link_identity(self, invite_token: str, telegram_user_id: str) -> dict[str, Any]:
+        return await self._json("POST", "/api/bot/v1/link", telegram_user_id=telegram_user_id, json={"inviteToken": invite_token, "telegramUserId": telegram_user_id})
+
     async def rentals(self, telegram_user_id: str) -> dict[str, Any]:
         return await self._json("GET", "/api/bot/v1/rentals", telegram_user_id=telegram_user_id)
 
