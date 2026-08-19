@@ -250,6 +250,30 @@ enum RentalDocumentGenerationStatus {
   ERROR
 }
 
+enum TelegramIdentityKind {
+  CLIENT
+  STAFF
+}
+
+enum BotFulfillmentMode {
+  OFFICE
+  DELIVERY
+}
+
+enum BotRentalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum BotNotificationStatus {
+  PENDING
+  PROCESSING
+  SENT
+  ERROR
+}
+
 model User {
   id                       String                    @id @default(cuid())
   email                    String                    @unique
@@ -276,6 +300,9 @@ model User {
   confirmedFineAssignments Fine[]                    @relation("FineAssignmentConfirmedBy")
   fineAssignments          FineAssignmentHistory[]   @relation("FineAssignmentActor")
   initiatedFineInvoices    FineInvoice[]             @relation("FineInvoiceInitiatedBy")
+  telegramIdentities       TelegramIdentity[]        @relation("TelegramIdentityUser")
+  createdTelegramInvites   TelegramInvite[]          @relation("TelegramInviteCreator")
+  decidedBotRentalRequests BotRentalRequest[]        @relation("BotRentalRequestDecider")
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
 }
@@ -349,6 +376,10 @@ model Company {
   fines                     Fine[]
   fineAssignmentHistory     FineAssignmentHistory[]
   fineInvoices              FineInvoice[]
+  telegramIdentities        TelegramIdentity[]
+  telegramInvites           TelegramInvite[]
+  botRentalRequests         BotRentalRequest[]
+  botNotificationJobs       BotNotificationJob[]
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
 }
@@ -411,6 +442,8 @@ model Client {
   rentalDriverLinks            RentalDriver[]      @relation("ClientRentalDriver")
   comments                     ClientComment[]
   fines                        Fine[]
+  telegramIdentity             TelegramIdentity?
+  botRentalRequests            BotRentalRequest[]
 
   @@unique([companyId, phoneIndex])
   @@unique([companyId, id])
@@ -641,6 +674,7 @@ model Vehicle {
   device                        Device?
   manualVehicleEvents           ManualVehicleEvent[]
   rentals                       Rental[]              @relation("VehicleRentals")
+  botRentalRequests             BotRentalRequest[]
   externalFineLinks             ExternalVehicleLink[]
   fines                         Fine[]
   createdAt                     DateTime              @default(now())
@@ -862,6 +896,7 @@ model Rental {
   fines                    Fine[]
   documentGenerations      RentalDocumentGeneration[]
   clientComments           ClientComment[]
+  botRentalRequests        BotRentalRequest[]
 
   @@unique([companyId, id])
   @@unique([companyId, clientId, id])
@@ -956,6 +991,97 @@ model RentalDocumentGeneration {
   @@unique([rentalId, version])
   @@index([companyId, status, leaseExpiresAt])
   @@index([companyId, rentalId, status])
+}
+
+model TelegramIdentity {
+  id             String               @id @default(cuid())
+  companyId      String
+  company        Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  telegramUserId String
+  kind           TelegramIdentityKind
+  userId         String?
+  user           User?                @relation("TelegramIdentityUser", fields: [userId], references: [id], onDelete: Cascade)
+  clientId       String?
+  client         Client?              @relation(fields: [companyId, clientId], references: [companyId, id], onDelete: Cascade)
+  isActive       Boolean              @default(true)
+  notifications  BotNotificationJob[]
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime             @updatedAt @db.Timestamptz(3)
+
+  @@unique([companyId, telegramUserId])
+  @@unique([companyId, userId])
+  @@unique([companyId, clientId])
+  @@index([telegramUserId, isActive])
+}
+
+model TelegramInvite {
+  id              String               @id @default(cuid())
+  companyId       String
+  company         Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  kind            TelegramIdentityKind
+  targetId        String
+  tokenHash       String               @unique
+  expiresAt       DateTime             @db.Timestamptz(3)
+  usedAt          DateTime?            @db.Timestamptz(3)
+  createdByUserId String
+  createdBy       User                 @relation("TelegramInviteCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt       DateTime             @default(now()) @db.Timestamptz(3)
+
+  @@index([companyId, targetId, expiresAt])
+  @@index([expiresAt, usedAt])
+}
+
+model BotRentalRequest {
+  id                       String                 @id @default(cuid())
+  companyId                String
+  company                  Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  clientId                 String
+  client                   Client                 @relation(fields: [companyId, clientId], references: [companyId, id], onDelete: Cascade)
+  rentalId                 String?
+  rental                   Rental?                @relation(fields: [companyId, rentalId], references: [companyId, id], onDelete: Restrict)
+  preferredVehicleId       String?
+  preferredVehicle         Vehicle?               @relation(fields: [companyId, preferredVehicleId], references: [companyId, id], onDelete: Restrict)
+  startsAt                 DateTime               @db.Timestamptz(3)
+  endsAt                   DateTime               @db.Timestamptz(3)
+  fulfillmentMode          BotFulfillmentMode
+  deliveryAddressEncrypted String?
+  commentEncrypted         String?
+  status                   BotRentalRequestStatus @default(PENDING)
+  idempotencyKey           String
+  decidedByUserId          String?
+  decidedBy                User?                  @relation("BotRentalRequestDecider", fields: [decidedByUserId], references: [id], onDelete: Restrict)
+  decidedAt                DateTime?              @db.Timestamptz(3)
+  createdAt                DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime               @updatedAt @db.Timestamptz(3)
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, status, createdAt])
+  @@index([companyId, clientId, createdAt])
+  @@index([companyId, preferredVehicleId, startsAt, endsAt])
+}
+
+model BotNotificationJob {
+  id             String                @id @default(cuid())
+  companyId      String
+  company        Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  identityId     String?
+  identity       TelegramIdentity?     @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  chatId         String?
+  eventKey       String                @unique
+  template       String
+  payload        Json
+  status         BotNotificationStatus @default(PENDING)
+  claimToken     String?               @unique
+  leaseExpiresAt DateTime?             @db.Timestamptz(3)
+  availableAt    DateTime              @db.Timestamptz(3)
+  attempts       Int                   @default(0)
+  sentAt         DateTime?             @db.Timestamptz(3)
+  lastErrorCode  String?
+  createdAt      DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime              @updatedAt @db.Timestamptz(3)
+
+  @@index([status, availableAt])
+  @@index([companyId, status, availableAt])
 }
 
 model Device {
@@ -1157,6 +1283,7 @@ model MaintenanceRecord {
   odometerKm       Decimal?          @db.Decimal(12, 1)
   targetOdometerKm Decimal?          @db.Decimal(12, 1)
   scheduledAt      DateTime?
+  scheduledEndsAt  DateTime?         @db.Timestamptz(3)
   completedAt      DateTime?
   provider         String?
   costMinor        Int?
@@ -1165,6 +1292,7 @@ model MaintenanceRecord {
   updatedAt        DateTime          @updatedAt
 
   @@index([vehicleId, scheduledAt])
+  @@index([vehicleId, scheduledAt, scheduledEndsAt])
 }
 
 model WashRecord {
