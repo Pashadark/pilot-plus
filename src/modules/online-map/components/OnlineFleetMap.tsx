@@ -36,6 +36,7 @@ interface MarkerResource {
 }
 
 function flyToVehicle(map: maplibregl.Map, vehicle: OnlineMapVehicle) {
+  if (vehicle.longitude == null || vehicle.latitude == null) return;
   map.flyTo({
     center: [vehicle.longitude, vehicle.latitude],
     zoom: 14,
@@ -96,6 +97,13 @@ export function OnlineFleetMap({
     () => JSON.parse(vehiclesSnapshotKey) as readonly OnlineMapVehicle[],
     [vehiclesSnapshotKey],
   );
+  const positionedVehicles = useMemo(
+    () =>
+      stableVehicles.filter(
+        (vehicle) => vehicle.longitude != null && vehicle.latitude != null,
+      ) as readonly (OnlineMapVehicle & { longitude: number; latitude: number })[],
+    [stableVehicles],
+  );
   const instanceKey = `${attempt}:${stableVehicles.map((vehicle) => vehicle.id).join('|')}`;
   const trackLayerFailed = failedTrackAttempt === trackAttempt;
 
@@ -129,7 +137,7 @@ export function OnlineFleetMap({
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || stableVehicles.length === 0) return;
+    if (!container || positionedVehicles.length === 0) return;
 
     mapReadyRef.current = false;
     const map = new maplibregl.Map({
@@ -147,8 +155,8 @@ export function OnlineFleetMap({
         },
         layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
       },
-      center: stableVehicles[0]
-        ? [stableVehicles[0].longitude, stableVehicles[0].latitude]
+      center: positionedVehicles[0]
+        ? [positionedVehicles[0].longitude, positionedVehicles[0].latitude]
         : DEFAULT_MAP_CENTER,
       zoom: 11,
       locale: RUSSIAN_MAP_LOCALE,
@@ -179,7 +187,7 @@ export function OnlineFleetMap({
     const resizeObserver = new ResizeObserver(() => map.resize());
     resizeObserver.observe(container);
 
-    const markerResources = stableVehicles.map((vehicle) => {
+    const markerResources = positionedVehicles.map((vehicle) => {
       const element = document.createElement('div');
       const root = createRoot(element);
       const selectVehicle = (selectedVehicle: OnlineMapVehicle) => {
@@ -222,7 +230,7 @@ export function OnlineFleetMap({
       map.remove();
       mapRef.current = null;
     };
-  }, [instanceKey, stableVehicles]);
+  }, [instanceKey, positionedVehicles]);
 
   useEffect(() => {
     for (const { root, vehicle } of markersRef.current) {
@@ -468,12 +476,12 @@ export function OnlineFleetMap({
     }
   }, [instanceKey, playbackPoint, trackAttempt, trackViewModel]);
 
-  if (stableVehicles.length === 0) {
+  if (positionedVehicles.length === 0) {
     return (
       <div className="grid h-full place-items-center bg-[var(--color-canvas)] p-4">
         <EmptyState
-          title="На карте нет подходящих автомобилей"
-          description="Измените поисковый запрос или выбранный фильтр."
+          title="Координаты ещё не получены"
+          description="Машины доступны в списке сверху. После синхронизации они появятся на карте."
         />
       </div>
     );

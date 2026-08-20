@@ -32,7 +32,6 @@ it('возвращает только активные реальные маши
         archivedAt: null,
         isDemoImport: false,
         company: { memberships: { some: { userId: 'user-1' } } },
-        positions: { some: { provider: 'GLONASSSOFT' } },
       },
     }),
   );
@@ -81,6 +80,43 @@ it('super-admin видит все компании, а устаревшая по
       status: 'offline',
       fuelPercent: null,
       lastSeenLabel: '2 часа назад',
+    }),
+  );
+});
+
+it('оставляет реальную машину без координат в списке и показывает текущий договор', async () => {
+  const findMany = vi.fn().mockResolvedValue([
+    {
+      id: 'vehicle-3',
+      model: 'Volkswagen Polo',
+      registrationNumber: 'А156АХ997',
+      positions: [],
+      rentals: [
+        {
+          id: 'rental-1',
+          contractNumber: 'ME-2026-0003-BK',
+          client: { fullName: 'Горбунов Глеб Геннадьевич' },
+        },
+      ],
+    },
+  ]);
+
+  const result = await listOnlineMapVehicles(
+    { id: 'root', role: 'SUPER_ADMIN' } as never,
+    { vehicle: { findMany } } as never,
+    new Date('2026-08-20T12:00:00.000Z'),
+  );
+
+  expect(result[0]).toEqual(
+    expect.objectContaining({
+      status: 'no-data',
+      latitude: null,
+      longitude: null,
+      currentRental: {
+        id: 'rental-1',
+        contractNumber: 'ME-2026-0003-BK',
+        clientName: 'Горбунов Глеб Геннадьевич',
+      },
     }),
   );
 });

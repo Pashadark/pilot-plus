@@ -9,12 +9,14 @@ const statusColors: Record<OnlineMapStatus, string> = {
   moving: 'bg-[var(--color-success)]',
   idle: 'bg-[var(--color-warning)]',
   offline: 'bg-[var(--color-text-secondary)]',
+  'no-data': 'bg-[var(--color-text-secondary)]',
 };
 
 const statusLabels: Record<OnlineMapStatus, string> = {
   moving: 'В движении',
   idle: 'На стоянке',
   offline: 'Нет связи',
+  'no-data': 'Нет координат',
 };
 
 interface VehicleMapMarkerProps {

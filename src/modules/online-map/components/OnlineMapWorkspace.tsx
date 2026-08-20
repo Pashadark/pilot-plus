@@ -30,6 +30,7 @@ const filters: readonly { value: OnlineMapFilter; label: string }[] = [
   { value: 'moving', label: 'В движении' },
   { value: 'idle', label: 'На стоянке' },
   { value: 'offline', label: 'Нет связи' },
+  { value: 'no-data', label: 'Нет координат' },
 ];
 
 export interface OnlineMapWorkspaceProps {
@@ -259,6 +260,26 @@ export function OnlineMapWorkspace({
             </FilterChip>
           ))}
         </div>
+        {filteredVehicles.length > 0 ? (
+          <div
+            aria-label="Автомобили на карте"
+            className="scrollbar-hidden flex gap-2 overflow-x-auto pb-1"
+          >
+            {filteredVehicles.map((vehicle) => (
+              <Button
+                key={vehicle.id}
+                type="button"
+                size="sm"
+                variant={selectedVehicleId === vehicle.id ? 'primary' : 'secondary'}
+                aria-label={`Открыть карточку ${vehicle.name}`}
+                className="shrink-0 shadow-[var(--shadow-card)]"
+                onClick={() => handleVehicleSelect(vehicle)}
+              >
+                {vehicle.plate}
+              </Button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {filteredVehicles.length === 0 && (

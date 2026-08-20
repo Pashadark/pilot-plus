@@ -9,12 +9,14 @@ const statusLabels: Record<OnlineMapStatus, string> = {
   moving: 'В движении',
   idle: 'На стоянке',
   offline: 'Нет связи',
+  'no-data': 'Нет координат',
 };
 
 const statusClasses: Record<OnlineMapStatus, string> = {
   moving: 'bg-[var(--color-success-soft)] text-[var(--color-success)]',
   idle: 'bg-[var(--color-warning-soft)] text-[var(--color-warning)]',
   offline: 'bg-[var(--color-elevated)] text-[var(--color-text-secondary)]',
+  'no-data': 'bg-[var(--color-elevated)] text-[var(--color-text-secondary)]',
 };
 
 export interface SelectedVehiclePanelProps {
@@ -84,6 +86,14 @@ export function SelectedVehiclePanel({
           </dl>
 
           <div className="grid gap-3 text-sm">
+            {vehicle.currentRental ? (
+              <p className="rounded-[var(--radius-md)] bg-[var(--color-primary-soft)] p-3 text-[var(--color-text)]">
+                Сейчас в аренде: <strong>{vehicle.currentRental.clientName}</strong>
+                {vehicle.currentRental.contractNumber
+                  ? ` · ${vehicle.currentRental.contractNumber}`
+                  : ''}
+              </p>
+            ) : null}
             <p className="flex gap-2 text-[var(--color-text-secondary)]">
               <FiMapPin aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
               <span>{vehicle.address}</span>

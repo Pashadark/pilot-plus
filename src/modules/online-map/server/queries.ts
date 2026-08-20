@@ -24,6 +24,11 @@ interface OnlineMapRow {
     fuelLevelPercent: unknown | null;
     recordedAt: Date;
   }>;
+  rentals?: Array<{
+    id: string;
+    contractNumber: string | null;
+    client: { fullName: string };
+  }>;
 }
 
 function lastSeenLabel(recordedAt: Date, now: Date): string {
@@ -52,7 +57,6 @@ export async function listOnlineMapVehicles(
       ...(user.role === 'SUPER_ADMIN'
         ? {}
         : { company: { memberships: { some: { userId: user.id } } } }),
-      positions: { some: { provider: 'GLONASSSOFT' } },
     },
     select: {
       id: true,
@@ -70,27 +74,61 @@ export async function listOnlineMapVehicles(
         orderBy: { recordedAt: 'desc' },
         take: 1,
       },
+      rentals: {
+        where: {
+          status: { in: ['CONFIRMED', 'ACTIVE'] },
+          startsAt: { lte: now },
+          endsAt: { gt: now },
+        },
+        select: {
+          id: true,
+          contractNumber: true,
+          client: { select: { fullName: true } },
+        },
+        orderBy: { startsAt: 'desc' },
+        take: 1,
+      },
     },
     orderBy: [{ model: 'asc' }, { registrationNumberNormalized: 'asc' }],
   })) as OnlineMapRow[];
 
-  return rows.flatMap((vehicle) => {
+  return rows.map((vehicle): OnlineMapVehicle => {
     const position = vehicle.positions[0];
-    if (!position) return [];
-    const speedKph = position.speedKph ?? 0;
-    return [
-      {
+    const currentRental = vehicle.rentals?.[0]
+      ? {
+          id: vehicle.rentals[0].id,
+          contractNumber: vehicle.rentals[0].contractNumber,
+          clientName: vehicle.rentals[0].client.fullName,
+        }
+      : null;
+    if (!position) {
+      return {
         id: vehicle.id,
         name: vehicle.model,
         plate: vehicle.registrationNumber ?? 'Без госномера',
-        status: positionStatus(speedKph, position.recordedAt, now),
-        longitude: Number(position.longitude),
-        latitude: Number(position.latitude),
-        speedKph,
-        fuelPercent: position.fuelLevelPercent == null ? null : Number(position.fuelLevelPercent),
-        lastSeenLabel: lastSeenLabel(position.recordedAt, now),
-        address: 'Адрес уточняется по координатам',
-      },
-    ];
+        status: 'no-data' as const,
+        longitude: null,
+        latitude: null,
+        speedKph: 0,
+        fuelPercent: null,
+        lastSeenLabel: 'координаты ещё не получены',
+        address: 'Нет данных GLONASSSoft',
+        currentRental,
+      };
+    }
+    const speedKph = position.speedKph ?? 0;
+    return {
+      id: vehicle.id,
+      name: vehicle.model,
+      plate: vehicle.registrationNumber ?? 'Без госномера',
+      status: positionStatus(speedKph, position.recordedAt, now),
+      longitude: Number(position.longitude),
+      latitude: Number(position.latitude),
+      speedKph,
+      fuelPercent: position.fuelLevelPercent == null ? null : Number(position.fuelLevelPercent),
+      lastSeenLabel: lastSeenLabel(position.recordedAt, now),
+      address: 'Адрес уточняется по координатам',
+      currentRental,
+    };
   });
 }
