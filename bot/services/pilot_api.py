@@ -61,6 +61,18 @@ class PilotApiClient:
     async def create_rental_request(self, telegram_user_id: str, payload: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]:
         return await self._json("POST", "/api/bot/v1/rental-requests", telegram_user_id=telegram_user_id, json=payload, idempotency_key=idempotency_key)
 
+    async def bind_work_group(self, telegram_user_id: str, telegram_chat_id: str, chat_type: str, title: str | None) -> dict[str, Any]:
+        payload: dict[str, Any] = {"telegramChatId": telegram_chat_id, "chatType": chat_type}
+        if title:
+            payload["title"] = title
+        return await self._json("POST", "/api/bot/v1/group-bindings", telegram_user_id=telegram_user_id, json=payload)
+
+    async def daily_operations(self, telegram_user_id: str, date: str | None = None) -> dict[str, Any]:
+        path = "/api/bot/v1/daily-operations"
+        if date:
+            path = f"{path}?{httpx.QueryParams({'date': date})}"
+        return await self._json("GET", path, telegram_user_id=telegram_user_id)
+
     async def claim_notifications(self, worker_id: str) -> dict[str, Any]:
         return await self._json("POST", "/api/bot/v1/notifications/claim", telegram_user_id="", json={"workerId": worker_id})
 

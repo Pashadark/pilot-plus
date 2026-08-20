@@ -1,7 +1,9 @@
 from aiogram import F, Router
+from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.callbacks import STAFF_REQUESTS
+from bot.formatters.operations import fleet_text, requests_text
 from bot.keyboards.staff import (
     STAFF_CALENDAR_TEXT,
     STAFF_CLIENTS_TEXT,
@@ -36,6 +38,27 @@ async def staff_access(telegram_user_id: int, pilot_api) -> str:
     return "allowed" if profile.get("kind") == "STAFF" else "forbidden"
 
 
+@router.message(Command("pilot_setup"))
+async def bind_work_group(message: Message, pilot_api) -> None:
+    if not message.from_user:
+        return
+    chat_type = getattr(message.chat.type, "value", message.chat.type)
+    if chat_type not in {"group", "supergroup"}:
+        await message.answer("Добавьте бота в рабочую группу и выполните там /pilot_setup.")
+        return
+    try:
+        await pilot_api.bind_work_group(
+            str(message.from_user.id), str(message.chat.id), str(chat_type), message.chat.title
+        )
+    except PilotApiError as error:
+        if error.code == "FORBIDDEN":
+            await message.answer("Привязать группу может администратор или диспетчер Pilot+.")
+        else:
+            await message.answer("Не удалось привязать группу. Проверьте доступ и повторите.")
+        return
+    await message.answer("Группа Pilot+ привязана. Сюда будут приходить ежедневные сводки.")
+
+
 @router.message(F.text.in_(STAFF_MENU_LABELS))
 async def staff_menu_action(message: Message, pilot_api) -> None:
     if not message.from_user:
@@ -46,6 +69,15 @@ async def staff_menu_action(message: Message, pilot_api) -> None:
         return
     if access == "forbidden":
         await message.answer("Этот раздел доступен только сотрудникам Pilot+.")
+        return
+    if message.text in {STAFF_REQUESTS_TEXT, STAFF_FLEET_TEXT}:
+        try:
+            operations = await pilot_api.daily_operations(str(message.from_user.id))
+        except PilotApiError:
+            await message.answer("Не удалось загрузить данные Pilot+. Попробуйте ещё раз.", reply_markup=staff_main_menu())
+            return
+        text = requests_text(operations) if message.text == STAFF_REQUESTS_TEXT else fleet_text(operations)
+        await message.answer(text, reply_markup=staff_main_menu())
         return
     await message.answer(SECTION_RESPONSES[message.text], reply_markup=staff_main_menu())
 

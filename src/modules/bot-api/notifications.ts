@@ -4,10 +4,34 @@ import { prisma } from '@/database/prisma/client';
 import { decryptField } from '@/services/security/field-encryption';
 
 import { BotApiError } from './auth';
+import { moscowDayRange } from './daily-operations';
 
 type ClaimDb = Pick<typeof prisma, '$transaction'>;
 type UpdateDb = Pick<typeof prisma, 'botNotificationJob'>;
 const LEASE_MS = 60_000;
+
+export async function enqueueDailyOperationsDigests(now: Date, database = prisma) {
+  const moscow = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+  if (moscow.getUTCHours() === 0 && moscow.getUTCMinutes() < 5) return 0;
+  const date = moscow.toISOString().slice(0, 10);
+  const bindings = await database.telegramGroupBinding.findMany({
+    select: { companyId: true, telegramChatId: true },
+    take: 500,
+  });
+  if (!bindings.length) return 0;
+  const result = await database.botNotificationJob.createMany({
+    data: bindings.map((binding) => ({
+      companyId: binding.companyId,
+      chatId: binding.telegramChatId,
+      eventKey: `daily-operations:${binding.companyId}:${date}`,
+      template: 'DAILY_OPERATIONS_DIGEST',
+      payload: { date },
+      availableAt: now,
+    })),
+    skipDuplicates: true,
+  });
+  return result.count;
+}
 
 export async function enqueueReturnReminders(now: Date, database = prisma) {
   const horizon = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -57,6 +81,7 @@ async function hydrateJob(
   tx: Parameters<Parameters<ClaimDb['$transaction']>[0]>[0],
   job: {
     id: string;
+    companyId: string;
     template: string;
     payload: unknown;
     chatId: string | null;
@@ -64,6 +89,65 @@ async function hydrateJob(
     identity: { telegramUserId: string; isActive: boolean } | null;
   },
 ) {
+  if (job.template === 'DAILY_OPERATIONS_DIGEST') {
+    const date =
+      typeof job.payload === 'object' && job.payload !== null && 'date' in job.payload
+        ? String(job.payload.date)
+        : undefined;
+    const range = moscowDayRange(date);
+    const overlap = { startsAt: { lt: range.end }, endsAt: { gt: range.start } };
+    const [requests, rentals, returns, vehicles] = await Promise.all([
+      tx.botRentalRequest.count({
+        where: { companyId: job.companyId, status: 'PENDING', ...overlap },
+      }),
+      tx.rental.count({
+        where: { companyId: job.companyId, status: { in: ['CONFIRMED', 'ACTIVE'] }, ...overlap },
+      }),
+      tx.rental.count({
+        where: {
+          companyId: job.companyId,
+          status: { in: ['CONFIRMED', 'ACTIVE'] },
+          endsAt: { gte: range.start, lt: range.end },
+        },
+      }),
+      tx.vehicle.findMany({
+        where: { companyId: job.companyId, archivedAt: null, isRentalReady: true },
+        select: {
+          status: true,
+          rentals: {
+            where: { status: { in: ['CONFIRMED', 'ACTIVE'] }, ...overlap },
+            select: { id: true },
+            take: 1,
+          },
+          maintenanceRecords: {
+            where: {
+              status: { in: ['PLANNED', 'IN_PROGRESS', 'OVERDUE'] },
+              scheduledAt: { lt: range.end },
+              OR: [{ scheduledEndsAt: { gt: range.start } }, { scheduledEndsAt: null }],
+            },
+            select: { id: true },
+            take: 1,
+          },
+        },
+        take: 300,
+      }),
+    ]);
+    const free = vehicles.filter(
+      (vehicle) =>
+        vehicle.status !== 'MAINTENANCE' &&
+        !vehicle.rentals.length &&
+        !vehicle.maintenanceRecords.length,
+    ).length;
+    const service = vehicles.filter(
+      (vehicle) => vehicle.status === 'MAINTENANCE' || vehicle.maintenanceRecords.length,
+    ).length;
+    return {
+      ...job,
+      payload: {
+        message: `Сводка Pilot+ на ${range.date}\nЗаявки: ${requests}\nАренды: ${rentals}\nВозвраты сегодня: ${returns}\nСвободные машины: ${free}\nНа ТО / недоступны: ${service}`,
+      },
+    };
+  }
   if (job.template !== 'RENTAL_RETURN_STAFF' && job.template !== 'RENTAL_RETURN_CLIENT') return job;
   const rentalId =
     typeof job.payload === 'object' && job.payload !== null && 'rentalId' in job.payload
@@ -148,6 +232,7 @@ export async function claimNotificationJobs(
         where: { claimToken },
         select: {
           id: true,
+          companyId: true,
           claimToken: true,
           template: true,
           payload: true,

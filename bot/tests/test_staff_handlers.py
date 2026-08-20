@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bot.handlers.staff import legacy_staff_requests, staff_menu_action
+from bot.handlers.staff import bind_work_group, legacy_staff_requests, staff_menu_action
 from bot.keyboards.staff import STAFF_MENU_LABELS, STAFF_REQUESTS_TEXT
 from bot.services.errors import PilotApiError
 
@@ -12,6 +12,8 @@ class FakeApi:
         self._profile = profile
         self._error = error
         self.profile_calls = []
+        self.bind_calls = []
+        self.operations_calls = []
 
     async def profile(self, telegram_user_id: str):
         self.profile_calls.append(telegram_user_id)
@@ -19,12 +21,21 @@ class FakeApi:
             raise self._error
         return self._profile
 
+    async def bind_work_group(self, telegram_user_id: str, telegram_chat_id: str, chat_type: str, title: str | None):
+        self.bind_calls.append((telegram_user_id, telegram_chat_id, chat_type, title))
+        return {"companyId": "company-1"}
+
+    async def daily_operations(self, telegram_user_id: str):
+        self.operations_calls.append(telegram_user_id)
+        return {"date": "2026-08-20", "requests": [], "freeVehicles": [], "unavailableVehicles": []}
+
 
 class FakeMessage:
     def __init__(self, text: str, telegram_id: int):
         self.text = text
         self.from_user = SimpleNamespace(id=telegram_id)
         self.answers = []
+        self.chat = SimpleNamespace(id=telegram_id, type="private", title=None)
 
     async def answer(self, text: str, **kwargs):
         self.answers.append((text, kwargs.get("reply_markup")))
@@ -79,3 +90,15 @@ async def test_legacy_staff_callback_is_acknowledged():
 
     assert callback.answers == [(None, {})]
     assert len(callback.message.answers) == 1
+
+
+@pytest.mark.asyncio
+async def test_staff_admin_can_bind_current_work_group():
+    api = FakeApi({"kind": "STAFF", "displayName": "Павел Седов"})
+    message = FakeMessage("/pilot_setup", 185185047)
+    message.chat = SimpleNamespace(id=-100777, type="supergroup", title="Pilot+ работа")
+
+    await bind_work_group(message, api)
+
+    assert api.bind_calls == [("185185047", "-100777", "supergroup", "Pilot+ работа")]
+    assert message.answers[0][0] == "Группа Pilot+ привязана. Сюда будут приходить ежедневные сводки."
