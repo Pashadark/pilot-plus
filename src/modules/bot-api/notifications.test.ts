@@ -1,8 +1,38 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { ackNotificationJob, claimNotificationJobs, enqueueReturnReminders } from './notifications';
+import {
+  ackNotificationJob,
+  claimNotificationJobs,
+  enqueueDailyOperationsDigests,
+  enqueueReturnReminders,
+} from './notifications';
 
 describe('bot notification leases', () => {
+  it('enqueues one idempotent daily digest per bound company after 00:05 Moscow', async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 1 });
+    const database = {
+      telegramGroupBinding: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ companyId: 'company-1', telegramChatId: '-100777' }]),
+      },
+      botNotificationJob: { createMany },
+    };
+    await expect(
+      enqueueDailyOperationsDigests(new Date('2026-08-19T21:05:00Z'), database as never),
+    ).resolves.toBe(1);
+    expect(createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: [
+          expect.objectContaining({
+            eventKey: 'daily-operations:company-1:2026-08-20',
+            chatId: '-100777',
+            template: 'DAILY_OPERATIONS_DIGEST',
+          }),
+        ],
+      }),
+    );
+  });
   it('returns only rows successfully claimed by this worker', async () => {
     const tx = {
       botNotificationJob: {
@@ -43,17 +73,15 @@ describe('bot notification leases', () => {
     const createMany = vi.fn().mockResolvedValue({ count: 2 });
     const database = {
       rental: {
-        findMany: vi
-          .fn()
-          .mockResolvedValue([
-            {
-              id: 'r1',
-              companyId: 'c1',
-              clientId: 'cl1',
-              endsAt: new Date('2026-08-20T09:00:00Z'),
-              client: { telegramIdentity: { id: 'i1', isActive: true } },
-            },
-          ]),
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'r1',
+            companyId: 'c1',
+            clientId: 'cl1',
+            endsAt: new Date('2026-08-20T09:00:00Z'),
+            client: { telegramIdentity: { id: 'i1', isActive: true } },
+          },
+        ]),
       },
       botNotificationJob: { createMany },
     };

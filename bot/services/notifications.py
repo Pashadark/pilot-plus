@@ -15,8 +15,11 @@ async def notification_worker(bot, api, stop_event: asyncio.Event, staff_chat_id
             jobs = (await api.claim_notifications(worker_id)).get("items", [])
             for job in jobs:
                 target = job.get("identity", {}).get("telegramUserId")
-                if not target and str(job.get("chatId", "")).startswith("staff:"):
+                chat_id = str(job.get("chatId") or "")
+                if not target and chat_id.startswith("staff:"):
                     target = staff_chat_id
+                elif not target and chat_id.lstrip("-").isdigit():
+                    target = int(chat_id)
                 try:
                     await bot.send_message(target, notification_text(job))
                 except Exception:

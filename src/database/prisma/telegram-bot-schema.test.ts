@@ -7,6 +7,10 @@ const migrationUrl = new URL(
   './migrations/20260819120000_add_telegram_bot_mvp/migration.sql',
   import.meta.url,
 );
+const groupBindingMigrationUrl = new URL(
+  './migrations/20260820090000_add_telegram_group_binding/migration.sql',
+  import.meta.url,
+);
 
 describe('Telegram bot MVP schema', () => {
   it('adds tenant-scoped identity, invite, rental request and notification lifecycles', () => {
@@ -36,6 +40,26 @@ describe('Telegram bot MVP schema', () => {
       'CHECK (("fulfillmentMode" = \'DELIVERY\') = ("deliveryAddressEncrypted" IS NOT NULL))',
     );
     expect(migration).toContain('CHECK ("startsAt" < "endsAt")');
+    expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN)/iu);
+  });
+
+  it('adds one durable Telegram work-group binding per company and chat', () => {
+    expect(schema).toContain('model TelegramGroupBinding {');
+    expect(schema).toMatch(/companyId\s+String\s+@unique/u);
+    expect(schema).toMatch(/telegramChatId\s+String\s+@unique/u);
+    expect(schema).toMatch(/boundByUserId\s+String/u);
+    expect(schema).toMatch(/telegramGroupBinding\s+TelegramGroupBinding\?/u);
+    expect(schema).toMatch(/boundTelegramGroups\s+TelegramGroupBinding\[\]/u);
+
+    expect(existsSync(groupBindingMigrationUrl)).toBe(true);
+    const migration = existsSync(groupBindingMigrationUrl)
+      ? readFileSync(groupBindingMigrationUrl, 'utf8')
+      : '';
+    expect(migration).toContain('CREATE TABLE "TelegramGroupBinding"');
+    expect(migration).toContain('CREATE UNIQUE INDEX "TelegramGroupBinding_companyId_key"');
+    expect(migration).toContain('CREATE UNIQUE INDEX "TelegramGroupBinding_telegramChatId_key"');
+    expect(migration).toContain('REFERENCES "Company"("id") ON DELETE CASCADE');
+    expect(migration).toContain('REFERENCES "User"("id") ON DELETE RESTRICT');
     expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN)/iu);
   });
 });

@@ -22,3 +22,21 @@ async def test_client_sends_only_service_identity_and_idempotency_headers():
     assert captured.headers["Authorization"] == "Bearer service-secret"
     assert captured.headers["X-Telegram-User-Id"] == "123"
     assert captured.headers["Idempotency-Key"] == "tg-update-77"
+
+
+@pytest.mark.asyncio
+async def test_group_binding_sends_exact_group_context():
+    captured = None
+
+    def handler(request: httpx.Request):
+        nonlocal captured
+        captured = request
+        return httpx.Response(200, json={"companyId": "company-1"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        client = PilotApiClient("https://pilot.example.com", "service-secret", http=http)
+        await client.bind_work_group("185185047", "-100777", "supergroup", "Pilot+ работа")
+
+    assert captured.url.path == "/api/bot/v1/group-bindings"
+    assert captured.headers["X-Telegram-User-Id"] == "185185047"
+    assert captured.read().decode() == '{"telegramChatId":"-100777","chatType":"supergroup","title":"Pilot+ работа"}'

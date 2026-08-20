@@ -302,6 +302,7 @@ model User {
   initiatedFineInvoices    FineInvoice[]             @relation("FineInvoiceInitiatedBy")
   telegramIdentities       TelegramIdentity[]        @relation("TelegramIdentityUser")
   createdTelegramInvites   TelegramInvite[]          @relation("TelegramInviteCreator")
+  boundTelegramGroups      TelegramGroupBinding[]
   decidedBotRentalRequests BotRentalRequest[]        @relation("BotRentalRequestDecider")
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
@@ -378,6 +379,7 @@ model Company {
   fineInvoices              FineInvoice[]
   telegramIdentities        TelegramIdentity[]
   telegramInvites           TelegramInvite[]
+  telegramGroupBinding      TelegramGroupBinding?
   botRentalRequests         BotRentalRequest[]
   botNotificationJobs       BotNotificationJob[]
   createdAt                 DateTime                   @default(now())
@@ -1029,6 +1031,18 @@ model TelegramInvite {
 
   @@index([companyId, targetId, expiresAt])
   @@index([expiresAt, usedAt])
+}
+
+model TelegramGroupBinding {
+  id             String   @id @default(cuid())
+  companyId      String   @unique
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  telegramChatId String   @unique
+  title          String?
+  boundByUserId  String
+  boundBy        User     @relation(fields: [boundByUserId], references: [id], onDelete: Restrict)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
 }
 
 model BotRentalRequest {
