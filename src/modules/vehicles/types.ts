@@ -97,4 +97,13 @@ export interface VehicleDetailDto extends VehicleCardDto {
   maintenanceRecords: VehicleMaintenanceHistorySummary[];
   washRecords: VehicleWashHistorySummary[];
   documents: { id: string; title: string; type: string; expiresAt: string | null }[];
+  rentals?: {
+    id: string;
+    contractNumber: string | null;
+    status: 'DRAFT' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+    startsAt: string;
+    endsAt: string;
+    client: { id: string; fullName: string };
+    documents: { id: string; version: number; format: 'DOCX' | 'PDF' }[];
+  }[];
 }

@@ -1,5 +1,5 @@
 export type VehicleTab =
-  'overview' | 'trips' | 'routes' | 'events' | 'fuel' | 'maintenance' | 'documents';
+  'overview' | 'trips' | 'routes' | 'events' | 'fuel' | 'maintenance' | 'rentals' | 'documents';
 
 export const vehicleTabs: readonly { value: VehicleTab; label: string }[] = [
   { value: 'overview', label: 'Обзор' },
@@ -8,6 +8,7 @@ export const vehicleTabs: readonly { value: VehicleTab; label: string }[] = [
   { value: 'events', label: 'События' },
   { value: 'fuel', label: 'Топливо' },
   { value: 'maintenance', label: 'Обслуживание' },
+  { value: 'rentals', label: 'Аренды' },
   { value: 'documents', label: 'Документы' },
 ];
 
@@ -40,6 +41,10 @@ const emptyStates: Record<
   maintenance: {
     title: 'Обслуживание ещё не запланировано',
     description: 'Здесь будут регламенты, выполненные работы, даты и пробег.',
+  },
+  rentals: {
+    title: 'Аренд пока нет',
+    description: 'Здесь появятся клиенты, договоры и сроки использования автомобиля.',
   },
   documents: {
     title: 'Документы ещё не добавлены',

@@ -78,6 +78,15 @@ interface RawVehicle {
     type: string;
     expiresAt: Date | null;
   }[];
+  rentals?: Array<{
+    id: string;
+    contractNumber: string | null;
+    status: 'DRAFT' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+    startsAt: Date;
+    endsAt: Date;
+    client: { id: string; firstName: string; middleName: string | null; lastName: string };
+    documentVersions: { id: string; version: number; format: 'DOCX' | 'PDF' }[];
+  }>;
   images: {
     localPath: string;
     alt: string;
@@ -218,6 +227,22 @@ const vehicleDetailSelect = {
     orderBy: { createdAt: 'desc' as const },
     take: 50,
   },
+  rentals: {
+    select: {
+      id: true,
+      contractNumber: true,
+      status: true,
+      startsAt: true,
+      endsAt: true,
+      client: { select: { id: true, firstName: true, middleName: true, lastName: true } },
+      documentVersions: {
+        select: { id: true, version: true, format: true },
+        orderBy: [{ version: 'desc' as const }, { format: 'asc' as const }],
+      },
+    },
+    orderBy: { startsAt: 'desc' as const },
+    take: 100,
+  },
   images: {
     where: { isPrimary: true },
     select: { localPath: true, alt: true },
@@ -318,6 +343,20 @@ function mapDetail(vehicle: RawVehicle, referenceTime: Date): VehicleDetailDto {
     documents: vehicle.documents.map((document) => ({
       ...document,
       expiresAt: document.expiresAt?.toISOString() ?? null,
+    })),
+    rentals: (vehicle.rentals ?? []).map((rental) => ({
+      id: rental.id,
+      contractNumber: rental.contractNumber,
+      status: rental.status,
+      startsAt: rental.startsAt.toISOString(),
+      endsAt: rental.endsAt.toISOString(),
+      client: {
+        id: rental.client.id,
+        fullName: [rental.client.lastName, rental.client.firstName, rental.client.middleName]
+          .filter(Boolean)
+          .join(' '),
+      },
+      documents: rental.documentVersions,
     })),
   };
 }

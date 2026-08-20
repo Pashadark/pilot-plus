@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { getVehicleEmptyState, normalizeVehicleTab, vehicleTabs } from './vehicle-tabs';
 
 describe('вкладки карточки автомобиля', () => {
-  it('содержит семь русских разделов с постоянными адресами', () => {
+  it('содержит раздел аренды и истории клиентов', () => {
     expect(vehicleTabs).toEqual([
       { value: 'overview', label: 'Обзор' },
       { value: 'trips', label: 'Поездки' },
@@ -11,6 +11,7 @@ describe('вкладки карточки автомобиля', () => {
       { value: 'events', label: 'События' },
       { value: 'fuel', label: 'Топливо' },
       { value: 'maintenance', label: 'Обслуживание' },
+      { value: 'rentals', label: 'Аренды' },
       { value: 'documents', label: 'Документы' },
     ]);
   });

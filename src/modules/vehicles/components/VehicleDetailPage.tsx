@@ -330,6 +330,57 @@ function TabContent({ vehicle, tab }: { vehicle: VehicleDetailDto; tab: VehicleT
     );
   }
 
+  if (tab === 'rentals') {
+    const rentals = vehicle.rentals ?? [];
+    if (!rentals.length) return <VehicleEmptySection tab={tab} />;
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold">История аренд и клиентов</h2>
+            <Badge tone="primary">{rentals.length}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {rentals.map((rental) => (
+            <article
+              key={rental.id}
+              className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_auto]"
+            >
+              <div>
+                <Link
+                  href={`/rentals/${rental.id}`}
+                  className="font-semibold text-[var(--color-primary)] hover:underline"
+                >
+                  {rental.contractNumber ?? 'Черновик договора'}
+                </Link>
+                <p className="mt-1 text-sm">
+                  <Link href={`/clients/${rental.client.id}`} className="hover:underline">
+                    {rental.client.fullName}
+                  </Link>
+                </p>
+                <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                  {formatDate(rental.startsAt)} — {formatDate(rental.endsAt)}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-start gap-2">
+                {rental.documents.map((document) => (
+                  <Link
+                    key={document.id}
+                    href={`/rentals/${rental.id}/documents/${document.version}/${document.format}`}
+                    className="inline-flex min-h-11 items-center rounded-[var(--radius-sm)] border px-3 text-sm font-semibold hover:bg-[var(--color-elevated)]"
+                  >
+                    {document.format}
+                  </Link>
+                ))}
+              </div>
+            </article>
+          ))}
+        </CardContent>
+      </Card>
+    );
+  }
+
   // Документы
   if (tab === 'documents') {
     const documents = vehicle.documents;
