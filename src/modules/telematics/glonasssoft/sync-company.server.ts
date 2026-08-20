@@ -152,6 +152,7 @@ async function savePoint(
       speedKph: Math.round(point.speedKph),
       odometerKm: point.odometerKm,
       fuelLevelPercent: point.fuelPercent,
+      address: point.address,
       recordedAt,
       provider: 'GLONASSSOFT',
       externalId,

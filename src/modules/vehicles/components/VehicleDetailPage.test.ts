@@ -28,6 +28,7 @@ const vehicle: VehicleDetailDto = {
     lastSeenAt: null,
     lastTripAt: null,
     hasPosition: false,
+    address: null,
   },
   vin: null,
   createdAt: '2026-07-19T12:00:00.000Z',

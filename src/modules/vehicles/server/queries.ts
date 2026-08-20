@@ -31,6 +31,7 @@ interface RawVehicle {
     odometerKm: unknown | null;
     fuelLevelPercent: unknown | null;
     recordedAt: Date;
+    address: string | null;
   }[];
   trips: {
     id?: string;
@@ -132,7 +133,7 @@ const vehicleCardSelect = {
   features: true,
   status: true,
   positions: {
-    select: { odometerKm: true, fuelLevelPercent: true, recordedAt: true },
+    select: { odometerKm: true, fuelLevelPercent: true, recordedAt: true, address: true },
     orderBy: { recordedAt: 'desc' as const },
     take: 1,
   },
@@ -168,7 +169,7 @@ const vehicleDetailSelect = {
   status: true,
   createdAt: true,
   positions: {
-    select: { odometerKm: true, fuelLevelPercent: true, recordedAt: true },
+    select: { odometerKm: true, fuelLevelPercent: true, recordedAt: true, address: true },
     orderBy: { recordedAt: 'desc' as const },
     take: 1,
   },
@@ -302,6 +303,7 @@ function mapCard(vehicle: RawVehicleCard): VehicleCardDto {
       lastSeenAt: position?.recordedAt.toISOString() ?? null,
       lastTripAt: trip?.startedAt.toISOString() ?? null,
       hasPosition: Boolean(position),
+      address: position?.address ?? null,
     },
   };
 }

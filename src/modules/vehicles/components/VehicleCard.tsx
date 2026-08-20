@@ -14,6 +14,7 @@ import {
 } from 'react-icons/fi';
 
 import type { VehicleCardDto, VehicleStatus } from '../types';
+import { vehicleStatusLabel } from '../park-status';
 import { formatDailyPrice, formatOptionalMetric } from '../utils';
 import { VehiclePhoto } from './VehiclePhoto';
 import { useToast } from '@/shared/providers/ToastProvider';
@@ -85,7 +86,9 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
                   {vehicle.registrationNumber ? ` · ${vehicle.registrationNumber}` : ''}
                 </p>
               </div>
-              <Badge tone={status.tone}>{status.label}</Badge>
+              <Badge tone={status.tone}>
+                {vehicleStatusLabel(vehicle.status, vehicle.telemetry.address)}
+              </Badge>
             </div>
             <p className="mt-2 flex items-start gap-1.5 text-sm text-[var(--color-text-secondary)]">
               <FiMapPin aria-hidden="true" className="mt-0.5 shrink-0" />

@@ -1231,6 +1231,7 @@ model VehiclePosition {
   heading            Int?
   odometerKm         Decimal?  @db.Decimal(12, 1)
   fuelLevelPercent   Decimal?  @db.Decimal(5, 2)
+  address            String?
   recordedAt         DateTime
   provider           String?
   externalId         String?

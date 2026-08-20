@@ -63,6 +63,7 @@ describe('синхронизация последних позиций GLONASSSo
         speedKph: 32,
         odometerKm: 12345.6,
         fuelPercent: 67,
+        address: 'г. Москва, Зелёный проспект, д. 22',
       },
       {
         externalId: 'foreign',
@@ -100,6 +101,7 @@ describe('синхронизация последних позиций GLONASSSo
         latitude: 55.7558,
         longitude: 37.6176,
         provider: 'GLONASSSOFT',
+        address: 'г. Москва, Зелёный проспект, д. 22',
       }),
       update: {},
     });

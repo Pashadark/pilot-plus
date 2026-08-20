@@ -27,6 +27,7 @@ function vehicle(overrides: Partial<VehicleCardDto>): VehicleCardDto {
       lastSeenAt: null,
       lastTripAt: null,
       hasPosition: false,
+      address: null,
     },
     ...overrides,
   };

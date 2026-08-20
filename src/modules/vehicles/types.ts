@@ -7,6 +7,7 @@ export interface VehicleTelemetrySummary {
   lastSeenAt: string | null;
   lastTripAt: string | null;
   hasPosition: boolean;
+  address: string | null;
 }
 
 export interface VehicleImageDto {

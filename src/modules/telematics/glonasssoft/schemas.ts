@@ -42,6 +42,7 @@ export const lastDataSchema = z
     speed: finiteNumber.nonnegative().optional(),
     mileage: finiteNumber.nonnegative().optional(),
     fuel: finiteNumber.min(0).max(100).optional(),
+    address: z.string().trim().max(1000).optional().nullable(),
   })
   .passthrough()
   .transform((value, context) => {
@@ -68,6 +69,7 @@ export const lastDataSchema = z
       speedKph: value.speed ?? 0,
       odometerKm: value.mileage ?? null,
       fuelPercent: value.fuel ?? null,
+      address: value.address || null,
     };
   });
 

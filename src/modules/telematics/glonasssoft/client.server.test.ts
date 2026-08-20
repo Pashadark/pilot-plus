@@ -86,6 +86,7 @@ describe('GLONASSSoft API client', () => {
             lat: 55.7558,
             lon: 37.6176,
             speed: 32,
+            address: 'г. Москва, Зелёный проспект, д. 22',
           },
         ]),
       )
@@ -93,7 +94,13 @@ describe('GLONASSSoft API client', () => {
     const client = new GlonassSoftClient(options(transport));
 
     await expect(client.getLastData(['42'])).resolves.toMatchObject([
-      { externalId: '42', latitude: 55.7558, longitude: 37.6176, speedKph: 32 },
+      {
+        externalId: '42',
+        latitude: 55.7558,
+        longitude: 37.6176,
+        speedKph: 32,
+        address: 'г. Москва, Зелёный проспект, д. 22',
+      },
     ]);
     await client.getTerminalMessages({
       externalId: '42',
