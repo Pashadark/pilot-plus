@@ -214,23 +214,25 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
       : [];
     const rentalById = new Map(rentals.map((rental) => [rental.id, rental]));
     const attribution = selectFineAttribution(fine.offenseAt, rentals);
-    const assignmentCandidates = attribution.candidates.flatMap((candidate) => {
-      const rental = rentalById.get(candidate.id);
-      return rental
-        ? [
-            {
-              rentalId: rental.id,
-              contractNumber: rental.contractNumber,
-              clientDisplayName: clientDisplayName(rental.client),
-              startsAt: rental.startsAt.toISOString(),
-              endsAt: rental.endsAt.toISOString(),
-              distanceMs: candidate.distanceMs,
-              distanceLabel: distanceLabel(candidate.distanceMs, candidate.relativeToOffense),
-              relativeToOffense: candidate.relativeToOffense,
-            },
-          ]
-        : [];
-    });
+    const assignmentCandidates = fine.clientId
+      ? []
+      : attribution.candidates.flatMap((candidate) => {
+          const rental = rentalById.get(candidate.id);
+          return rental
+            ? [
+                {
+                  rentalId: rental.id,
+                  contractNumber: rental.contractNumber,
+                  clientDisplayName: clientDisplayName(rental.client),
+                  startsAt: rental.startsAt.toISOString(),
+                  endsAt: rental.endsAt.toISOString(),
+                  distanceMs: candidate.distanceMs,
+                  distanceLabel: distanceLabel(candidate.distanceMs, candidate.relativeToOffense),
+                  relativeToOffense: candidate.relativeToOffense,
+                },
+              ]
+            : [];
+        });
     return {
       id: fine.id,
       companyId: fine.companyId,

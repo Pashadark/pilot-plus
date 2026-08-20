@@ -30,4 +30,32 @@ describe('FineAssignmentReview', () => {
     expect(markup).toContain('Снять привязку');
     expect(markup).not.toContain('Клиент подтверждён');
   });
+
+  it('скрывает остальных кандидатов после подтверждения клиента', () => {
+    const markup = renderToStaticMarkup(
+      <FineAssignmentReview
+        companyId="company-a"
+        fineId="fine-a"
+        canManage
+        confirmedClientLabel="Барышева Кристина Олеговна"
+        confirmedContractLabel="ME-2026-0001-BK"
+        candidates={[
+          {
+            rentalId: 'rental-other',
+            contractNumber: 'ME-2026-0009-HM',
+            clientDisplayName: 'Хайитов Мухаммад Абдумаликович',
+            startsAt: '2026-08-16T00:00:00.000Z',
+            endsAt: '2026-08-19T00:00:00.000Z',
+            distanceLabel: '55 ч после',
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain('Подтверждённый клиент');
+    expect(markup).toContain('Барышева Кристина Олеговна');
+    expect(markup).toContain('Снять привязку');
+    expect(markup).not.toContain('Хайитов Мухаммад Абдумаликович');
+    expect(markup).not.toContain('Подтвердить клиента');
+  });
 });

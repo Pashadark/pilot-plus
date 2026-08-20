@@ -61,7 +61,7 @@ describe('fine queries', () => {
     );
   });
 
-  it('returns safe, sorted assignment candidates and the current assignment source', async () => {
+  it('hides assignment candidates after a client and rental are confirmed', async () => {
     const offenseAt = new Date('2026-08-16T09:30:00.000Z');
     getFineAccessMock.mockResolvedValue({
       scope: 'COMPANY',
@@ -123,28 +123,7 @@ describe('fine queries', () => {
       id: 'fine-1',
       assignedRentalId: 'rental-current',
       assignmentSource: 'MANUAL',
-      assignmentCandidates: [
-        {
-          rentalId: 'rental-after',
-          contractNumber: 'ME-2026-0002-BB',
-          clientDisplayName: 'Волкова Вера Олеговна',
-          startsAt: '2026-08-16T09:45:00.000Z',
-          endsAt: '2026-08-16T11:00:00.000Z',
-          distanceMs: 15 * 60 * 1000,
-          distanceLabel: '15 мин после',
-          relativeToOffense: 'AFTER',
-        },
-        {
-          rentalId: 'rental-before',
-          contractNumber: 'ME-2026-0001-AA',
-          clientDisplayName: 'Белов Борис',
-          startsAt: '2026-08-16T07:00:00.000Z',
-          endsAt: '2026-08-16T09:00:00.000Z',
-          distanceMs: 30 * 60 * 1000,
-          distanceLabel: '30 мин до',
-          relativeToOffense: 'BEFORE',
-        },
-      ],
+      assignmentCandidates: [],
     });
     expect(rentalFindManyMock).toHaveBeenCalledWith({
       where: {

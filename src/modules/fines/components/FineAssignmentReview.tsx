@@ -55,7 +55,7 @@ export function FineAssignmentReview({
         </p>
       ) : null}
 
-      {candidates.length ? (
+      {!confirmedClientLabel && candidates.length ? (
         <div className="grid gap-2">
           {candidates.map((candidate) => (
             <div
