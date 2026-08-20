@@ -1,0 +1,6 @@
+CLIENT_NEW_RENTAL = "client:new_rental"
+CLIENT_RENTALS = "client:rentals"
+CLIENT_EXTEND = "client:extend"
+COMMON_HELP = "client:help"
+STAFF_REQUESTS = "staff:requests"
+ADMIN_SETTINGS = "admin:settings"

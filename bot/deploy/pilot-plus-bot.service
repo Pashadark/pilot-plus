@@ -1,0 +1,22 @@
+[Unit]
+Description=Pilot+ Telegram bot
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/pilot-plus
+ExecStart=/usr/bin/docker compose -f bot/docker-compose.bot.yaml up -d --build
+ExecStop=/usr/bin/docker compose -f bot/docker-compose.bot.yaml down
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/pilot-plus
+
+[Install]
+WantedBy=multi-user.target
