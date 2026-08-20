@@ -1,12 +1,26 @@
 from pathlib import Path
 
+from aiogram.types import ReplyKeyboardMarkup
+
 from bot.keyboards.client import client_main_menu
 from bot.keyboards.rentals import extension_choices
+from bot.keyboards.staff import STAFF_MENU_LABELS, staff_main_menu
 
 
 def test_client_menu_has_only_client_capabilities():
     labels = [button.text for row in client_main_menu().inline_keyboard for button in row]
     assert labels == ["Новая аренда", "Мои аренды", "Продлить аренду", "Помощь"]
+
+
+def test_staff_menu_is_persistent_reply_keyboard_with_all_sections():
+    markup = staff_main_menu()
+
+    assert isinstance(markup, ReplyKeyboardMarkup)
+    assert markup.resize_keyboard is True
+    assert markup.is_persistent is True
+    labels = [button.text for row in markup.keyboard for button in row]
+    assert labels == ["Заявки", "Аренды", "Календарь", "Клиенты", "Автопарк", "Штрафы", "Помощь"]
+    assert STAFF_MENU_LABELS == frozenset(labels)
 
 
 def test_markup_imports_exist_only_in_keyboards_package():
