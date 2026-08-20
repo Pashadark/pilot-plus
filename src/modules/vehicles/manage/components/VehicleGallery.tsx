@@ -127,6 +127,7 @@ export function VehicleGallery({
                   src={image.localPath}
                   alt={image.alt}
                   fill
+                  unoptimized
                   sizes="(max-width: 640px) 100vw, 33vw"
                   className="object-cover"
                 />

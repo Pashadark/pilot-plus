@@ -26,6 +26,7 @@ describe('VehicleGallery', () => {
 
     expect(screen.getByLabelText('Добавить фотографии автомобиля')).toBeTruthy();
     expect(screen.getByText('Основное фото')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Kia' }).getAttribute('src')).toBe('/one.webp');
     expect(screen.getByRole('button', { name: 'Удалить фото Kia' })).toBeTruthy();
   });
 });
