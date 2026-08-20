@@ -34,10 +34,12 @@ const filters: readonly { value: OnlineMapFilter; label: string }[] = [
 
 export interface OnlineMapWorkspaceProps {
   mapComponent?: ComponentType<OnlineFleetMapProps>;
+  vehicles?: readonly OnlineMapVehicle[];
 }
 
 export function OnlineMapWorkspace({
   mapComponent: MapComponent = OnlineFleetMapClient,
+  vehicles = onlineMapVehicles,
 }: OnlineMapWorkspaceProps) {
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<OnlineMapFilter>('all');
@@ -53,8 +55,8 @@ export function OnlineMapWorkspace({
   const reducedMotion = useReducedMotion() ?? false;
 
   const filteredVehicles = useMemo(
-    () => filterOnlineMapVehicles(onlineMapVehicles, query, activeFilter),
-    [activeFilter, query],
+    () => filterOnlineMapVehicles(vehicles, query, activeFilter),
+    [activeFilter, query, vehicles],
   );
   const selectedVehicle =
     filteredVehicles.find((vehicle) => vehicle.id === selectedVehicleId) ?? null;
@@ -119,7 +121,7 @@ export function OnlineMapWorkspace({
   };
 
   const applyFilter = (nextQuery: string, nextFilter: OnlineMapFilter) => {
-    const nextVehicles = filterOnlineMapVehicles(onlineMapVehicles, nextQuery, nextFilter);
+    const nextVehicles = filterOnlineMapVehicles(vehicles, nextQuery, nextFilter);
 
     if (!nextVehicles.some((vehicle) => vehicle.id === selectedVehicleId)) {
       clearVehicleSelection();

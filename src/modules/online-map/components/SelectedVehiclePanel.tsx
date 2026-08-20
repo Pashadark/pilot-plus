@@ -77,7 +77,9 @@ export function SelectedVehiclePanel({
             </div>
             <div className="rounded-[var(--radius-md)] bg-[var(--color-elevated)] p-3">
               <dt className="text-[var(--color-text-secondary)]">Топливо</dt>
-              <dd className="mt-1 font-semibold">{vehicle.fuelPercent}%</dd>
+              <dd className="mt-1 font-semibold">
+                {vehicle.fuelPercent == null ? 'Нет данных' : `${vehicle.fuelPercent}%`}
+              </dd>
             </div>
           </dl>
 

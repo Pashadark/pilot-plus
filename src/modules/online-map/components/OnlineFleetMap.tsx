@@ -19,7 +19,7 @@ import { VehicleMapMarker } from './VehicleMapMarker';
 
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-const KRASNOYARSK_CENTER: [number, number] = [92.87, 56.01];
+const DEFAULT_MAP_CENTER: [number, number] = [37.6176, 55.7558];
 const MAP_LOAD_TIMEOUT_MS = 10_000;
 const RUSSIAN_MAP_LOCALE = {
   'Map.Title': 'Интерактивная карта автопарка',
@@ -147,7 +147,9 @@ export function OnlineFleetMap({
         },
         layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
       },
-      center: KRASNOYARSK_CENTER,
+      center: stableVehicles[0]
+        ? [stableVehicles[0].longitude, stableVehicles[0].latitude]
+        : DEFAULT_MAP_CENTER,
       zoom: 11,
       locale: RUSSIAN_MAP_LOCALE,
     });

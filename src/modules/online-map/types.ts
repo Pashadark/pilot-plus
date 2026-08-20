@@ -10,7 +10,7 @@ export interface OnlineMapVehicle {
   longitude: number;
   latitude: number;
   speedKph: number;
-  fuelPercent: number;
+  fuelPercent: number | null;
   lastSeenLabel: string;
   address: string;
 }
