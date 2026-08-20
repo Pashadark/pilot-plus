@@ -244,7 +244,7 @@ it('не пересоздаёт карту из-за нового массива
   );
 
   expect(source).toContain('const vehiclesSnapshotKey = JSON.stringify(vehicles);');
-  expect(source).toContain('[instanceKey, stableVehicles]');
+  expect(source).toContain('[instanceKey, positionedVehicles]');
   expect(source).not.toContain('[instanceKey, vehicles]');
 });
 
