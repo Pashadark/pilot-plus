@@ -374,6 +374,8 @@ model Company {
   clientComments            ClientComment[]
   fineIntegration           FineIntegration?
   externalVehicleLinks      ExternalVehicleLink[]
+  telematicsIntegration     TelematicsIntegration?
+  telematicsVehicleLinks    TelematicsVehicleLink[]
   fines                     Fine[]
   fineAssignmentHistory     FineAssignmentHistory[]
   fineInvoices              FineInvoice[]
@@ -613,10 +615,10 @@ model AuditLog {
 }
 
 model Vehicle {
-  id                            String                @id @default(cuid())
+  id                            String                  @id @default(cuid())
   companyId                     String
-  company                       Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  sourceKey                     String                @unique
+  company                       Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceKey                     String                  @unique
   internalNumber                String
   model                         String
   city                          String
@@ -634,13 +636,13 @@ model Vehicle {
   category                      String?
   bodyType                      String?
   transmission                  String
-  engineLiters                  Decimal?              @db.Decimal(3, 1)
+  engineLiters                  Decimal?                @db.Decimal(3, 1)
   fuelType                      FuelType
   seats                         Int
   dailyPriceMinor               Int
   rangePriceMinor               BigInt?
-  currency                      String                @db.Char(3)
-  odometerKm                    Decimal?              @db.Decimal(12, 1)
+  currency                      String                  @db.Char(3)
+  odometerKm                    Decimal?                @db.Decimal(12, 1)
   valueMinor                    BigInt?
   depositMinor                  BigInt?
   includedMileageKm             Int?
@@ -650,21 +652,21 @@ model Vehicle {
   vehiclePassportNumber         String?
   osagoInsurer                  String?
   osagoPolicyNumber             String?
-  osagoStartsAt                 DateTime?             @db.Date
-  osagoEndsAt                   DateTime?             @db.Date
+  osagoStartsAt                 DateTime?               @db.Date
+  osagoEndsAt                   DateTime?               @db.Date
   cascoInsurer                  String?
   cascoPolicyNumber             String?
-  cascoStartsAt                 DateTime?             @db.Date
-  cascoEndsAt                   DateTime?             @db.Date
-  isRentalReady                 Boolean               @default(false)
-  rentalReadyAt                 DateTime?             @db.Timestamptz(3)
-  archivedAt                    DateTime?             @db.Timestamptz(3)
+  cascoStartsAt                 DateTime?               @db.Date
+  cascoEndsAt                   DateTime?               @db.Date
+  isRentalReady                 Boolean                 @default(false)
+  rentalReadyAt                 DateTime?               @db.Timestamptz(3)
+  archivedAt                    DateTime?               @db.Timestamptz(3)
   archivedByUserId              String?
-  archivedBy                    User?                 @relation("VehicleArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
+  archivedBy                    User?                   @relation("VehicleArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
   originalPrice                 String
-  features                      String[]              @default([])
-  status                        VehicleStatus         @default(UNKNOWN)
-  isDemoImport                  Boolean               @default(true)
+  features                      String[]                @default([])
+  status                        VehicleStatus           @default(UNKNOWN)
+  isDemoImport                  Boolean                 @default(true)
   positions                     VehiclePosition[]
   trips                         Trip[]
   events                        VehicleEvent[]
@@ -675,12 +677,13 @@ model Vehicle {
   images                        VehicleImage[]
   device                        Device?
   manualVehicleEvents           ManualVehicleEvent[]
-  rentals                       Rental[]              @relation("VehicleRentals")
+  rentals                       Rental[]                @relation("VehicleRentals")
   botRentalRequests             BotRentalRequest[]
   externalFineLinks             ExternalVehicleLink[]
+  telematicsLinks               TelematicsVehicleLink[]
   fines                         Fine[]
-  createdAt                     DateTime              @default(now())
-  updatedAt                     DateTime              @updatedAt
+  createdAt                     DateTime                @default(now())
+  updatedAt                     DateTime                @updatedAt
 
   @@unique([companyId, internalNumber])
   @@unique([companyId, id])
@@ -720,6 +723,38 @@ model ExternalVehicleLink {
 
   @@unique([companyId, provider, externalId])
   @@index([companyId, vehicleId])
+}
+
+model TelematicsIntegration {
+  id                String    @id @default(cuid())
+  companyId         String    @unique
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  provider          String    @default("GLONASSSOFT")
+  baseUrl           String
+  usernameEncrypted String
+  passwordEncrypted String
+  enabled           Boolean   @default(true)
+  lastAttemptAt     DateTime? @db.Timestamptz(3)
+  lastSuccessAt     DateTime? @db.Timestamptz(3)
+  lastErrorCode     String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model TelematicsVehicleLink {
+  id                           String   @id @default(cuid())
+  companyId                    String
+  company                      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vehicleId                    String
+  vehicle                      Vehicle  @relation(fields: [companyId, vehicleId], references: [companyId, id], onDelete: Cascade)
+  provider                     String   @default("GLONASSSOFT")
+  externalId                   String
+  registrationNumberNormalized String
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  @@unique([companyId, provider, externalId])
+  @@unique([companyId, provider, vehicleId])
 }
 
 model Fine {
@@ -1187,18 +1222,23 @@ model VehicleImage {
 }
 
 model VehiclePosition {
-  id               String   @id @default(cuid())
-  vehicleId        String
-  vehicle          Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  latitude         Decimal  @db.Decimal(9, 6)
-  longitude        Decimal  @db.Decimal(9, 6)
-  speedKph         Int?
-  heading          Int?
-  odometerKm       Decimal? @db.Decimal(12, 1)
-  fuelLevelPercent Decimal? @db.Decimal(5, 2)
-  recordedAt       DateTime
-  createdAt        DateTime @default(now())
+  id                 String    @id @default(cuid())
+  vehicleId          String
+  vehicle            Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  latitude           Decimal   @db.Decimal(9, 6)
+  longitude          Decimal   @db.Decimal(9, 6)
+  speedKph           Int?
+  heading            Int?
+  odometerKm         Decimal?  @db.Decimal(12, 1)
+  fuelLevelPercent   Decimal?  @db.Decimal(5, 2)
+  recordedAt         DateTime
+  provider           String?
+  externalId         String?
+  providerRecordedAt DateTime? @db.Timestamptz(3)
+  receivedAt         DateTime? @db.Timestamptz(3)
+  createdAt          DateTime  @default(now())
 
+  @@unique([vehicleId, provider, externalId])
   @@index([vehicleId, recordedAt])
 }
 
@@ -1229,8 +1269,11 @@ model VehicleEvent {
   description String?
   location    String?
   recordedAt  DateTime
+  provider    String?
+  externalId  String?
   createdAt   DateTime          @default(now())
 
+  @@unique([vehicleId, provider, externalId])
   @@index([vehicleId, recordedAt])
   @@index([severity, recordedAt])
 }
