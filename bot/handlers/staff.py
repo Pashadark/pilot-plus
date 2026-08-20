@@ -61,7 +61,8 @@ async def bind_work_group(message: Message, pilot_api) -> None:
 
 @router.message(F.text.in_(STAFF_MENU_LABELS))
 async def staff_menu_action(message: Message, pilot_api) -> None:
-    if not message.from_user:
+    chat_type = getattr(message.chat.type, "value", message.chat.type)
+    if not message.from_user or chat_type != "private":
         return
     access = await staff_access(message.from_user.id, pilot_api)
     if access == "unavailable":
@@ -101,7 +102,8 @@ async def legacy_staff_requests(callback: CallbackQuery, pilot_api) -> None:
 
 @router.message()
 async def staff_unknown_message(message: Message, pilot_api) -> None:
-    if not message.from_user:
+    chat_type = getattr(message.chat.type, "value", message.chat.type)
+    if not message.from_user or chat_type != "private":
         return
     if await staff_access(message.from_user.id, pilot_api) == "allowed":
         await message.answer("Выберите раздел в меню Pilot+.", reply_markup=staff_main_menu())

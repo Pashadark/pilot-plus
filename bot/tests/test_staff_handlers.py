@@ -2,7 +2,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from bot.handlers.staff import bind_work_group, legacy_staff_requests, staff_menu_action
+from bot.handlers.staff import (
+    bind_work_group,
+    legacy_staff_requests,
+    staff_menu_action,
+    staff_unknown_message,
+)
 from bot.keyboards.staff import STAFF_MENU_LABELS, STAFF_REQUESTS_TEXT
 from bot.services.errors import PilotApiError
 
@@ -102,3 +107,21 @@ async def test_staff_admin_can_bind_current_work_group():
 
     assert api.bind_calls == [("185185047", "-100777", "supergroup", "Pilot+ работа")]
     assert message.answers[0][0] == "Группа Pilot+ привязана. Сюда будут приходить ежедневные сводки."
+
+
+@pytest.mark.asyncio
+async def test_bot_ignores_ordinary_group_messages():
+    api = FakeApi({"kind": "STAFF", "displayName": "Павел Седов"})
+    message = FakeMessage("20.08 Офис -2000 рублей", 185185047)
+    message.chat = SimpleNamespace(id=-5147178959, type="group", title="TG Car / Офис Москва")
+
+    await staff_unknown_message(message, api)
+
+    assert message.answers == []
+    assert api.profile_calls == []
+
+    menu_message = FakeMessage(STAFF_REQUESTS_TEXT, 185185047)
+    menu_message.chat = message.chat
+    await staff_menu_action(menu_message, api)
+    assert menu_message.answers == []
+    assert api.profile_calls == []
