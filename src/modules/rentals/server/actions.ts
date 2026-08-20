@@ -91,7 +91,7 @@ async function saveDraft(formData: FormData, rentalId?: string): Promise<RentalA
             id: value.vehicleId,
             companyId: value.companyId,
             archivedAt: null,
-            isRentalReady: true,
+            isDemoImport: false,
           },
           select: {
             id: true,

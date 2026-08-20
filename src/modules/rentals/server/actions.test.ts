@@ -66,6 +66,16 @@ describe('rental actions', () => {
     expect(rentalCreate.mock.calls[0]?.[0].data.snapshot).toMatchObject({
       issuance: { depositMinor: 125000 },
     });
+    expect(transaction.vehicle.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'vehicle-1',
+          companyId: 'company-1',
+          archivedAt: null,
+          isDemoImport: false,
+        },
+      }),
+    );
   });
   it('reserves cancellation for draft and confirmed states', () => {
     expect(['DRAFT', 'CONFIRMED']).toContain('CONFIRMED');
