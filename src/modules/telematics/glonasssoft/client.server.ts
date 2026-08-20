@@ -136,7 +136,7 @@ export class GlonassSoftClient {
     if (ids.length === 0 || ids.length > 10_000 || new Set(ids).size !== ids.length) {
       throw new GlonassSoftError('INVALID_RESPONSE');
     }
-    return this.authenticated('/vehicles/getlastdata', ids, lastDataListSchema);
+    return this.authenticated('/vehicles/getlastdata', { vehiclesIds: ids }, lastDataListSchema);
   }
 
   async getTerminalMessages(range: GlonassSoftRange) {

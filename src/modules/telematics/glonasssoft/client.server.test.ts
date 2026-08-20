@@ -101,7 +101,7 @@ describe('GLONASSSoft API client', () => {
       to: new Date('2026-08-21T00:00:00Z'),
     });
 
-    expect(await (transport.mock.calls[1]?.[0] as Request).json()).toEqual([42]);
+    expect(await (transport.mock.calls[1]?.[0] as Request).json()).toEqual({ vehiclesIds: [42] });
     expect(await (transport.mock.calls[2]?.[0] as Request).json()).toEqual({
       vehicleId: 42,
       from: '2026-08-20T00:00:00.000Z',
