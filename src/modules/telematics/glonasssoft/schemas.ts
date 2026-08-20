@@ -9,11 +9,13 @@ export const authResponseSchema = z
     z.string().trim().min(1).max(4096),
     z.object({ token: z.string().trim().min(1).max(4096) }).passthrough(),
     z.object({ authId: z.string().trim().min(1).max(4096) }).passthrough(),
+    z.object({ AuthId: z.string().trim().min(1).max(4096) }).passthrough(),
   ])
   .transform<string>((value) => {
     if (typeof value === 'string') return value;
     if ('token' in value && typeof value.token === 'string') return value.token;
     if ('authId' in value && typeof value.authId === 'string') return value.authId;
+    if ('AuthId' in value && typeof value.AuthId === 'string') return value.AuthId;
     throw new Error('Invalid auth response');
   });
 

@@ -17,6 +17,7 @@
     "client-documents:reconcile": "tsx scripts/reconcile-client-document-uploads.ts",
     "vehicles:sync-images": "tsx scripts/sync-vehicle-images.ts",
     "telematics:sync-glonasssoft": "tsx --conditions=react-server scripts/sync-glonasssoft.ts",
+    "telematics:configure-glonasssoft": "tsx --conditions=react-server scripts/configure-glonasssoft.ts",
     "vehicles:reconcile-real": "tsx --conditions=react-server scripts/reconcile-real-fleet.ts",
     "test:e2e": "playwright test",
     "test:e2e:auth": "playwright test tests/auth.spec.ts --workers=1",

@@ -27,7 +27,7 @@ interface OnlineMapRow {
   rentals?: Array<{
     id: string;
     contractNumber: string | null;
-    client: { fullName: string };
+    client: { firstName: string; middleName: string | null; lastName: string };
   }>;
 }
 
@@ -83,7 +83,7 @@ export async function listOnlineMapVehicles(
         select: {
           id: true,
           contractNumber: true,
-          client: { select: { fullName: true } },
+          client: { select: { lastName: true, firstName: true, middleName: true } },
         },
         orderBy: { startsAt: 'desc' },
         take: 1,
@@ -98,7 +98,13 @@ export async function listOnlineMapVehicles(
       ? {
           id: vehicle.rentals[0].id,
           contractNumber: vehicle.rentals[0].contractNumber,
-          clientName: vehicle.rentals[0].client.fullName,
+          clientName: [
+            vehicle.rentals[0].client.lastName,
+            vehicle.rentals[0].client.firstName,
+            vehicle.rentals[0].client.middleName,
+          ]
+            .filter(Boolean)
+            .join(' '),
         }
       : null;
     if (!position) {

@@ -21,7 +21,7 @@ describe('GLONASSSoft API client', () => {
   it('authenticates on the exact host and uses X-Auth for vehicle lookup', async () => {
     const transport = vi
       .fn()
-      .mockResolvedValueOnce(json({ token: 'session-token' }))
+      .mockResolvedValueOnce(json({ AuthId: 'session-token', ErrorStatus: 0 }))
       .mockResolvedValueOnce(json([{ vehicleId: 42, name: 'Volkswagen Polo А156АХ997' }]));
     const client = new GlonassSoftClient(options(transport));
 

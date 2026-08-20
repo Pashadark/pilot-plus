@@ -95,7 +95,11 @@ it('оставляет реальную машину без координат �
         {
           id: 'rental-1',
           contractNumber: 'ME-2026-0003-BK',
-          client: { fullName: 'Горбунов Глеб Геннадьевич' },
+          client: {
+            lastName: 'Горбунов',
+            firstName: 'Глеб',
+            middleName: 'Геннадьевич',
+          },
         },
       ],
     },
@@ -119,4 +123,9 @@ it('оставляет реальную машину без координат �
       },
     }),
   );
+  expect(findMany.mock.calls[0]?.[0].select.rentals.select.client.select).toEqual({
+    lastName: true,
+    firstName: true,
+    middleName: true,
+  });
 });
