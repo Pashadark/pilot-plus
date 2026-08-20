@@ -111,7 +111,7 @@ async function hydrateJob(
         },
       }),
       tx.vehicle.findMany({
-        where: { companyId: job.companyId, archivedAt: null, isRentalReady: true },
+        where: { companyId: job.companyId, archivedAt: null },
         select: {
           status: true,
           rentals: {

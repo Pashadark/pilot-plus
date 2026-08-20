@@ -99,7 +99,7 @@ export async function listDailyOperations(
       },
     }),
     database.vehicle.findMany({
-      where: { companyId: identity.companyId, archivedAt: null, isRentalReady: true },
+      where: { companyId: identity.companyId, archivedAt: null },
       orderBy: [{ make: 'asc' }, { modelName: 'asc' }, { id: 'asc' }],
       take: 300,
       select: {

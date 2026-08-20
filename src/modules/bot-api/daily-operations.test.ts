@@ -84,5 +84,10 @@ describe('daily operations', () => {
     expect(result.rentals).toHaveLength(1);
     expect(result.returns).toHaveLength(1);
     expect(result.freeVehicles.map((vehicle) => vehicle.id)).toEqual(['v1']);
+    expect(db.vehicle.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { companyId: 'c1', archivedAt: null },
+      }),
+    );
   });
 });
