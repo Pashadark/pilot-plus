@@ -1,0 +1,152 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { GlonassSoftClient, GlonassSoftError } from './client.server';
+
+const json = (body: unknown, status = 200, headers: HeadersInit = {}) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json', ...headers },
+  });
+
+const options = (transport: (request: Request) => Promise<Response>) => ({
+  baseUrl: 'https://gs.sputnik.vision/api/v3',
+  username: 'provider-user',
+  password: 'provider-password',
+  transport,
+  delay: vi.fn().mockResolvedValue(undefined),
+  now: vi.fn().mockReturnValueOnce(0).mockReturnValue(500),
+});
+
+describe('GLONASSSoft API client', () => {
+  it('authenticates on the exact host and uses X-Auth for vehicle lookup', async () => {
+    const transport = vi
+      .fn()
+      .mockResolvedValueOnce(json({ token: 'session-token' }))
+      .mockResolvedValueOnce(json([{ vehicleId: 42, name: 'Volkswagen Polo А156АХ997' }]));
+    const client = new GlonassSoftClient(options(transport));
+
+    await expect(client.findVehicles()).resolves.toEqual([
+      { externalId: '42', name: 'Volkswagen Polo А156АХ997' },
+    ]);
+
+    const login = transport.mock.calls[0]?.[0] as Request;
+    const vehicles = transport.mock.calls[1]?.[0] as Request;
+    expect(login.url).toBe('https://gs.sputnik.vision/api/v3/auth/login');
+    expect(login.method).toBe('POST');
+    expect(await login.json()).toEqual({ login: 'provider-user', password: 'provider-password' });
+    expect(vehicles.url).toBe('https://gs.sputnik.vision/api/v3/vehicles/find');
+    expect(vehicles.headers.get('x-auth')).toBe('session-token');
+    expect(await vehicles.json()).toEqual({});
+  });
+
+  it('waits at least 500ms between provider requests', async () => {
+    const delay = vi.fn().mockResolvedValue(undefined);
+    const transport = vi
+      .fn()
+      .mockResolvedValueOnce(json('session-token'))
+      .mockResolvedValueOnce(json([]))
+      .mockResolvedValueOnce(json([]));
+    const client = new GlonassSoftClient({
+      ...options(transport),
+      delay,
+      now: vi.fn().mockReturnValueOnce(0).mockReturnValueOnce(100).mockReturnValueOnce(200),
+    });
+
+    await client.findVehicles();
+    await client.findVehicles();
+
+    expect(delay).toHaveBeenCalledWith(400);
+  });
+
+  it('reauthenticates once after 401 and retries with the new session', async () => {
+    const transport = vi
+      .fn()
+      .mockResolvedValueOnce(json({ token: 'old-session' }))
+      .mockResolvedValueOnce(json({}, 401))
+      .mockResolvedValueOnce(json({ token: 'new-session' }))
+      .mockResolvedValueOnce(json([]));
+    const client = new GlonassSoftClient(options(transport));
+
+    await expect(client.findVehicles()).resolves.toEqual([]);
+    expect((transport.mock.calls[3]?.[0] as Request).headers.get('x-auth')).toBe('new-session');
+    expect(transport).toHaveBeenCalledTimes(4);
+  });
+
+  it('posts exact last-data and bounded range payloads', async () => {
+    const transport = vi
+      .fn()
+      .mockResolvedValueOnce(json('session'))
+      .mockResolvedValueOnce(
+        json([
+          {
+            vehicleId: 42,
+            receiveTime: '2026-08-20T09:00:00Z',
+            recordTime: '2026-08-20T08:59:30Z',
+            state: 4,
+            lat: 55.7558,
+            lon: 37.6176,
+            speed: 32,
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(json([]));
+    const client = new GlonassSoftClient(options(transport));
+
+    await expect(client.getLastData(['42'])).resolves.toMatchObject([
+      { externalId: '42', latitude: 55.7558, longitude: 37.6176, speedKph: 32 },
+    ]);
+    await client.getTerminalMessages({
+      externalId: '42',
+      from: new Date('2026-08-20T00:00:00Z'),
+      to: new Date('2026-08-21T00:00:00Z'),
+    });
+
+    expect(await (transport.mock.calls[1]?.[0] as Request).json()).toEqual([42]);
+    expect(await (transport.mock.calls[2]?.[0] as Request).json()).toEqual({
+      vehicleId: 42,
+      from: '2026-08-20T00:00:00.000Z',
+      to: '2026-08-21T00:00:00.000Z',
+    });
+  });
+
+  it('rejects unsafe base URLs before network access', () => {
+    for (const baseUrl of [
+      'http://gs.sputnik.vision/api/v3',
+      'https://user:pass@gs.sputnik.vision/api/v3',
+      'https://gs.sputnik.vision/api/v3?token=x',
+      'https://gs.sputnik.vision/other',
+    ]) {
+      expect(() => new GlonassSoftClient({ ...options(vi.fn()), baseUrl })).toThrow(
+        expect.objectContaining({ code: 'INVALID_CONFIGURATION' }),
+      );
+    }
+  });
+
+  it('rejects oversized and malformed responses without leaking credentials', async () => {
+    const transport = vi.fn().mockResolvedValue(
+      new Response('{}', {
+        headers: {
+          'content-type': 'application/json',
+          'content-length': String(2 * 1024 * 1024 + 1),
+        },
+      }),
+    );
+    const client = new GlonassSoftClient(options(transport));
+
+    const error = await client.findVehicles().catch((caught: unknown) => caught);
+    expect(error).toMatchObject<Partial<GlonassSoftError>>({ code: 'INVALID_RESPONSE' });
+    expect(JSON.stringify(error)).not.toMatch(/provider-user|provider-password/u);
+  });
+
+  it('maps an aborted request to a safe timeout error', async () => {
+    const transport = vi.fn(async (request: Request) => {
+      await new Promise<void>((resolve) =>
+        request.signal.addEventListener('abort', () => resolve()),
+      );
+      throw request.signal.reason;
+    });
+    const client = new GlonassSoftClient({ ...options(transport), timeoutMs: 5 });
+
+    await expect(client.findVehicles()).rejects.toMatchObject({ code: 'TIMEOUT' });
+  });
+});
