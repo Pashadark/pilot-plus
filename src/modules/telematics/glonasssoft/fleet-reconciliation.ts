@@ -7,6 +7,7 @@ export interface ExistingFleetRow {
   make: string | null;
   model: string | null;
   references: number;
+  isDemoImport: boolean;
 }
 
 export interface ProviderFleetRow {
@@ -118,7 +119,7 @@ export function buildRealFleetPreview(input: {
   const resolvedIds = new Set(Array.from(resolved.values(), (row) => row.id));
   for (const row of input.existing) {
     if (resolvedIds.has(row.id) || (row.plate && APPROVED_REAL_PLATES.has(row.plate))) continue;
-    const target = row.references === 0 ? preview.delete : preview.archive;
+    const target = row.references === 0 && row.isDemoImport ? preview.delete : preview.archive;
     target.push({
       vehicleId: row.id,
       make: row.make ?? 'Не указано',

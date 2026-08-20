@@ -23,7 +23,14 @@ describe('предпросмотр реального автопарка', () =>
   it('создаёт отсутствующие, связывает совпавшие и игнорирует чужие объекты провайдера', () => {
     const preview = buildRealFleetPreview({
       existing: [
-        { id: 'polo', plate: 'А156АХ997', make: 'Volkswagen', model: 'Polo', references: 2 },
+        {
+          id: 'polo',
+          plate: 'А156АХ997',
+          make: 'Volkswagen',
+          model: 'Polo',
+          references: 2,
+          isDemoImport: false,
+        },
       ],
       provider: [
         { externalId: '42', name: 'Volkswagen Polo A156AX997' },
@@ -42,8 +49,22 @@ describe('предпросмотр реального автопарка', () =>
   it('удаляет только демо без истории и архивирует машину со ссылками', () => {
     const preview = buildRealFleetPreview({
       existing: [
-        { id: 'delete-me', plate: 'О001ОО77', make: 'Demo', model: 'One', references: 0 },
-        { id: 'archive-me', plate: 'О002ОО77', make: 'Legacy', model: 'Two', references: 3 },
+        {
+          id: 'delete-me',
+          plate: 'О001ОО77',
+          make: 'Demo',
+          model: 'One',
+          references: 0,
+          isDemoImport: true,
+        },
+        {
+          id: 'archive-me',
+          plate: 'О002ОО77',
+          make: 'Legacy',
+          model: 'Two',
+          references: 3,
+          isDemoImport: false,
+        },
       ],
       provider: [],
     });
@@ -57,7 +78,14 @@ describe('предпросмотр реального автопарка', () =>
   it('помечает старый номер Toyota для исправления', () => {
     const preview = buildRealFleetPreview({
       existing: [
-        { id: 'toyota', plate: 'Н26АХ550', make: 'Toyota', model: 'Camry', references: 1 },
+        {
+          id: 'toyota',
+          plate: 'Н26АХ550',
+          make: 'Toyota',
+          model: 'Camry',
+          references: 1,
+          isDemoImport: false,
+        },
       ],
       provider: [{ externalId: 'camry-object', name: 'Toyota Camry H726AX550' }],
     });
@@ -73,8 +101,22 @@ describe('предпросмотр реального автопарка', () =>
   it('блокирует неоднозначный внешний объект или дубликат номера в базе', () => {
     const duplicate = buildRealFleetPreview({
       existing: [
-        { id: 'one', plate: 'А156АХ997', make: 'Volkswagen', model: 'Polo', references: 0 },
-        { id: 'two', plate: 'А156АХ997', make: 'Volkswagen', model: 'Polo', references: 0 },
+        {
+          id: 'one',
+          plate: 'А156АХ997',
+          make: 'Volkswagen',
+          model: 'Polo',
+          references: 0,
+          isDemoImport: false,
+        },
+        {
+          id: 'two',
+          plate: 'А156АХ997',
+          make: 'Volkswagen',
+          model: 'Polo',
+          references: 0,
+          isDemoImport: false,
+        },
       ],
       provider: [{ externalId: '42', name: 'Volkswagen Polo A156AX997' }],
     });
