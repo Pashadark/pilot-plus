@@ -1,4 +1,5 @@
 CREATE TYPE "public"."RentalOperationType" AS ENUM ('HANDOVER', 'EXTENSION', 'RETURN');
+CREATE TYPE "public"."RentalOperationStatus" AS ENUM ('DRAFT', 'COMMITTED', 'ERROR');
 CREATE TYPE "public"."RentalEvidenceStatus" AS ENUM ('COMPLETE', 'VIDEO_MISSING', 'DASHBOARD_PHOTO_MISSING', 'MISSING');
 CREATE TYPE "public"."RentalOperationMediaKind" AS ENUM ('INSPECTION_VIDEO', 'DASHBOARD_PHOTO');
 CREATE TYPE "public"."RentalOperationMediaStatus" AS ENUM ('PENDING', 'SCANNING', 'CLEAN', 'BLOCKED', 'CLEANING', 'ERROR');
@@ -15,6 +16,7 @@ CREATE TABLE "public"."RentalOperation" (
   "vehicleId" TEXT NOT NULL,
   "actorUserId" TEXT NOT NULL,
   "type" "public"."RentalOperationType" NOT NULL,
+  "status" "public"."RentalOperationStatus" NOT NULL DEFAULT 'DRAFT',
   "idempotencyKey" TEXT NOT NULL,
   "occurredAt" TIMESTAMPTZ(3) NOT NULL,
   "evidenceStatus" "public"."RentalEvidenceStatus" NOT NULL,
@@ -42,6 +44,7 @@ CREATE TABLE "public"."RentalOperation" (
   "damageDescription" TEXT,
   "notes" TEXT,
   "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "committedAt" TIMESTAMPTZ(3),
 
   CONSTRAINT "RentalOperation_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "RentalOperation_mileage_non_negative_check" CHECK ("mileageKm" IS NULL OR "mileageKm" >= 0),
@@ -127,7 +130,19 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  RAISE EXCEPTION 'Rental operation facts are immutable';
+  IF TG_OP = 'DELETE' THEN
+    IF OLD."status" = 'COMMITTED' THEN
+      RAISE EXCEPTION 'Committed rental operation facts are immutable';
+    END IF;
+    RETURN OLD;
+  END IF;
+  IF OLD."status" = 'COMMITTED' THEN
+    RAISE EXCEPTION 'Committed rental operation facts are immutable';
+  END IF;
+  IF NEW."status" = 'COMMITTED' AND NEW."committedAt" IS NULL THEN
+    RAISE EXCEPTION 'Committed rental operation requires committedAt';
+  END IF;
+  RETURN NEW;
 END;
 $$;
 

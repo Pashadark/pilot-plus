@@ -182,6 +182,9 @@ describe('доменная схема аренды', () => {
     const operation = schema.match(/model RentalOperation \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(schema).toMatch(/enum RentalOperationType \{[\s\S]*\bHANDOVER\b[\s\S]*\bEXTENSION\b[\s\S]*\bRETURN\b/);
     expect(schema).toMatch(/enum RentalEvidenceStatus \{[\s\S]*\bCOMPLETE\b[\s\S]*\bVIDEO_MISSING\b[\s\S]*\bDASHBOARD_PHOTO_MISSING\b[\s\S]*\bMISSING\b/);
+    expect(schema).toMatch(/enum RentalOperationStatus \{[\s\S]*\bDRAFT\b[\s\S]*\bCOMMITTED\b[\s\S]*\bERROR\b/);
+    expect(operation).toMatch(/status\s+RentalOperationStatus\s+@default\(DRAFT\)/);
+    expect(operation).toMatch(/committedAt\s+DateTime\?/);
     expect(operation).toMatch(/companyId\s+String/);
     expect(operation).toMatch(/rentalId\s+String/);
     expect(operation).toMatch(/clientId\s+String/);
@@ -217,6 +220,8 @@ describe('доменная схема аренды', () => {
     expect(migration).toContain('CREATE TABLE "public"."RentalOperationMedia"');
     expect(migration).toContain('RentalOperation_prevent_fact_mutation');
     expect(migration).toContain('RentalOperation_prevent_delete');
+    expect(migration).toContain(`OLD."status" = 'COMMITTED'`);
+    expect(migration).toContain(`NEW."status" = 'COMMITTED'`);
     expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
   });
 

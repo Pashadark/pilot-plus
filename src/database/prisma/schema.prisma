@@ -256,6 +256,12 @@ enum RentalOperationType {
   RETURN
 }
 
+enum RentalOperationStatus {
+  DRAFT
+  COMMITTED
+  ERROR
+}
+
 enum RentalEvidenceStatus {
   COMPLETE
   VIDEO_MISSING
@@ -1101,6 +1107,7 @@ model RentalOperation {
   actorUserId             String
   actor                   User                     @relation("RentalOperationActor", fields: [actorUserId], references: [id], onDelete: Restrict)
   type                    RentalOperationType
+  status                  RentalOperationStatus    @default(DRAFT)
   idempotencyKey          String
   occurredAt              DateTime                 @db.Timestamptz(3)
   evidenceStatus          RentalEvidenceStatus
@@ -1128,6 +1135,7 @@ model RentalOperation {
   damageDescription       String?
   notes                   String?
   createdAt               DateTime                 @default(now()) @db.Timestamptz(3)
+  committedAt             DateTime?                @db.Timestamptz(3)
   media                   RentalOperationMedia[]
 
   @@unique([companyId, idempotencyKey])
