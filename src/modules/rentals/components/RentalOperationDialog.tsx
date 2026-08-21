@@ -56,6 +56,8 @@ export function RentalOperationDialog({
   const router = useRouter();
   const { showToast } = useToast();
   const [idempotencyKey, setIdempotencyKey] = useState('');
+  const [hasVideo, setHasVideo] = useState(false);
+  const [hasDashboardPhoto, setHasDashboardPhoto] = useState(false);
   useEffect(() => {
     setIdempotencyKey(`${kind.toLowerCase()}-${rental.id}-${crypto.randomUUID()}`);
   }, [kind, rental.id]);
@@ -129,20 +131,36 @@ export function RentalOperationDialog({
                 required
               />
             </div>
-            <Select
-              label="Фиксация состояния"
-              name="evidenceStatus"
-              defaultValue="MISSING"
-              required
-            >
-              <option value="VIDEO_MISSING">Нет видео</option>
-              <option value="DASHBOARD_PHOTO_MISSING">Нет фото приборки</option>
-              <option value="MISSING">Фиксация пропущена</option>
-            </Select>
+            <div className="grid gap-4 rounded-xl border border-[var(--color-border)] p-4">
+              <p className="text-sm font-semibold">Фиксация состояния</p>
+              <Input
+                label="Видео осмотра автомобиля"
+                name="inspectionVideo"
+                type="file"
+                accept="video/mp4,video/webm"
+                hint="MP4 или WebM, до 150 МБ. Файл проверяется антивирусом."
+                onChange={(event) => setHasVideo(Boolean(event.currentTarget.files?.length))}
+              />
+              <Input
+                label="Фото приборной панели"
+                name="dashboardPhoto"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                hint="JPG, PNG или WebP, до 15 МБ."
+                onChange={(event) =>
+                  setHasDashboardPhoto(Boolean(event.currentTarget.files?.length))
+                }
+              />
+              <p className="text-xs text-[var(--color-text-secondary)]" aria-live="polite">
+                {hasVideo && hasDashboardPhoto
+                  ? 'Полная фиксация: видео и фото выбраны.'
+                  : 'Если файл пропущен, ниже обязательно укажите причину.'}
+              </p>
+            </div>
             <Textarea
               label="Причина отсутствия фиксации"
               name="evidenceMissingReason"
-              required
+              required={!(hasVideo && hasDashboardPhoto)}
               hint="Обязательно, если видео или фото отсутствуют."
               maxLength={1000}
             />

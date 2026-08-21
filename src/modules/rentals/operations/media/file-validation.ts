@@ -24,10 +24,7 @@ function detect(bytes: Uint8Array): DetectedMedia {
     return { media: 'photo', mime: 'image/jpeg', extension: 'jpg' };
   if (hasPrefix(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
     return { media: 'photo', mime: 'image/png', extension: 'png' };
-  if (
-    hasPrefix(bytes, [0x52, 0x49, 0x46, 0x46]) &&
-    hasPrefix(bytes, [0x57, 0x45, 0x42, 0x50], 8)
-  )
+  if (hasPrefix(bytes, [0x52, 0x49, 0x46, 0x46]) && hasPrefix(bytes, [0x57, 0x45, 0x42, 0x50], 8))
     return { media: 'photo', mime: 'image/webp', extension: 'webp' };
   if (hasPrefix(bytes, [0x66, 0x74, 0x79, 0x70], 4))
     return { media: 'video', mime: 'video/mp4', extension: 'mp4' };

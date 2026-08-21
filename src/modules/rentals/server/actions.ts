@@ -1,5 +1,7 @@
 'use server';
 
+import { randomUUID } from 'node:crypto';
+
 import { revalidatePath } from 'next/cache';
 
 import { prisma } from '@/database/prisma/client';
@@ -7,6 +9,12 @@ import { calculateRental } from '@/modules/rentals/domain/calculate-rental';
 import { createRentalExtension } from '@/modules/rentals/operations/server/extend-rental';
 import { createRentalHandover } from '@/modules/rentals/operations/server/handover-rental';
 import { createRentalReturn } from '@/modules/rentals/operations/server/return-rental';
+import { executeOperationWithEvidence } from '@/modules/rentals/operations/server/execute-with-evidence';
+import { createOperationDraftPreparer } from '@/modules/rentals/operations/server/prepare-operation';
+import { admitOperationMedia } from '@/modules/rentals/operations/media/admit-operation-media';
+import { scanOperationMedia } from '@/modules/rentals/operations/media/scan-operation-media';
+import { ClamAvClient } from '@/services/malware-scanner/clamav-client';
+import { LocalPrivateStorage } from '@/services/storage/local-private-storage';
 import {
   validateExtensionCommand,
   validateHandoverCommand,
@@ -73,6 +81,66 @@ function operationActor(access: Awaited<ReturnType<typeof requireRentalAccess>>)
 const handoverUseCase = createRentalHandover(prisma as never);
 const extensionUseCase = createRentalExtension(prisma as never);
 const returnUseCase = createRentalReturn(prisma as never);
+const prepareOperation = createOperationDraftPreparer(prisma as never);
+
+function privateStorageRoot() {
+  const root = process.env.PRIVATE_STORAGE_ROOT?.trim();
+  if (!root) throw new Error('Приватное хранилище не настроено.');
+  return root;
+}
+
+async function operationFile(formData: FormData, key: string) {
+  const value = formData.get(key);
+  if (!(value instanceof File) || value.size === 0) return undefined;
+  return { name: value.name, bytes: new Uint8Array(await value.arrayBuffer()) };
+}
+
+async function operationEvidenceFiles(formData: FormData) {
+  const [video, dashboardPhoto] = await Promise.all([
+    operationFile(formData, 'inspectionVideo'),
+    operationFile(formData, 'dashboardPhoto'),
+  ]);
+  return { video, dashboardPhoto };
+}
+
+async function admitEvidence(input: {
+  companyId: string;
+  actorUserId: string;
+  operationId: string;
+  kind: 'INSPECTION_VIDEO' | 'DASHBOARD_PHOTO';
+  file: { name: string; bytes: Uint8Array };
+}) {
+  const storage = await LocalPrivateStorage.create(privateStorageRoot());
+  const repository = {
+    findOperation: (value: Parameters<typeof prisma.rentalOperation.findFirst>[0]) =>
+      prisma.rentalOperation.findFirst(value as never) as never,
+    findMedia: (value: Parameters<typeof prisma.rentalOperationMedia.findFirst>[0]) =>
+      prisma.rentalOperationMedia.findFirst(value as never) as never,
+    createMedia: (value: Record<string, unknown>) =>
+      prisma.rentalOperationMedia.create({
+        data: value,
+        select: { id: true, uploadId: true, companyId: true, storageKey: true },
+      } as never) as never,
+    updateMany: (value: Parameters<typeof prisma.rentalOperationMedia.updateMany>[0]) =>
+      prisma.rentalOperationMedia.updateMany(value as never),
+  };
+  return admitOperationMedia({
+    ...input,
+    repository: repository as never,
+    storage,
+    randomId: randomUUID,
+    scan: (media) =>
+      scanOperationMedia({
+        media,
+        now: new Date(),
+        leaseMs: 120_000,
+        claimToken: randomUUID(),
+        repository: prisma.rentalOperationMedia,
+        storage,
+        scanner: ClamAvClient.fromEnvironment(),
+      }),
+  });
+}
 
 export async function handoverRentalAction(
   _state: RentalActionResult | null,
@@ -81,13 +149,22 @@ export async function handoverRentalAction(
   try {
     const identity = operationIdentity(formData);
     const access = await requireRentalAccess(identity.companyId);
+    const evidence = await operationEvidenceFiles(formData);
+    const submittedEvidenceStatus =
+      evidence.video && evidence.dashboardPhoto
+        ? 'COMPLETE'
+        : evidence.video
+          ? 'DASHBOARD_PHOTO_MISSING'
+          : evidence.dashboardPhoto
+            ? 'VIDEO_MISSING'
+            : 'MISSING';
     const command = validateHandoverCommand({
       rentalId: identity.rentalId,
       idempotencyKey: String(formData.get('idempotencyKey') ?? ''),
       occurredAt: String(formData.get('occurredAt') ?? ''),
       mileageKm: Number(formData.get('mileageKm')),
       fuelLevelPercent: Number(formData.get('fuelLevelPercent')),
-      evidenceStatus: String(formData.get('evidenceStatus')) as never,
+      evidenceStatus: submittedEvidenceStatus,
       evidenceMissingReason: String(formData.get('evidenceMissingReason') ?? ''),
       fulfillmentMethod: String(formData.get('fulfillmentMethod')) as never,
       fulfillmentAddress: String(formData.get('fulfillmentAddress') ?? ''),
@@ -95,10 +172,29 @@ export async function handoverRentalAction(
       depositAmountMinor: optionalNumber(formData, 'depositAmountMinor'),
       depositPaymentMethod: String(formData.get('depositPaymentMethod') ?? '') as never,
     });
-    const result = await handoverUseCase({
-      companyId: identity.companyId,
-      actor: operationActor(access),
+    const actor = operationActor(access);
+    const result = await executeOperationWithEvidence({
       command,
+      ...evidence,
+      prepare: (preparedCommand) =>
+        prepareOperation({
+          companyId: identity.companyId,
+          actor,
+          rentalId: preparedCommand.rentalId,
+          type: 'HANDOVER',
+          idempotencyKey: preparedCommand.idempotencyKey,
+          occurredAt: preparedCommand.occurredAt,
+        }),
+      admit: ({ operationId, kind, file }) =>
+        admitEvidence({
+          companyId: identity.companyId,
+          actorUserId: access.user.id,
+          operationId,
+          kind,
+          file,
+        }),
+      commit: (finalCommand) =>
+        handoverUseCase({ companyId: identity.companyId, actor, command: finalCommand }),
     });
     revalidatePath(`/rentals/${identity.rentalId}`);
     revalidatePath('/rentals');
@@ -146,13 +242,22 @@ export async function returnRentalAction(
   try {
     const identity = operationIdentity(formData);
     const access = await requireRentalAccess(identity.companyId);
+    const evidence = await operationEvidenceFiles(formData);
+    const submittedEvidenceStatus =
+      evidence.video && evidence.dashboardPhoto
+        ? 'COMPLETE'
+        : evidence.video
+          ? 'DASHBOARD_PHOTO_MISSING'
+          : evidence.dashboardPhoto
+            ? 'VIDEO_MISSING'
+            : 'MISSING';
     const command = validateReturnCommand({
       rentalId: identity.rentalId,
       idempotencyKey: String(formData.get('idempotencyKey') ?? ''),
       occurredAt: String(formData.get('occurredAt') ?? ''),
       mileageKm: Number(formData.get('mileageKm')),
       fuelLevelPercent: Number(formData.get('fuelLevelPercent')),
-      evidenceStatus: String(formData.get('evidenceStatus')) as never,
+      evidenceStatus: submittedEvidenceStatus,
       evidenceMissingReason: String(formData.get('evidenceMissingReason') ?? ''),
       vehicleCondition: String(formData.get('vehicleCondition')) as never,
       damageDescription: String(formData.get('damageDescription') ?? ''),
@@ -161,10 +266,29 @@ export async function returnRentalAction(
       depositWithheldMinor: optionalNumber(formData, 'depositWithheldMinor'),
       depositResolutionReason: String(formData.get('depositResolutionReason') ?? ''),
     });
-    const result = await returnUseCase({
-      companyId: identity.companyId,
-      actor: operationActor(access),
+    const actor = operationActor(access);
+    const result = await executeOperationWithEvidence({
       command,
+      ...evidence,
+      prepare: (preparedCommand) =>
+        prepareOperation({
+          companyId: identity.companyId,
+          actor,
+          rentalId: preparedCommand.rentalId,
+          type: 'RETURN',
+          idempotencyKey: preparedCommand.idempotencyKey,
+          occurredAt: preparedCommand.occurredAt,
+        }),
+      admit: ({ operationId, kind, file }) =>
+        admitEvidence({
+          companyId: identity.companyId,
+          actorUserId: access.user.id,
+          operationId,
+          kind,
+          file,
+        }),
+      commit: (finalCommand) =>
+        returnUseCase({ companyId: identity.companyId, actor, command: finalCommand }),
     });
     revalidatePath(`/rentals/${identity.rentalId}`);
     revalidatePath('/rentals');

@@ -24,7 +24,9 @@ function database(overrides: Record<string, unknown> = {}) {
     rentalOperation: {
       findFirst: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue({ id: 'operation-1' }),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
+    rentalOperationMedia: { findMany: vi.fn().mockResolvedValue([]) },
     rental: {
       findFirst: vi.fn().mockResolvedValue({
         id: 'rental-1',
@@ -98,5 +100,43 @@ describe('createRentalHandover', () => {
       handover({ companyId: 'company-1', actor: { id: 'actor-1', scope: 'COMPANY' }, command }),
     ).rejects.toThrow('Доступ к операциям аренды запрещён');
     expect(fixture.transaction.rental.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('commits an actor-owned draft and derives complete evidence only from clean stored media', async () => {
+    const fixture = database({
+      rentalOperation: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'operation-draft',
+          rentalId: 'rental-1',
+          status: 'DRAFT',
+          type: 'HANDOVER',
+          actorUserId: 'actor-1',
+        }),
+        create: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      rentalOperationMedia: {
+        findMany: vi.fn().mockResolvedValue([
+          { kind: 'INSPECTION_VIDEO', status: 'CLEAN' },
+          { kind: 'DASHBOARD_PHOTO', status: 'CLEAN' },
+        ]),
+      },
+    });
+    const handover = createRentalHandover(fixture.database as never);
+
+    await expect(
+      handover({
+        companyId: 'company-1',
+        actor: { id: 'actor-1', scope: 'COMPANY' },
+        command: { ...command, evidenceStatus: 'MISSING', evidenceMissingReason: undefined },
+      }),
+    ).resolves.toEqual({ operationId: 'operation-draft', rentalId: 'rental-1' });
+    expect(fixture.transaction.rentalOperation.create).not.toHaveBeenCalled();
+    expect(fixture.transaction.rentalOperation.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'operation-draft', status: 'DRAFT' }),
+        data: expect.objectContaining({ status: 'COMMITTED', evidenceStatus: 'COMPLETE' }),
+      }),
+    );
   });
 });

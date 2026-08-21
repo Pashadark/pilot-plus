@@ -15,6 +15,7 @@
     "db:preflight:maintenance": "tsx scripts/maintenance-migration-preflight.ts",
     "db:migrate:fresh:verify": "tsx scripts/verify-fresh-migrations.ts",
     "client-documents:reconcile": "tsx scripts/reconcile-client-document-uploads.ts",
+    "rental-operations:reconcile-media": "tsx scripts/reconcile-rental-operation-media.ts",
     "vehicles:sync-images": "tsx scripts/sync-vehicle-images.ts",
     "telematics:sync-glonasssoft": "tsx --conditions=react-server scripts/sync-glonasssoft.ts",
     "telematics:configure-glonasssoft": "tsx --conditions=react-server scripts/configure-glonasssoft.ts",

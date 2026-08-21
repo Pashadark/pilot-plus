@@ -1,4 +1,5 @@
 import { calculateReturnCharges } from '../calculation';
+import { deriveEvidenceStatus } from '../evidence-status';
 import type { RentalDepositStatus, RentalEvidenceStatus, RentalVehicleCondition } from '../types';
 
 type Count = { count: number };
@@ -8,11 +9,13 @@ type Transaction = {
   rentalOperation: {
     findFirst(args: unknown): Promise<Record<string, unknown> | null>;
     create(args: unknown): Promise<{ id: string }>;
+    updateMany(args: unknown): Promise<Count>;
+  };
+  rentalOperationMedia: {
+    findMany(args: unknown): Promise<{ kind: string; status: string }[]>;
   };
   rental: {
-    findFirst(
-      args: unknown,
-    ): Promise<{
+    findFirst(args: unknown): Promise<{
       id: string;
       clientId: string;
       vehicleId: string;
@@ -93,7 +96,13 @@ export function createRentalReturn(database: Database) {
                 existing.rentalId === input.command.rentalId
               )
                 return { operationId: String(existing.id), rentalId: String(existing.rentalId) };
-              throw new Error('Ключ операции уже использован.');
+              if (
+                existing.status !== 'DRAFT' ||
+                existing.type !== 'RETURN' ||
+                existing.rentalId !== input.command.rentalId ||
+                existing.actorUserId !== input.actor.id
+              )
+                throw new Error('Ключ операции уже использован.');
             }
             const rental = await tx.rental.findFirst({
               where: { id: input.command.rentalId, companyId: input.companyId, status: 'ACTIVE' },
@@ -143,40 +152,70 @@ export function createRentalReturn(database: Database) {
             });
             if (updated.count !== 1)
               throw Object.assign(new Error('Stale rental'), { code: 'P2034' });
-            const operation = await tx.rentalOperation.create({
-              data: {
-                companyId: input.companyId,
-                rentalId: rental.id,
-                clientId: rental.clientId,
-                vehicleId: rental.vehicleId,
-                actorUserId: input.actor.id,
-                type: 'RETURN',
-                status: 'COMMITTED',
-                idempotencyKey: input.command.idempotencyKey,
-                occurredAt: input.command.occurredAt,
-                committedAt: input.command.occurredAt,
-                evidenceStatus: input.command.evidenceStatus,
-                evidenceMissingReason: input.command.evidenceMissingReason,
-                mileageKm: input.command.mileageKm,
-                fuelLevelPercent: input.command.fuelLevelPercent,
-                mileageChargeMinor: BigInt(charges.mileageChargeMinor),
-                fuelChargeMinor: BigInt(charges.fuelChargeMinor),
-                totalChargeMinor: BigInt(charges.totalChargeMinor),
-                depositStatus: input.command.depositStatus,
-                depositAmountMinor:
-                  input.command.depositAmountMinor === undefined
-                    ? undefined
-                    : BigInt(input.command.depositAmountMinor),
-                depositWithheldMinor:
-                  input.command.depositWithheldMinor === undefined
-                    ? undefined
-                    : BigInt(input.command.depositWithheldMinor),
-                depositResolutionReason: input.command.depositResolutionReason,
-                vehicleCondition: input.command.vehicleCondition,
-                damageDescription: input.command.damageDescription,
-              },
-              select: { id: true },
-            });
+            let evidenceStatus = input.command.evidenceStatus;
+            if (existing) {
+              const media = await tx.rentalOperationMedia.findMany({
+                where: { companyId: input.companyId, operationId: existing.id, status: 'CLEAN' },
+                select: { kind: true, status: true },
+              });
+              evidenceStatus = deriveEvidenceStatus({
+                hasVideo: media.some((item) => item.kind === 'INSPECTION_VIDEO'),
+                hasDashboardPhoto: media.some((item) => item.kind === 'DASHBOARD_PHOTO'),
+              });
+              if (evidenceStatus !== 'COMPLETE' && !input.command.evidenceMissingReason)
+                throw new Error('Причина отсутствия фиксации обязательна.');
+            }
+            const operationData = {
+              companyId: input.companyId,
+              rentalId: rental.id,
+              clientId: rental.clientId,
+              vehicleId: rental.vehicleId,
+              actorUserId: input.actor.id,
+              type: 'RETURN',
+              status: 'COMMITTED',
+              idempotencyKey: input.command.idempotencyKey,
+              occurredAt: input.command.occurredAt,
+              committedAt: input.command.occurredAt,
+              evidenceStatus,
+              evidenceMissingReason: input.command.evidenceMissingReason,
+              mileageKm: input.command.mileageKm,
+              fuelLevelPercent: input.command.fuelLevelPercent,
+              mileageChargeMinor: BigInt(charges.mileageChargeMinor),
+              fuelChargeMinor: BigInt(charges.fuelChargeMinor),
+              totalChargeMinor: BigInt(charges.totalChargeMinor),
+              depositStatus: input.command.depositStatus,
+              depositAmountMinor:
+                input.command.depositAmountMinor === undefined
+                  ? undefined
+                  : BigInt(input.command.depositAmountMinor),
+              depositWithheldMinor:
+                input.command.depositWithheldMinor === undefined
+                  ? undefined
+                  : BigInt(input.command.depositWithheldMinor),
+              depositResolutionReason: input.command.depositResolutionReason,
+              vehicleCondition: input.command.vehicleCondition,
+              damageDescription: input.command.damageDescription,
+            };
+            let operation: { id: string };
+            if (existing) {
+              const committed = await tx.rentalOperation.updateMany({
+                where: {
+                  id: String(existing.id),
+                  companyId: input.companyId,
+                  status: 'DRAFT',
+                  actorUserId: input.actor.id,
+                },
+                data: operationData,
+              });
+              if (committed.count !== 1)
+                throw Object.assign(new Error('Stale operation status'), { code: 'P2034' });
+              operation = { id: String(existing.id) };
+            } else {
+              operation = await tx.rentalOperation.create({
+                data: operationData,
+                select: { id: true },
+              });
+            }
             await tx.auditLog.create({
               data: {
                 companyId: input.companyId,
@@ -189,7 +228,7 @@ export function createRentalReturn(database: Database) {
                 changes: {
                   operationId: operation.id,
                   totalChargeMinor: charges.totalChargeMinor,
-                  evidenceStatus: input.command.evidenceStatus,
+                  evidenceStatus,
                 },
               },
             });

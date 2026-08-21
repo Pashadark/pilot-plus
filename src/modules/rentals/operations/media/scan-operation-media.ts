@@ -19,8 +19,7 @@ export async function scanOperationMedia(input: {
   storage: PrivateStorage;
   scanner: MalwareScanner;
 }): Promise<
-  | { ok: true; status: 'CLEAN' | 'BLOCKED' | 'ERROR' }
-  | { ok: false; status: 'OWNERSHIP_LOST' }
+  { ok: true; status: 'CLEAN' | 'BLOCKED' | 'ERROR' } | { ok: false; status: 'OWNERSHIP_LOST' }
 > {
   const leaseExpiresAt = new Date(input.now.getTime() + input.leaseMs);
   const claimed = await input.repository.updateMany({
