@@ -52,12 +52,12 @@
 - Modify: `src/modules/rentals/domain/availability.ts`
 - Modify: `src/modules/rentals/domain/availability.test.ts`
 
-- [ ] Add failing tests for strict Moscow timestamps, safe integer money, mileage/fuel bounds, missing-evidence reasons, return damage reasons, and deposit decisions.
-- [ ] Define explicit command schemas for handover, extension, and return; reject unknown fields and browser-controlled tenant/price facts.
-- [ ] Derive evidence status from stored CLEAN media plus skip reasons: `COMPLETE`, `VIDEO_MISSING`, `DASHBOARD_PHOTO_MISSING`, `MISSING`.
-- [ ] Calculate extension surcharge and return mileage/fuel charges with BigInt-safe arithmetic and explicit breakdowns.
-- [ ] Extend availability checking to reject rental and maintenance overlaps while returning a bounded list of available replacement vehicles.
-- [ ] Run the focused domain tests and typecheck.
+- [x] Add failing tests for strict Moscow timestamps, safe integer money, mileage/fuel bounds, missing-evidence reasons, return damage reasons, and deposit decisions.
+- [x] Define explicit command schemas for handover, extension, and return; reject unknown fields and browser-controlled tenant/price facts.
+- [x] Derive evidence status from stored CLEAN media plus skip reasons: `COMPLETE`, `VIDEO_MISSING`, `DASHBOARD_PHOTO_MISSING`, `MISSING`.
+- [x] Calculate extension surcharge and return mileage/fuel charges with BigInt-safe arithmetic and explicit breakdowns.
+- [x] Extend availability checking to reject rental and maintenance overlaps while returning a bounded list of available replacement vehicles.
+- [x] Run the focused domain tests and typecheck.
 - [ ] Commit: `feat(rentals): validate rental operations`.
 
 ## Task 3: Build Durable Private Evidence Uploads

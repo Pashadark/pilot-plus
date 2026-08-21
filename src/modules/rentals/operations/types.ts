@@ -14,10 +14,6 @@ export type RentalOperationMediaKind = (typeof rentalOperationMediaKinds)[number
 
 export type RentalFulfillmentMethod = 'OFFICE' | 'DELIVERY';
 export type RentalDepositStatus =
-  | 'NOT_COLLECTED'
-  | 'COLLECTED'
-  | 'RETURNED'
-  | 'PARTIALLY_WITHHELD'
-  | 'WITHHELD';
+  'NOT_COLLECTED' | 'COLLECTED' | 'RETURNED' | 'PARTIALLY_WITHHELD' | 'WITHHELD';
 export type RentalPaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'OTHER';
 export type RentalVehicleCondition = 'GOOD' | 'DAMAGE_RECORDED';

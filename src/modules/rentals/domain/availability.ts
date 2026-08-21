@@ -42,3 +42,18 @@ export function getAvailability(
     reasons.push('RENTAL_OVERLAP');
   return { available: reasons.length === 0, reasons };
 }
+
+type AvailabilityVehicle = Parameters<typeof getAvailability>[0] & { id: string };
+
+export function selectAvailableReplacementVehicles<T extends AvailabilityVehicle>(
+  vehicles: readonly T[],
+  period: readonly [Date, Date],
+  limit = 5,
+): T[] {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 20)
+    throw new Error('Лимит предложений некорректен.');
+  return vehicles
+    .filter((vehicle) => getAvailability(vehicle, period).available)
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .slice(0, limit);
+}

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { intervalsOverlap, getAvailability } from './availability';
+import {
+  getAvailability,
+  intervalsOverlap,
+  selectAvailableReplacementVehicles,
+} from './availability';
 
 describe('rental availability', () => {
   it('uses half-open intervals and gives unavailability reasons', () => {
@@ -46,5 +50,24 @@ describe('rental availability', () => {
       available: false,
       reasons: ['MAINTENANCE'],
     });
+  });
+
+  it('returns at most five available replacement vehicles in stable order', () => {
+    const period = [new Date('2026-09-01T09:00Z'), new Date('2026-09-02T09:00Z')] as const;
+    const vehicles = Array.from({ length: 7 }, (_, index) => ({
+      id: `vehicle-${7 - index}`,
+      archived: false,
+      rentalReady: true,
+      status: 'UNKNOWN',
+      rentals: [],
+      maintenance: [],
+    }));
+    expect(selectAvailableReplacementVehicles(vehicles, period).map(({ id }) => id)).toEqual([
+      'vehicle-1',
+      'vehicle-2',
+      'vehicle-3',
+      'vehicle-4',
+      'vehicle-5',
+    ]);
   });
 });
