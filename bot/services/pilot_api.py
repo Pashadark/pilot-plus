@@ -42,6 +42,40 @@ class PilotApiClient:
             raise PilotApiError("INVALID_RESPONSE", 502)
         return payload
 
+    async def _multipart(
+        self,
+        path: str,
+        *,
+        telegram_user_id: str,
+        data: Mapping[str, str],
+        files: Mapping[str, tuple[str, bytes, str]],
+    ) -> dict[str, Any]:
+        try:
+            response = await self._http.request(
+                "POST",
+                f"{self._base_url}{path}",
+                headers=self._headers(telegram_user_id),
+                data=data,
+                files=files,
+            )
+        except httpx.HTTPError as exc:
+            raise PilotApiError("PILOT_UNAVAILABLE", 503) from exc
+        if len(response.content) > MAX_RESPONSE_BYTES:
+            raise PilotApiError("RESPONSE_TOO_LARGE", 502)
+        if response.is_error:
+            try:
+                code = response.json().get("error", {}).get("code", "PILOT_ERROR")
+            except (ValueError, AttributeError):
+                code = "PILOT_ERROR"
+            raise PilotApiError(str(code), response.status_code)
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise PilotApiError("INVALID_RESPONSE", 502) from exc
+        if not isinstance(payload, dict):
+            raise PilotApiError("INVALID_RESPONSE", 502)
+        return payload
+
     async def profile(self, telegram_user_id: str) -> dict[str, Any]:
         return await self._json("GET", "/api/bot/v1/me", telegram_user_id=telegram_user_id)
 
@@ -72,6 +106,45 @@ class PilotApiClient:
         if date:
             path = f"{path}?{httpx.QueryParams({'date': date})}"
         return await self._json("GET", path, telegram_user_id=telegram_user_id)
+
+    async def staff_rentals(self, telegram_user_id: str) -> dict[str, Any]:
+        return await self._json("GET", "/api/bot/v1/staff/rentals", telegram_user_id=telegram_user_id)
+
+    async def complete_rental_operation(
+        self,
+        telegram_user_id: str,
+        rental_id: str,
+        operation: str,
+        data: Mapping[str, str],
+        *,
+        video: tuple[str, bytes, str] | None = None,
+        dashboard_photo: tuple[str, bytes, str] | None = None,
+    ) -> dict[str, Any]:
+        operation_path = "handover" if operation == "HANDOVER" else "return"
+        files: dict[str, tuple[str, bytes, str]] = {}
+        if video:
+            files["inspectionVideo"] = video
+        if dashboard_photo:
+            files["dashboardPhoto"] = dashboard_photo
+        return await self._multipart(
+            f"/api/bot/v1/rentals/{rental_id}/{operation_path}",
+            telegram_user_id=telegram_user_id,
+            data=data,
+            files=files,
+        )
+
+    async def extend_staff_rental(
+        self,
+        telegram_user_id: str,
+        rental_id: str,
+        payload: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        return await self._json(
+            "POST",
+            f"/api/bot/v1/rentals/{rental_id}/extend",
+            telegram_user_id=telegram_user_id,
+            json=payload,
+        )
 
     async def claim_notifications(self, worker_id: str) -> dict[str, Any]:
         return await self._json("POST", "/api/bot/v1/notifications/claim", telegram_user_id="", json={"workerId": worker_id})

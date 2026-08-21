@@ -7,6 +7,7 @@ from bot.config import Settings
 from bot.handlers.start import router as start_router
 from bot.handlers.rentals import router as rentals_router
 from bot.handlers.staff import router as staff_router
+from bot.handlers.staff_operations import router as staff_operations_router
 from bot.services.pilot_api import PilotApiClient
 from bot.services.notifications import notification_worker
 
@@ -18,6 +19,7 @@ async def main() -> None:
     dispatcher = Dispatcher(storage=storage)
     dispatcher.include_router(start_router)
     dispatcher.include_router(rentals_router)
+    dispatcher.include_router(staff_operations_router)
     dispatcher.include_router(staff_router)
     api = PilotApiClient(str(settings.pilot_api_base_url), settings.pilot_bot_service_token.get_secret_value(), timeout=settings.request_timeout_seconds)
     stop_event = asyncio.Event()

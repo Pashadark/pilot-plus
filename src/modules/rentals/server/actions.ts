@@ -1,20 +1,14 @@
 'use server';
 
-import { randomUUID } from 'node:crypto';
-
 import { revalidatePath } from 'next/cache';
 
 import { prisma } from '@/database/prisma/client';
 import { calculateRental } from '@/modules/rentals/domain/calculate-rental';
 import { createRentalExtension } from '@/modules/rentals/operations/server/extend-rental';
-import { createRentalHandover } from '@/modules/rentals/operations/server/handover-rental';
-import { createRentalReturn } from '@/modules/rentals/operations/server/return-rental';
-import { executeOperationWithEvidence } from '@/modules/rentals/operations/server/execute-with-evidence';
-import { createOperationDraftPreparer } from '@/modules/rentals/operations/server/prepare-operation';
-import { admitOperationMedia } from '@/modules/rentals/operations/media/admit-operation-media';
-import { scanOperationMedia } from '@/modules/rentals/operations/media/scan-operation-media';
-import { ClamAvClient } from '@/services/malware-scanner/clamav-client';
-import { LocalPrivateStorage } from '@/services/storage/local-private-storage';
+import {
+  executeHandoverOperation,
+  executeReturnOperation,
+} from '@/modules/rentals/operations/server/execute-operation';
 import {
   validateExtensionCommand,
   validateHandoverCommand,
@@ -78,16 +72,7 @@ function operationActor(access: Awaited<ReturnType<typeof requireRentalAccess>>)
   return { id: access.user.id, scope: access.scope } as const;
 }
 
-const handoverUseCase = createRentalHandover(prisma as never);
 const extensionUseCase = createRentalExtension(prisma as never);
-const returnUseCase = createRentalReturn(prisma as never);
-const prepareOperation = createOperationDraftPreparer(prisma as never);
-
-function privateStorageRoot() {
-  const root = process.env.PRIVATE_STORAGE_ROOT?.trim();
-  if (!root) throw new Error('Приватное хранилище не настроено.');
-  return root;
-}
 
 async function operationFile(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -101,45 +86,6 @@ async function operationEvidenceFiles(formData: FormData) {
     operationFile(formData, 'dashboardPhoto'),
   ]);
   return { video, dashboardPhoto };
-}
-
-async function admitEvidence(input: {
-  companyId: string;
-  actorUserId: string;
-  operationId: string;
-  kind: 'INSPECTION_VIDEO' | 'DASHBOARD_PHOTO';
-  file: { name: string; bytes: Uint8Array };
-}) {
-  const storage = await LocalPrivateStorage.create(privateStorageRoot());
-  const repository = {
-    findOperation: (value: Parameters<typeof prisma.rentalOperation.findFirst>[0]) =>
-      prisma.rentalOperation.findFirst(value as never) as never,
-    findMedia: (value: Parameters<typeof prisma.rentalOperationMedia.findFirst>[0]) =>
-      prisma.rentalOperationMedia.findFirst(value as never) as never,
-    createMedia: (value: Record<string, unknown>) =>
-      prisma.rentalOperationMedia.create({
-        data: value,
-        select: { id: true, uploadId: true, companyId: true, storageKey: true },
-      } as never) as never,
-    updateMany: (value: Parameters<typeof prisma.rentalOperationMedia.updateMany>[0]) =>
-      prisma.rentalOperationMedia.updateMany(value as never),
-  };
-  return admitOperationMedia({
-    ...input,
-    repository: repository as never,
-    storage,
-    randomId: randomUUID,
-    scan: (media) =>
-      scanOperationMedia({
-        media,
-        now: new Date(),
-        leaseMs: 120_000,
-        claimToken: randomUUID(),
-        repository: prisma.rentalOperationMedia,
-        storage,
-        scanner: ClamAvClient.fromEnvironment(),
-      }),
-  });
 }
 
 export async function handoverRentalAction(
@@ -173,28 +119,11 @@ export async function handoverRentalAction(
       depositPaymentMethod: String(formData.get('depositPaymentMethod') ?? '') as never,
     });
     const actor = operationActor(access);
-    const result = await executeOperationWithEvidence({
+    const result = await executeHandoverOperation({
+      companyId: identity.companyId,
+      actor,
       command,
       ...evidence,
-      prepare: (preparedCommand) =>
-        prepareOperation({
-          companyId: identity.companyId,
-          actor,
-          rentalId: preparedCommand.rentalId,
-          type: 'HANDOVER',
-          idempotencyKey: preparedCommand.idempotencyKey,
-          occurredAt: preparedCommand.occurredAt,
-        }),
-      admit: ({ operationId, kind, file }) =>
-        admitEvidence({
-          companyId: identity.companyId,
-          actorUserId: access.user.id,
-          operationId,
-          kind,
-          file,
-        }),
-      commit: (finalCommand) =>
-        handoverUseCase({ companyId: identity.companyId, actor, command: finalCommand }),
     });
     revalidatePath(`/rentals/${identity.rentalId}`);
     revalidatePath('/rentals');
@@ -267,28 +196,11 @@ export async function returnRentalAction(
       depositResolutionReason: String(formData.get('depositResolutionReason') ?? ''),
     });
     const actor = operationActor(access);
-    const result = await executeOperationWithEvidence({
+    const result = await executeReturnOperation({
+      companyId: identity.companyId,
+      actor,
       command,
       ...evidence,
-      prepare: (preparedCommand) =>
-        prepareOperation({
-          companyId: identity.companyId,
-          actor,
-          rentalId: preparedCommand.rentalId,
-          type: 'RETURN',
-          idempotencyKey: preparedCommand.idempotencyKey,
-          occurredAt: preparedCommand.occurredAt,
-        }),
-      admit: ({ operationId, kind, file }) =>
-        admitEvidence({
-          companyId: identity.companyId,
-          actorUserId: access.user.id,
-          operationId,
-          kind,
-          file,
-        }),
-      commit: (finalCommand) =>
-        returnUseCase({ companyId: identity.companyId, actor, command: finalCommand }),
     });
     revalidatePath(`/rentals/${identity.rentalId}`);
     revalidatePath('/rentals');

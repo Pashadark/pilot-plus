@@ -15,6 +15,7 @@ from bot.keyboards.staff import (
     STAFF_REQUESTS_TEXT,
     staff_main_menu,
 )
+from bot.keyboards.rentals import staff_operation_choices
 from bot.services.errors import PilotApiError
 
 router = Router(name="staff")
@@ -70,6 +71,17 @@ async def staff_menu_action(message: Message, pilot_api) -> None:
         return
     if access == "forbidden":
         await message.answer("Этот раздел доступен только сотрудникам Pilot+.")
+        return
+    if message.text == STAFF_RENTALS_TEXT:
+        try:
+            rentals = (await pilot_api.staff_rentals(str(message.from_user.id))).get("items", [])
+        except PilotApiError:
+            await message.answer("Не удалось загрузить договоры. Попробуйте ещё раз.", reply_markup=staff_main_menu())
+            return
+        if not rentals:
+            await message.answer("Сейчас нет договоров для выдачи или возврата.", reply_markup=staff_main_menu())
+            return
+        await message.answer("Выберите договор и действие:", reply_markup=staff_operation_choices(rentals))
         return
     if message.text in {STAFF_REQUESTS_TEXT, STAFF_FLEET_TEXT}:
         try:

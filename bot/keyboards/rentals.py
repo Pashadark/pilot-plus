@@ -52,3 +52,37 @@ def extension_confirmation() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="Отправить продление", callback_data="rental:extend-submit")],
         [InlineKeyboardButton(text="Отмена", callback_data="rental:cancel")],
     ])
+
+
+def staff_operation_choices(rentals: list[dict]) -> InlineKeyboardMarkup:
+    rows = []
+    for item in rentals:
+        label = f"{item.get('contractNumber') or 'Без номера'} · {item['vehicle']['registrationNumber']}"
+        if item["action"] == "HANDOVER":
+            rows.append([InlineKeyboardButton(text=f"Выдать · {label}", callback_data=f"staffop:HANDOVER:{item['id']}")])
+        else:
+            rows.append([
+                InlineKeyboardButton(text=f"Принять · {label}", callback_data=f"staffop:RETURN:{item['id']}"),
+                InlineKeyboardButton(text="Продлить", callback_data=f"staffop:EXTENSION:{item['id']}"),
+            ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def operation_choice(prefix: str, values: list[tuple[str, str]]) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=label, callback_data=f"staffop:{prefix}:{value}")]
+        for label, value in values
+    ])
+
+
+def operation_media_skip(kind: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Пропустить с причиной", callback_data=f"staffop:skip:{kind}")]
+    ])
+
+
+def operation_confirmation() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Подтвердить операцию", callback_data="staffop:confirm")],
+        [InlineKeyboardButton(text="Отмена", callback_data="staffop:cancel")],
+    ])

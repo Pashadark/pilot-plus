@@ -19,6 +19,7 @@ class FakeApi:
         self.profile_calls = []
         self.bind_calls = []
         self.operations_calls = []
+        self.staff_rental_calls = []
 
     async def profile(self, telegram_user_id: str):
         self.profile_calls.append(telegram_user_id)
@@ -33,6 +34,10 @@ class FakeApi:
     async def daily_operations(self, telegram_user_id: str):
         self.operations_calls.append(telegram_user_id)
         return {"date": "2026-08-20", "requests": [], "freeVehicles": [], "unavailableVehicles": []}
+
+    async def staff_rentals(self, telegram_user_id: str):
+        self.staff_rental_calls.append(telegram_user_id)
+        return {"items": []}
 
 
 class FakeMessage:
