@@ -1,14 +1,30 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import { prisma } from '@/database/prisma/client';
 import { calculateRental } from '@/modules/rentals/domain/calculate-rental';
+import { createRentalExtension } from '@/modules/rentals/operations/server/extend-rental';
+import { createRentalHandover } from '@/modules/rentals/operations/server/handover-rental';
+import { createRentalReturn } from '@/modules/rentals/operations/server/return-rental';
+import {
+  validateExtensionCommand,
+  validateHandoverCommand,
+  validateReturnCommand,
+} from '@/modules/rentals/operations/validation';
 
 import { requireRentalAccess, RentalAccessDeniedError } from './access';
 import { confirmRental } from './confirm-rental';
 import { generateRentalDocumentPair } from './generate-rental-documents';
 
 export type RentalActionResult =
-  | { ok: true; rentalId: string; contractNumber?: string; documentVersion?: number }
+  | {
+      ok: true;
+      rentalId: string;
+      operationId?: string;
+      contractNumber?: string;
+      documentVersion?: number;
+    }
   | {
       ok: false;
       code: string;
@@ -22,6 +38,11 @@ const forbidden = {
   code: 'FORBIDDEN',
   message: 'Доступ к договорам аренды запрещён.',
 };
+const operationFailed = (message: string): RentalActionResult => ({
+  ok: false,
+  code: 'OPERATION_FAILED',
+  message,
+});
 function isPrismaCode(error: unknown, code: string): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
 }
@@ -31,6 +52,128 @@ function input(formData: FormData) {
   const rentalId = String(formData.get('rentalId') ?? '').trim();
   if (!companyId || !rentalId) throw new Error('VALIDATION');
   return { companyId, rentalId };
+}
+
+function operationIdentity(formData: FormData) {
+  const companyId = String(formData.get('companyId') ?? '').trim();
+  const rentalId = String(formData.get('rentalId') ?? '').trim();
+  if (!companyId || !rentalId) throw new Error('VALIDATION');
+  return { companyId, rentalId };
+}
+
+function optionalNumber(formData: FormData, key: string) {
+  const raw = String(formData.get(key) ?? '').trim();
+  return raw ? Number(raw) : undefined;
+}
+
+function operationActor(access: Awaited<ReturnType<typeof requireRentalAccess>>) {
+  return { id: access.user.id, scope: access.scope } as const;
+}
+
+const handoverUseCase = createRentalHandover(prisma as never);
+const extensionUseCase = createRentalExtension(prisma as never);
+const returnUseCase = createRentalReturn(prisma as never);
+
+export async function handoverRentalAction(
+  _state: RentalActionResult | null,
+  formData: FormData,
+): Promise<RentalActionResult> {
+  try {
+    const identity = operationIdentity(formData);
+    const access = await requireRentalAccess(identity.companyId);
+    const command = validateHandoverCommand({
+      rentalId: identity.rentalId,
+      idempotencyKey: String(formData.get('idempotencyKey') ?? ''),
+      occurredAt: String(formData.get('occurredAt') ?? ''),
+      mileageKm: Number(formData.get('mileageKm')),
+      fuelLevelPercent: Number(formData.get('fuelLevelPercent')),
+      evidenceStatus: String(formData.get('evidenceStatus')) as never,
+      evidenceMissingReason: String(formData.get('evidenceMissingReason') ?? ''),
+      fulfillmentMethod: String(formData.get('fulfillmentMethod')) as never,
+      fulfillmentAddress: String(formData.get('fulfillmentAddress') ?? ''),
+      depositStatus: String(formData.get('depositStatus')) as never,
+      depositAmountMinor: optionalNumber(formData, 'depositAmountMinor'),
+      depositPaymentMethod: String(formData.get('depositPaymentMethod') ?? '') as never,
+    });
+    const result = await handoverUseCase({
+      companyId: identity.companyId,
+      actor: operationActor(access),
+      command,
+    });
+    revalidatePath(`/rentals/${identity.rentalId}`);
+    revalidatePath('/rentals');
+    return { ok: true, ...result };
+  } catch (error) {
+    return error instanceof RentalAccessDeniedError
+      ? forbidden
+      : operationFailed(error instanceof Error ? error.message : 'Не удалось сохранить выдачу.');
+  }
+}
+
+export async function extendRentalAction(
+  _state: RentalActionResult | null,
+  formData: FormData,
+): Promise<RentalActionResult> {
+  try {
+    const identity = operationIdentity(formData);
+    const access = await requireRentalAccess(identity.companyId);
+    const command = validateExtensionCommand({
+      rentalId: identity.rentalId,
+      idempotencyKey: String(formData.get('idempotencyKey') ?? ''),
+      occurredAt: String(formData.get('occurredAt') ?? ''),
+      nextEndsAt: String(formData.get('nextEndsAt') ?? ''),
+      notes: String(formData.get('notes') ?? ''),
+    });
+    const result = await extensionUseCase({
+      companyId: identity.companyId,
+      actor: operationActor(access),
+      command,
+    });
+    revalidatePath(`/rentals/${identity.rentalId}`);
+    revalidatePath('/rentals');
+    return { ok: true, ...result };
+  } catch (error) {
+    return error instanceof RentalAccessDeniedError
+      ? forbidden
+      : operationFailed(error instanceof Error ? error.message : 'Не удалось продлить аренду.');
+  }
+}
+
+export async function returnRentalAction(
+  _state: RentalActionResult | null,
+  formData: FormData,
+): Promise<RentalActionResult> {
+  try {
+    const identity = operationIdentity(formData);
+    const access = await requireRentalAccess(identity.companyId);
+    const command = validateReturnCommand({
+      rentalId: identity.rentalId,
+      idempotencyKey: String(formData.get('idempotencyKey') ?? ''),
+      occurredAt: String(formData.get('occurredAt') ?? ''),
+      mileageKm: Number(formData.get('mileageKm')),
+      fuelLevelPercent: Number(formData.get('fuelLevelPercent')),
+      evidenceStatus: String(formData.get('evidenceStatus')) as never,
+      evidenceMissingReason: String(formData.get('evidenceMissingReason') ?? ''),
+      vehicleCondition: String(formData.get('vehicleCondition')) as never,
+      damageDescription: String(formData.get('damageDescription') ?? ''),
+      depositStatus: String(formData.get('depositStatus')) as never,
+      depositAmountMinor: optionalNumber(formData, 'depositAmountMinor'),
+      depositWithheldMinor: optionalNumber(formData, 'depositWithheldMinor'),
+      depositResolutionReason: String(formData.get('depositResolutionReason') ?? ''),
+    });
+    const result = await returnUseCase({
+      companyId: identity.companyId,
+      actor: operationActor(access),
+      command,
+    });
+    revalidatePath(`/rentals/${identity.rentalId}`);
+    revalidatePath('/rentals');
+    return { ok: true, ...result };
+  } catch (error) {
+    return error instanceof RentalAccessDeniedError
+      ? forbidden
+      : operationFailed(error instanceof Error ? error.message : 'Не удалось принять возврат.');
+  }
 }
 
 function draftValues(formData: FormData) {

@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { AppShell } from '@/shared/components/app-shell/AppShell';
 import { RentalDetailPanel } from '@/modules/rentals/components/RentalDetailPanel';
 import { RentalDetailWorkspace } from '@/modules/rentals/components/RentalDetailWorkspace';
+import { RentalActionRail } from '@/modules/rentals/components/RentalActionRail';
 import {
   getRentalDetailForCurrentUser,
   listRentalAuditForCurrentUser,
@@ -69,28 +70,36 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
         { label: rental.contractNumber ?? 'Черновик' },
       ]}
     >
-      <main className="grid min-w-0 gap-5 p-4 sm:p-6" data-testid="rental-detail-page">
-        <RentalDetailWorkspace detail={detail} />
-        <RentalDetailPanel
-          rental={{
-            id: rental.id,
-            companyId: rental.companyId,
-            status: rental.status,
-            contractNumber: rental.contractNumber,
-          }}
-          documents={rental.documentVersions}
-          generations={rental.documentGenerations.map((item) => ({
-            version: item.version,
-            status: item.status,
-            updatedAt: item.updatedAt.toISOString(),
-          }))}
-          history={history.map((item) => ({
-            id: item.id,
-            action: item.action,
-            label: 'Действие с договором',
-            createdAt: item.createdAt.toISOString(),
-          }))}
-          source={detail.source.label}
+      <main
+        className="grid min-w-0 gap-5 p-4 pb-24 sm:p-6 sm:pb-24 xl:grid-cols-[minmax(0,1fr)_18rem] xl:items-start xl:pb-6"
+        data-testid="rental-detail-page"
+      >
+        <div className="grid min-w-0 gap-5">
+          <RentalDetailWorkspace detail={detail} />
+          <RentalDetailPanel
+            rental={{
+              id: rental.id,
+              companyId: rental.companyId,
+              status: rental.status,
+              contractNumber: rental.contractNumber,
+            }}
+            documents={rental.documentVersions}
+            generations={rental.documentGenerations.map((item) => ({
+              version: item.version,
+              status: item.status,
+              updatedAt: item.updatedAt.toISOString(),
+            }))}
+            history={history.map((item) => ({
+              id: item.id,
+              action: item.action,
+              label: 'Действие с договором',
+              createdAt: item.createdAt.toISOString(),
+            }))}
+            source={detail.source.label}
+          />
+        </div>
+        <RentalActionRail
+          rental={{ id: rental.id, companyId: rental.companyId, status: rental.status }}
         />
       </main>
     </AppShell>
