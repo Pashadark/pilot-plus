@@ -3,6 +3,7 @@ import { AppShell } from '@/shared/components/app-shell/AppShell';
 import { RentalDetailPanel } from '@/modules/rentals/components/RentalDetailPanel';
 import { RentalDetailWorkspace } from '@/modules/rentals/components/RentalDetailWorkspace';
 import { RentalActionRail } from '@/modules/rentals/components/RentalActionRail';
+import { RentalOperationTimeline } from '@/modules/rentals/components/RentalOperationTimeline';
 import {
   getRentalDetailForCurrentUser,
   listRentalAuditForCurrentUser,
@@ -76,6 +77,22 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
       >
         <div className="grid min-w-0 gap-5">
           <RentalDetailWorkspace detail={detail} />
+          <RentalOperationTimeline
+            operations={rental.operations.map((operation) => ({
+              id: operation.id,
+              type: operation.type,
+              occurredAt: operation.occurredAt.toISOString(),
+              actorName: operation.actor.name,
+              evidenceStatus: operation.evidenceStatus,
+              evidenceMissingReason: operation.evidenceMissingReason,
+              mileageKm: operation.mileageKm,
+              fuelLevelPercent: operation.fuelLevelPercent,
+              fulfillmentMethod: operation.fulfillmentMethod,
+              fulfillmentAddress: operation.fulfillmentAddress,
+              nextEndsAt: operation.nextEndsAt?.toISOString() ?? null,
+              totalChargeMinor: operation.totalChargeMinor?.toString() ?? null,
+            }))}
+          />
           <RentalDetailPanel
             rental={{
               id: rental.id,

@@ -183,6 +183,25 @@ export async function getRentalDetailForCurrentUser(id: string) {
         orderBy: { version: 'desc' },
         take: 5,
       },
+      operations: {
+        where: { status: 'COMMITTED' },
+        select: {
+          id: true,
+          type: true,
+          occurredAt: true,
+          evidenceStatus: true,
+          evidenceMissingReason: true,
+          mileageKm: true,
+          fuelLevelPercent: true,
+          fulfillmentMethod: true,
+          fulfillmentAddress: true,
+          nextEndsAt: true,
+          totalChargeMinor: true,
+          actor: { select: { name: true } },
+        },
+        orderBy: [{ occurredAt: 'asc' }, { createdAt: 'asc' }],
+        take: 100,
+      },
     },
   });
 }
