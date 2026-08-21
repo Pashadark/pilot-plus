@@ -20,6 +20,16 @@ type RawRental = {
     format: 'DOCX' | 'PDF';
     clientDocumentVersion: { scanVerdict: string | null };
   }>;
+  operations: Array<{
+    id: string;
+    type: 'HANDOVER' | 'EXTENSION' | 'RETURN';
+    occurredAt: Date;
+    mileageKm: number | null;
+    fuelLevelPercent: number | null;
+    evidenceStatus: 'COMPLETE' | 'VIDEO_MISSING' | 'DASHBOARD_PHOTO_MISSING' | 'MISSING';
+    evidenceMissingReason: string | null;
+    actor: { name: string };
+  }>;
 };
 
 export async function getClientRentalWorkspace(
@@ -51,6 +61,21 @@ export async function getClientRentalWorkspace(
         },
         orderBy: [{ version: 'desc' }, { format: 'asc' }],
       },
+      operations: {
+        where: { status: 'COMMITTED' },
+        select: {
+          id: true,
+          type: true,
+          occurredAt: true,
+          mileageKm: true,
+          fuelLevelPercent: true,
+          evidenceStatus: true,
+          evidenceMissingReason: true,
+          actor: { select: { name: true } },
+        },
+        orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+        take: 50,
+      },
     },
     orderBy: [{ startsAt: 'desc' }, { createdAt: 'desc' }],
     take: 100,
@@ -73,6 +98,16 @@ export async function getClientRentalWorkspace(
     documents: rental.documentVersions
       .filter(({ clientDocumentVersion }) => clientDocumentVersion.scanVerdict === 'CLEAN')
       .map(({ version, format }) => ({ version, format })),
+    operations: rental.operations.map((operation) => ({
+      id: operation.id,
+      type: operation.type,
+      occurredAt: operation.occurredAt.toISOString(),
+      mileageKm: operation.mileageKm,
+      fuelLevelPercent: operation.fuelLevelPercent,
+      evidenceStatus: operation.evidenceStatus,
+      evidenceMissingReason: operation.evidenceMissingReason,
+      actorName: operation.actor.name,
+    })),
   }));
 
   return {

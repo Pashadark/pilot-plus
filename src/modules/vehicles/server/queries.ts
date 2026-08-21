@@ -87,6 +87,14 @@ interface RawVehicle {
     endsAt: Date;
     client: { id: string; firstName: string; middleName: string | null; lastName: string };
     documentVersions: { id: string; version: number; format: 'DOCX' | 'PDF' }[];
+    operations: Array<{
+      id: string;
+      type: 'HANDOVER' | 'EXTENSION' | 'RETURN';
+      occurredAt: Date;
+      mileageKm: number | null;
+      fuelLevelPercent: number | null;
+      evidenceStatus: 'COMPLETE' | 'VIDEO_MISSING' | 'DASHBOARD_PHOTO_MISSING' | 'MISSING';
+    }>;
   }>;
   images: {
     localPath: string;
@@ -240,6 +248,19 @@ const vehicleDetailSelect = {
         select: { id: true, version: true, format: true },
         orderBy: [{ version: 'desc' as const }, { format: 'asc' as const }],
       },
+      operations: {
+        where: { status: 'COMMITTED' },
+        select: {
+          id: true,
+          type: true,
+          occurredAt: true,
+          mileageKm: true,
+          fuelLevelPercent: true,
+          evidenceStatus: true,
+        },
+        orderBy: [{ occurredAt: 'desc' as const }, { id: 'desc' as const }],
+        take: 50,
+      },
     },
     orderBy: { startsAt: 'desc' as const },
     take: 100,
@@ -359,6 +380,10 @@ function mapDetail(vehicle: RawVehicle, referenceTime: Date): VehicleDetailDto {
           .join(' '),
       },
       documents: rental.documentVersions,
+      operations: rental.operations.map((operation) => ({
+        ...operation,
+        occurredAt: operation.occurredAt.toISOString(),
+      })),
     })),
   };
 }

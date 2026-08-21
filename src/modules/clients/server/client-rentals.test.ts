@@ -21,6 +21,18 @@ describe('история аренд клиента', () => {
           { version: 1, format: 'PDF', clientDocumentVersion: { scanVerdict: 'CLEAN' } },
           { version: 2, format: 'PDF', clientDocumentVersion: { scanVerdict: 'ERROR' } },
         ],
+        operations: [
+          {
+            id: 'operation-1',
+            type: 'HANDOVER',
+            occurredAt: new Date('2026-08-01T09:00:00.000Z'),
+            mileageKm: 10000,
+            fuelLevelPercent: 80,
+            evidenceStatus: 'MISSING',
+            evidenceMissingReason: 'Телефон разрядился',
+            actor: { name: 'Павел Седов' },
+          },
+        ],
       },
     ]);
 
@@ -41,6 +53,15 @@ describe('история аренд клиента', () => {
       { version: 1, format: 'PDF' },
     ]);
     expect(result.rentals[0]?.vehicle.label).toBe("Kia Cee'd");
+    expect(result.rentals[0]?.operations).toEqual([
+      expect.objectContaining({
+        id: 'operation-1',
+        type: 'HANDOVER',
+        mileageKm: 10000,
+        evidenceStatus: 'MISSING',
+        actorName: 'Павел Седов',
+      }),
+    ]);
   });
 
   it('для суперадминистратора не добавляет company filter', async () => {

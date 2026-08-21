@@ -83,6 +83,29 @@ export function ClientRentalHistory({ workspace }: { workspace: ClientRentalWork
                   Аренда: <strong>{money(rental.totalPriceMinor)}</strong> · Залог:{' '}
                   <strong>{money(rental.depositMinor)}</strong>
                 </p>
+                {rental.operations.length ? (
+                  <div className="mt-3 grid gap-1 border-l-2 border-[var(--color-border)] pl-3 text-sm">
+                    {rental.operations.map((operation) => (
+                      <p key={operation.id}>
+                        <strong>
+                          {operation.type === 'HANDOVER'
+                            ? 'Выдача'
+                            : operation.type === 'RETURN'
+                              ? 'Возврат'
+                              : 'Продление'}
+                        </strong>{' '}
+                        · {date(operation.occurredAt)} · {operation.actorName}
+                        {operation.mileageKm === null ? '' : ` · ${operation.mileageKm} км`}
+                        {operation.fuelLevelPercent === null
+                          ? ''
+                          : ` · топливо ${operation.fuelLevelPercent}%`}
+                        {operation.evidenceStatus === 'COMPLETE'
+                          ? ''
+                          : ` · без полной фиксации: ${operation.evidenceMissingReason ?? 'причина не указана'}`}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               <div className="flex flex-wrap items-start gap-2">
                 {rental.documents.map((document) => (

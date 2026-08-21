@@ -81,5 +81,15 @@ export type ClientRentalWorkspaceDto = {
     currency: string;
     vehicle: { label: string; registrationNumber: string | null };
     documents: Array<{ version: number; format: 'DOCX' | 'PDF' }>;
+    operations: Array<{
+      id: string;
+      type: 'HANDOVER' | 'EXTENSION' | 'RETURN';
+      occurredAt: string;
+      mileageKm: number | null;
+      fuelLevelPercent: number | null;
+      evidenceStatus: 'COMPLETE' | 'VIDEO_MISSING' | 'DASHBOARD_PHOTO_MISSING' | 'MISSING';
+      evidenceMissingReason: string | null;
+      actorName: string;
+    }>;
   }>;
 };

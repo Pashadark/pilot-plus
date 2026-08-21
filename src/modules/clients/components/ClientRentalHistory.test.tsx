@@ -29,6 +29,18 @@ describe('ClientRentalHistory', () => {
                 { version: 1, format: 'DOCX' },
                 { version: 1, format: 'PDF' },
               ],
+              operations: [
+                {
+                  id: 'operation-1',
+                  type: 'RETURN',
+                  occurredAt: '2026-08-03T09:00:00.000Z',
+                  mileageKm: 10950,
+                  fuelLevelPercent: 55,
+                  evidenceStatus: 'MISSING',
+                  evidenceMissingReason: 'Телефон разрядился',
+                  actorName: 'Павел Седов',
+                },
+              ],
             },
           ],
         }}
@@ -36,6 +48,13 @@ describe('ClientRentalHistory', () => {
     );
     expect(screen.getByText('ME-2026-0001-BK')).toBeTruthy();
     expect(screen.getByText("Kia Cee'd")).toBeTruthy();
+    expect(
+      screen.getByText(
+        (_, node) =>
+          node?.tagName === 'P' &&
+          /Возврат.*10950 км.*Телефон разрядился/.test(node.textContent ?? ''),
+      ),
+    ).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Скачать PDF' }).getAttribute('href')).toBe(
       '/rentals/rental-1/documents/1/PDF',
     );

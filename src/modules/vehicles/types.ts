@@ -106,5 +106,13 @@ export interface VehicleDetailDto extends VehicleCardDto {
     endsAt: string;
     client: { id: string; fullName: string };
     documents: { id: string; version: number; format: 'DOCX' | 'PDF' }[];
+    operations: {
+      id: string;
+      type: 'HANDOVER' | 'EXTENSION' | 'RETURN';
+      occurredAt: string;
+      mileageKm: number | null;
+      fuelLevelPercent: number | null;
+      evidenceStatus: 'COMPLETE' | 'VIDEO_MISSING' | 'DASHBOARD_PHOTO_MISSING' | 'MISSING';
+    }[];
   }[];
 }

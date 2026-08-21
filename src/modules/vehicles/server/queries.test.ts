@@ -246,6 +246,45 @@ describe('запросы автопарка', () => {
     await expect(queries.getVehicleForUser('user-1', 'foreign')).resolves.toBeNull();
   });
 
+  it('показывает выдачу и возврат в истории конкретного автомобиля', async () => {
+    const repository = {
+      async findMany() {
+        return [];
+      },
+      async findFirst() {
+        return {
+          ...rawVehicle,
+          rentals: [
+            {
+              id: 'rental-1',
+              contractNumber: 'ME-2026-0001-BK',
+              status: 'COMPLETED',
+              startsAt: new Date('2026-08-01T09:00:00.000Z'),
+              endsAt: new Date('2026-08-03T09:00:00.000Z'),
+              client: { id: 'client-1', firstName: 'Иван', middleName: null, lastName: 'Иванов' },
+              documentVersions: [],
+              operations: [
+                {
+                  id: 'operation-1',
+                  type: 'RETURN',
+                  occurredAt: new Date('2026-08-03T09:00:00.000Z'),
+                  mileageKm: 10950,
+                  fuelLevelPercent: 55,
+                  evidenceStatus: 'COMPLETE',
+                },
+              ],
+            },
+          ],
+        };
+      },
+    };
+    const vehicle = await createVehicleQueries(repository).getVehicleForUser('user-1', 'vehicle-1');
+
+    expect(vehicle?.rentals?.[0]?.operations).toEqual([
+      expect.objectContaining({ id: 'operation-1', type: 'RETURN', mileageKm: 10950 }),
+    ]);
+  });
+
   it('возвращает null вместо главного фото, если запись отсутствует', async () => {
     const repository = {
       async findMany() {

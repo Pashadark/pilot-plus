@@ -362,6 +362,21 @@ function TabContent({ vehicle, tab }: { vehicle: VehicleDetailDto; tab: VehicleT
                 <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
                   {formatDate(rental.startsAt)} — {formatDate(rental.endsAt)}
                 </p>
+                {rental.operations.map((operation) => (
+                  <p key={operation.id} className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                    {operation.type === 'HANDOVER'
+                      ? 'Выдача'
+                      : operation.type === 'RETURN'
+                        ? 'Возврат'
+                        : 'Продление'}{' '}
+                    · {formatDate(operation.occurredAt)}
+                    {operation.mileageKm === null ? '' : ` · ${operation.mileageKm} км`}
+                    {operation.fuelLevelPercent === null
+                      ? ''
+                      : ` · топливо ${operation.fuelLevelPercent}%`}
+                    {operation.evidenceStatus === 'COMPLETE' ? '' : ' · фиксация неполная'}
+                  </p>
+                ))}
               </div>
               <div className="flex flex-wrap items-start gap-2">
                 {rental.documents.map((document) => (
