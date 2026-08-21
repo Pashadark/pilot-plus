@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import {
@@ -55,6 +55,10 @@ export function RentalOperationDialog({
 }) {
   const router = useRouter();
   const { showToast } = useToast();
+  const [idempotencyKey, setIdempotencyKey] = useState('');
+  useEffect(() => {
+    setIdempotencyKey(`${kind.toLowerCase()}-${rental.id}-${crypto.randomUUID()}`);
+  }, [kind, rental.id]);
   const [state, action, pending] = useActionState<RentalActionResult | null, FormData>(
     actionByKind[kind],
     null,
@@ -66,6 +70,7 @@ export function RentalOperationDialog({
       title: state.ok ? 'Операция аренды сохранена.' : state.message,
     });
     if (state.ok) {
+      setIdempotencyKey(`${kind.toLowerCase()}-${rental.id}-${crypto.randomUUID()}`);
       onOpenChange(false);
       router.refresh();
     }
@@ -82,11 +87,7 @@ export function RentalOperationDialog({
       <form action={action} className="grid gap-4">
         <input type="hidden" name="companyId" value={rental.companyId} />
         <input type="hidden" name="rentalId" value={rental.id} />
-        <input
-          type="hidden"
-          name="idempotencyKey"
-          value={`${kind.toLowerCase()}-${rental.id}-${Date.now()}`}
-        />
+        <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
         <Input
           label="Дата и время операции"
           name="occurredAt"
@@ -134,7 +135,6 @@ export function RentalOperationDialog({
               defaultValue="MISSING"
               required
             >
-              <option value="COMPLETE">Видео и фото приборки загружены</option>
               <option value="VIDEO_MISSING">Нет видео</option>
               <option value="DASHBOARD_PHOTO_MISSING">Нет фото приборки</option>
               <option value="MISSING">Фиксация пропущена</option>
@@ -221,7 +221,7 @@ export function RentalOperationDialog({
           >
             Отмена
           </Button>
-          <Button type="submit" className="w-full" loading={pending}>
+          <Button type="submit" className="w-full" loading={pending} disabled={!idempotencyKey}>
             Сохранить
           </Button>
         </div>

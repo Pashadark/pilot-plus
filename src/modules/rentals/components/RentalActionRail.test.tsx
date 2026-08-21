@@ -40,4 +40,25 @@ describe('RentalActionRail', () => {
     expect(screen.getByRole('dialog', { name: 'Продлить аренду' })).toBeTruthy();
     expect(screen.getByLabelText('Новая дата возврата *')).toBeTruthy();
   });
+
+  it('keeps one idempotency key while the dialog rerenders and cannot claim missing uploads exist', () => {
+    const { rerender } = render(
+      <RentalActionRail
+        rental={{ id: 'rental-1', companyId: 'company-1', status: 'CONFIRMED' }}
+      />,
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: 'Выдать / Подать' })[0]);
+    const keyBefore = document.querySelector<HTMLInputElement>('input[name="idempotencyKey"]')?.value;
+    expect(keyBefore).toBeTruthy();
+    expect(screen.queryByRole('option', { name: 'Видео и фото приборки загружены' })).toBeNull();
+
+    rerender(
+      <RentalActionRail
+        rental={{ id: 'rental-1', companyId: 'company-1', status: 'CONFIRMED' }}
+      />,
+    );
+    expect(document.querySelector<HTMLInputElement>('input[name="idempotencyKey"]')?.value).toBe(
+      keyBefore,
+    );
+  });
 });
