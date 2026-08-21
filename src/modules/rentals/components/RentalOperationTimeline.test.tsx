@@ -8,6 +8,7 @@ describe('RentalOperationTimeline', () => {
   it('shows immutable operational facts and a permanent missing-evidence warning', () => {
     render(
       <RentalOperationTimeline
+        rentalId="rental-1"
         operations={[
           {
             id: 'operation-1',
@@ -22,6 +23,10 @@ describe('RentalOperationTimeline', () => {
             fulfillmentAddress: null,
             nextEndsAt: null,
             totalChargeMinor: null,
+            media: [
+              { kind: 'INSPECTION_VIDEO', verifiedMime: 'video/mp4' },
+              { kind: 'DASHBOARD_PHOTO', verifiedMime: 'image/jpeg' },
+            ],
           },
         ]}
       />,
@@ -30,5 +35,9 @@ describe('RentalOperationTimeline', () => {
     expect(screen.getByText('10 000 км · топливо 80%')).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toContain('Фиксация пропущена');
     expect(screen.getByText('Клиент торопился')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Открыть видео' }).getAttribute('href')).toBe(
+      '/rentals/rental-1/operations/operation-1/media/INSPECTION_VIDEO',
+    );
+    expect(screen.getByRole('link', { name: 'Открыть фото приборки' })).toBeTruthy();
   });
 });

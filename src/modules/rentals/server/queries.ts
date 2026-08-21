@@ -198,6 +198,11 @@ export async function getRentalDetailForCurrentUser(id: string) {
           nextEndsAt: true,
           totalChargeMinor: true,
           actor: { select: { name: true } },
+          media: {
+            where: { status: 'CLEAN' },
+            select: { kind: true, verifiedMime: true },
+            orderBy: { kind: 'asc' },
+          },
         },
         orderBy: [{ occurredAt: 'asc' }, { createdAt: 'asc' }],
         take: 100,

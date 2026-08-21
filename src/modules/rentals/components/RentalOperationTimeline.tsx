@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { Card, CardContent, CardHeader } from '@/shared/ui/Card';
 
 export type RentalOperationTimelineItem = {
@@ -13,6 +15,10 @@ export type RentalOperationTimelineItem = {
   fulfillmentAddress: string | null;
   nextEndsAt: string | null;
   totalChargeMinor: string | null;
+  media: Array<{
+    kind: 'INSPECTION_VIDEO' | 'DASHBOARD_PHOTO';
+    verifiedMime: string | null;
+  }>;
 };
 
 const operationLabels = {
@@ -35,8 +41,10 @@ function date(value: string) {
 }
 
 export function RentalOperationTimeline({
+  rentalId,
   operations,
 }: {
+  rentalId: string;
   operations: readonly RentalOperationTimelineItem[];
 }) {
   return (
@@ -91,6 +99,23 @@ export function RentalOperationTimeline({
                   <p className="text-sm text-[var(--color-text-secondary)]">
                     {operation.evidenceMissingReason}
                   </p>
+                ) : null}
+                {operation.media.length ? (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {operation.media.map((media) => (
+                      <Link
+                        key={media.kind}
+                        href={`/rentals/${rentalId}/operations/${operation.id}/media/${media.kind}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex min-h-11 items-center rounded-[var(--radius-md)] border px-3 text-sm font-semibold hover:bg-[var(--color-elevated)]"
+                      >
+                        {media.kind === 'INSPECTION_VIDEO'
+                          ? 'Открыть видео'
+                          : 'Открыть фото приборки'}
+                      </Link>
+                    ))}
+                  </div>
                 ) : null}
               </li>
             ))}

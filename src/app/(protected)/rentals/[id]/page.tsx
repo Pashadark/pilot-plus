@@ -78,6 +78,7 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
         <div className="grid min-w-0 gap-5">
           <RentalDetailWorkspace detail={detail} />
           <RentalOperationTimeline
+            rentalId={rental.id}
             operations={rental.operations.map((operation) => ({
               id: operation.id,
               type: operation.type,
@@ -91,6 +92,7 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
               fulfillmentAddress: operation.fulfillmentAddress,
               nextEndsAt: operation.nextEndsAt?.toISOString() ?? null,
               totalChargeMinor: operation.totalChargeMinor?.toString() ?? null,
+              media: operation.media,
             }))}
           />
           <RentalDetailPanel
