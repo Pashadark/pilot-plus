@@ -40,3 +40,19 @@ async def test_group_binding_sends_exact_group_context():
     assert captured.url.path == "/api/bot/v1/group-bindings"
     assert captured.headers["X-Telegram-User-Id"] == "185185047"
     assert captured.read().decode() == '{"telegramChatId":"-100777","chatType":"supergroup","title":"Pilot+ работа"}'
+
+
+@pytest.mark.asyncio
+async def test_successful_notification_ack_omits_null_error_code():
+    captured = None
+
+    def handler(request: httpx.Request):
+        nonlocal captured
+        captured = request
+        return httpx.Response(200, json={"ok": True})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        client = PilotApiClient("https://pilot.example.com", "service-secret", http=http)
+        await client.ack_notification("job-1", "claim-token-123456", True)
+
+    assert captured.read().decode() == '{"claimToken":"claim-token-123456","success":true}'

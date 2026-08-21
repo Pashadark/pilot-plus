@@ -5,9 +5,41 @@ import {
   claimNotificationJobs,
   enqueueDailyOperationsDigests,
   enqueueReturnReminders,
+  formatDailyOperationsDigest,
 } from './notifications';
 
 describe('bot notification leases', () => {
+  it('lists today returns and every free vehicle in the group digest', () => {
+    expect(
+      formatDailyOperationsDigest({
+        date: '2026-08-21',
+        requests: 0,
+        rentals: 2,
+        returns: [
+          {
+            at: new Date('2026-08-21T12:00:00Z'),
+            client: 'Иванов Иван',
+            vehicle: 'Kia K5 · В342НР797',
+            contractNumber: 'ME-2026-0011-II',
+          },
+        ],
+        freeVehicles: ['Skoda Octavia · Е435АН997', 'Toyota Camry · Н726АХ550'],
+        service: 1,
+      }),
+    ).toContain(
+      'Возвраты сегодня: 1\n• 15:00 · Kia K5 · В342НР797 · Иванов Иван · ME-2026-0011-II',
+    );
+    expect(
+      formatDailyOperationsDigest({
+        date: '2026-08-21',
+        requests: 0,
+        rentals: 0,
+        returns: [],
+        freeVehicles: ['Toyota Camry · Н726АХ550'],
+        service: 0,
+      }),
+    ).toContain('Свободные машины: 1\n• Toyota Camry · Н726АХ550');
+  });
   it('enqueues one idempotent daily digest per bound company after 00:05 Moscow', async () => {
     const createMany = vi.fn().mockResolvedValue({ count: 1 });
     const database = {

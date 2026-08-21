@@ -77,7 +77,10 @@ class PilotApiClient:
         return await self._json("POST", "/api/bot/v1/notifications/claim", telegram_user_id="", json={"workerId": worker_id})
 
     async def ack_notification(self, job_id: str, claim_token: str, success: bool, error_code: str | None = None) -> dict[str, Any]:
-        return await self._json("POST", f"/api/bot/v1/notifications/{job_id}/ack", telegram_user_id="", json={"claimToken": claim_token, "success": success, "errorCode": error_code})
+        payload: dict[str, Any] = {"claimToken": claim_token, "success": success}
+        if error_code is not None:
+            payload["errorCode"] = error_code
+        return await self._json("POST", f"/api/bot/v1/notifications/{job_id}/ack", telegram_user_id="", json=payload)
 
     async def close(self) -> None:
         if self._owned_http:

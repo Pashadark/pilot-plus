@@ -10,6 +10,53 @@ type ClaimDb = Pick<typeof prisma, '$transaction'>;
 type UpdateDb = Pick<typeof prisma, 'botNotificationJob'>;
 const LEASE_MS = 60_000;
 
+interface DailyDigestInput {
+  date: string;
+  requests: number;
+  rentals: number;
+  returns: Array<{
+    at: Date;
+    client: string;
+    vehicle: string;
+    contractNumber: string | null;
+  }>;
+  freeVehicles: string[];
+  service: number;
+}
+
+export function formatDailyOperationsDigest(input: DailyDigestInput) {
+  const lines = [
+    `Сводка Pilot+ на ${input.date}`,
+    `Заявки: ${input.requests}`,
+    `Аренды: ${input.rentals}`,
+    `Возвраты сегодня: ${input.returns.length}`,
+  ];
+  lines.push(
+    ...input.returns.map((item) => {
+      const at = new Intl.DateTimeFormat('ru-RU', {
+        timeZone: 'Europe/Moscow',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(item.at);
+      return `• ${at} · ${item.vehicle} · ${item.client} · ${item.contractNumber ?? 'без номера'}`;
+    }),
+  );
+  lines.push(`Свободные машины: ${input.freeVehicles.length}`);
+  lines.push(...input.freeVehicles.map((vehicle) => `• ${vehicle}`));
+  lines.push(`На ТО / недоступны: ${input.service}`);
+  return lines.join('\n');
+}
+
+function vehicleLabel(vehicle: {
+  make: string | null;
+  modelName: string | null;
+  model: string;
+  registrationNumber: string | null;
+}) {
+  const title = `${vehicle.make ?? ''} ${vehicle.modelName ?? vehicle.model}`.trim();
+  return `${title} · ${vehicle.registrationNumber ?? 'без номера'}`;
+}
+
 export async function enqueueDailyOperationsDigests(now: Date, database = prisma) {
   const moscow = new Date(now.getTime() + 3 * 60 * 60 * 1000);
   if (moscow.getUTCHours() === 0 && moscow.getUTCMinutes() < 5) return 0;
@@ -103,17 +150,36 @@ async function hydrateJob(
       tx.rental.count({
         where: { companyId: job.companyId, status: { in: ['CONFIRMED', 'ACTIVE'] }, ...overlap },
       }),
-      tx.rental.count({
+      tx.rental.findMany({
         where: {
           companyId: job.companyId,
           status: { in: ['CONFIRMED', 'ACTIVE'] },
           endsAt: { gte: range.start, lt: range.end },
+        },
+        orderBy: [{ endsAt: 'asc' }, { id: 'asc' }],
+        take: 200,
+        select: {
+          endsAt: true,
+          contractNumber: true,
+          client: { select: { firstName: true, lastName: true } },
+          vehicle: {
+            select: {
+              make: true,
+              modelName: true,
+              model: true,
+              registrationNumber: true,
+            },
+          },
         },
       }),
       tx.vehicle.findMany({
         where: { companyId: job.companyId, archivedAt: null },
         select: {
           status: true,
+          make: true,
+          modelName: true,
+          model: true,
+          registrationNumber: true,
           rentals: {
             where: { status: { in: ['CONFIRMED', 'ACTIVE'] }, ...overlap },
             select: { id: true },
@@ -132,19 +198,31 @@ async function hydrateJob(
         take: 300,
       }),
     ]);
-    const free = vehicles.filter(
+    const freeVehicles = vehicles.filter(
       (vehicle) =>
         vehicle.status !== 'MAINTENANCE' &&
         !vehicle.rentals.length &&
         !vehicle.maintenanceRecords.length,
-    ).length;
+    );
     const service = vehicles.filter(
       (vehicle) => vehicle.status === 'MAINTENANCE' || vehicle.maintenanceRecords.length,
     ).length;
     return {
       ...job,
       payload: {
-        message: `Сводка Pilot+ на ${range.date}\nЗаявки: ${requests}\nАренды: ${rentals}\nВозвраты сегодня: ${returns}\nСвободные машины: ${free}\nНа ТО / недоступны: ${service}`,
+        message: formatDailyOperationsDigest({
+          date: range.date,
+          requests,
+          rentals,
+          returns: returns.map((rental) => ({
+            at: rental.endsAt,
+            client: `${rental.client.lastName} ${rental.client.firstName}`.trim(),
+            vehicle: vehicleLabel(rental.vehicle),
+            contractNumber: rental.contractNumber,
+          })),
+          freeVehicles: freeVehicles.map(vehicleLabel),
+          service,
+        }),
       },
     };
   }
