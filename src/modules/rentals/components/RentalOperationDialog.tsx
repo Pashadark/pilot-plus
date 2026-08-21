@@ -46,21 +46,20 @@ export function RentalOperationDialog({
   kind,
   open,
   onOpenChange,
+  operationSequence,
   rental,
 }: {
   kind: RentalOperationDialogKind;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  operationSequence: number;
   rental: { id: string; companyId: string };
 }) {
   const router = useRouter();
   const { showToast } = useToast();
-  const [idempotencyKey, setIdempotencyKey] = useState('');
+  const idempotencyKey = `${kind.toLowerCase()}-${rental.id}-${operationSequence}`;
   const [hasVideo, setHasVideo] = useState(false);
   const [hasDashboardPhoto, setHasDashboardPhoto] = useState(false);
-  useEffect(() => {
-    setIdempotencyKey(`${kind.toLowerCase()}-${rental.id}-${crypto.randomUUID()}`);
-  }, [kind, rental.id]);
   const [state, action, pending] = useActionState<RentalActionResult | null, FormData>(
     actionByKind[kind],
     null,
@@ -72,7 +71,6 @@ export function RentalOperationDialog({
       title: state.ok ? 'Операция аренды сохранена.' : state.message,
     });
     if (state.ok) {
-      setIdempotencyKey(`${kind.toLowerCase()}-${rental.id}-${crypto.randomUUID()}`);
       onOpenChange(false);
       router.refresh();
     }
@@ -239,7 +237,7 @@ export function RentalOperationDialog({
           >
             Отмена
           </Button>
-          <Button type="submit" className="w-full" loading={pending} disabled={!idempotencyKey}>
+          <Button type="submit" className="w-full" loading={pending}>
             Сохранить
           </Button>
         </div>

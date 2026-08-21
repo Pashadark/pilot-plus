@@ -24,6 +24,7 @@ function actionsFor(
 
 export function RentalActionRail({ rental }: { rental: Rental }) {
   const [openKind, setOpenKind] = useState<RentalOperationDialogKind | null>(null);
+  const [operationSequence, setOperationSequence] = useState(0);
   const actions = actionsFor(rental.status);
   if (!actions.length) return null;
   const buttons = actions.map((action) => (
@@ -31,7 +32,10 @@ export function RentalActionRail({ rental }: { rental: Rental }) {
       key={action.kind}
       variant={action.variant}
       className="min-h-12 w-full justify-center"
-      onClick={() => setOpenKind(action.kind)}
+      onClick={() => {
+        setOperationSequence((current) => current + 1);
+        setOpenKind(action.kind);
+      }}
     >
       {action.label}
     </Button>
@@ -56,6 +60,7 @@ export function RentalActionRail({ rental }: { rental: Rental }) {
         <RentalOperationDialog
           kind={openKind}
           open
+          operationSequence={operationSequence}
           onOpenChange={(open) => !open && setOpenKind(null)}
           rental={rental}
         />

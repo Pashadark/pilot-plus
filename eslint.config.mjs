@@ -15,6 +15,7 @@ const eslintConfig = defineConfig([
     'src/database/generated/**',
     'src/database/src/generated/**',
     '.worktrees/**',
+    '**/.pytest_cache/**',
   ]),
 ]);
 
