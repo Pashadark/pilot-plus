@@ -30,14 +30,14 @@
 - Modify: `src/database/prisma/rental-schema.test.ts`
 - Create: `src/modules/rentals/operations/types.ts`
 
-- [ ] Add failing schema tests for operation enums, relations, indexes, idempotency, immutable facts, media lifecycle, and additive SQL.
-- [ ] Add `RentalOperationType` (`HANDOVER`, `EXTENSION`, `RETURN`), evidence status, media kind/status, delivery method, deposit status/method, and condition enums.
-- [ ] Add `RentalOperation` linked to company, rental, client, vehicle, actor, and optional predecessor operation. Store occurred-at, before/after rental dates, mileage/fuel, addresses, price/deposit facts, damage/skip reasons, and an idempotency key.
-- [ ] Add `RentalOperationMedia` with private/quarantine keys, MIME, byte size, SHA-256, scan status, leases, claim token, and timestamps. Enforce one current dashboard photo and one current inspection video per operation/kind.
-- [ ] Add indexes for rental timeline, vehicle timeline, client timeline, due operations, media recovery, and unique `(companyId, idempotencyKey)`.
-- [ ] Add database triggers preventing updates/deletes of completed operation facts while permitting bounded media lifecycle transitions.
-- [ ] Run `npx vitest run src/database/prisma/rental-schema.test.ts` and expect GREEN.
-- [ ] Run Prisma format/generate/validate with a non-connecting placeholder `DATABASE_URL`.
+- [x] Add failing schema tests for operation enums, relations, indexes, idempotency, immutable facts, media lifecycle, and additive SQL.
+- [x] Add `RentalOperationType` (`HANDOVER`, `EXTENSION`, `RETURN`), evidence status, media kind/status, delivery method, deposit status/method, and condition enums.
+- [x] Add `RentalOperation` linked to company, rental, client, vehicle, and actor. Store occurred-at, before/after rental dates, mileage/fuel, addresses, price/deposit facts, damage/skip reasons, and an idempotency key.
+- [x] Add `RentalOperationMedia` with private/quarantine keys, MIME, byte size, SHA-256, scan status, leases, claim token, and timestamps. Enforce one dashboard photo and one inspection video per operation/kind.
+- [x] Add indexes for rental timeline, vehicle timeline, client timeline, media recovery, and unique `(companyId, idempotencyKey)`.
+- [x] Add database triggers preventing updates/deletes of completed operation facts while permitting bounded media lifecycle transitions.
+- [x] Run `npx vitest run src/database/prisma/rental-schema.test.ts` and expect GREEN.
+- [x] Run Prisma format/generate/validate with a non-connecting placeholder `DATABASE_URL`.
 - [ ] Commit: `feat(rentals): persist rental operations`.
 
 ## Task 2: Validate Evidence and Calculate Operational Money

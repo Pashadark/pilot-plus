@@ -37,6 +37,10 @@ const rentalDocumentGenerationMigrationPath = new URL(
   './migrations/20260813090101_add_rental_document_generation_lifecycle/migration.sql',
   import.meta.url,
 );
+const rentalOperationsMigrationPath = new URL(
+  './migrations/20260821120000_add_rental_operations/migration.sql',
+  import.meta.url,
+);
 const migrationRecoveryRunbookPath = new URL(
   '../../../docs/runbooks/rental-migration-recovery.md',
   import.meta.url,
@@ -171,6 +175,48 @@ describe('доменная схема аренды', () => {
     expect(migration).toContain("'CLEANING'");
     expect(migration).toContain('"claimToken" TEXT');
     expect(migration).toContain('ADD COLUMN "legalContentVersion" TEXT NOT NULL DEFAULT');
+    expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
+  });
+
+  it('persists immutable tenant-scoped handover, extension, and return facts', () => {
+    const operation = schema.match(/model RentalOperation \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(schema).toMatch(/enum RentalOperationType \{[\s\S]*\bHANDOVER\b[\s\S]*\bEXTENSION\b[\s\S]*\bRETURN\b/);
+    expect(schema).toMatch(/enum RentalEvidenceStatus \{[\s\S]*\bCOMPLETE\b[\s\S]*\bVIDEO_MISSING\b[\s\S]*\bDASHBOARD_PHOTO_MISSING\b[\s\S]*\bMISSING\b/);
+    expect(operation).toMatch(/companyId\s+String/);
+    expect(operation).toMatch(/rentalId\s+String/);
+    expect(operation).toMatch(/clientId\s+String/);
+    expect(operation).toMatch(/vehicleId\s+String/);
+    expect(operation).toMatch(/actorUserId\s+String/);
+    expect(operation).toMatch(/idempotencyKey\s+String/);
+    expect(operation).toMatch(/occurredAt\s+DateTime\s+@db\.Timestamptz\(3\)/);
+    expect(operation).toMatch(/mileageKm\s+Int\?/);
+    expect(operation).toMatch(/fuelLevelPercent\s+Int\?/);
+    expect(operation).toMatch(/evidenceStatus\s+RentalEvidenceStatus/);
+    expect(operation).toContain('@@unique([companyId, idempotencyKey])');
+    expect(operation).toContain('@@index([companyId, rentalId, occurredAt])');
+    expect(operation).toContain('@@index([companyId, vehicleId, occurredAt])');
+    expect(operation).toContain('@@index([companyId, clientId, occurredAt])');
+  });
+
+  it('persists a recoverable private-media lifecycle for rental operations', () => {
+    const media = schema.match(/model RentalOperationMedia \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(schema).toMatch(/enum RentalOperationMediaKind \{[\s\S]*\bINSPECTION_VIDEO\b[\s\S]*\bDASHBOARD_PHOTO\b/);
+    expect(schema).toMatch(/enum RentalOperationMediaStatus \{[\s\S]*\bPENDING\b[\s\S]*\bSCANNING\b[\s\S]*\bCLEAN\b[\s\S]*\bCLEANING\b[\s\S]*\bERROR\b/);
+    expect(media).toMatch(/quarantineKey\s+String\s+@unique/);
+    expect(media).toMatch(/storageKey\s+String\s+@unique/);
+    expect(media).toMatch(/sha256\s+String\?/);
+    expect(media).toMatch(/leaseExpiresAt\s+DateTime\?/);
+    expect(media).toMatch(/claimToken\s+String\?\s+@unique/);
+    expect(media).toContain('@@unique([operationId, kind])');
+    expect(media).toContain('@@index([companyId, status, leaseExpiresAt])');
+
+    expect(existsSync(rentalOperationsMigrationPath)).toBe(true);
+    if (!existsSync(rentalOperationsMigrationPath)) return;
+    const migration = readFileSync(rentalOperationsMigrationPath, 'utf8');
+    expect(migration).toContain('CREATE TABLE "public"."RentalOperation"');
+    expect(migration).toContain('CREATE TABLE "public"."RentalOperationMedia"');
+    expect(migration).toContain('RentalOperation_prevent_fact_mutation');
+    expect(migration).toContain('RentalOperation_prevent_delete');
     expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
   });
 
