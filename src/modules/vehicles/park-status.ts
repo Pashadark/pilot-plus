@@ -8,13 +8,18 @@ const STATUS_LABELS: Record<VehicleStatus, string> = {
   UNKNOWN: 'Нет телеметрии',
 };
 
-function isFleetParkAddress(address: string | null | undefined) {
-  if (!address) return false;
-  const normalized = address
+export function normalizeFleetParkAddress(address: string | null | undefined) {
+  if (!address) return '';
+  return address
     .toLocaleLowerCase('ru-RU')
     .replaceAll('ё', 'е')
     .replace(/[^а-я0-9]+/gu, ' ')
     .trim();
+}
+
+export function isFleetParkAddress(address: string | null | undefined) {
+  const normalized = normalizeFleetParkAddress(address);
+  if (!normalized) return false;
   const isGreenAvenue = /(?:^|\s)зелен(?:ый|ого)\s+проспект(?:\s|$)/u.test(normalized);
   const isHouse22 = /(?:^|\s)(?:д|дом)?\s*22(?:\s|$)/u.test(normalized);
   return isGreenAvenue && isHouse22;
