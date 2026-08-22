@@ -133,11 +133,38 @@ it('фильтрует все статусы с ожидаемым количе�
   expect(screen.getAllByRole('button', { name: /Выбрать автомобиль/ })).toHaveLength(2);
 
   await user.click(screen.getByRole('button', { name: 'На стоянке' }));
-  expect(screen.getAllByRole('button', { name: /Выбрать автомобиль/ })).toHaveLength(2);
+  expect(screen.getAllByRole('button', { name: /Выбрать автомобиль/ })).toHaveLength(1);
 
-  await user.click(screen.getByRole('button', { name: 'Нет связи' }));
+  await user.click(screen.getByRole('button', { name: 'Давно не обновлялся' }));
   expect(screen.getAllByRole('button', { name: /Выбрать автомобиль/ })).toHaveLength(1);
   expect(screen.getByRole('button', { name: /К 111 МР 199/ })).toBeTruthy();
+
+  await user.click(screen.getByRole('button', { name: 'В парке' }));
+  expect(screen.getByRole('button', { name: /В 456 КХ 178/ })).toBeTruthy();
+});
+
+it('держит автомобиль без координат в верхнем списке и фильтрует его как нет связи', async () => {
+  const user = userEvent.setup();
+  const vehicles = [
+    {
+      id: 'without-coordinates',
+      name: 'Toyota Camry',
+      plate: 'А 777 АА 77',
+      longitude: null,
+      latitude: null,
+      speedKph: 0,
+      fuelPercent: null,
+      lastSeenLabel: 'координаты ещё не получены',
+      address: 'Нет данных GLONASSSoft',
+      gpsStatus: { key: 'NO_DATA', label: 'Нет связи', tone: 'danger', isConnected: false },
+    },
+  ] as never;
+
+  render(<OnlineMapWorkspace mapComponent={FakeMap} vehicles={vehicles} />);
+
+  expect(screen.getByRole('button', { name: /А 777 АА 77/ })).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'Нет связи' }));
+  expect(screen.getByRole('button', { name: /А 777 АА 77/ })).toBeTruthy();
 });
 
 it('использует container responsive layout и сохраняет атрибуцию отдельно от панели', () => {

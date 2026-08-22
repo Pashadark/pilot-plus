@@ -164,7 +164,7 @@ const vehicles: readonly OnlineMapVehicle[] = [
     id: 'lada-vesta-a123mr77',
     name: 'Lada Vesta',
     plate: 'А 123 МР 77',
-    status: 'moving',
+    gpsStatus: { key: 'MOVING', label: 'В движении', tone: 'primary', isConnected: true },
     speedKph: 42,
     fuelPercent: 68,
     lastSeenLabel: 'сейчас',
@@ -270,6 +270,36 @@ it('поднимает мобильные контролы карты над п�
     '[&_.maplibregl-ctrl-bottom-right]:bottom-[calc(48dvh+max(1rem,env(safe-area-inset-bottom)))]',
   );
   expect(mapShell?.className).not.toContain('calc(42dvh');
+});
+
+it('не создаёт маркер для машины без координат GLONASSSOFT', () => {
+  const vehicleWithoutCoordinates: readonly OnlineMapVehicle[] = [
+    {
+      ...vehicles[0],
+      latitude: null,
+      longitude: null,
+      gpsStatus: { key: 'NO_DATA', label: 'Нет связи', tone: 'danger', isConnected: false },
+    },
+  ];
+
+  render(
+    createElement(OnlineFleetMap, {
+      vehicles: vehicleWithoutCoordinates,
+      selectedVehicleId: null,
+      trackViewModel: null,
+      playbackPoint: null,
+      selectedEventId: null,
+      previewedEventId: null,
+      previewedSegmentId: null,
+      onVehicleSelect: vi.fn(),
+      onEventPreview: vi.fn(),
+      onEventActivate: vi.fn(),
+      onSegmentPreview: vi.fn(),
+    }),
+  );
+
+  expect(screen.getByText('Координаты ещё не получены')).toBeTruthy();
+  expect(mapMocks.reactRootContainers).toHaveLength(0);
 });
 
 it('оставляет data probe маршрута вне последовательного tab-flow', async () => {

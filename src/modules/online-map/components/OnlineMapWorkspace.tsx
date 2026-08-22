@@ -27,10 +27,11 @@ import { TrackSegmentList } from './TrackSegmentList';
 
 const filters: readonly { value: OnlineMapFilter; label: string }[] = [
   { value: 'all', label: 'Все' },
+  { value: 'in-park', label: 'В парке' },
   { value: 'moving', label: 'В движении' },
   { value: 'idle', label: 'На стоянке' },
-  { value: 'offline', label: 'Нет связи' },
-  { value: 'no-data', label: 'Нет координат' },
+  { value: 'offline', label: 'Давно не обновлялся' },
+  { value: 'no-data', label: 'Нет связи' },
 ];
 
 export interface OnlineMapWorkspaceProps {

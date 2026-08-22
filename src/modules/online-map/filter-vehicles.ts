@@ -1,5 +1,13 @@
 import type { OnlineMapFilter, OnlineMapVehicle } from './types';
 
+const gpsStatusByFilter: Readonly<Record<Exclude<OnlineMapFilter, 'all'>, string>> = {
+  'in-park': 'IN_PARK',
+  moving: 'MOVING',
+  idle: 'IDLE',
+  offline: 'STALE',
+  'no-data': 'NO_DATA',
+};
+
 function normalizeSearchValue(value: string) {
   return value.toLocaleLowerCase('ru-RU').replace(/\s/g, '');
 }
@@ -13,7 +21,7 @@ export function filterOnlineMapVehicles(
 
   return vehicles.filter(
     (vehicle) =>
-      (filter === 'all' || vehicle.status === filter) &&
+      (filter === 'all' || vehicle.gpsStatus.key === gpsStatusByFilter[filter]) &&
       (!normalizedQuery ||
         normalizeSearchValue(`${vehicle.name}${vehicle.plate}`).includes(normalizedQuery)),
   );

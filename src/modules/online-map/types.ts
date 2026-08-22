@@ -1,12 +1,12 @@
-export type OnlineMapStatus = 'moving' | 'idle' | 'offline' | 'no-data';
+import type { VehicleGpsStatusView } from '@/modules/vehicles/gps-status';
 
-export type OnlineMapFilter = 'all' | OnlineMapStatus;
+export type OnlineMapFilter = 'all' | 'in-park' | 'moving' | 'idle' | 'offline' | 'no-data';
 
 export interface OnlineMapVehicle {
   id: string;
   name: string;
   plate: string;
-  status: OnlineMapStatus;
+  gpsStatus: VehicleGpsStatusView;
   longitude: number | null;
   latitude: number | null;
   speedKph: number;

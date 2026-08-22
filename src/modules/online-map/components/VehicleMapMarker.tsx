@@ -3,20 +3,15 @@
 import { motion, useReducedMotion } from 'framer-motion';
 import { FiTruck } from 'react-icons/fi';
 
-import type { OnlineMapStatus, OnlineMapVehicle } from '../types';
+import type { VehicleGpsStatusTone } from '@/modules/vehicles/gps-status';
 
-const statusColors: Record<OnlineMapStatus, string> = {
-  moving: 'bg-[var(--color-success)]',
-  idle: 'bg-[var(--color-warning)]',
-  offline: 'bg-[var(--color-text-secondary)]',
-  'no-data': 'bg-[var(--color-text-secondary)]',
-};
+import type { OnlineMapVehicle } from '../types';
 
-const statusLabels: Record<OnlineMapStatus, string> = {
-  moving: 'В движении',
-  idle: 'На стоянке',
-  offline: 'Нет связи',
-  'no-data': 'Нет координат',
+const statusColors: Record<VehicleGpsStatusTone, string> = {
+  success: 'bg-[var(--color-success)]',
+  primary: 'bg-[var(--color-primary)]',
+  warning: 'bg-[var(--color-warning)]',
+  danger: 'bg-[var(--color-danger)]',
 };
 
 interface VehicleMapMarkerProps {
@@ -44,8 +39,8 @@ export function VehicleMapMarker({ vehicle, selected, onSelect }: VehicleMapMark
       <span className="grid size-10 place-items-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] shadow-[var(--shadow-floating)]">
         <FiTruck aria-hidden="true" className="size-5" />
         <span
-          aria-label={statusLabels[vehicle.status]}
-          className={`absolute right-0.5 bottom-0.5 size-2.5 rounded-full border-2 border-[var(--color-surface)] ${statusColors[vehicle.status]}`}
+          aria-label={vehicle.gpsStatus.label}
+          className={`absolute right-0.5 bottom-0.5 size-2.5 rounded-full border-2 border-[var(--color-surface)] ${statusColors[vehicle.gpsStatus.tone]}`}
         />
       </span>
 
@@ -54,7 +49,7 @@ export function VehicleMapMarker({ vehicle, selected, onSelect }: VehicleMapMark
       >
         <span className="block font-semibold">{vehicle.plate}</span>
         <span className="block text-[var(--color-text-secondary)]">
-          {vehicle.name} · {statusLabels[vehicle.status]}
+          {vehicle.name} · {vehicle.gpsStatus.label}
         </span>
         <span className="mt-1.5 block">Скорость: {vehicle.speedKph} км/ч</span>
         <span className="block">Топливо: {vehicle.fuelPercent}%</span>

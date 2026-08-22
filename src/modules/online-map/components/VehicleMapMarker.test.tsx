@@ -33,3 +33,20 @@ it('показывает в карточке скорость, топливо и
   expect(marker.textContent).toContain('Топливо: 72%');
   expect(marker.textContent).toContain('Последний сигнал: только что');
 });
+
+it('показывает устаревший GPS-сигнал красным с явной причиной', () => {
+  const staleVehicle = {
+    ...onlineMapVehicles[3],
+    gpsStatus: {
+      key: 'STALE',
+      label: 'Давно не обновлялся',
+      tone: 'danger',
+      isConnected: false,
+    },
+  } as unknown as (typeof onlineMapVehicles)[number];
+
+  render(<VehicleMapMarker vehicle={staleVehicle} selected={false} onSelect={vi.fn()} />);
+
+  expect(screen.getByLabelText('Давно не обновлялся').className).toContain('--color-danger');
+  expect(screen.getByText(/Kia K5 · Давно не обновлялся/)).toBeTruthy();
+});

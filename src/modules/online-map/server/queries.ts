@@ -2,10 +2,9 @@ import 'server-only';
 
 import { prisma } from '@/database/prisma/client';
 import type { SafeUser } from '@/modules/auth/types';
+import { deriveVehicleGpsStatus } from '@/modules/vehicles/gps-status';
 
-import type { OnlineMapStatus, OnlineMapVehicle } from '../types';
-
-const OFFLINE_AFTER_MS = 15 * 60 * 1000;
+import type { OnlineMapVehicle } from '../types';
 
 interface OnlineMapRepository {
   vehicle: {
@@ -22,6 +21,7 @@ interface OnlineMapRow {
     longitude: unknown;
     speedKph: number | null;
     fuelLevelPercent: unknown | null;
+    address: string | null;
     recordedAt: Date;
   }>;
   rentals?: Array<{
@@ -38,11 +38,6 @@ function lastSeenLabel(recordedAt: Date, now: Date): string {
     return `${minutes} ${minutes === 1 ? 'минуту' : minutes < 5 ? 'минуты' : 'минут'} назад`;
   const hours = Math.floor(minutes / 60);
   return `${hours} ${hours === 1 ? 'час' : hours < 5 ? 'часа' : 'часов'} назад`;
-}
-
-function positionStatus(speedKph: number, recordedAt: Date, now: Date): OnlineMapStatus {
-  if (now.getTime() - recordedAt.getTime() > OFFLINE_AFTER_MS) return 'offline';
-  return speedKph > 0 ? 'moving' : 'idle';
 }
 
 export async function listOnlineMapVehicles(
@@ -69,6 +64,7 @@ export async function listOnlineMapVehicles(
           longitude: true,
           speedKph: true,
           fuelLevelPercent: true,
+          address: true,
           recordedAt: true,
         },
         orderBy: { recordedAt: 'desc' },
@@ -112,12 +108,15 @@ export async function listOnlineMapVehicles(
         id: vehicle.id,
         name: vehicle.model,
         plate: vehicle.registrationNumber ?? 'Без госномера',
-        status: 'no-data' as const,
+        gpsStatus: deriveVehicleGpsStatus(
+          { recordedAt: null, speedKph: null, address: null, hasCoordinates: false },
+          now,
+        ),
         longitude: null,
         latitude: null,
         speedKph: 0,
         fuelPercent: null,
-        lastSeenLabel: 'координаты ещё не получены',
+        lastSeenLabel: 'сигнал ещё не получен',
         address: 'Нет данных GLONASSSoft',
         currentRental,
       };
@@ -127,13 +126,21 @@ export async function listOnlineMapVehicles(
       id: vehicle.id,
       name: vehicle.model,
       plate: vehicle.registrationNumber ?? 'Без госномера',
-      status: positionStatus(speedKph, position.recordedAt, now),
+      gpsStatus: deriveVehicleGpsStatus(
+        {
+          recordedAt: position.recordedAt,
+          speedKph,
+          address: position.address,
+          hasCoordinates: position.latitude != null && position.longitude != null,
+        },
+        now,
+      ),
       longitude: Number(position.longitude),
       latitude: Number(position.latitude),
       speedKph,
       fuelPercent: position.fuelLevelPercent == null ? null : Number(position.fuelLevelPercent),
       lastSeenLabel: lastSeenLabel(position.recordedAt, now),
-      address: 'Адрес уточняется по координатам',
+      address: position.address ?? 'Адрес уточняется по координатам',
       currentRental,
     };
   });

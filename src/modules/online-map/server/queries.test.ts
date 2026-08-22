@@ -35,12 +35,23 @@ it('возвращает только активные реальные маши
       },
     }),
   );
+  expect(findMany.mock.calls[0]?.[0].select.positions).toEqual(
+    expect.objectContaining({
+      where: { provider: 'GLONASSSOFT' },
+      select: expect.objectContaining({ address: true }),
+    }),
+  );
   expect(result).toEqual([
     expect.objectContaining({
       id: 'vehicle-1',
       name: 'Kia K5',
       plate: 'В342НР797',
-      status: 'moving',
+      gpsStatus: {
+        key: 'MOVING',
+        label: 'В движении',
+        tone: 'primary',
+        isConnected: true,
+      },
       latitude: 55.751244,
       longitude: 37.618423,
       speedKph: 42,
@@ -50,7 +61,7 @@ it('возвращает только активные реальные маши
   ]);
 });
 
-it('super-admin видит все компании, а устаревшая позиция помечается без связи', async () => {
+it('super-admin видит все компании, а устаревшая позиция получает общий красный GPS-статус', async () => {
   const findMany = vi.fn().mockResolvedValue([
     {
       id: 'vehicle-2',
@@ -77,14 +88,19 @@ it('super-admin видит все компании, а устаревшая по
   expect(findMany.mock.calls[0]?.[0].where.company).toBeUndefined();
   expect(result[0]).toEqual(
     expect.objectContaining({
-      status: 'offline',
+      gpsStatus: {
+        key: 'STALE',
+        label: 'Давно не обновлялся',
+        tone: 'danger',
+        isConnected: false,
+      },
       fuelPercent: null,
       lastSeenLabel: '2 часа назад',
     }),
   );
 });
 
-it('оставляет реальную машину без координат в списке и показывает текущий договор', async () => {
+it('оставляет реальную машину без координат в списке с общим красным GPS-статусом', async () => {
   const findMany = vi.fn().mockResolvedValue([
     {
       id: 'vehicle-3',
@@ -113,7 +129,12 @@ it('оставляет реальную машину без координат �
 
   expect(result[0]).toEqual(
     expect.objectContaining({
-      status: 'no-data',
+      gpsStatus: {
+        key: 'NO_DATA',
+        label: 'Нет связи',
+        tone: 'danger',
+        isConnected: false,
+      },
       latitude: null,
       longitude: null,
       currentRental: {

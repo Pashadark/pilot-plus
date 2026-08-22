@@ -2,21 +2,15 @@ import type { ReactNode } from 'react';
 import { FiClock, FiMapPin, FiTruck, FiX } from 'react-icons/fi';
 
 import { IconButton } from '@/shared/ui/IconButton';
+import type { VehicleGpsStatusTone } from '@/modules/vehicles/gps-status';
 
-import type { OnlineMapStatus, OnlineMapVehicle } from '../types';
+import type { OnlineMapVehicle } from '../types';
 
-const statusLabels: Record<OnlineMapStatus, string> = {
-  moving: 'В движении',
-  idle: 'На стоянке',
-  offline: 'Нет связи',
-  'no-data': 'Нет координат',
-};
-
-const statusClasses: Record<OnlineMapStatus, string> = {
-  moving: 'bg-[var(--color-success-soft)] text-[var(--color-success)]',
-  idle: 'bg-[var(--color-warning-soft)] text-[var(--color-warning)]',
-  offline: 'bg-[var(--color-elevated)] text-[var(--color-text-secondary)]',
-  'no-data': 'bg-[var(--color-elevated)] text-[var(--color-text-secondary)]',
+const statusClasses: Record<VehicleGpsStatusTone, string> = {
+  success: 'bg-[var(--color-success-soft)] text-[var(--color-success)]',
+  primary: 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]',
+  warning: 'bg-[var(--color-warning-soft)] text-[var(--color-warning)]',
+  danger: 'bg-[var(--color-danger-soft)] text-[var(--color-danger)]',
 };
 
 export interface SelectedVehiclePanelProps {
@@ -57,9 +51,9 @@ export function SelectedVehiclePanel({
               <p className="text-sm text-[var(--color-text-secondary)]">{vehicle.plate}</p>
             </div>
             <span
-              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClasses[vehicle.status]}`}
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClasses[vehicle.gpsStatus.tone]}`}
             >
-              {statusLabels[vehicle.status]}
+              {vehicle.gpsStatus.label}
             </span>
             <IconButton
               label="Закрыть карточку автомобиля"
@@ -100,7 +94,7 @@ export function SelectedVehiclePanel({
             </p>
             <p className="flex gap-2 text-[var(--color-text-secondary)]">
               <FiClock aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-              <span>Связь: {vehicle.lastSeenLabel}</span>
+              <span>Последний сигнал: {vehicle.lastSeenLabel}</span>
             </p>
           </div>
 
