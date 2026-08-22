@@ -9,7 +9,10 @@ import { VehicleCard } from './VehicleCard';
 
 afterEach(cleanup);
 
-function vehicle(gpsStatus: VehicleCardDto['gpsStatus']): VehicleCardDto {
+function vehicle(
+  gpsStatus: VehicleCardDto['gpsStatus'],
+  status: VehicleCardDto['status'] = 'MAINTENANCE',
+): VehicleCardDto {
   return {
     id: 'vehicle-1',
     internalNumber: 'PLT-001',
@@ -25,7 +28,7 @@ function vehicle(gpsStatus: VehicleCardDto['gpsStatus']): VehicleCardDto {
     currency: 'RUB',
     originalPrice: '8 800 ₽',
     features: [],
-    status: 'MAINTENANCE',
+    status,
     gpsStatus,
     primaryImage: null,
     telemetry: {
@@ -66,5 +69,29 @@ describe('VehicleCard', () => {
     expect(badge.className).toContain(semanticToken);
     expect(screen.getByText('Последний сигнал').textContent).toBe('Последний сигнал');
     expect(screen.getByText(/22\.08\.2026/).textContent).toContain('22.08.2026');
+  });
+
+  it('не дублирует legacy telemetry status и оставляет только настоящий бизнес-бейдж', () => {
+    const moving = {
+      key: 'MOVING',
+      label: 'В движении',
+      tone: 'primary',
+      isConnected: true,
+    } as const;
+    const { rerender } = render(
+      <ToastProvider>
+        <VehicleCard vehicle={vehicle(moving, 'OFFLINE')} />
+      </ToastProvider>,
+    );
+
+    expect(screen.queryByText('Не на связи')).toBeNull();
+    expect(screen.getAllByText('В движении')).toHaveLength(1);
+
+    rerender(
+      <ToastProvider>
+        <VehicleCard vehicle={vehicle(moving, 'MAINTENANCE')} />
+      </ToastProvider>,
+    );
+    expect(screen.getByText('Обслуживание')).toBeTruthy();
   });
 });

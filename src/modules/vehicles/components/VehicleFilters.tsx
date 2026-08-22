@@ -66,18 +66,14 @@ export function VehicleFilters({
         <option value="OTHER">Другое</option>
       </Select>
       <Select
-        label="Статус"
+        label="Бизнес-состояние"
         value={filters.status}
         onChange={(event) =>
           onChange({ ...filters, status: event.target.value as VehicleFiltersValue['status'] })
         }
       >
-        <option value="">Все статусы</option>
-        <option value="MOVING">В движении</option>
-        <option value="IDLE">Стоит</option>
-        <option value="OFFLINE">Не на связи</option>
+        <option value="">Любое</option>
         <option value="MAINTENANCE">Обслуживание</option>
-        <option value="UNKNOWN">Нет телеметрии</option>
       </Select>
       <Select
         label="Где машина"

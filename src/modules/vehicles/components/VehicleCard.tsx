@@ -13,22 +13,11 @@ import {
   FiUsers,
 } from 'react-icons/fi';
 
-import type { VehicleCardDto, VehicleStatus } from '../types';
+import type { VehicleCardDto } from '../types';
 import { formatDailyPrice, formatOptionalMetric } from '../utils';
 import { VehiclePhoto } from './VehiclePhoto';
 import { useToast } from '@/shared/providers/ToastProvider';
 import { Badge, Button, Card } from '@/shared/ui';
-
-const statusView: Record<
-  VehicleStatus,
-  { label: string; tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral' }
-> = {
-  MOVING: { label: 'В движении', tone: 'success' },
-  IDLE: { label: 'Стоит', tone: 'warning' },
-  OFFLINE: { label: 'Не на связи', tone: 'danger' },
-  MAINTENANCE: { label: 'Обслуживание', tone: 'info' },
-  UNKNOWN: { label: 'Нет телеметрии', tone: 'neutral' },
-};
 
 const fuelLabels = {
   PETROL: 'Бензин',
@@ -47,7 +36,8 @@ function dateOrEmpty(value: string | null) {
 
 export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
   const { showToast } = useToast();
-  const status = statusView[vehicle.status];
+  const businessStatus =
+    vehicle.status === 'MAINTENANCE' ? { label: 'Обслуживание', tone: 'info' as const } : null;
 
   const explainMissingPosition = () => {
     if (vehicle.telemetry.hasPosition) return;
@@ -89,7 +79,9 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
                 <Badge tone={vehicle.gpsStatus.tone} data-testid="vehicle-gps-status">
                   {vehicle.gpsStatus.label}
                 </Badge>
-                <Badge tone={status.tone}>{status.label}</Badge>
+                {businessStatus ? (
+                  <Badge tone={businessStatus.tone}>{businessStatus.label}</Badge>
+                ) : null}
               </div>
             </div>
             <p className="mt-2 flex items-start gap-1.5 text-sm text-[var(--color-text-secondary)]">

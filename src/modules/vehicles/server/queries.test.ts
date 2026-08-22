@@ -103,6 +103,7 @@ describe('запросы автопарка', () => {
       telemetry: {
         odometerKm: 12000,
         fuelLevelPercent: 60,
+        speedKph: 0,
         lastSeenAt: '2026-08-20T20:00:00.000Z',
         lastTripAt: null,
         hasPosition: true,
@@ -122,6 +123,7 @@ describe('запросы автопарка', () => {
     expect(fake.calls.list).toMatchObject({
       select: {
         positions: {
+          where: { provider: 'GLONASSSOFT' },
           select: { speedKph: true },
         },
         images: {
@@ -152,6 +154,13 @@ describe('запросы автопарка', () => {
         id: 'vehicle-1',
         archivedAt: null,
         company: { members: { some: { userId: 'user-1' } } },
+      },
+    });
+    expect(fake.calls.detail).toMatchObject({
+      select: {
+        positions: {
+          where: { provider: 'GLONASSSOFT' },
+        },
       },
     });
     expect(vehicle?.createdAt).toBe('2026-07-19T12:00:00.000Z');

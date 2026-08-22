@@ -58,7 +58,7 @@ export async function listOnlineMapVehicles(
       isDemoImport: false,
       ...(user.role === 'SUPER_ADMIN'
         ? {}
-        : { company: { memberships: { some: { userId: user.id } } } }),
+        : { company: { members: { some: { userId: user.id } } } }),
     },
     select: {
       id: true,
@@ -123,6 +123,7 @@ export async function listOnlineMapVehicles(
         latitude: null,
         speedKph: 0,
         fuelPercent: null,
+        recordedAt: null,
         lastSeenLabel: 'сигнал ещё не получен',
         address: 'Нет данных GLONASSSoft',
         currentRental,
@@ -149,6 +150,7 @@ export async function listOnlineMapVehicles(
       latitude: hasCoordinates ? latitude : null,
       speedKph,
       fuelPercent: position.fuelLevelPercent == null ? null : Number(position.fuelLevelPercent),
+      recordedAt: position.recordedAt.toISOString(),
       lastSeenLabel: lastSeenLabel(position.recordedAt, now),
       address: position.address ?? 'Адрес уточняется по координатам',
       currentRental,

@@ -1,11 +1,11 @@
-import type { VehicleCardDto, VehicleFuelType, VehicleStatus } from './types';
+import type { VehicleCardDto, VehicleFuelType } from './types';
 import type { VehicleGpsStatusKey } from './gps-status';
 
 export interface VehicleFilters {
   query: string;
   city: string;
   fuelType: VehicleFuelType | '';
-  status: VehicleStatus | '';
+  status: 'MAINTENANCE' | '';
   gpsStatus: VehicleGpsStatusKey | '';
   seats: string;
 }

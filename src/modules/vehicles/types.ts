@@ -6,6 +6,7 @@ export type VehicleFuelType = 'PETROL' | 'DIESEL' | 'ELECTRIC' | 'HYBRID' | 'OTH
 export interface VehicleTelemetrySummary {
   odometerKm: number | null;
   fuelLevelPercent: number | null;
+  speedKph?: number | null;
   lastSeenAt: string | null;
   lastTripAt: string | null;
   hasPosition: boolean;

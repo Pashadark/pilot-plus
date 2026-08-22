@@ -143,6 +143,7 @@ const vehicleCardSelect = {
   features: true,
   status: true,
   positions: {
+    where: { provider: 'GLONASSSOFT' },
     select: {
       odometerKm: true,
       fuelLevelPercent: true,
@@ -185,6 +186,7 @@ const vehicleDetailSelect = {
   status: true,
   createdAt: true,
   positions: {
+    where: { provider: 'GLONASSSOFT' },
     select: {
       odometerKm: true,
       fuelLevelPercent: true,
@@ -344,6 +346,7 @@ function mapCard(vehicle: RawVehicleCard, referenceTime: Date): VehicleCardDto {
     telemetry: {
       odometerKm: optionalNumber(position?.odometerKm),
       fuelLevelPercent: optionalNumber(position?.fuelLevelPercent),
+      speedKph: position?.speedKph ?? null,
       lastSeenAt: position?.recordedAt.toISOString() ?? null,
       lastTripAt: trip?.startedAt.toISOString() ?? null,
       hasPosition: Boolean(position),

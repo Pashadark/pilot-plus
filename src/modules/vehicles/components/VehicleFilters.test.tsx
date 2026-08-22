@@ -52,7 +52,12 @@ describe('VehicleFilters', () => {
 
     const gpsFilter = screen.getByLabelText('Где машина');
     expect(gpsFilter.tagName).toBe('SELECT');
-    expect(screen.getByLabelText('Статус').tagName).toBe('SELECT');
+    const businessFilter = screen.getByLabelText('Бизнес-состояние');
+    expect(businessFilter.tagName).toBe('SELECT');
+    expect(businessFilter.querySelectorAll('option')).toHaveLength(2);
+    expect(screen.getByRole('option', { name: 'Обслуживание' }).getAttribute('value')).toBe(
+      'MAINTENANCE',
+    );
     expect(screen.getByRole('option', { name: 'В парке' }).getAttribute('value')).toBe('IN_PARK');
     expect(screen.getByRole('option', { name: 'Давно не обновлялся' }).getAttribute('value')).toBe(
       'STALE',

@@ -44,7 +44,7 @@ const vehicles = [
     office: 'Аэропорт',
     fuelType: 'DIESEL',
     seats: 9,
-    status: 'OFFLINE',
+    status: 'MAINTENANCE',
   }),
 ];
 
@@ -64,7 +64,7 @@ describe('фильтрация автопарка', () => {
       query: '',
       city: 'Владивосток',
       fuelType: 'DIESEL',
-      status: 'OFFLINE',
+      status: 'MAINTENANCE',
       gpsStatus: '',
       seats: '9',
     });

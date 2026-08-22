@@ -11,6 +11,7 @@ export interface OnlineMapVehicle {
   latitude: number | null;
   speedKph: number;
   fuelPercent: number | null;
+  recordedAt?: string | null;
   lastSeenLabel: string;
   address: string;
   currentRental?: {

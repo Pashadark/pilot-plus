@@ -31,7 +31,7 @@ it('возвращает только активные реальные маши
       where: {
         archivedAt: null,
         isDemoImport: false,
-        company: { memberships: { some: { userId: 'user-1' } } },
+        company: { members: { some: { userId: 'user-1' } } },
       },
     }),
   );
@@ -56,6 +56,7 @@ it('возвращает только активные реальные маши
       longitude: 37.618423,
       speedKph: 42,
       fuelPercent: 68.5,
+      recordedAt: '2026-08-20T12:00:00.000Z',
       lastSeenLabel: '2 минуты назад',
     }),
   ]);

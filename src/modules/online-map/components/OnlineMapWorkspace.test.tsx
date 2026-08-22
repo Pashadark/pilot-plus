@@ -167,6 +167,36 @@ it('держит автомобиль без координат в верхне�
   expect(screen.getByRole('button', { name: /А 777 АА 77/ })).toBeTruthy();
 });
 
+it('без перезагрузки переводит свежий сигнал в устаревший после границы 15 минут', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-08-20T12:14:59.000Z'));
+  const vehicles = [
+    {
+      id: 'fresh-boundary',
+      name: 'Toyota Camry',
+      plate: 'А 777 АА 77',
+      longitude: 37.6,
+      latitude: 55.7,
+      speedKph: 30,
+      fuelPercent: 50,
+      recordedAt: '2026-08-20T12:00:00.000Z',
+      lastSeenLabel: '14 минут назад',
+      address: 'Москва',
+      gpsStatus: { key: 'MOVING', label: 'В движении', tone: 'primary', isConnected: true },
+    },
+  ] as never;
+
+  render(<OnlineMapWorkspace mapComponent={FakeMap} vehicles={vehicles} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Открыть карточку Toyota Camry' }));
+
+  const panel = screen.getByRole('complementary', { name: 'Выбранный автомобиль' });
+  expect(panel.textContent).toContain('В движении');
+
+  act(() => vi.advanceTimersByTime(60_000));
+
+  expect(panel.textContent).toContain('Давно не обновлялся');
+});
+
 it('использует container responsive layout и сохраняет атрибуцию отдельно от панели', () => {
   render(<OnlineMapWorkspace mapComponent={FakeMap} />);
 

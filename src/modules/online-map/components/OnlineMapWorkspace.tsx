@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState, type ComponentType, type ChangeEvent } fr
 import { useReducedMotion } from 'framer-motion';
 
 import { Button, EmptyState, FilterChip, SearchInput } from '@/shared/ui';
+import { deriveVehicleGpsStatus } from '@/modules/vehicles/gps-status';
+import { useMinuteNow } from '@/modules/vehicles/use-minute-now';
 
 import { onlineMapVehicles } from '../fixtures';
 import { filterOnlineMapVehicles } from '../filter-vehicles';
@@ -55,10 +57,33 @@ export function OnlineMapWorkspace({
   const [previewedEventId, setPreviewedEventId] = useState<string | null>(null);
   const [previewedSegmentId, setPreviewedSegmentId] = useState<string | null>(null);
   const reducedMotion = useReducedMotion() ?? false;
+  const minuteNow = useMinuteNow();
+  const liveVehicles = useMemo(
+    () =>
+      minuteNow === null
+        ? vehicles
+        : vehicles.map((vehicle) =>
+            vehicle.recordedAt === undefined
+              ? vehicle
+              : {
+                  ...vehicle,
+                  gpsStatus: deriveVehicleGpsStatus(
+                    {
+                      recordedAt: vehicle.recordedAt,
+                      speedKph: vehicle.speedKph,
+                      address: vehicle.address,
+                      hasCoordinates: vehicle.latitude !== null && vehicle.longitude !== null,
+                    },
+                    minuteNow,
+                  ),
+                },
+          ),
+    [minuteNow, vehicles],
+  );
 
   const filteredVehicles = useMemo(
-    () => filterOnlineMapVehicles(vehicles, query, activeFilter),
-    [activeFilter, query, vehicles],
+    () => filterOnlineMapVehicles(liveVehicles, query, activeFilter),
+    [activeFilter, liveVehicles, query],
   );
   const selectedVehicle =
     filteredVehicles.find((vehicle) => vehicle.id === selectedVehicleId) ?? null;
@@ -123,7 +148,7 @@ export function OnlineMapWorkspace({
   };
 
   const applyFilter = (nextQuery: string, nextFilter: OnlineMapFilter) => {
-    const nextVehicles = filterOnlineMapVehicles(vehicles, nextQuery, nextFilter);
+    const nextVehicles = filterOnlineMapVehicles(liveVehicles, nextQuery, nextFilter);
 
     if (!nextVehicles.some((vehicle) => vehicle.id === selectedVehicleId)) {
       clearVehicleSelection();
