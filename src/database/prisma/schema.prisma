@@ -93,6 +93,39 @@ enum ClientCommentSeverity {
   DANGER
 }
 
+enum ClientCommentProblemStatus {
+  OPEN
+  RESOLVED
+}
+
+enum ClientRatingEventSource {
+  AUTOMATIC
+  MANUAL
+}
+
+enum ClientRatingEventType {
+  CLEAN_RENTAL
+  ON_TIME_RETURN
+  CLEAN_RENTAL_STREAK
+  LATE_RETURN
+  UNPAID_CONFIRMED_FINE
+  DAMAGE
+  CONTRACT_VIOLATION
+  MANUAL_POSITIVE
+  MANUAL_NEGATIVE
+}
+
+enum ClientRatingEventReason {
+  CLEAN_RENTAL_COMPLETED
+  ON_TIME_RETURN_COMPLETED
+  CLEAN_RENTAL_STREAK_COMPLETED
+  LATE_RETURN_CONFIRMED
+  UNPAID_CONFIRMED_FINE
+  DAMAGE_CONFIRMED
+  CONTRACT_VIOLATION_CONFIRMED
+  MANUAL_COMMENT
+}
+
 enum DocumentScanStatus {
   UPLOADING
   PENDING
@@ -433,6 +466,7 @@ model Company {
   rentalOperationMedia      RentalOperationMedia[]
   contractTemplates         ContractTemplateVersion[]
   clientComments            ClientComment[]
+  clientRatingEvents        ClientRatingEvent[]
   fineIntegration           FineIntegration?
   externalVehicleLinks      ExternalVehicleLink[]
   telematicsIntegration     TelematicsIntegration?
@@ -450,15 +484,17 @@ model Company {
 }
 
 model CompanyMember {
-  id                    String              @id @default(cuid())
-  companyId             String
-  company               Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  userId                String
-  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role                  CompanyRole         @default(VIEWER)
-  additionalPermissions CompanyPermission[] @default([])
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
+  id                     String              @id @default(cuid())
+  companyId              String
+  company                Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId                 String
+  user                   User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role                   CompanyRole         @default(VIEWER)
+  additionalPermissions  CompanyPermission[] @default([])
+  resolvedClientComments ClientComment[]     @relation("ClientCommentResolvedBy")
+  ratingEvents           ClientRatingEvent[] @relation("ClientRatingEventActor")
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 
   @@unique([companyId, userId])
   @@index([userId])
@@ -506,6 +542,7 @@ model Client {
   rentals                      Rental[]            @relation("ClientRentals")
   rentalDriverLinks            RentalDriver[]      @relation("ClientRentalDriver")
   comments                     ClientComment[]
+  ratingEvents                 ClientRatingEvent[]
   fines                        Fine[]
   telegramIdentity             TelegramIdentity?
   botRentalRequests            BotRentalRequest[]
@@ -544,27 +581,62 @@ model ClientPhotoUpload {
 }
 
 model ClientComment {
-  id             String                @id @default(cuid())
-  companyId      String
-  company        Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  clientId       String
-  client         Client                @relation(fields: [companyId, clientId], references: [companyId, id], onDelete: Cascade)
-  rentalId       String?
-  rental         Rental?               @relation(fields: [companyId, rentalId], references: [companyId, id], onDelete: Restrict)
-  authorUserId   String
-  author         User                  @relation("ClientCommentAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
-  category       ClientCommentCategory @default(GENERAL)
-  severity       ClientCommentSeverity @default(INFO)
-  text           String
-  isPinned       Boolean               @default(false)
-  hiddenAt       DateTime?
-  hiddenByUserId String?
-  hiddenBy       User?                 @relation("ClientCommentHiddenBy", fields: [hiddenByUserId], references: [id], onDelete: Restrict)
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  id                   String                      @id @default(cuid())
+  companyId            String
+  company              Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  clientId             String
+  client               Client                      @relation(fields: [companyId, clientId], references: [companyId, id], onDelete: Cascade)
+  rentalId             String?
+  rental               Rental?                     @relation(fields: [companyId, rentalId], references: [companyId, id], onDelete: Restrict)
+  authorUserId         String
+  author               User                        @relation("ClientCommentAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  category             ClientCommentCategory       @default(GENERAL)
+  severity             ClientCommentSeverity       @default(INFO)
+  text                 String
+  isPinned             Boolean                     @default(false)
+  problemStatus        ClientCommentProblemStatus?
+  resolvedAt           DateTime?                   @db.Timestamptz(3)
+  resolvedByUserId     String?
+  resolvedByMembership CompanyMember?              @relation("ClientCommentResolvedBy", fields: [companyId, resolvedByUserId], references: [companyId, userId], onDelete: Restrict)
+  affectsRating        Boolean?
+  ratingDelta          Int?
+  hiddenAt             DateTime?
+  hiddenByUserId       String?
+  hiddenBy             User?                       @relation("ClientCommentHiddenBy", fields: [hiddenByUserId], references: [id], onDelete: Restrict)
+  ratingEvent          ClientRatingEvent?
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
 
+  @@unique([companyId, id])
   @@index([companyId, clientId, isPinned, createdAt])
   @@index([companyId, rentalId, createdAt])
+}
+
+model ClientRatingEvent {
+  id              String                  @id @default(cuid())
+  companyId       String
+  company         Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  clientId        String
+  client          Client                  @relation(fields: [companyId, clientId], references: [companyId, id], onDelete: Restrict)
+  source          ClientRatingEventSource
+  type            ClientRatingEventType
+  delta           Int
+  reason          ClientRatingEventReason
+  idempotencyKey  String?                 @unique
+  rentalId        String?
+  rental          Rental?                 @relation(fields: [companyId, rentalId], references: [companyId, id], onDelete: Restrict)
+  fineId          String?
+  fine            Fine?                   @relation(fields: [companyId, fineId], references: [companyId, id], onDelete: Restrict)
+  vehicleId       String?
+  vehicle         Vehicle?                @relation(fields: [companyId, vehicleId], references: [companyId, id], onDelete: Restrict)
+  commentId       String?                 @unique
+  comment         ClientComment?          @relation(fields: [companyId, commentId], references: [companyId, id], onDelete: Restrict)
+  actorUserId     String?
+  actorMembership CompanyMember?          @relation("ClientRatingEventActor", fields: [companyId, actorUserId], references: [companyId, userId], onDelete: Restrict)
+  createdAt       DateTime                @default(now()) @db.Timestamptz(3)
+
+  @@unique([companyId, commentId])
+  @@index([companyId, clientId, createdAt])
 }
 
 model ClientDocument {
@@ -745,6 +817,7 @@ model Vehicle {
   externalFineLinks             ExternalVehicleLink[]
   telematicsLinks               TelematicsVehicleLink[]
   fines                         Fine[]
+  ratingEvents                  ClientRatingEvent[]
   createdAt                     DateTime                @default(now())
   updatedAt                     DateTime                @updatedAt
 
@@ -861,6 +934,7 @@ model Fine {
   providerUpdatedAt           DateTime?               @db.Timestamptz(3)
   lastSyncedAt                DateTime                @db.Timestamptz(3)
   assignmentHistory           FineAssignmentHistory[]
+  ratingEvents                ClientRatingEvent[]
   invoiceItems                FineInvoiceItem[]
   createdAt                   DateTime                @default(now())
   updatedAt                   DateTime                @updatedAt
@@ -996,6 +1070,7 @@ model Rental {
   fines                    Fine[]
   documentGenerations      RentalDocumentGeneration[]
   clientComments           ClientComment[]
+  ratingEvents             ClientRatingEvent[]
   botRentalRequests        BotRentalRequest[]
   operations               RentalOperation[]
 
