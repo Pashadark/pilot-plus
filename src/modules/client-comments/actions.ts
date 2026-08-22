@@ -206,12 +206,29 @@ export async function updateClientCommentAction(
         access.scope === 'SYSTEM',
       );
       if (!client) return 'NOT_FOUND' as const;
+      const comment = await transaction.clientComment.findFirst({
+        where: { id: commentId, companyId: client.companyId, clientId: client.id, hiddenAt: null },
+        select: { problemStatus: true, resolvedAt: true, resolvedByUserId: true },
+      });
+      if (!comment) return 'NOT_FOUND' as const;
       if (
         parsed.data.affectsRating &&
         !(await canWriteManualRating(transaction, access, client.companyId))
       ) {
         return 'FORBIDDEN' as const;
       }
+      const lifecycle: {
+        problemStatus: 'OPEN' | 'RESOLVED' | null;
+        resolvedAt: Date | null;
+        resolvedByUserId: string | null;
+      } = parsed.data.problemStatus
+        ? {
+            problemStatus: comment.problemStatus === 'RESOLVED' ? 'RESOLVED' : 'OPEN',
+            resolvedAt: comment.problemStatus === 'RESOLVED' ? comment.resolvedAt : null,
+            resolvedByUserId:
+              comment.problemStatus === 'RESOLVED' ? comment.resolvedByUserId : null,
+          }
+        : { problemStatus: null, resolvedAt: null, resolvedByUserId: null };
       const result = await transaction.clientComment.updateMany({
         where: { id: commentId, companyId: client.companyId, clientId: client.id, hiddenAt: null },
         data: {
@@ -219,6 +236,7 @@ export async function updateClientCommentAction(
           category: parsed.data.category,
           severity: parsed.data.severity,
           text: parsed.data.text,
+          ...lifecycle,
         },
       });
       if (result.count !== 1) return 'NOT_FOUND' as const;
@@ -228,7 +246,11 @@ export async function updateClientCommentAction(
         commentId,
         actor: access.user,
         action: 'UPDATE',
-        changes: { category: parsed.data.category, severity: parsed.data.severity },
+        changes: {
+          category: parsed.data.category,
+          severity: parsed.data.severity,
+          problemStatus: lifecycle.problemStatus,
+        },
       });
       return 'UPDATED' as const;
     });

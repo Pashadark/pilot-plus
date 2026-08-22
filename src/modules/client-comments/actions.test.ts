@@ -171,6 +171,92 @@ describe('действия внутренних комментариев', () =>
     expect(db.clientComment.updateMany).not.toHaveBeenCalled();
   });
 
+  it('открывает проблему при изменении обычной заметки на проблемную категорию', async () => {
+    const db = database();
+    db.clientComment.findFirst.mockResolvedValue({ problemStatus: null });
+    transaction.mockImplementation((callback: (tx: typeof db) => unknown) => callback(db));
+
+    await expect(
+      updateClientCommentAction(
+        form({
+          clientId: 'client-1',
+          commentId: 'comment-1',
+          category: 'PAYMENT',
+          text: 'Нужно уточнить оплату',
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(db.clientComment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          problemStatus: 'OPEN',
+          resolvedAt: null,
+          resolvedByUserId: null,
+        }),
+      }),
+    );
+  });
+
+  it('очищает lifecycle при изменении открытой проблемы на обычную заметку', async () => {
+    const db = database();
+    db.clientComment.findFirst.mockResolvedValue({ problemStatus: 'OPEN' });
+    transaction.mockImplementation((callback: (tx: typeof db) => unknown) => callback(db));
+
+    await expect(
+      updateClientCommentAction(
+        form({
+          clientId: 'client-1',
+          commentId: 'comment-1',
+          category: 'GENERAL',
+          text: 'Вопрос закрыт',
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(db.clientComment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          problemStatus: null,
+          resolvedAt: null,
+          resolvedByUserId: null,
+        }),
+      }),
+    );
+  });
+
+  it('сохраняет RESOLVED при изменении категории решённой проблемы', async () => {
+    const db = database();
+    const resolvedAt = new Date('2026-08-22T10:00:00.000Z');
+    db.clientComment.findFirst.mockResolvedValue({
+      problemStatus: 'RESOLVED',
+      resolvedAt,
+      resolvedByUserId: 'user-2',
+    });
+    transaction.mockImplementation((callback: (tx: typeof db) => unknown) => callback(db));
+
+    await expect(
+      updateClientCommentAction(
+        form({
+          clientId: 'client-1',
+          commentId: 'comment-1',
+          category: 'DAMAGE',
+          text: 'Уточнена категория замечания',
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(db.clientComment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          problemStatus: 'RESOLVED',
+          resolvedAt,
+          resolvedByUserId: 'user-2',
+        }),
+      }),
+    );
+  });
+
   it('решает только открытую видимую проблему без изменения rating event', async () => {
     const db = database();
     transaction.mockImplementation((callback: (tx: typeof db) => unknown) => callback(db));

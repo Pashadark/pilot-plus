@@ -54,3 +54,15 @@
   copied into either payload.
 - The ledger's immutable event is the score source of truth. Resolving or hiding
   a comment does not delete, update, or reverse its historical rating impact.
+
+## I1 follow-up: category lifecycle synchronization
+
+- `updateClientCommentAction` now re-reads the exact visible tenant-scoped
+  comment before updating it.
+- Changing a general or positive note to a problem category opens the problem.
+  Changing an open problem to general or positive clears all problem lifecycle
+  fields. Editing a resolved problem within problem categories deliberately
+  preserves `RESOLVED`, its timestamp, and resolver provenance.
+- RED: three new lifecycle transition regressions failed because the update did
+  not include lifecycle fields. GREEN: `actions.test.ts` passed 9/9, typecheck
+  and scoped Prettier passed, and `git diff --check` passed.
