@@ -1,6 +1,7 @@
 import { calculateReturnCharges } from '../calculation';
 import { deriveEvidenceStatus } from '../evidence-status';
 import type { RentalDepositStatus, RentalEvidenceStatus, RentalVehicleCondition } from '../types';
+import { recordAutomaticRatingEvent } from '@/modules/client-rating/automatic-events';
 
 type Count = { count: number };
 type Transaction = {
@@ -19,12 +20,19 @@ type Transaction = {
       id: string;
       clientId: string;
       vehicleId: string;
+      endsAt: Date;
       billableDays: number;
       includedMileageKm: number | null;
       overageMileagePriceMinor: bigint | null;
       missingFuelPriceMinor: bigint | null;
     } | null>;
     updateMany(args: unknown): Promise<Count>;
+  };
+  clientRatingEvent: {
+    createMany(args: unknown): Promise<{ count: number }>;
+  };
+  clientComment: {
+    findFirst(args: unknown): Promise<{ id: string } | null>;
   };
   auditLog: { create(args: unknown): Promise<unknown> };
 };
@@ -110,6 +118,7 @@ export function createRentalReturn(database: Database) {
                 id: true,
                 clientId: true,
                 vehicleId: true,
+                endsAt: true,
                 billableDays: true,
                 includedMileageKm: true,
                 overageMileagePriceMinor: true,
@@ -214,6 +223,42 @@ export function createRentalReturn(database: Database) {
               operation = await tx.rentalOperation.create({
                 data: operationData,
                 select: { id: true },
+              });
+            }
+            const openProblem =
+              input.command.vehicleCondition === 'GOOD'
+                ? await tx.clientComment.findFirst({
+                    where: {
+                      companyId: input.companyId,
+                      rentalId: rental.id,
+                      hiddenAt: null,
+                      problemStatus: 'OPEN',
+                    },
+                    select: { id: true },
+                  })
+                : null;
+            if (input.command.vehicleCondition === 'GOOD' && !openProblem) {
+              await recordAutomaticRatingEvent(tx, {
+                companyId: input.companyId,
+                clientId: rental.clientId,
+                rentalId: rental.id,
+                vehicleId: rental.vehicleId,
+                type: 'CLEAN_RENTAL',
+                reason: 'CLEAN_RENTAL_COMPLETED',
+                delta: 8,
+                idempotencyKey: `rental:${rental.id}:clean-completion`,
+              });
+            }
+            if (input.command.occurredAt <= rental.endsAt) {
+              await recordAutomaticRatingEvent(tx, {
+                companyId: input.companyId,
+                clientId: rental.clientId,
+                rentalId: rental.id,
+                vehicleId: rental.vehicleId,
+                type: 'ON_TIME_RETURN',
+                reason: 'ON_TIME_RETURN_COMPLETED',
+                delta: 2,
+                idempotencyKey: `rental:${rental.id}:on-time-return`,
               });
             }
             await tx.auditLog.create({

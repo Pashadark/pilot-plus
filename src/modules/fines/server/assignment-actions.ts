@@ -5,6 +5,10 @@ import 'server-only';
 import { revalidatePath } from 'next/cache';
 
 import { prisma } from '@/database/prisma/client';
+import {
+  createFineRatingInput,
+  recordAutomaticRatingEvent,
+} from '@/modules/client-rating/automatic-events';
 
 import { FineAccessDeniedError, requireFineManageAccess } from '../access';
 
@@ -62,7 +66,7 @@ export async function assignFineAction(
       async (transaction) => {
         const fine = await transaction.fine.findFirst({
           where: { id: fineId, companyId },
-          select: { id: true, vehicleId: true },
+          select: { id: true, vehicleId: true, status: true },
         });
         if (!fine) return notFoundError;
 
@@ -89,6 +93,20 @@ export async function assignFineAction(
           },
           select: { id: true },
         });
+        const ratingEvent = createFineRatingInput({
+          assignment: assignedRentalId ? 'CONFIRMED' : 'CANDIDATE',
+          overdue: fine.status === 'OVERDUE',
+        });
+        if (ratingEvent && assignedRentalId && assignedClientId) {
+          await recordAutomaticRatingEvent(transaction, {
+            companyId,
+            clientId: assignedClientId,
+            rentalId: assignedRentalId,
+            fineId: fine.id,
+            ...ratingEvent,
+            idempotencyKey: `fine:${fine.id}:confirmed-overdue`,
+          });
+        }
         await transaction.fineAssignmentHistory.create({
           data: {
             companyId,

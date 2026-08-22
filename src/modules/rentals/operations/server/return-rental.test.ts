@@ -19,6 +19,7 @@ describe('createRentalReturn', () => {
           id: 'rental-1',
           clientId: 'client-1',
           vehicleId: 'vehicle-1',
+          endsAt: new Date('2026-08-23T10:00:00Z'),
           billableDays: 3,
           includedMileageKm: 250,
           overageMileagePriceMinor: BigInt(2_000),
@@ -26,6 +27,8 @@ describe('createRentalReturn', () => {
         }),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
+      clientComment: { findFirst: vi.fn().mockResolvedValue(null) },
+      clientRatingEvent: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
       auditLog: { create: vi.fn().mockResolvedValue({}) },
     };
     const complete = createRentalReturn({
@@ -94,6 +97,7 @@ describe('createRentalReturn', () => {
           id: 'rental-1',
           clientId: 'client-1',
           vehicleId: 'vehicle-1',
+          endsAt: new Date('2026-08-23T10:00:00Z'),
           billableDays: 3,
           includedMileageKm: 250,
           overageMileagePriceMinor: BigInt(2_000),
@@ -101,6 +105,8 @@ describe('createRentalReturn', () => {
         }),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
+      clientComment: { findFirst: vi.fn().mockResolvedValue(null) },
+      clientRatingEvent: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
       auditLog: { create: vi.fn().mockResolvedValue({}) },
     };
     const complete = createRentalReturn({
@@ -127,6 +133,143 @@ describe('createRentalReturn', () => {
     expect(transaction.rentalOperation.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: 'COMMITTED', evidenceStatus: 'COMPLETE' }),
+      }),
+    );
+  });
+
+  it('records clean and on-time rating events only after committing the return', async () => {
+    const transaction = {
+      companyMember: { findFirst: vi.fn().mockResolvedValue({ id: 'member-1' }) },
+      user: { findFirst: vi.fn() },
+      rentalOperation: {
+        findFirst: vi
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({ mileageKm: 10_000, fuelLevelPercent: 80 }),
+        create: vi.fn().mockResolvedValue({ id: 'return-1' }),
+      },
+      rental: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'rental-1',
+          clientId: 'client-1',
+          vehicleId: 'vehicle-1',
+          endsAt: new Date('2026-08-23T10:00:00Z'),
+          billableDays: 1,
+          includedMileageKm: 250,
+          overageMileagePriceMinor: BigInt(2_000),
+          missingFuelPriceMinor: BigInt(5_000),
+        }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      clientComment: { findFirst: vi.fn().mockResolvedValue(null) },
+      clientRatingEvent: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      auditLog: { create: vi.fn().mockResolvedValue({}) },
+    };
+    const complete = createRentalReturn({
+      $transaction: vi.fn(async (work) => work(transaction)),
+    } as never);
+
+    await complete({
+      companyId: 'company-1',
+      actor: { id: 'actor-1', scope: 'COMPANY' },
+      command: {
+        rentalId: 'rental-1',
+        idempotencyKey: 'return-key',
+        occurredAt: new Date('2026-08-23T09:00:00Z'),
+        mileageKm: 10_100,
+        fuelLevelPercent: 80,
+        evidenceStatus: 'COMPLETE',
+        vehicleCondition: 'GOOD',
+        depositStatus: 'RETURNED',
+      },
+    });
+
+    expect(transaction.clientRatingEvent.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          type: 'CLEAN_RENTAL',
+          reason: 'CLEAN_RENTAL_COMPLETED',
+          delta: 8,
+          idempotencyKey: 'rental:rental-1:clean-completion',
+        }),
+      ],
+      skipDuplicates: true,
+    });
+    expect(transaction.clientRatingEvent.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          type: 'ON_TIME_RETURN',
+          reason: 'ON_TIME_RETURN_COMPLETED',
+          delta: 2,
+          idempotencyKey: 'rental:rental-1:on-time-return',
+        }),
+      ],
+      skipDuplicates: true,
+    });
+    expect(transaction.rentalOperation.create.mock.invocationCallOrder[0]).toBeLessThan(
+      transaction.clientRatingEvent.createMany.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('does not reward a clean completion while that rental has an open problem', async () => {
+    const transaction = {
+      companyMember: { findFirst: vi.fn().mockResolvedValue({ id: 'member-1' }) },
+      user: { findFirst: vi.fn() },
+      rentalOperation: {
+        findFirst: vi
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({ mileageKm: 10_000, fuelLevelPercent: 80 }),
+        create: vi.fn().mockResolvedValue({ id: 'return-1' }),
+      },
+      rental: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'rental-1',
+          clientId: 'client-1',
+          vehicleId: 'vehicle-1',
+          endsAt: new Date('2026-08-23T10:00:00Z'),
+          billableDays: 1,
+          includedMileageKm: 250,
+          overageMileagePriceMinor: BigInt(2_000),
+          missingFuelPriceMinor: BigInt(5_000),
+        }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      clientComment: { findFirst: vi.fn().mockResolvedValue({ id: 'open-comment-1' }) },
+      clientRatingEvent: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      auditLog: { create: vi.fn().mockResolvedValue({}) },
+    };
+    const complete = createRentalReturn({
+      $transaction: vi.fn(async (work) => work(transaction)),
+    } as never);
+
+    await complete({
+      companyId: 'company-1',
+      actor: { id: 'actor-1', scope: 'COMPANY' },
+      command: {
+        rentalId: 'rental-1',
+        idempotencyKey: 'return-key',
+        occurredAt: new Date('2026-08-23T09:00:00Z'),
+        mileageKm: 10_100,
+        fuelLevelPercent: 80,
+        evidenceStatus: 'COMPLETE',
+        vehicleCondition: 'GOOD',
+        depositStatus: 'RETURNED',
+      },
+    });
+
+    expect(transaction.clientComment.findFirst).toHaveBeenCalledWith({
+      where: {
+        companyId: 'company-1',
+        rentalId: 'rental-1',
+        hiddenAt: null,
+        problemStatus: 'OPEN',
+      },
+      select: { id: true },
+    });
+    expect(transaction.clientRatingEvent.createMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: [expect.objectContaining({ type: 'CLEAN_RENTAL' })],
       }),
     );
   });

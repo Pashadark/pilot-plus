@@ -31,6 +31,8 @@ function transactionDatabase() {
         rentalId: null,
         clientId: null,
         assignmentSource: null,
+        assignmentConfirmedAt: null,
+        status: 'UNPAID',
       }),
       update: vi.fn().mockResolvedValue({ id: 'fine-1' }),
     },
@@ -38,6 +40,7 @@ function transactionDatabase() {
       findFirst: vi.fn().mockResolvedValue({ id: 'rental-1', clientId: 'client-1' }),
     },
     fineAssignmentHistory: { create: vi.fn().mockResolvedValue({ id: 'history-1' }) },
+    clientRatingEvent: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
     auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
   };
 }
@@ -191,5 +194,40 @@ describe('fine assignment action', () => {
       code: 'FORBIDDEN',
     });
     expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it('records an idempotent score event only for an exactly confirmed overdue fine assignment', async () => {
+    const database = transactionDatabase();
+    database.fine.findFirst.mockResolvedValue({
+      id: 'fine-1',
+      vehicleId: 'vehicle-1',
+      status: 'OVERDUE',
+    });
+    transaction.mockImplementation(
+      async (operation: (client: typeof database) => Promise<unknown>) => operation(database),
+    );
+
+    await expect(assignFineAction(null, assignmentForm())).resolves.toMatchObject({ ok: true });
+
+    expect(database.clientRatingEvent.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          companyId: 'company-1',
+          clientId: 'client-1',
+          rentalId: 'rental-1',
+          fineId: 'fine-1',
+          source: 'AUTOMATIC',
+          actorUserId: null,
+          type: 'UNPAID_CONFIRMED_FINE',
+          reason: 'UNPAID_CONFIRMED_FINE',
+          delta: -15,
+          idempotencyKey: 'fine:fine-1:confirmed-overdue',
+        },
+      ],
+      skipDuplicates: true,
+    });
+    expect(database.fine.update.mock.invocationCallOrder[0]).toBeLessThan(
+      database.clientRatingEvent.createMany.mock.invocationCallOrder[0],
+    );
   });
 });
