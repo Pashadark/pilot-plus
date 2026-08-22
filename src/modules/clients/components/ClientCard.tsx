@@ -2,9 +2,11 @@ import Link from 'next/link';
 import { FiSend } from 'react-icons/fi';
 
 import type { ClientCardDto, ClientStatus } from '../types';
+import type { ClientRatingSummary } from '@/modules/client-rating/types';
 import { Badge, Card } from '@/shared/ui';
 
 import { ClientPhoto } from './ClientPhoto';
+import { ClientRatingStars } from '@/modules/client-rating/components/ClientRatingStars';
 
 const statusView: Record<
   ClientStatus,
@@ -29,10 +31,12 @@ export function ClientCard({
   client,
   localPhotoUrl,
   messenger,
+  rating,
 }: {
   client: ClientCardDto;
   localPhotoUrl?: string | null;
   messenger?: ClientMessenger;
+  rating?: ClientRatingSummary;
 }) {
   const status = statusView[client.status];
   const resolvedMessenger =
@@ -66,6 +70,11 @@ export function ClientCard({
               <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                 {client.phoneMasked}
               </p>
+              {rating ? (
+                <div className="mt-2">
+                  <ClientRatingStars rating={rating} compact />
+                </div>
+              ) : null}
             </div>
             <Badge tone={status.tone}>{status.label}</Badge>
           </div>

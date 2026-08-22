@@ -4,6 +4,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { FiPlus } from 'react-icons/fi';
 
 import type { ClientListResult, ClientQueryFilters } from '../types';
+import type { ClientRatingSummary } from '@/modules/client-rating/types';
 import { Badge, Button, PageHeader } from '@/shared/ui';
 
 import { clientQueryHref } from './client-query';
@@ -16,11 +17,13 @@ export function ClientPage({
   filters,
   canManage,
   companies,
+  ratings = {},
 }: {
   result: ClientListResult;
   filters: ClientQueryFilters;
   canManage: boolean;
   companies: readonly { id: string; name: string }[];
+  ratings?: Readonly<Record<string, ClientRatingSummary>>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -58,7 +61,7 @@ export function ClientPage({
           Показано {result.items.length} клиентов
         </p>
       </div>
-      <ClientGrid clients={result.items} />
+      <ClientGrid clients={result.items} ratings={ratings} />
       <nav aria-label="Пагинация клиентов" className="flex flex-wrap justify-between gap-2">
         <Button
           type="button"

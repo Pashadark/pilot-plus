@@ -6,7 +6,10 @@ import type { ClientDocumentListItem } from '@/modules/client-documents/types';
 import type { ClientDetailDto, ClientStatus } from '../types';
 import type { ClientRentalWorkspaceDto } from '../types';
 import type { ClientCommentDto } from '@/modules/client-comments/types';
+import type { ClientRatingDto } from '@/modules/client-rating/queries';
 import { ClientCommentsPanel } from '@/modules/client-comments/components/ClientCommentsPanel';
+import { ClientRatingPanel } from '@/modules/client-rating/components/ClientRatingPanel';
+import { ClientRatingStars } from '@/modules/client-rating/components/ClientRatingStars';
 import { Badge, Card, CardContent, CardHeader } from '@/shared/ui';
 
 import { ClientForm } from './ClientForm';
@@ -52,6 +55,8 @@ export function ClientDetailPage({
   comments = [],
   currentUserId = '',
   canHideAnyComment = false,
+  canManageRating = false,
+  rating = null,
 }: {
   client: ClientDetailDto;
   canManage: boolean;
@@ -63,6 +68,8 @@ export function ClientDetailPage({
   comments?: ClientCommentDto[];
   currentUserId?: string;
   canHideAnyComment?: boolean;
+  canManageRating?: boolean;
+  rating?: ClientRatingDto | null;
 }) {
   return (
     <main className="grid min-w-0 gap-5 p-4 sm:p-6" data-testid="client-detail-page">
@@ -99,6 +106,11 @@ export function ClientDetailPage({
               <FiPhone aria-hidden="true" />
               {client.phone}
             </a>
+            {canManage && rating ? (
+              <div className="mt-2">
+                <ClientRatingStars rating={rating} />
+              </div>
+            ) : null}
             {canCreateRental ? (
               <Link
                 href={`/clients/${client.id}/rentals/new`}
@@ -163,17 +175,21 @@ export function ClientDetailPage({
           />
         }
         comments={
-          <ClientCommentsPanel
-            clientId={client.id}
-            comments={comments}
-            rentals={rentalWorkspace.rentals.map((rental) => ({
-              id: rental.id,
-              label: rental.contractNumber ?? rental.vehicle.label,
-            }))}
-            canManage={canManage}
-            currentUserId={currentUserId}
-            canHideAny={canHideAnyComment}
-          />
+          <div className="grid gap-5">
+            {canManage && rating ? <ClientRatingPanel rating={rating} /> : null}
+            <ClientCommentsPanel
+              clientId={client.id}
+              comments={comments}
+              rentals={rentalWorkspace.rentals.map((rental) => ({
+                id: rental.id,
+                label: rental.contractNumber ?? rental.vehicle.label,
+              }))}
+              canManage={canManage}
+              canManageRating={canManageRating}
+              currentUserId={currentUserId}
+              canHideAny={canHideAnyComment}
+            />
+          </div>
         }
       />
     </main>

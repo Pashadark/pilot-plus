@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useTransition } from 'react';
-import { FiEdit2, FiEyeOff, FiMapPin } from 'react-icons/fi';
+import { FiCheck, FiEdit2, FiEyeOff, FiMapPin } from 'react-icons/fi';
 
 import { useToast } from '@/shared/providers/ToastProvider';
 import { Badge, Button, Card, CardContent, Select } from '@/shared/ui';
@@ -10,13 +10,14 @@ import { Badge, Button, Card, CardContent, Select } from '@/shared/ui';
 import {
   createClientCommentAction,
   hideClientCommentAction,
+  resolveClientCommentAction,
   toggleClientCommentPinAction,
   updateClientCommentAction,
 } from '../actions';
 import type { ClientCommentDto } from '../types';
 
 const categories = {
-  GENERAL: 'Заметка',
+  GENERAL: 'Общее',
   POSITIVE: 'Положительное',
   PROBLEM: 'Проблема',
   DAMAGE: 'Повреждение',
@@ -29,6 +30,7 @@ export function ClientCommentsPanel({
   comments,
   rentals,
   canManage,
+  canManageRating = false,
   currentUserId,
   canHideAny,
 }: {
@@ -36,6 +38,7 @@ export function ClientCommentsPanel({
   comments: ClientCommentDto[];
   rentals: Array<{ id: string; label: string }>;
   canManage: boolean;
+  canManageRating?: boolean;
   currentUserId: string;
   canHideAny: boolean;
 }) {
@@ -89,6 +92,34 @@ export function ClientCommentsPanel({
                   </option>
                 ))}
               </Select>
+              {canManageRating ? (
+                <fieldset className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] p-3">
+                  <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      name="affectsRating"
+                      defaultChecked={editing?.affectsRating ?? false}
+                    />
+                    Учитывать в рейтинге
+                  </label>
+                  <label className="grid gap-1 text-sm font-medium">
+                    Влияние на рейтинг
+                    <input
+                      aria-label="Влияние на рейтинг"
+                      name="ratingDelta"
+                      type="number"
+                      min={-30}
+                      max={10}
+                      step={1}
+                      defaultValue={editing?.ratingDelta ?? ''}
+                      className="min-h-11 rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3"
+                    />
+                  </label>
+                  <p className="text-xs text-[var(--color-text-secondary)]">
+                    От −30 до +10, кроме нуля.
+                  </p>
+                </fieldset>
+              ) : null}
               <Select name="severity" label="Важность" defaultValue={editing?.severity ?? 'INFO'}>
                 <option value="INFO">Обычная</option>
                 <option value="WARNING">Важная</option>
@@ -106,7 +137,7 @@ export function ClientCommentsPanel({
                   </option>
                 ))}
               </Select>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button type="submit" loading={pending}>
                   {editing ? 'Сохранить' : 'Добавить комментарий'}
                 </Button>
@@ -139,6 +170,11 @@ export function ClientCommentsPanel({
                       {categories[comment.category]}
                     </Badge>
                     {comment.isPinned ? <Badge tone="info">Закреплён</Badge> : null}
+                    {comment.problemStatus ? (
+                      <Badge tone={comment.problemStatus === 'OPEN' ? 'warning' : 'success'}>
+                        {comment.problemStatus === 'OPEN' ? 'Открыта' : 'Решена'}
+                      </Badge>
+                    ) : null}
                   </div>
                   <time className="text-xs text-[var(--color-text-secondary)]">
                     {new Intl.DateTimeFormat('ru-RU', {
@@ -161,7 +197,7 @@ export function ClientCommentsPanel({
                   ) : null}
                 </div>
                 {canManage ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-3 flex flex-wrap justify-end gap-2">
                     <Button size="xs" variant="ghost" onClick={() => setEditing(comment)}>
                       <FiEdit2 /> Редактировать
                     </Button>
@@ -172,6 +208,20 @@ export function ClientCommentsPanel({
                         <FiMapPin /> {comment.isPinned ? 'Открепить' : 'Закрепить'}
                       </Button>
                     </form>
+                    {comment.problemStatus === 'OPEN' ? (
+                      <form action={(data) => run(resolveClientCommentAction, data)}>
+                        <input type="hidden" name="clientId" value={clientId} />
+                        <input type="hidden" name="commentId" value={comment.id} />
+                        <Button
+                          type="submit"
+                          size="xs"
+                          variant="ghost"
+                          aria-label="Решить проблему"
+                        >
+                          <FiCheck /> Решить
+                        </Button>
+                      </form>
+                    ) : null}
                     {canHideAny || comment.authorUserId === currentUserId ? (
                       <form action={(data) => run(hideClientCommentAction, data)}>
                         <input type="hidden" name="clientId" value={clientId} />
