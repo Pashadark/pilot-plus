@@ -85,6 +85,8 @@ enum ClientCommentCategory {
   DAMAGE
   PAYMENT
   VIOLATION
+  HANDOVER_RETURN
+  DOCUMENTS
 }
 
 enum ClientCommentSeverity {

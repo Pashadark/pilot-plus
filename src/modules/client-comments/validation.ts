@@ -9,7 +9,16 @@ const schema = z.object({
     z.string().trim().min(1).max(128).nullable().default(null),
   ),
   category: z
-    .enum(['GENERAL', 'POSITIVE', 'PROBLEM', 'DAMAGE', 'PAYMENT', 'VIOLATION'])
+    .enum([
+      'GENERAL',
+      'POSITIVE',
+      'PROBLEM',
+      'DAMAGE',
+      'PAYMENT',
+      'VIOLATION',
+      'HANDOVER_RETURN',
+      'DOCUMENTS',
+    ])
     .default('GENERAL'),
   severity: z.enum(['INFO', 'WARNING', 'DANGER']).default('INFO'),
   text: z
@@ -40,9 +49,14 @@ export function parseClientCommentInput(input: unknown) {
     return { ok: false as const, message: 'Укажите влияние от −30 до +10, кроме нуля.' };
   }
 
-  const problemStatus: 'OPEN' | null = ['PROBLEM', 'DAMAGE', 'PAYMENT', 'VIOLATION'].includes(
-    parsed.data.category,
-  )
+  const problemStatus: 'OPEN' | null = [
+    'PROBLEM',
+    'DAMAGE',
+    'PAYMENT',
+    'VIOLATION',
+    'HANDOVER_RETURN',
+    'DOCUMENTS',
+  ].includes(parsed.data.category)
     ? 'OPEN'
     : null;
   return {

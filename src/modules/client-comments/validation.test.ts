@@ -49,6 +49,18 @@ describe('валидация внутреннего комментария', () 
     });
   });
 
+  it('принимает выдачу, возврат и документы как проблемные категории', () => {
+    for (const category of ['HANDOVER_RETURN', 'DOCUMENTS']) {
+      expect(
+        parseClientCommentInput({
+          clientId: 'client-1',
+          category,
+          text: 'Нужно проверить',
+        }),
+      ).toMatchObject({ ok: true, data: { category, problemStatus: 'OPEN' } });
+    }
+  });
+
   it('отклоняет ноль и влияние за пределами ручного диапазона', () => {
     expect(
       parseClientCommentInput({

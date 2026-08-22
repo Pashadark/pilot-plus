@@ -167,7 +167,32 @@ describe('действия внутренних комментариев', () =>
       }),
     );
 
-    expect(result).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+    expect(result).toMatchObject({ ok: false, code: 'IMMUTABLE_RATING' });
+    expect(db.clientComment.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('отклоняет поддельное изменение immutable rating impact даже от администратора', async () => {
+    const db = database();
+    transaction.mockImplementation((callback: (tx: typeof db) => unknown) => callback(db));
+    getAccess.mockResolvedValue({
+      scope: 'SYSTEM',
+      companyIds: [],
+      canManage: true,
+      user: { id: 'admin-1', email: 'admin@pilot.test' },
+    });
+
+    const result = await updateClientCommentAction(
+      form({
+        clientId: 'client-1',
+        commentId: 'comment-1',
+        category: 'PAYMENT',
+        text: 'Изменённый текст',
+        affectsRating: 'on',
+        ratingDelta: '-5',
+      }),
+    );
+
+    expect(result).toMatchObject({ ok: false, code: 'IMMUTABLE_RATING' });
     expect(db.clientComment.updateMany).not.toHaveBeenCalled();
   });
 

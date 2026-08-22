@@ -18,6 +18,7 @@ describe('схема рейтинга надёжности клиента', () =
     expect(schema).toContain('enum ClientRatingEventType {');
     expect(schema).toContain('enum ClientRatingEventReason {');
     expect(schema).toContain('enum ClientCommentProblemStatus {');
+    expect(schema).toMatch(/enum ClientCommentCategory \{[\s\S]*HANDOVER_RETURN[\s\S]*DOCUMENTS/);
     expect(schema).toContain('model ClientRatingEvent {');
     expect(ratingEvent).toMatch(/idempotencyKey\s+String\?\s+@unique/);
     expect(ratingEvent).toMatch(/commentId\s+String\?\s+@unique/);
@@ -77,6 +78,8 @@ describe('схема рейтинга надёжности клиента', () =
     expect(migration).toContain('FOREIGN KEY ("companyId", "resolvedByUserId")');
     expect(migration).toContain('REFERENCES "CompanyMember"("companyId", "userId")');
     expect(migration).toContain('CREATE TYPE "ClientRatingEventReason"');
+    expect(migration).toMatch(/ADD VALUE (IF NOT EXISTS )?'HANDOVER_RETURN'/);
+    expect(migration).toMatch(/ADD VALUE (IF NOT EXISTS )?'DOCUMENTS'/);
     expect(migration).toContain('"reason" "ClientRatingEventReason" NOT NULL');
     expect(migration).not.toMatch(/"description"\s+TEXT/);
     expect(migration).toContain('ClientRatingEvent_prevent_mutation');

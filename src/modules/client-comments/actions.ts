@@ -12,7 +12,7 @@ export type ClientCommentActionState =
   | { ok: true; message: string; commentId: string }
   | {
       ok: false;
-      code: 'FORBIDDEN' | 'NOT_FOUND' | 'VALIDATION' | 'SAVE_FAILED';
+      code: 'FORBIDDEN' | 'NOT_FOUND' | 'VALIDATION' | 'IMMUTABLE_RATING' | 'SAVE_FAILED';
       message: string;
     };
 
@@ -185,6 +185,13 @@ export async function updateClientCommentAction(
 ): Promise<ClientCommentActionState> {
   const access = await getClientAccess('MANAGE_CLIENTS');
   if (!access) return forbidden;
+  if (formData.has('affectsRating') || formData.has('ratingDelta')) {
+    return {
+      ok: false,
+      code: 'IMMUTABLE_RATING',
+      message: 'Влияние заметки на рейтинг изменить нельзя: добавьте отдельное событие.',
+    };
+  }
   const commentId = value(formData, 'commentId');
   const parsed = parseClientCommentInput({
     clientId: value(formData, 'clientId'),
@@ -192,8 +199,6 @@ export async function updateClientCommentAction(
     category: value(formData, 'category') || 'GENERAL',
     severity: value(formData, 'severity') || 'INFO',
     text: value(formData, 'text'),
-    affectsRating: value(formData, 'affectsRating'),
-    ratingDelta: value(formData, 'ratingDelta'),
   });
   if (!parsed.ok || !commentId)
     return { ok: false, code: 'VALIDATION', message: 'Проверьте комментарий.' };
@@ -216,12 +221,6 @@ export async function updateClientCommentAction(
         select: { problemStatus: true, resolvedAt: true, resolvedByUserId: true },
       });
       if (!comment) return 'NOT_FOUND' as const;
-      if (
-        parsed.data.affectsRating &&
-        !(await canWriteManualRating(transaction, access, client.companyId))
-      ) {
-        return 'FORBIDDEN' as const;
-      }
       const lifecycle: {
         problemStatus: 'OPEN' | 'RESOLVED' | null;
         resolvedAt: Date | null;
@@ -265,7 +264,6 @@ export async function updateClientCommentAction(
       });
       return 'UPDATED' as const;
     });
-    if (updated === 'FORBIDDEN') return forbidden;
     if (updated === 'NOT_FOUND')
       return { ok: false, code: 'NOT_FOUND', message: 'Комментарий недоступен.' };
     refresh(parsed.data.clientId);

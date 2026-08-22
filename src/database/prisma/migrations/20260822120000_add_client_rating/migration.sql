@@ -1,5 +1,8 @@
 CREATE TYPE "ClientCommentProblemStatus" AS ENUM ('OPEN', 'RESOLVED');
 
+ALTER TYPE "ClientCommentCategory" ADD VALUE IF NOT EXISTS 'HANDOVER_RETURN';
+ALTER TYPE "ClientCommentCategory" ADD VALUE IF NOT EXISTS 'DOCUMENTS';
+
 CREATE TYPE "ClientRatingEventSource" AS ENUM ('AUTOMATIC', 'MANUAL');
 
 CREATE TYPE "ClientRatingEventType" AS ENUM (

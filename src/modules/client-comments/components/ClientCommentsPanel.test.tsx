@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../actions', () => ({
@@ -88,5 +88,58 @@ describe('ClientCommentsPanel', () => {
     expect(screen.getByText('Открыта')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Решить проблему' })).toBeTruthy();
     expect(screen.getByLabelText('Влияние на рейтинг')).toBeTruthy();
+  });
+
+  it('keeps an existing manual score impact read-only while editing', () => {
+    render(
+      <ClientCommentsPanel
+        clientId="client-1"
+        canManage
+        canManageRating
+        currentUserId="user-1"
+        canHideAny
+        rentals={[]}
+        comments={[
+          {
+            id: 'comment-1',
+            rentalId: null,
+            rentalLabel: null,
+            authorUserId: 'user-1',
+            authorName: 'Анна',
+            category: 'PAYMENT',
+            severity: 'DANGER',
+            text: 'Оплата просрочена',
+            isPinned: false,
+            problemStatus: 'OPEN',
+            affectsRating: true,
+            ratingDelta: -15,
+            resolvedAt: null,
+            hiddenAt: null,
+            createdAt: '2026-08-17T10:00:00.000Z',
+            updatedAt: '2026-08-17T10:00:00.000Z',
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Редактировать' }));
+    expect(screen.getByText('Влияние на рейтинг: −15 баллов')).toBeTruthy();
+    expect(screen.queryByLabelText('Учитывать в рейтинге')).toBeNull();
+    expect(screen.queryByLabelText('Влияние на рейтинг')).toBeNull();
+  });
+
+  it('offers handover and document categories in Russian', () => {
+    render(
+      <ClientCommentsPanel
+        clientId="client-1"
+        canManage
+        currentUserId="user-1"
+        canHideAny={false}
+        rentals={[]}
+        comments={[]}
+      />,
+    );
+    expect(screen.getByRole('option', { name: 'Выдача / возврат' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Документы' })).toBeTruthy();
   });
 });

@@ -23,6 +23,8 @@ const categories = {
   DAMAGE: 'Повреждение',
   PAYMENT: 'Оплата',
   VIOLATION: 'Нарушение',
+  HANDOVER_RETURN: 'Выдача / возврат',
+  DOCUMENTS: 'Документы',
 };
 
 export function ClientCommentsPanel({
@@ -45,6 +47,7 @@ export function ClientCommentsPanel({
   const [editing, setEditing] = useState<ClientCommentDto | null>(null);
   const [pending, startTransition] = useTransition();
   const { showToast } = useToast();
+  const canSetRatingOnCreate = canManageRating && editing === null;
   function run(
     action: (data: FormData) => Promise<{ ok: boolean; message: string }>,
     data: FormData,
@@ -92,14 +95,10 @@ export function ClientCommentsPanel({
                   </option>
                 ))}
               </Select>
-              {canManageRating ? (
+              {canSetRatingOnCreate ? (
                 <fieldset className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] p-3">
                   <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
-                    <input
-                      type="checkbox"
-                      name="affectsRating"
-                      defaultChecked={editing?.affectsRating ?? false}
-                    />
+                    <input type="checkbox" name="affectsRating" defaultChecked={false} />
                     Учитывать в рейтинге
                   </label>
                   <label className="grid gap-1 text-sm font-medium">
@@ -111,7 +110,7 @@ export function ClientCommentsPanel({
                       min={-30}
                       max={10}
                       step={1}
-                      defaultValue={editing?.ratingDelta ?? ''}
+                      defaultValue=""
                       className="min-h-11 rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3"
                     />
                   </label>
@@ -119,6 +118,12 @@ export function ClientCommentsPanel({
                     От −30 до +10, кроме нуля.
                   </p>
                 </fieldset>
+              ) : null}
+              {editing?.affectsRating && editing.ratingDelta !== null ? (
+                <p className="rounded-[var(--radius-md)] bg-[var(--color-elevated)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+                  Влияние на рейтинг: {editing.ratingDelta > 0 ? '+' : '−'}
+                  {Math.abs(editing.ratingDelta)} баллов
+                </p>
               ) : null}
               <Select name="severity" label="Важность" defaultValue={editing?.severity ?? 'INFO'}>
                 <option value="INFO">Обычная</option>
