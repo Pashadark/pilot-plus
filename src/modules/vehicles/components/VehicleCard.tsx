@@ -14,7 +14,6 @@ import {
 } from 'react-icons/fi';
 
 import type { VehicleCardDto, VehicleStatus } from '../types';
-import { vehicleStatusLabel } from '../park-status';
 import { formatDailyPrice, formatOptionalMetric } from '../utils';
 import { VehiclePhoto } from './VehiclePhoto';
 import { useToast } from '@/shared/providers/ToastProvider';
@@ -86,9 +85,12 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
                   {vehicle.registrationNumber ? ` · ${vehicle.registrationNumber}` : ''}
                 </p>
               </div>
-              <Badge tone={status.tone}>
-                {vehicleStatusLabel(vehicle.status, vehicle.telemetry.address)}
-              </Badge>
+              <div className="flex flex-wrap justify-end gap-1.5">
+                <Badge tone={vehicle.gpsStatus.tone} data-testid="vehicle-gps-status">
+                  {vehicle.gpsStatus.label}
+                </Badge>
+                <Badge tone={status.tone}>{status.label}</Badge>
+              </div>
             </div>
             <p className="mt-2 flex items-start gap-1.5 text-sm text-[var(--color-text-secondary)]">
               <FiMapPin aria-hidden="true" className="mt-0.5 shrink-0" />
@@ -139,7 +141,7 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
               <FiClock aria-hidden="true" className="mt-0.5 text-[var(--color-primary)]" />
               <span>
                 <strong className="block text-xs text-[var(--color-text-tertiary)]">
-                  Последняя связь
+                  Последний сигнал
                 </strong>
                 {dateOrEmpty(vehicle.telemetry.lastSeenAt)}
               </span>

@@ -20,6 +20,7 @@ function vehicle(overrides: Partial<VehicleCardDto>): VehicleCardDto {
     originalPrice: '8 800 ₽',
     features: [],
     status: 'UNKNOWN',
+    gpsStatus: { key: 'NO_DATA', label: 'Нет связи', tone: 'danger', isConnected: false },
     primaryImage: null,
     telemetry: {
       odometerKm: null,
@@ -64,9 +65,72 @@ describe('фильтрация автопарка', () => {
       city: 'Владивосток',
       fuelType: 'DIESEL',
       status: 'OFFLINE',
+      gpsStatus: '',
       seats: '9',
     });
 
     expect(result.map((item) => item.id)).toEqual(['3']);
+  });
+
+  it('отдельно фильтрует автомобили по оперативному GPS-статусу', () => {
+    const gpsVehicles = [
+      vehicle({
+        id: 'park',
+        gpsStatus: { key: 'IN_PARK', label: 'В парке', tone: 'success', isConnected: true },
+      }),
+      vehicle({
+        id: 'moving',
+        gpsStatus: { key: 'MOVING', label: 'В движении', tone: 'primary', isConnected: true },
+      }),
+      vehicle({
+        id: 'idle',
+        gpsStatus: { key: 'IDLE', label: 'Стоит', tone: 'warning', isConnected: true },
+      }),
+      vehicle({
+        id: 'stale',
+        gpsStatus: {
+          key: 'STALE',
+          label: 'Давно не обновлялся',
+          tone: 'danger',
+          isConnected: false,
+        },
+      }),
+      vehicle({
+        id: 'no-data',
+        gpsStatus: { key: 'NO_DATA', label: 'Нет связи', tone: 'danger', isConnected: false },
+      }),
+    ];
+
+    for (const [gpsStatus, id] of [
+      ['IN_PARK', 'park'],
+      ['MOVING', 'moving'],
+      ['IDLE', 'idle'],
+      ['STALE', 'stale'],
+      ['NO_DATA', 'no-data'],
+    ] as const) {
+      expect(
+        filterVehicles(gpsVehicles, { ...initialVehicleFilters, gpsStatus }).map((item) => item.id),
+      ).toEqual([id]);
+    }
+  });
+
+  it('сохраняет бизнес-статус отдельным от GPS-фильтра', () => {
+    const result = filterVehicles(
+      [
+        vehicle({
+          id: 'maintenance-in-park',
+          status: 'MAINTENANCE',
+          gpsStatus: { key: 'IN_PARK', label: 'В парке', tone: 'success', isConnected: true },
+        }),
+        vehicle({
+          id: 'maintenance-moving',
+          status: 'MAINTENANCE',
+          gpsStatus: { key: 'MOVING', label: 'В движении', tone: 'primary', isConnected: true },
+        }),
+      ],
+      { ...initialVehicleFilters, status: 'MAINTENANCE', gpsStatus: 'IN_PARK' },
+    );
+
+    expect(result.map((item) => item.id)).toEqual(['maintenance-in-park']);
   });
 });

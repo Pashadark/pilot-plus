@@ -2,6 +2,7 @@ import type { Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 
 import type { VehicleCardDto, VehicleDetailDto, VehicleOptionDto } from '../types';
+import { deriveVehicleGpsStatus } from '../gps-status';
 import { getEffectiveMaintenanceStatus } from '@/modules/maintenance/effective-status';
 
 interface VehicleRepository {
@@ -28,6 +29,7 @@ interface RawVehicle {
   status: VehicleCardDto['status'];
   createdAt: Date;
   positions: {
+    speedKph: number | null;
     odometerKm: unknown | null;
     fuelLevelPercent: unknown | null;
     recordedAt: Date;
@@ -141,7 +143,13 @@ const vehicleCardSelect = {
   features: true,
   status: true,
   positions: {
-    select: { odometerKm: true, fuelLevelPercent: true, recordedAt: true, address: true },
+    select: {
+      odometerKm: true,
+      fuelLevelPercent: true,
+      speedKph: true,
+      recordedAt: true,
+      address: true,
+    },
     orderBy: { recordedAt: 'desc' as const },
     take: 1,
   },
@@ -177,7 +185,13 @@ const vehicleDetailSelect = {
   status: true,
   createdAt: true,
   positions: {
-    select: { odometerKm: true, fuelLevelPercent: true, recordedAt: true, address: true },
+    select: {
+      odometerKm: true,
+      fuelLevelPercent: true,
+      speedKph: true,
+      recordedAt: true,
+      address: true,
+    },
     orderBy: { recordedAt: 'desc' as const },
     take: 1,
   },
@@ -298,7 +312,7 @@ function optionalNumber(value: unknown | null | undefined) {
   return value === null || value === undefined ? null : Number(value);
 }
 
-function mapCard(vehicle: RawVehicleCard): VehicleCardDto {
+function mapCard(vehicle: RawVehicleCard, referenceTime: Date): VehicleCardDto {
   const position = vehicle.positions[0];
   const trip = vehicle.trips[0];
   return {
@@ -317,6 +331,15 @@ function mapCard(vehicle: RawVehicleCard): VehicleCardDto {
     originalPrice: vehicle.originalPrice,
     features: vehicle.features,
     status: vehicle.status,
+    gpsStatus: deriveVehicleGpsStatus(
+      {
+        recordedAt: position?.recordedAt,
+        speedKph: position?.speedKph,
+        address: position?.address,
+        hasCoordinates: Boolean(position),
+      },
+      referenceTime,
+    ),
     primaryImage: vehicle.images[0] ?? null,
     telemetry: {
       odometerKm: optionalNumber(position?.odometerKm),
@@ -331,7 +354,7 @@ function mapCard(vehicle: RawVehicleCard): VehicleCardDto {
 
 function mapDetail(vehicle: RawVehicle, referenceTime: Date): VehicleDetailDto {
   return {
-    ...mapCard(vehicle),
+    ...mapCard(vehicle, referenceTime),
     vin: vehicle.vin,
     createdAt: vehicle.createdAt.toISOString(),
     trips: vehicle.trips.map((trip) => ({
@@ -390,13 +413,13 @@ function mapDetail(vehicle: RawVehicle, referenceTime: Date): VehicleDetailDto {
 
 export function createVehicleQueries(repository: VehicleRepository) {
   return {
-    async listVehiclesForUser(userId: string) {
+    async listVehiclesForUser(userId: string, referenceTime = new Date()) {
       const vehicles = await repository.findMany({
         where: { archivedAt: null, company: { members: { some: { userId } } } },
         select: vehicleCardSelect,
         orderBy: [{ city: 'asc' }, { model: 'asc' }, { internalNumber: 'asc' }],
       });
-      return (vehicles as RawVehicleCard[]).map(mapCard);
+      return (vehicles as RawVehicleCard[]).map((vehicle) => mapCard(vehicle, referenceTime));
     },
     async listVehicleOptionsForUser(userId: string): Promise<VehicleOptionDto[]> {
       const vehicles = await repository.findMany({

@@ -21,6 +21,7 @@ const vehicle: VehicleDetailDto = {
   originalPrice: '8 800 ₽',
   features: [],
   status: 'UNKNOWN',
+  gpsStatus: { key: 'NO_DATA', label: 'Нет связи', tone: 'danger', isConnected: false },
   primaryImage: null,
   telemetry: {
     odometerKm: null,

@@ -1,10 +1,12 @@
 import type { VehicleCardDto, VehicleFuelType, VehicleStatus } from './types';
+import type { VehicleGpsStatusKey } from './gps-status';
 
 export interface VehicleFilters {
   query: string;
   city: string;
   fuelType: VehicleFuelType | '';
   status: VehicleStatus | '';
+  gpsStatus: VehicleGpsStatusKey | '';
   seats: string;
 }
 
@@ -13,6 +15,7 @@ export const initialVehicleFilters: VehicleFilters = {
   city: '',
   fuelType: '',
   status: '',
+  gpsStatus: '',
   seats: '',
 };
 
@@ -36,6 +39,7 @@ export function filterVehicles(vehicles: readonly VehicleCardDto[], filters: Veh
       (!filters.city || vehicle.city === filters.city) &&
       (!filters.fuelType || vehicle.fuelType === filters.fuelType) &&
       (!filters.status || vehicle.status === filters.status) &&
+      (!filters.gpsStatus || vehicle.gpsStatus.key === filters.gpsStatus) &&
       (!filters.seats || vehicle.seats === Number(filters.seats))
     );
   });

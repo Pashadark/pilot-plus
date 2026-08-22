@@ -21,7 +21,7 @@ export function VehicleFilters({
   const seats = [...new Set(vehicles.map((vehicle) => vehicle.seats))].sort((a, b) => a - b);
 
   return (
-    <div className="grid gap-3 rounded-[var(--radius-panel)] border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)] lg:grid-cols-[minmax(16rem,1fr)_repeat(4,minmax(8rem,0.45fr))_auto] lg:items-end">
+    <div className="grid gap-3 rounded-[var(--radius-panel)] border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)] xl:grid-cols-[minmax(16rem,1fr)_repeat(5,minmax(8rem,0.45fr))_auto] xl:items-end">
       <label className="grid gap-1.5">
         <span className="text-sm font-medium">Поиск</span>
         <span className="relative block">
@@ -78,6 +78,23 @@ export function VehicleFilters({
         <option value="OFFLINE">Не на связи</option>
         <option value="MAINTENANCE">Обслуживание</option>
         <option value="UNKNOWN">Нет телеметрии</option>
+      </Select>
+      <Select
+        label="Где машина"
+        value={filters.gpsStatus}
+        onChange={(event) =>
+          onChange({
+            ...filters,
+            gpsStatus: event.target.value as VehicleFiltersValue['gpsStatus'],
+          })
+        }
+      >
+        <option value="">Любое состояние</option>
+        <option value="IN_PARK">В парке</option>
+        <option value="MOVING">В движении</option>
+        <option value="IDLE">Стоит</option>
+        <option value="STALE">Давно не обновлялся</option>
+        <option value="NO_DATA">Нет связи</option>
       </Select>
       <Select
         label="Мест"

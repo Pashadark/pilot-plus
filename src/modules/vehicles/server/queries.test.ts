@@ -24,6 +24,7 @@ const rawVehicle = {
     {
       odometerKm: { toString: () => '12000' },
       fuelLevelPercent: { toString: () => '60' },
+      speedKph: 0,
       recordedAt: new Date('2026-08-20T20:00:00.000Z'),
       address: 'г. Москва, Зелёный проспект, д. 22',
     },
@@ -87,7 +88,10 @@ describe('запросы автопарка', () => {
     const fake = createRepository();
     const queries = createVehicleQueries(fake.repository);
 
-    const vehicles = await queries.listVehiclesForUser('user-1');
+    const vehicles = await queries.listVehiclesForUser(
+      'user-1',
+      new Date('2026-08-20T20:05:00.000Z'),
+    );
 
     expect(fake.calls.list).toMatchObject({
       where: { archivedAt: null, company: { members: { some: { userId: 'user-1' } } } },
@@ -108,9 +112,18 @@ describe('запросы автопарка', () => {
         localPath: '/vehicles/krasnoyarsk/fleet-001/primary.webp',
         alt: 'GWM WEY — Красноярск',
       },
+      gpsStatus: {
+        key: 'IN_PARK',
+        label: 'В парке',
+        tone: 'success',
+        isConnected: true,
+      },
     });
     expect(fake.calls.list).toMatchObject({
       select: {
+        positions: {
+          select: { speedKph: true },
+        },
         images: {
           where: { isPrimary: true },
           orderBy: { position: 'asc' },
