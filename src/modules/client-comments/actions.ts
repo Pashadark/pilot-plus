@@ -4,7 +4,7 @@ import type { Prisma } from '@/database/generated/prisma';
 import { revalidatePath } from 'next/cache';
 
 import { prisma } from '@/database/prisma/client';
-import { getClientAccess } from '@/modules/clients/access';
+import { getClientAccess, type ClientAccess } from '@/modules/clients/access';
 
 import { parseClientCommentInput } from './validation';
 
@@ -30,6 +30,19 @@ function value(formData: FormData, key: string) {
 
 function refresh(clientId: string) {
   revalidatePath(`/clients/${clientId}`);
+}
+
+async function canWriteManualRating(
+  transaction: Transaction,
+  access: ClientAccess,
+  companyId: string,
+) {
+  if (access.scope === 'SYSTEM') return true;
+  const membership = await transaction.companyMember.findFirst({
+    where: { companyId, userId: access.user.id, role: 'COMPANY_ADMIN' },
+    select: { id: true },
+  });
+  return Boolean(membership);
 }
 
 async function writeAudit(
@@ -84,6 +97,8 @@ export async function createClientCommentAction(
     category: value(formData, 'category') || 'GENERAL',
     severity: value(formData, 'severity') || 'INFO',
     text: value(formData, 'text'),
+    affectsRating: value(formData, 'affectsRating'),
+    ratingDelta: value(formData, 'ratingDelta'),
   });
   if (!parsed.ok) return { ok: false, code: 'VALIDATION', message: parsed.message };
   try {
@@ -94,13 +109,19 @@ export async function createClientCommentAction(
         access.companyIds,
         access.scope === 'SYSTEM',
       );
-      if (!client) return null;
+      if (!client) return { kind: 'NOT_FOUND' as const };
       if (parsed.data.rentalId) {
         const rental = await transaction.rental.findFirst({
           where: { id: parsed.data.rentalId, clientId: client.id, companyId: client.companyId },
           select: { id: true },
         });
-        if (!rental) return null;
+        if (!rental) return { kind: 'NOT_FOUND' as const };
+      }
+      if (
+        parsed.data.affectsRating &&
+        !(await canWriteManualRating(transaction, access, client.companyId))
+      ) {
+        return { kind: 'FORBIDDEN' as const };
       }
       const comment = await transaction.clientComment.create({
         data: {
@@ -111,22 +132,49 @@ export async function createClientCommentAction(
           category: parsed.data.category,
           severity: parsed.data.severity,
           text: parsed.data.text,
+          problemStatus: parsed.data.problemStatus,
+          affectsRating: parsed.data.affectsRating,
+          ratingDelta: parsed.data.ratingDelta,
         },
         select: { id: true },
       });
+      if (parsed.data.affectsRating && parsed.data.ratingDelta !== null) {
+        await transaction.clientRatingEvent.create({
+          data: {
+            companyId: client.companyId,
+            clientId: client.id,
+            source: 'MANUAL',
+            type: parsed.data.ratingDelta > 0 ? 'MANUAL_POSITIVE' : 'MANUAL_NEGATIVE',
+            reason: 'MANUAL_COMMENT',
+            delta: parsed.data.ratingDelta,
+            idempotencyKey: `manual-comment:${comment.id}`,
+            commentId: comment.id,
+            rentalId: parsed.data.rentalId,
+            actorUserId: access.scope === 'SYSTEM' ? null : access.user.id,
+          },
+        });
+      }
       await writeAudit(transaction, {
         companyId: client.companyId,
         clientId: client.id,
         commentId: comment.id,
         actor: access.user,
         action: 'CREATE',
-        changes: { category: parsed.data.category, severity: parsed.data.severity },
+        changes: {
+          category: parsed.data.category,
+          severity: parsed.data.severity,
+          problemStatus: parsed.data.problemStatus,
+          affectsRating: parsed.data.affectsRating,
+          ratingDelta: parsed.data.ratingDelta,
+        },
       });
-      return comment;
+      return { kind: 'CREATED' as const, comment };
     });
-    if (!result) return { ok: false, code: 'NOT_FOUND', message: 'Клиент или аренда недоступны.' };
+    if (result.kind === 'FORBIDDEN') return forbidden;
+    if (result.kind === 'NOT_FOUND')
+      return { ok: false, code: 'NOT_FOUND', message: 'Клиент или аренда недоступны.' };
     refresh(parsed.data.clientId);
-    return { ok: true, message: 'Комментарий добавлен.', commentId: result.id };
+    return { ok: true, message: 'Комментарий добавлен.', commentId: result.comment.id };
   } catch {
     return { ok: false, code: 'SAVE_FAILED', message: 'Не удалось добавить комментарий.' };
   }
@@ -144,6 +192,8 @@ export async function updateClientCommentAction(
     category: value(formData, 'category') || 'GENERAL',
     severity: value(formData, 'severity') || 'INFO',
     text: value(formData, 'text'),
+    affectsRating: value(formData, 'affectsRating'),
+    ratingDelta: value(formData, 'ratingDelta'),
   });
   if (!parsed.ok || !commentId)
     return { ok: false, code: 'VALIDATION', message: 'Проверьте комментарий.' };
@@ -155,7 +205,13 @@ export async function updateClientCommentAction(
         access.companyIds,
         access.scope === 'SYSTEM',
       );
-      if (!client) return false;
+      if (!client) return 'NOT_FOUND' as const;
+      if (
+        parsed.data.affectsRating &&
+        !(await canWriteManualRating(transaction, access, client.companyId))
+      ) {
+        return 'FORBIDDEN' as const;
+      }
       const result = await transaction.clientComment.updateMany({
         where: { id: commentId, companyId: client.companyId, clientId: client.id, hiddenAt: null },
         data: {
@@ -165,7 +221,7 @@ export async function updateClientCommentAction(
           text: parsed.data.text,
         },
       });
-      if (result.count !== 1) return false;
+      if (result.count !== 1) return 'NOT_FOUND' as const;
       await writeAudit(transaction, {
         companyId: client.companyId,
         clientId: client.id,
@@ -174,9 +230,11 @@ export async function updateClientCommentAction(
         action: 'UPDATE',
         changes: { category: parsed.data.category, severity: parsed.data.severity },
       });
-      return true;
+      return 'UPDATED' as const;
     });
-    if (!updated) return { ok: false, code: 'NOT_FOUND', message: 'Комментарий недоступен.' };
+    if (updated === 'FORBIDDEN') return forbidden;
+    if (updated === 'NOT_FOUND')
+      return { ok: false, code: 'NOT_FOUND', message: 'Комментарий недоступен.' };
     refresh(parsed.data.clientId);
     return { ok: true, message: 'Комментарий обновлён.', commentId };
   } catch {
@@ -286,5 +344,56 @@ export async function hideClientCommentAction(
     return { ok: true, message: 'Комментарий скрыт.', commentId };
   } catch {
     return { ok: false, code: 'SAVE_FAILED', message: 'Не удалось скрыть комментарий.' };
+  }
+}
+
+export async function resolveClientCommentAction(
+  formData: FormData,
+): Promise<ClientCommentActionState> {
+  const access = await getClientAccess('MANAGE_CLIENTS');
+  if (!access) return forbidden;
+  const clientId = value(formData, 'clientId');
+  const commentId = value(formData, 'commentId');
+  if (!clientId || !commentId)
+    return { ok: false, code: 'VALIDATION', message: 'Проверьте комментарий.' };
+  try {
+    const resolved = await prisma.$transaction(async (transaction) => {
+      const client = await managedClient(
+        transaction,
+        clientId,
+        access.companyIds,
+        access.scope === 'SYSTEM',
+      );
+      if (!client) return false;
+      const result = await transaction.clientComment.updateMany({
+        where: {
+          id: commentId,
+          companyId: client.companyId,
+          clientId: client.id,
+          hiddenAt: null,
+          problemStatus: 'OPEN',
+        },
+        data: {
+          problemStatus: 'RESOLVED',
+          resolvedAt: new Date(),
+          resolvedByUserId: access.scope === 'SYSTEM' ? null : access.user.id,
+        },
+      });
+      if (result.count !== 1) return false;
+      await writeAudit(transaction, {
+        companyId: client.companyId,
+        clientId: client.id,
+        commentId,
+        actor: access.user,
+        action: 'UPDATE',
+        changes: { problemStatus: 'RESOLVED' },
+      });
+      return true;
+    });
+    if (!resolved) return { ok: false, code: 'NOT_FOUND', message: 'Комментарий недоступен.' };
+    refresh(clientId);
+    return { ok: true, message: 'Проблема отмечена как решённая.', commentId };
+  } catch {
+    return { ok: false, code: 'SAVE_FAILED', message: 'Не удалось решить проблему.' };
   }
 }

@@ -18,11 +18,35 @@ const schema = z.object({
     .min(1)
     .max(2000)
     .transform((value) => value.replace(controlCharacters, '')),
+  affectsRating: z.unknown().optional(),
+  ratingDelta: z.unknown().optional(),
 });
 
 export function parseClientCommentInput(input: unknown) {
   const parsed = schema.safeParse(input);
-  if (parsed.success && parsed.data.text.length > 0)
-    return { ok: true as const, data: parsed.data };
-  return { ok: false as const, message: 'Проверьте текст и параметры комментария.' };
+  if (!parsed.success || parsed.data.text.length === 0)
+    return { ok: false as const, message: 'Проверьте текст и параметры комментария.' };
+
+  const affectsRating = parsed.data.affectsRating === true || parsed.data.affectsRating === 'on';
+  const ratingDelta = affectsRating ? Number(parsed.data.ratingDelta) : null;
+  if (
+    affectsRating &&
+    (ratingDelta === null ||
+      !Number.isInteger(ratingDelta) ||
+      ratingDelta === 0 ||
+      ratingDelta < -30 ||
+      ratingDelta > 10)
+  ) {
+    return { ok: false as const, message: 'Укажите влияние от −30 до +10, кроме нуля.' };
+  }
+
+  const problemStatus: 'OPEN' | null = ['PROBLEM', 'DAMAGE', 'PAYMENT', 'VIOLATION'].includes(
+    parsed.data.category,
+  )
+    ? 'OPEN'
+    : null;
+  return {
+    ok: true as const,
+    data: { ...parsed.data, affectsRating, ratingDelta, problemStatus },
+  };
 }

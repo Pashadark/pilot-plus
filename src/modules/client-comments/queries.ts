@@ -16,6 +16,10 @@ type RawComment = {
   severity: ClientCommentDto['severity'];
   text: string;
   isPinned: boolean;
+  problemStatus: ClientCommentDto['problemStatus'];
+  affectsRating: boolean | null;
+  ratingDelta: number | null;
+  resolvedAt: Date | null;
   hiddenAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -43,6 +47,10 @@ export async function listClientComments(
       severity: true,
       text: true,
       isPinned: true,
+      problemStatus: true,
+      affectsRating: true,
+      ratingDelta: true,
+      resolvedAt: true,
       hiddenAt: true,
       createdAt: true,
       updatedAt: true,
@@ -62,6 +70,10 @@ export async function listClientComments(
     severity: comment.severity,
     text: comment.text,
     isPinned: comment.isPinned,
+    problemStatus: comment.problemStatus,
+    affectsRating: comment.affectsRating === true,
+    ratingDelta: comment.affectsRating ? comment.ratingDelta : null,
+    resolvedAt: comment.resolvedAt?.toISOString() ?? null,
     hiddenAt: comment.hiddenAt?.toISOString() ?? null,
     createdAt: comment.createdAt.toISOString(),
     updatedAt: comment.updatedAt.toISOString(),
