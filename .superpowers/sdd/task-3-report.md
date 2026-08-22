@@ -67,3 +67,24 @@ No DB/schema/data changes or full suite were run.
 
 The requested local signed-in browser inspection was not performed in this subtask: the
 focused unit/component/route tests are the available verification evidence.
+
+## Reviewer follow-up — partial GLONASSSOFT coordinates
+
+Reviewer P1 found that `Number(null)` could serialize a partial provider position as the
+fictional coordinate `0`. A new server-query regression first failed with `latitude: 0`.
+The mapper now validates finite latitude/longitude ranges and returns **both** values as
+`null` unless both are present and valid. The shared GPS view therefore remains `NO_DATA`;
+the existing map regression verifies that no-coordinate vehicles create no marker while
+remaining available to the workspace list/filter.
+
+```text
+npx vitest run src/modules/online-map/server/queries.test.ts \
+  src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts
+2 passed, 19 tests passed
+
+npm run typecheck
+exit 0
+
+git diff --check
+exit 0
+```

@@ -40,6 +40,13 @@ function lastSeenLabel(recordedAt: Date, now: Date): string {
   return `${hours} ${hours === 1 ? 'час' : hours < 5 ? 'часа' : 'часов'} назад`;
 }
 
+function coordinate(value: unknown, minimum: number, maximum: number): number | null {
+  if (value === null || value === undefined || value === '') return null;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= minimum && parsed <= maximum ? parsed : null;
+}
+
 export async function listOnlineMapVehicles(
   user: SafeUser,
   repository: OnlineMapRepository = prisma,
@@ -122,6 +129,9 @@ export async function listOnlineMapVehicles(
       };
     }
     const speedKph = position.speedKph ?? 0;
+    const latitude = coordinate(position.latitude, -90, 90);
+    const longitude = coordinate(position.longitude, -180, 180);
+    const hasCoordinates = latitude !== null && longitude !== null;
     return {
       id: vehicle.id,
       name: vehicle.model,
@@ -131,12 +141,12 @@ export async function listOnlineMapVehicles(
           recordedAt: position.recordedAt,
           speedKph,
           address: position.address,
-          hasCoordinates: position.latitude != null && position.longitude != null,
+          hasCoordinates,
         },
         now,
       ),
-      longitude: Number(position.longitude),
-      latitude: Number(position.latitude),
+      longitude: hasCoordinates ? longitude : null,
+      latitude: hasCoordinates ? latitude : null,
       speedKph,
       fuelPercent: position.fuelLevelPercent == null ? null : Number(position.fuelLevelPercent),
       lastSeenLabel: lastSeenLabel(position.recordedAt, now),

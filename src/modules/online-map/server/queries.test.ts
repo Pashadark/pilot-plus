@@ -150,3 +150,43 @@ it('оставляет реальную машину без координат �
     middleName: true,
   });
 });
+
+it('не превращает частичную позицию GLONASSSOFT в фиктивные координаты нуля', async () => {
+  const findMany = vi.fn().mockResolvedValue([
+    {
+      id: 'vehicle-4',
+      model: 'Skoda Octavia',
+      registrationNumber: 'О321ОО77',
+      positions: [
+        {
+          latitude: null,
+          longitude: '37.618423',
+          speedKph: 0,
+          fuelLevelPercent: '40',
+          address: 'Москва, Зелёный проспект, 22',
+          recordedAt: new Date('2026-08-20T11:59:00.000Z'),
+        },
+      ],
+    },
+  ]);
+
+  const result = await listOnlineMapVehicles(
+    { id: 'root', role: 'SUPER_ADMIN' } as never,
+    { vehicle: { findMany } } as never,
+    new Date('2026-08-20T12:00:00.000Z'),
+  );
+
+  expect(result).toEqual([
+    expect.objectContaining({
+      latitude: null,
+      longitude: null,
+      gpsStatus: {
+        key: 'NO_DATA',
+        label: 'Нет связи',
+        tone: 'danger',
+        isConnected: false,
+      },
+      lastSeenLabel: '1 минуту назад',
+    }),
+  ]);
+});
