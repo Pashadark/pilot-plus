@@ -42,3 +42,16 @@
 - The `OVERDUE` fine status is the current persisted unpaid-deadline signal; if a later worker
   transitions a fine to `OVERDUE`, it must call the same idempotent writer only after confirmed
   rental/client attribution.
+
+## Follow-up: overdue transition during Driver Helper sync
+
+- Driver Helper normalizes provider status only as `UNPAID`, `PAID`, or `CANCELLED`; its
+  trustworthy overdue signal is an unpaid fine with `toBailiff=true`. The serializable sync
+  transaction now derives and persists `OVERDUE` from that combination.
+- On the first transition only, it re-reads the confirmed manual rental using the exact
+  tenant, client, rental, and vehicle tuple. It then records the existing deterministic
+  `fine:<id>:confirmed-overdue` event after the fine upsert. A repeated sync observes the
+  persisted `OVERDUE` status and writes no second event.
+- Focused regression tests cover the transition, replay, unconfirmed `AUTO_EXACT` attribution,
+  and a ledger-write failure that aborts the sync transaction. No database-mutating command was
+  run outside the mocked test transaction.

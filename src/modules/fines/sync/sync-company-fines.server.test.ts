@@ -6,6 +6,8 @@ const findFine = vi.hoisted(() => vi.fn());
 const findRentals = vi.hoisted(() => vi.fn());
 const upsertFine = vi.hoisted(() => vi.fn());
 const createAssignmentHistory = vi.hoisted(() => vi.fn());
+const findBoundRental = vi.hoisted(() => vi.fn());
+const createRatingEvent = vi.hoisted(() => vi.fn());
 const transaction = vi.hoisted(() => vi.fn());
 const runSync = vi.hoisted(() => vi.fn());
 
@@ -29,7 +31,7 @@ vi.mock('@/database/prisma/client', () => ({
       update: updateIntegration,
     },
     fine: { findUnique: findFine, upsert: upsertFine },
-    rental: { findMany: findRentals },
+    rental: { findMany: findRentals, findFirst: findBoundRental },
     fineAssignmentHistory: { create: createAssignmentHistory },
     $transaction: transaction,
   },
@@ -68,8 +70,9 @@ describe('production company fine sync', () => {
     transaction.mockImplementation(async (operation: (database: unknown) => Promise<unknown>) =>
       operation({
         fine: { findUnique: findFine, upsert: upsertFine },
-        rental: { findMany: findRentals },
+        rental: { findMany: findRentals, findFirst: findBoundRental },
         fineAssignmentHistory: { create: createAssignmentHistory },
+        clientRatingEvent: { createMany: createRatingEvent },
       }),
     );
     runSync.mockImplementation(
@@ -278,5 +281,153 @@ describe('production company fine sync', () => {
       assignmentSource: 'AUTO_EXACT',
     });
     expect(createAssignmentHistory).not.toHaveBeenCalled();
+  });
+
+  it('records one overdue event after a confirmed bound fine transitions from UNPAID', async () => {
+    const confirmedUnpaidFine = {
+      id: 'fine-db-1',
+      vehicleId: 'vehicle-1',
+      rentalId: 'rental-1',
+      clientId: 'client-1',
+      assignmentSource: 'MANUAL',
+      assignmentConfirmedAt: new Date('2026-08-16T09:00:00.000Z'),
+      assignmentConfirmedByUserId: 'dispatcher-1',
+      status: 'UNPAID',
+    };
+    findFine.mockResolvedValue(confirmedUnpaidFine);
+    findRentals.mockResolvedValue([]);
+    findBoundRental.mockResolvedValue({ id: 'rental-1' });
+    createRatingEvent.mockResolvedValue({ count: 1 });
+    runSync.mockImplementation(async (companyId, dependencies) => {
+      await dependencies.upsertFine(
+        companyId,
+        { ...normalizedFine, status: 'UNPAID', toBailiff: true },
+        'vehicle-1',
+      );
+      return { ok: true, received: 1, created: 0, updated: 1, unmatched: 0 };
+    });
+
+    await syncCompanyFines('company-1');
+
+    expect(upsertFine.mock.calls[0]?.[0].update).toMatchObject({ status: 'OVERDUE' });
+    expect(findBoundRental).toHaveBeenCalledWith({
+      where: {
+        id: 'rental-1',
+        companyId: 'company-1',
+        clientId: 'client-1',
+        vehicleId: 'vehicle-1',
+      },
+      select: { id: true },
+    });
+    expect(createRatingEvent).toHaveBeenCalledWith({
+      data: [
+        {
+          companyId: 'company-1',
+          clientId: 'client-1',
+          rentalId: 'rental-1',
+          fineId: 'fine-db-1',
+          source: 'AUTOMATIC',
+          actorUserId: null,
+          type: 'UNPAID_CONFIRMED_FINE',
+          reason: 'UNPAID_CONFIRMED_FINE',
+          delta: -15,
+          idempotencyKey: 'fine:fine-db-1:confirmed-overdue',
+        },
+      ],
+      skipDuplicates: true,
+    });
+  });
+
+  it('does not replay an overdue event during repeated synchronization', async () => {
+    const confirmedFine = {
+      id: 'fine-db-1',
+      vehicleId: 'vehicle-1',
+      rentalId: 'rental-1',
+      clientId: 'client-1',
+      assignmentSource: 'MANUAL',
+      assignmentConfirmedAt: new Date('2026-08-16T09:00:00.000Z'),
+      assignmentConfirmedByUserId: 'dispatcher-1',
+    };
+    findFine
+      .mockResolvedValueOnce({ ...confirmedFine, status: 'UNPAID' })
+      .mockResolvedValueOnce({ ...confirmedFine, status: 'OVERDUE' });
+    findRentals.mockResolvedValue([]);
+    findBoundRental.mockResolvedValue({ id: 'rental-1' });
+    createRatingEvent.mockResolvedValue({ count: 1 });
+    runSync.mockImplementation(async (companyId, dependencies) => {
+      await dependencies.upsertFine(
+        companyId,
+        { ...normalizedFine, status: 'UNPAID', toBailiff: true },
+        'vehicle-1',
+      );
+      return { ok: true, received: 1, created: 0, updated: 1, unmatched: 0 };
+    });
+
+    await syncCompanyFines('company-1');
+    await syncCompanyFines('company-1');
+
+    expect(createRatingEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not score an unconfirmed exact attribution when it becomes overdue', async () => {
+    findFine.mockResolvedValue({
+      id: 'fine-db-1',
+      vehicleId: 'vehicle-1',
+      rentalId: 'rental-1',
+      clientId: 'client-1',
+      assignmentSource: 'AUTO_EXACT',
+      assignmentConfirmedAt: null,
+      assignmentConfirmedByUserId: null,
+      status: 'UNPAID',
+    });
+    findRentals.mockResolvedValue([]);
+    runSync.mockImplementation(async (companyId, dependencies) => {
+      await dependencies.upsertFine(
+        companyId,
+        { ...normalizedFine, status: 'UNPAID', toBailiff: true },
+        'vehicle-1',
+      );
+      return { ok: true, received: 1, created: 0, updated: 1, unmatched: 0 };
+    });
+
+    await syncCompanyFines('company-1');
+
+    expect(findBoundRental).not.toHaveBeenCalled();
+    expect(createRatingEvent).not.toHaveBeenCalled();
+  });
+
+  it('fails the entire sync transaction when the overdue ledger write fails', async () => {
+    findFine.mockResolvedValue({
+      id: 'fine-db-1',
+      vehicleId: 'vehicle-1',
+      rentalId: 'rental-1',
+      clientId: 'client-1',
+      assignmentSource: 'MANUAL',
+      assignmentConfirmedAt: new Date('2026-08-16T09:00:00.000Z'),
+      assignmentConfirmedByUserId: 'dispatcher-1',
+      status: 'UNPAID',
+    });
+    findRentals.mockResolvedValue([]);
+    findBoundRental.mockResolvedValue({ id: 'rental-1' });
+    createRatingEvent.mockRejectedValue(new Error('ledger unavailable'));
+    runSync.mockImplementation(async (companyId, dependencies) => {
+      await dependencies.upsertFine(
+        companyId,
+        { ...normalizedFine, status: 'UNPAID', toBailiff: true },
+        'vehicle-1',
+      );
+      return { ok: true, received: 1, created: 0, updated: 1, unmatched: 0 };
+    });
+
+    await expect(syncCompanyFines('company-1')).rejects.toThrow('ledger unavailable');
+
+    expect(transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: 'Serializable',
+    });
+    expect(updateIntegration).toHaveBeenLastCalledWith({
+      where: { companyId: 'company-1' },
+      data: { lastErrorCode: 'UNAVAILABLE' },
+      select: { id: true },
+    });
   });
 });

@@ -1,6 +1,11 @@
 import 'server-only';
 
+import type { FineStatus } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
+import {
+  createFineRatingInput,
+  recordAutomaticRatingEvent,
+} from '@/modules/client-rating/automatic-events';
 import { normalizeRegistrationNumber } from '@/modules/vehicles/manage/validation';
 import { blindIndex, decryptField } from '@/services/security/field-encryption';
 
@@ -127,6 +132,7 @@ export async function syncCompanyFines(companyId: string) {
                 assignmentSource: true,
                 assignmentConfirmedAt: true,
                 assignmentConfirmedByUserId: true,
+                status: true,
               },
             });
             const rentals = vehicleId
@@ -169,6 +175,34 @@ export async function syncCompanyFines(companyId: string) {
                     assignmentConfirmedByUserId: null,
                   }
                 : preservedAssignment;
+            const persistedStatus: FineStatus =
+              fine.status === 'UNPAID' && fine.toBailiff ? 'OVERDUE' : fine.status;
+            const confirmedBinding =
+              existing &&
+              existing.status !== 'OVERDUE' &&
+              persistedStatus === 'OVERDUE' &&
+              existing.assignmentSource === 'MANUAL' &&
+              existing.assignmentConfirmedAt &&
+              existing.vehicleId &&
+              existing.rentalId &&
+              existing.clientId
+                ? {
+                    vehicleId: existing.vehicleId,
+                    rentalId: existing.rentalId,
+                    clientId: existing.clientId,
+                  }
+                : null;
+            const confirmedRental = confirmedBinding
+              ? await transaction.rental.findFirst({
+                  where: {
+                    id: confirmedBinding.rentalId,
+                    companyId: tenantId,
+                    clientId: confirmedBinding.clientId,
+                    vehicleId: confirmedBinding.vehicleId,
+                  },
+                  select: { id: true },
+                })
+              : null;
             const data = {
               providerVehicleId: fine.providerVehicleId,
               ...assignment,
@@ -182,7 +216,7 @@ export async function syncCompanyFines(companyId: string) {
               articleCode: fine.articleCode,
               description: fine.description,
               address: fine.address,
-              status: fine.status,
+              status: persistedStatus,
               toBailiff: fine.toBailiff,
               photoState: fine.photoState,
               lastSyncedAt: now,
@@ -198,6 +232,20 @@ export async function syncCompanyFines(companyId: string) {
               update: data,
               select: { id: true },
             });
+            const ratingEvent = createFineRatingInput({
+              assignment: confirmedRental ? 'CONFIRMED' : 'CANDIDATE',
+              overdue: Boolean(confirmedBinding),
+            });
+            if (ratingEvent && confirmedBinding) {
+              await recordAutomaticRatingEvent(transaction, {
+                companyId: tenantId,
+                clientId: confirmedBinding.clientId,
+                rentalId: confirmedBinding.rentalId,
+                fineId: saved.id,
+                ...ratingEvent,
+                idempotencyKey: `fine:${saved.id}:confirmed-overdue`,
+              });
+            }
             if (attribution.kind === 'MATCHED' && (!existing || exactChanged)) {
               await transaction.fineAssignmentHistory.create({
                 data: {
