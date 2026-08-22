@@ -207,7 +207,12 @@ export async function updateClientCommentAction(
       );
       if (!client) return 'NOT_FOUND' as const;
       const comment = await transaction.clientComment.findFirst({
-        where: { id: commentId, companyId: client.companyId, clientId: client.id, hiddenAt: null },
+        where: {
+          id: commentId,
+          companyId: client.companyId,
+          clientId: client.id,
+          hiddenAt: null,
+        },
         select: { problemStatus: true, resolvedAt: true, resolvedByUserId: true },
       });
       if (!comment) return 'NOT_FOUND' as const;
@@ -230,7 +235,13 @@ export async function updateClientCommentAction(
           }
         : { problemStatus: null, resolvedAt: null, resolvedByUserId: null };
       const result = await transaction.clientComment.updateMany({
-        where: { id: commentId, companyId: client.companyId, clientId: client.id, hiddenAt: null },
+        where: {
+          id: commentId,
+          companyId: client.companyId,
+          clientId: client.id,
+          hiddenAt: null,
+          problemStatus: comment.problemStatus,
+        },
         data: {
           rentalId: parsed.data.rentalId,
           category: parsed.data.category,

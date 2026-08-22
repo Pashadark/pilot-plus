@@ -257,6 +257,31 @@ describe('действия внутренних комментариев', () =>
     );
   });
 
+  it('не перезаписывает проблему, решённую между чтением и updateMany', async () => {
+    const db = database();
+    db.clientComment.findFirst.mockResolvedValue({ problemStatus: 'OPEN' });
+    db.clientComment.updateMany.mockImplementation(
+      ({ where }: { where: { problemStatus?: string | null } }) =>
+        Promise.resolve({ count: where.problemStatus === 'OPEN' ? 0 : 1 }),
+    );
+    transaction.mockImplementation((callback: (tx: typeof db) => unknown) => callback(db));
+
+    await expect(
+      updateClientCommentAction(
+        form({
+          clientId: 'client-1',
+          commentId: 'comment-1',
+          category: 'GENERAL',
+          text: 'Не должен стереть решение коллеги',
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: false, code: 'NOT_FOUND' });
+
+    expect(db.clientComment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ problemStatus: 'OPEN' }) }),
+    );
+  });
+
   it('решает только открытую видимую проблему без изменения rating event', async () => {
     const db = database();
     transaction.mockImplementation((callback: (tx: typeof db) => unknown) => callback(db));
