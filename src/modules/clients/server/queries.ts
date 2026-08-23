@@ -45,7 +45,12 @@ type RawClient = {
     status: 'DRAFT' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
     startsAt: Date;
     endsAt: Date;
+    depositMinor: bigint | null;
     vehicle: { make: string; model: string; registrationNumber: string | null };
+    operations: Array<{
+      depositStatus:
+        'NOT_COLLECTED' | 'COLLECTED' | 'RETURNED' | 'PARTIALLY_WITHHELD' | 'WITHHELD' | null;
+    }>;
   }>;
   _count: { rentals: number };
 };
@@ -75,7 +80,14 @@ const clientSelect = {
       status: true,
       startsAt: true,
       endsAt: true,
+      depositMinor: true,
       vehicle: { select: { make: true, model: true, registrationNumber: true } },
+      operations: {
+        where: { status: 'COMMITTED', depositStatus: { not: null } },
+        select: { depositStatus: true },
+        orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+        take: 1,
+      },
     },
     orderBy: [{ startsAt: 'desc' }, { id: 'desc' }],
     take: 25,
@@ -166,6 +178,8 @@ function mapCard(client: RawClient, encryptionKey: string): ClientCardDto {
     status: rental.status,
     startsAt: rental.startsAt.toISOString(),
     endsAt: rental.endsAt.toISOString(),
+    depositMinor: rental.depositMinor?.toString() ?? null,
+    depositStatus: rental.operations[0]?.depositStatus ?? null,
     vehicle: {
       label: vehicleLabel(rental.vehicle.make, rental.vehicle.model),
       registrationNumber: rental.vehicle.registrationNumber,

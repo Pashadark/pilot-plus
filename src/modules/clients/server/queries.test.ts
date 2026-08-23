@@ -44,7 +44,9 @@ const rawClient = {
       status: 'ACTIVE' as const,
       startsAt: new Date('2026-08-20T10:00:00.000Z'),
       endsAt: new Date('2026-08-26T10:00:00.000Z'),
+      depositMinor: BigInt(2_000_000),
       vehicle: { make: 'Kia', model: 'K5', registrationNumber: 'В342НР797' },
+      operations: [{ depositStatus: 'COLLECTED' as const }],
     },
     {
       id: 'rental-old',
@@ -52,7 +54,9 @@ const rawClient = {
       status: 'COMPLETED' as const,
       startsAt: new Date('2026-08-01T10:00:00.000Z'),
       endsAt: new Date('2026-08-03T10:00:00.000Z'),
+      depositMinor: BigInt(1_000_000),
       vehicle: { make: 'Kia', model: 'Rio', registrationNumber: 'Р604АО997' },
+      operations: [{ depositStatus: 'RETURNED' as const }],
     },
   ],
   _count: { rentals: 2 },
@@ -96,6 +100,8 @@ describe('tenant-scoped client queries', () => {
           id: 'rental-current',
           contractNumber: 'ME-2026-0015-VA',
           vehicle: { label: 'Kia · K5', registrationNumber: 'В342НР797' },
+          depositMinor: '2000000',
+          depositStatus: 'COLLECTED',
         },
       },
     });

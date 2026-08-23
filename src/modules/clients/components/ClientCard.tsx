@@ -7,6 +7,7 @@ import { Badge, Card } from '@/shared/ui';
 
 import { ClientPhoto } from './ClientPhoto';
 import { ClientRatingStars } from '@/modules/client-rating/components/ClientRatingStars';
+import { presentClientDeposit } from './client-deposit';
 
 export const clientStatusView: Record<
   ClientStatus,
@@ -39,6 +40,10 @@ export function ClientCard({
   rating?: ClientRatingSummary;
 }) {
   const status = clientStatusView[client.status];
+  const deposit = presentClientDeposit(
+    client.rentalSummary.current ?? client.rentalSummary.last,
+    Boolean(client.rentalSummary.current),
+  );
   const resolvedMessenger =
     messenger ??
     (client.telegramUrl
@@ -87,6 +92,10 @@ export function ClientCard({
               {client.rentalSummary.current
                 ? `${client.rentalSummary.current.vehicle.label} · ${client.rentalSummary.current.vehicle.registrationNumber ?? 'Без номера'}`
                 : 'Сейчас не арендует'}
+            </div>
+            <div>
+              Депозит: <strong className="text-[var(--color-text)]">{deposit.amount}</strong>
+              {deposit.label ? ` · ${deposit.label}` : ''}
             </div>
           </dl>
           <div className="mt-3 flex flex-wrap gap-2">

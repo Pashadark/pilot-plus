@@ -37,6 +37,8 @@ describe('ClientGrid', () => {
                 startsAt: '2026-08-20T10:00:00.000Z',
                 endsAt: '2026-08-26T10:00:00.000Z',
                 vehicle: { label: 'Kia · K5', registrationNumber: 'В342НР797' },
+                depositMinor: '2000000',
+                depositStatus: 'COLLECTED',
               },
               last: {
                 id: 'rental-3',
@@ -45,6 +47,8 @@ describe('ClientGrid', () => {
                 startsAt: '2026-08-20T10:00:00.000Z',
                 endsAt: '2026-08-26T10:00:00.000Z',
                 vehicle: { label: 'Kia · K5', registrationNumber: 'В342НР797' },
+                depositMinor: '2000000',
+                depositStatus: 'COLLECTED',
               },
             },
           },
@@ -54,9 +58,13 @@ describe('ClientGrid', () => {
 
     expect(markup.indexOf('client-photo')).toBeLessThan(markup.indexOf('Анна Воронова'));
     expect(markup).toContain('Текущая машина');
+    expect(markup).toContain('Телефон');
+    expect(markup).toContain('Депозит');
     expect(markup).toContain('Kia · K5');
     expect(markup).toContain('В342НР797');
     expect(markup).toContain('Постоянный');
+    expect(markup).toContain('20 000 ₽');
+    expect(markup).toContain('Нужно вернуть');
     expect(markup).toContain('Открыть');
   });
 });

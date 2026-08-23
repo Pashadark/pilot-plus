@@ -7,6 +7,7 @@ import { ClientRatingStars } from '@/modules/client-rating/components/ClientRati
 
 import { ClientCard, clientStatusView } from './ClientCard';
 import { ClientPhoto } from './ClientPhoto';
+import { presentClientDeposit } from './client-deposit';
 
 function formatRentalDate(value: string) {
   return new Intl.DateTimeFormat('ru-RU', {
@@ -41,13 +42,15 @@ export function ClientGrid({
       </div>
 
       <div className="hidden overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)] md:block">
-        <table className="w-full min-w-[960px] border-collapse text-left">
+        <table className="w-full min-w-[1180px] border-collapse text-left">
           <thead className="bg-[var(--color-elevated)] text-xs font-semibold tracking-wide text-[var(--color-text-secondary)] uppercase">
             <tr>
               <th className="px-4 py-3">Клиент</th>
+              <th className="px-4 py-3">Телефон</th>
               <th className="px-4 py-3">Рейтинг</th>
               <th className="px-4 py-3">Аренды</th>
               <th className="px-4 py-3">Текущая машина</th>
+              <th className="px-4 py-3">Депозит</th>
               <th className="px-4 py-3">Статус</th>
               <th className="px-4 py-3 text-right">Действия</th>
             </tr>
@@ -57,6 +60,8 @@ export function ClientGrid({
               const status = clientStatusView[client.status];
               const current = client.rentalSummary.current;
               const last = client.rentalSummary.last;
+              const depositRental = current ?? last;
+              const deposit = presentClientDeposit(depositRental, Boolean(current));
               return (
                 <tr key={client.id} className="transition-colors hover:bg-[var(--color-elevated)]">
                   <td className="px-4 py-3">
@@ -73,11 +78,11 @@ export function ClientGrid({
                         >
                           {client.fullName}
                         </Link>
-                        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                          {client.phoneMasked}
-                        </p>
                       </div>
                     </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm font-semibold whitespace-nowrap">
+                    {client.phoneMasked}
                   </td>
                   <td className="px-4 py-3">
                     {ratings[client.id] ? (
@@ -106,6 +111,14 @@ export function ClientGrid({
                         Сейчас не арендует
                       </span>
                     )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="font-semibold whitespace-nowrap">{deposit.amount}</p>
+                    {deposit.label ? (
+                      <div className="mt-1">
+                        <Badge tone={deposit.tone}>{deposit.label}</Badge>
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3">
                     <Badge tone={status.tone}>{status.label}</Badge>
