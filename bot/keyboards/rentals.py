@@ -68,6 +68,18 @@ def staff_operation_choices(rentals: list[dict]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def staff_operation_actions(rental: dict) -> InlineKeyboardMarkup:
+    rental_id = rental["id"]
+    if rental["action"] == "HANDOVER":
+        rows = [[InlineKeyboardButton(text="Выдать автомобиль", callback_data=f"staffop:HANDOVER:{rental_id}")]]
+    else:
+        rows = [
+            [InlineKeyboardButton(text="Принять автомобиль", callback_data=f"staffop:RETURN:{rental_id}")],
+            [InlineKeyboardButton(text="Продлить аренду", callback_data=f"staffop:EXTENSION:{rental_id}")],
+        ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def operation_choice(prefix: str, values: list[tuple[str, str]]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=label, callback_data=f"staffop:{prefix}:{value}")]

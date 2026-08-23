@@ -8,7 +8,7 @@ from bot.handlers.staff import (
     staff_menu_action,
     staff_unknown_message,
 )
-from bot.keyboards.staff import STAFF_MENU_LABELS, STAFF_REQUESTS_TEXT
+from bot.keyboards.staff import STAFF_MENU_LABELS, STAFF_RENTALS_TEXT, STAFF_REQUESTS_TEXT
 from bot.services.errors import PilotApiError
 
 
@@ -37,7 +37,7 @@ class FakeApi:
 
     async def staff_rentals(self, telegram_user_id: str):
         self.staff_rental_calls.append(telegram_user_id)
-        return {"items": []}
+        return getattr(self, "staff_rentals_result", {"items": []})
 
 
 class FakeMessage:
@@ -130,3 +130,29 @@ async def test_bot_ignores_ordinary_group_messages():
     await staff_menu_action(menu_message, api)
     assert menu_message.answers == []
     assert api.profile_calls == []
+
+
+@pytest.mark.asyncio
+async def test_staff_rentals_are_sent_as_readable_individual_cards():
+    api = FakeApi({"kind": "STAFF", "displayName": "Павел Седов"})
+    api.staff_rentals_result = {"items": [{
+        "id": "r1",
+        "contractNumber": "ME-2026-0003-BK",
+        "status": "ACTIVE",
+        "startsAt": "2026-08-13T12:00:00Z",
+        "endsAt": "2026-08-23T12:00:00Z",
+        "clientName": "Горбунов Глеб Геннадьевич",
+        "vehicle": {"make": "Volkswagen", "model": "Polo", "registrationNumber": "А156АХ997"},
+        "action": "RETURN",
+    }]}
+    message = FakeMessage(STAFF_RENTALS_TEXT, 185185047)
+
+    await staff_menu_action(message, api)
+
+    assert len(message.answers) == 2
+    assert message.answers[0][0] == "Текущие аренды: 1"
+    card, markup = message.answers[1]
+    assert "Горбунов Глеб Геннадьевич" in card
+    assert "Volkswagen Polo · <b>А156АХ997</b>" in card
+    assert "ME-2026-0003-BK" in card
+    assert [row[0].text for row in markup.inline_keyboard] == ["Принять автомобиль", "Продлить аренду"]

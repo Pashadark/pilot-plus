@@ -3,7 +3,7 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.callbacks import STAFF_REQUESTS
-from bot.formatters.operations import fleet_text, requests_text
+from bot.formatters.operations import fleet_text, requests_text, staff_rental_card
 from bot.keyboards.staff import (
     STAFF_CALENDAR_TEXT,
     STAFF_CLIENTS_TEXT,
@@ -15,7 +15,7 @@ from bot.keyboards.staff import (
     STAFF_REQUESTS_TEXT,
     staff_main_menu,
 )
-from bot.keyboards.rentals import staff_operation_choices
+from bot.keyboards.rentals import staff_operation_actions
 from bot.services.errors import PilotApiError
 
 router = Router(name="staff")
@@ -81,7 +81,13 @@ async def staff_menu_action(message: Message, pilot_api) -> None:
         if not rentals:
             await message.answer("Сейчас нет договоров для выдачи или возврата.", reply_markup=staff_main_menu())
             return
-        await message.answer("Выберите договор и действие:", reply_markup=staff_operation_choices(rentals))
+        await message.answer(f"Текущие аренды: {len(rentals)}", reply_markup=staff_main_menu())
+        for rental in rentals:
+            await message.answer(
+                staff_rental_card(rental),
+                parse_mode="HTML",
+                reply_markup=staff_operation_actions(rental),
+            )
         return
     if message.text in {STAFF_REQUESTS_TEXT, STAFF_FLEET_TEXT}:
         try:

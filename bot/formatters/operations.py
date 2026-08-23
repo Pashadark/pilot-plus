@@ -1,4 +1,5 @@
 from datetime import datetime
+from html import escape
 from zoneinfo import ZoneInfo
 
 
@@ -32,3 +33,20 @@ def fleet_text(data: dict) -> str:
         lines.append(f"На ТО / недоступны: {len(unavailable)}")
         lines.extend(f"• {_car(item)}" for item in unavailable)
     return "\n".join(lines)
+
+
+def staff_rental_card(item: dict) -> str:
+    start = datetime.fromisoformat(item["startsAt"].replace("Z", "+00:00")).astimezone(ZoneInfo("Europe/Moscow"))
+    end = datetime.fromisoformat(item["endsAt"].replace("Z", "+00:00")).astimezone(ZoneInfo("Europe/Moscow"))
+    vehicle = item["vehicle"]
+    vehicle_title = " ".join(part for part in (vehicle.get("make"), vehicle.get("model")) if part)
+    action = "Ожидает возврата" if item.get("action") == "RETURN" else "Ожидает выдачи"
+    return "\n".join(
+        (
+            f"<b>{escape(str(item.get('clientName') or 'Клиент не указан'))}</b>",
+            f"🚗 {escape(vehicle_title)} · <b>{escape(str(vehicle.get('registrationNumber') or 'без номера'))}</b>",
+            f"📄 {escape(str(item.get('contractNumber') or 'Договор без номера'))}",
+            f"🗓 {start:%d.%m.%Y %H:%M} — {end:%d.%m.%Y %H:%M}",
+            f"Статус: <b>{action}</b>",
+        )
+    )

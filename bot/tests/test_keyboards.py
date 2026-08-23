@@ -3,7 +3,7 @@ from pathlib import Path
 from aiogram.types import ReplyKeyboardMarkup
 
 from bot.keyboards.client import client_main_menu
-from bot.keyboards.rentals import extension_choices
+from bot.keyboards.rentals import extension_choices, staff_operation_actions
 from bot.keyboards.staff import STAFF_MENU_LABELS, staff_main_menu
 
 
@@ -43,3 +43,16 @@ def test_extension_menu_contains_only_active_or_confirmed_own_rentals():
     callbacks = [button.callback_data for row in markup.inline_keyboard for button in row]
     assert "rental:extend:r1" in callbacks
     assert "rental:extend:r2" not in callbacks
+
+
+def test_staff_rental_actions_are_large_separate_rows():
+    markup = staff_operation_actions({"id": "r1", "action": "RETURN"})
+
+    assert [[button.text for button in row] for row in markup.inline_keyboard] == [
+        ["Принять автомобиль"],
+        ["Продлить аренду"],
+    ]
+    assert [[button.callback_data for button in row] for row in markup.inline_keyboard] == [
+        ["staffop:RETURN:r1"],
+        ["staffop:EXTENSION:r1"],
+    ]
