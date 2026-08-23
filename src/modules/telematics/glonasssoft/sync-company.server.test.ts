@@ -21,11 +21,11 @@ function database() {
           { vehicleId: 'vehicle-1', externalId: '42', registrationNumberNormalized: 'А156АХ997' },
         ]),
     },
-    vehiclePosition: { upsert: vi.fn().mockResolvedValue({ id: 'position-1' }) },
+    vehiclePosition: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
     vehicle: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     $transaction: vi.fn((callback) =>
       callback({
-        vehiclePosition: { upsert: vi.fn().mockResolvedValue({ id: 'position-1' }) },
+        vehiclePosition: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
         vehicle: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       }),
     ),
@@ -48,7 +48,7 @@ describe('синхронизация последних позиций GLONASSSo
   it('сохраняет только связанные tenant-машины и обновляет более новый пробег', async () => {
     const prisma = database();
     const transaction = {
-      vehiclePosition: { upsert: vi.fn().mockResolvedValue({ id: 'position-1' }) },
+      vehiclePosition: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
       vehicle: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     };
     prisma.$transaction.mockImplementation((callback) => callback(transaction));
@@ -85,25 +85,25 @@ describe('синхронизация последних позиций GLONASSSo
         decrypt: vi.fn((value: string) => value),
         now: () => new Date('2026-08-20T09:01:00Z'),
       }),
-    ).resolves.toEqual({ requested: 1, saved: 1, skipped: 1 });
+    ).resolves.toEqual({
+      requested: 1,
+      saved: 1,
+      skipped: 1,
+      changedVehicleIds: ['vehicle-1'],
+    });
 
     expect(getLastData).toHaveBeenCalledWith(['42']);
-    expect(transaction.vehiclePosition.upsert).toHaveBeenCalledWith({
-      where: {
-        vehicleId_provider_externalId: {
+    expect(transaction.vehiclePosition.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
           vehicleId: 'vehicle-1',
+          latitude: 55.7558,
+          longitude: 37.6176,
           provider: 'GLONASSSOFT',
-          externalId: '42:2026-08-20T09:00:00.000Z',
-        },
-      },
-      create: expect.objectContaining({
-        vehicleId: 'vehicle-1',
-        latitude: 55.7558,
-        longitude: 37.6176,
-        provider: 'GLONASSSOFT',
-        address: 'г. Москва, Зелёный проспект, д. 22',
-      }),
-      update: {},
+          address: 'г. Москва, Зелёный проспект, д. 22',
+        }),
+      ],
+      skipDuplicates: true,
     });
     expect(transaction.vehicle.updateMany).toHaveBeenCalledWith({
       where: { id: 'vehicle-1', companyId: 'company-a', archivedAt: null },
@@ -133,6 +133,38 @@ describe('синхронизация последних позиций GLONASSSo
       where: { companyId: 'company-a', enabled: true },
       data: expect.objectContaining({ lastErrorCode: 'TIMEOUT' }),
     });
-    expect(prisma.vehiclePosition.upsert).not.toHaveBeenCalled();
+    expect(prisma.vehiclePosition.createMany).not.toHaveBeenCalled();
+  });
+
+  it('не объявляет повторную provider-точку новым изменением', async () => {
+    const prisma = database();
+    const transaction = {
+      vehiclePosition: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      vehicle: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    };
+    prisma.$transaction.mockImplementation((callback) => callback(transaction));
+
+    await expect(
+      syncCompanyLatestPositions('company-a', {
+        prisma,
+        createClient: vi.fn(() => ({
+          getLastData: vi.fn().mockResolvedValue([
+            {
+              externalId: '42',
+              receivedAt: '2026-08-20T09:00:30Z',
+              recordedAt: '2026-08-20T09:00:00Z',
+              state: 4,
+              latitude: 55.7558,
+              longitude: 37.6176,
+              speedKph: 32,
+              odometerKm: 12345.6,
+              fuelPercent: 67,
+            },
+          ]),
+        })),
+        decrypt: vi.fn((value: string) => value),
+      }),
+    ).resolves.toMatchObject({ saved: 0, changedVehicleIds: [] });
+    expect(transaction.vehicle.updateMany).not.toHaveBeenCalled();
   });
 });

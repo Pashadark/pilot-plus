@@ -38,7 +38,7 @@ interface SyncDatabase {
 }
 
 interface SyncTransaction {
-  vehiclePosition: { upsert(args: unknown): Promise<unknown> };
+  vehiclePosition: { createMany(args: unknown): Promise<{ count: number }> };
   vehicle: { updateMany(args: unknown): Promise<{ count: number }> };
 }
 
@@ -93,7 +93,7 @@ export async function syncCompanyLatestPositions(
       where: { companyId, enabled: true },
       data: { lastSuccessAt: attemptedAt, lastErrorCode: null },
     });
-    return { requested: 0, saved: 0, skipped: 0 };
+    return { requested: 0, saved: 0, skipped: 0, changedVehicleIds: [] as string[] };
   }
 
   try {
@@ -106,6 +106,7 @@ export async function syncCompanyLatestPositions(
     const linkByExternalId = new Map(links.map((link) => [link.externalId, link]));
     let saved = 0;
     let skipped = 0;
+    const changedVehicleIds: string[] = [];
     await deps.prisma.$transaction(async (database) => {
       for (const point of data) {
         const link = linkByExternalId.get(point.externalId);
@@ -113,8 +114,11 @@ export async function syncCompanyLatestPositions(
           skipped += 1;
           continue;
         }
-        await savePoint(database, companyId, link.vehicleId, point);
-        saved += 1;
+        const changed = await savePoint(database, companyId, link.vehicleId, point);
+        if (changed) {
+          saved += 1;
+          changedVehicleIds.push(link.vehicleId);
+        }
       }
     });
     const successfulAt = deps.now();
@@ -122,7 +126,12 @@ export async function syncCompanyLatestPositions(
       where: { companyId, enabled: true },
       data: { lastSuccessAt: successfulAt, lastErrorCode: null },
     });
-    return { requested: links.length, saved, skipped };
+    return {
+      requested: links.length,
+      saved,
+      skipped,
+      changedVehicleIds: [...new Set(changedVehicleIds)].sort(),
+    };
   } catch (error) {
     await deps.prisma.telematicsIntegration.updateMany({
       where: { companyId, enabled: true },
@@ -137,30 +146,30 @@ async function savePoint(
   companyId: string,
   vehicleId: string,
   point: LastData,
-) {
+): Promise<boolean> {
   const recordedAt = new Date(point.recordedAt);
   const providerReceivedAt = new Date(point.receivedAt);
   const externalId = `${point.externalId}:${recordedAt.toISOString()}`;
-  await database.vehiclePosition.upsert({
-    where: {
-      vehicleId_provider_externalId: { vehicleId, provider: 'GLONASSSOFT', externalId },
-    },
-    create: {
-      vehicleId,
-      latitude: point.latitude,
-      longitude: point.longitude,
-      speedKph: Math.round(point.speedKph),
-      odometerKm: point.odometerKm,
-      fuelLevelPercent: point.fuelPercent,
-      address: point.address,
-      recordedAt,
-      provider: 'GLONASSSOFT',
-      externalId,
-      providerRecordedAt: recordedAt,
-      receivedAt: providerReceivedAt,
-    },
-    update: {},
+  const inserted = await database.vehiclePosition.createMany({
+    data: [
+      {
+        vehicleId,
+        latitude: point.latitude,
+        longitude: point.longitude,
+        speedKph: Math.round(point.speedKph),
+        odometerKm: point.odometerKm,
+        fuelLevelPercent: point.fuelPercent,
+        address: point.address,
+        recordedAt,
+        provider: 'GLONASSSOFT',
+        externalId,
+        providerRecordedAt: recordedAt,
+        receivedAt: providerReceivedAt,
+      },
+    ],
+    skipDuplicates: true,
   });
+  if (inserted.count === 0) return false;
   await database.vehicle.updateMany({
     where: { id: vehicleId, companyId, archivedAt: null },
     data: {
@@ -168,6 +177,7 @@ async function savePoint(
       status: stateToStatus(point.state),
     },
   });
+  return true;
 }
 
 function stateToStatus(state: number) {
