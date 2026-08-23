@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the client card grid with an operational table that starts with the client photo and shows rating, rental history, current vehicle, and status.
+**Goal:** Replace the client card grid with an operational table that starts with the client photo and shows phone, rating, rental history, current vehicle, deposit, and status.
 
 **Architecture:** Extend the existing tenant-scoped Prisma client query with small rental projections and map them into a dedicated list summary DTO. Render the DTO through one adaptive component: a semantic table on desktop and compact cards on mobile, reusing the current photo, rating, badge, filtering, and pagination primitives.
 
@@ -28,6 +28,7 @@
 **Interfaces:**
 - Produces: `ClientCardDto.rentalSummary` containing `total`, `active`, `current`, and `last`.
 - `current` and `last` contain rental id, contract number, dates, status, and vehicle label/registration number.
+- Each rental summary also contains the contract deposit amount and the latest committed deposit status from its operations.
 
 - [ ] **Step 1: Write the failing query test**
 
@@ -70,7 +71,7 @@ Expected: PASS.
 
 **Interfaces:**
 - Consumes: `ClientCardDto.rentalSummary` and existing `ClientRatingSummary`.
-- Produces: desktop table with columns `Клиент`, `Рейтинг`, `Аренды`, `Текущая машина`, `Статус`, `Действия`, plus mobile cards.
+- Produces: desktop table with columns `Клиент`, `Телефон`, `Рейтинг`, `Аренды`, `Текущая машина`, `Депозит`, `Статус`, `Действия`, plus mobile cards.
 
 - [ ] **Step 1: Add failing component tests**
 
