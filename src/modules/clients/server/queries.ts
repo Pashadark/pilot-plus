@@ -39,6 +39,15 @@ type RawClient = {
   updatedAt: Date;
   photoPath: string | null;
   telegramUsername: string | null;
+  rentals: Array<{
+    id: string;
+    contractNumber: string | null;
+    status: 'DRAFT' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+    startsAt: Date;
+    endsAt: Date;
+    vehicle: { make: string; model: string; registrationNumber: string | null };
+  }>;
+  _count: { rentals: number };
 };
 
 const clientSelect = {
@@ -59,6 +68,19 @@ const clientSelect = {
   updatedAt: true,
   photoPath: true,
   telegramUsername: true,
+  rentals: {
+    select: {
+      id: true,
+      contractNumber: true,
+      status: true,
+      startsAt: true,
+      endsAt: true,
+      vehicle: { select: { make: true, model: true, registrationNumber: true } },
+    },
+    orderBy: [{ startsAt: 'desc' }, { id: 'desc' }],
+    take: 25,
+  },
+  _count: { select: { rentals: true } },
 } satisfies Prisma.ClientSelect;
 
 function tenantWhere(access: ClientAccess): Prisma.ClientWhereInput {
@@ -67,6 +89,7 @@ function tenantWhere(access: ClientAccess): Prisma.ClientWhereInput {
 
 function queryWhere(access: ClientAccess, filters: ClientQueryFilters): Prisma.ClientWhereInput {
   const query = filters.q?.trim();
+  const now = new Date();
   return {
     ...tenantWhere(access),
     archivedAt: null,
@@ -75,6 +98,17 @@ function queryWhere(access: ClientAccess, filters: ClientQueryFilters): Prisma.C
     ...(filters.documents === 'missing' ? { passportEncrypted: null } : {}),
     ...(filters.license === 'present' ? { driverLicenseEncrypted: { not: null } } : {}),
     ...(filters.license === 'missing' ? { driverLicenseEncrypted: null } : {}),
+    ...(filters.renting === 'active'
+      ? {
+          rentals: {
+            some: {
+              status: { in: ['CONFIRMED', 'ACTIVE'] },
+              startsAt: { lte: now },
+              endsAt: { gte: now },
+            },
+          },
+        }
+      : {}),
     ...(query
       ? {
           OR: [
@@ -112,6 +146,12 @@ function fullName(client: RawClient): string {
   return [client.lastName, client.firstName, client.middleName].filter(Boolean).join(' ');
 }
 
+function vehicleLabel(make: string, model: string): string {
+  return model.toLocaleLowerCase('ru-RU').startsWith(make.toLocaleLowerCase('ru-RU'))
+    ? model
+    : [make, model].filter(Boolean).join(' · ');
+}
+
 function mapCard(client: RawClient, encryptionKey: string): ClientCardDto {
   const phone = decryptField(client.phoneEncrypted, encryptionKey);
   const passport = client.passportEncrypted
@@ -120,6 +160,24 @@ function mapCard(client: RawClient, encryptionKey: string): ClientCardDto {
   const driverLicense = client.driverLicenseEncrypted
     ? decryptField(client.driverLicenseEncrypted, encryptionKey)
     : null;
+  const rentals = client.rentals.map((rental) => ({
+    id: rental.id,
+    contractNumber: rental.contractNumber,
+    status: rental.status,
+    startsAt: rental.startsAt.toISOString(),
+    endsAt: rental.endsAt.toISOString(),
+    vehicle: {
+      label: vehicleLabel(rental.vehicle.make, rental.vehicle.model),
+      registrationNumber: rental.vehicle.registrationNumber,
+    },
+  }));
+  const now = Date.now();
+  const currentRentals = rentals.filter(
+    (rental) =>
+      (rental.status === 'ACTIVE' || rental.status === 'CONFIRMED') &&
+      new Date(rental.startsAt).getTime() <= now &&
+      new Date(rental.endsAt).getTime() >= now,
+  );
 
   return {
     id: client.id,
@@ -139,6 +197,12 @@ function mapCard(client: RawClient, encryptionKey: string): ClientCardDto {
       client.telegramUsername && /^[a-zA-Z0-9_]{5,32}$/.test(client.telegramUsername)
         ? `https://t.me/${client.telegramUsername}`
         : null,
+    rentalSummary: {
+      total: client._count.rentals,
+      active: currentRentals.length,
+      current: currentRentals[0] ?? null,
+      last: rentals[0] ?? null,
+    },
   };
 }
 

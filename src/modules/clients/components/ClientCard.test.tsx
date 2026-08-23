@@ -22,6 +22,7 @@ describe('ClientCard', () => {
           updatedAt: '2026-08-04T10:00:00.000Z',
           localPhotoUrl: null,
           telegramUrl: null,
+          rentalSummary: { total: 0, active: 0, current: null, last: null },
         }}
         messenger={{ type: 'telegram', href: 'https://t.me/anna', confirmedAvatarUrl: null }}
       />,
@@ -35,6 +36,7 @@ describe('ClientCard', () => {
     expect(screen.getByTestId('client-card').className).toContain(
       'grid-cols-[5.5rem_minmax(0,1fr)]',
     );
+    expect(screen.getByText('Сейчас не арендует')).toBeTruthy();
   });
 
   it('shows a compact five-star reliability score when staff provides one', () => {
@@ -53,6 +55,7 @@ describe('ClientCard', () => {
           updatedAt: '2026-08-04T10:00:00.000Z',
           localPhotoUrl: null,
           telegramUrl: null,
+          rentalSummary: { total: 0, active: 0, current: null, last: null },
         }}
         rating={{
           score: 84,

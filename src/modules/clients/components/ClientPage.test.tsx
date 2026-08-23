@@ -24,6 +24,8 @@ describe('ClientPage', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Клиенты' })).toBeTruthy();
+    expect(screen.getByText('Клиентская база')).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Быстрые фильтры клиентов' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Добавить клиента' })).toBeNull();
   });
 });

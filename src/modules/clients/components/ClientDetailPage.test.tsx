@@ -39,6 +39,7 @@ describe('ClientDetailPage', () => {
             updatedAt: '2026-08-04T00:00:00.000Z',
             localPhotoUrl: null,
             telegramUrl: null,
+            rentalSummary: { total: 0, active: 0, current: null, last: null },
           },
         }),
       ),
@@ -81,6 +82,7 @@ describe('ClientDetailPage', () => {
             updatedAt: '2026-08-04T00:00:00.000Z',
             localPhotoUrl: null,
             telegramUrl: null,
+            rentalSummary: { total: 0, active: 0, current: null, last: null },
           },
           rating: {
             score: 84,

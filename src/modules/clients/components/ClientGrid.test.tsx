@@ -5,8 +5,58 @@ import { describe, expect, it } from 'vitest';
 import { ClientGrid } from './ClientGrid';
 
 describe('ClientGrid', () => {
-  it('uses 1/2/3/4 responsive columns for accessible cards', () => {
+  it('shows an accessible empty state', () => {
     const markup = renderToStaticMarkup(createElement(ClientGrid, { clients: [] }));
     expect(markup).toContain('Клиенты не найдены');
+  });
+
+  it('renders photo-first operational columns with real rental context', () => {
+    const markup = renderToStaticMarkup(
+      createElement(ClientGrid, {
+        clients: [
+          {
+            id: 'client-1',
+            companyId: 'company-1',
+            fullName: 'Анна Воронова',
+            email: null,
+            phoneMasked: '+7 ••• •••-12-34',
+            passportMasked: null,
+            driverLicenseMasked: null,
+            driverLicenseExpiresAt: null,
+            status: 'REGULAR',
+            updatedAt: '2026-08-24T10:00:00.000Z',
+            localPhotoUrl: null,
+            telegramUrl: null,
+            rentalSummary: {
+              total: 3,
+              active: 1,
+              current: {
+                id: 'rental-3',
+                contractNumber: 'ME-2026-0015-VA',
+                status: 'ACTIVE',
+                startsAt: '2026-08-20T10:00:00.000Z',
+                endsAt: '2026-08-26T10:00:00.000Z',
+                vehicle: { label: 'Kia · K5', registrationNumber: 'В342НР797' },
+              },
+              last: {
+                id: 'rental-3',
+                contractNumber: 'ME-2026-0015-VA',
+                status: 'ACTIVE',
+                startsAt: '2026-08-20T10:00:00.000Z',
+                endsAt: '2026-08-26T10:00:00.000Z',
+                vehicle: { label: 'Kia · K5', registrationNumber: 'В342НР797' },
+              },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(markup.indexOf('client-photo')).toBeLessThan(markup.indexOf('Анна Воронова'));
+    expect(markup).toContain('Текущая машина');
+    expect(markup).toContain('Kia · K5');
+    expect(markup).toContain('В342НР797');
+    expect(markup).toContain('Постоянный');
+    expect(markup).toContain('Открыть');
   });
 });

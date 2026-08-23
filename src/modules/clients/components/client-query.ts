@@ -22,6 +22,7 @@ export function normalizeClientSearchParams(params: SearchParams): ClientQueryFi
   const status = single(params.status);
   const documents = single(params.documents);
   const license = single(params.license);
+  const renting = single(params.renting);
   const rawPage = Number(single(params.page));
 
   return {
@@ -33,6 +34,7 @@ export function normalizeClientSearchParams(params: SearchParams): ClientQueryFi
     ...(license && documentValues.has(license as 'present' | 'missing')
       ? { license: license as 'present' | 'missing' }
       : {}),
+    ...(renting === 'active' ? { renting: 'active' as const } : {}),
     page: Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1,
   };
 }

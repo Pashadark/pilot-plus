@@ -37,6 +37,25 @@ const rawClient = {
   updatedAt: new Date('2026-08-02T10:00:00.000Z'),
   photoPath: 'companies/c1/clients/client-1/photos/clean.webp',
   telegramUsername: 'anna_demo',
+  rentals: [
+    {
+      id: 'rental-current',
+      contractNumber: 'ME-2026-0015-VA',
+      status: 'ACTIVE' as const,
+      startsAt: new Date('2026-08-20T10:00:00.000Z'),
+      endsAt: new Date('2026-08-26T10:00:00.000Z'),
+      vehicle: { make: 'Kia', model: 'K5', registrationNumber: 'В342НР797' },
+    },
+    {
+      id: 'rental-old',
+      contractNumber: 'ME-2026-0002-VA',
+      status: 'COMPLETED' as const,
+      startsAt: new Date('2026-08-01T10:00:00.000Z'),
+      endsAt: new Date('2026-08-03T10:00:00.000Z'),
+      vehicle: { make: 'Kia', model: 'Rio', registrationNumber: 'Р604АО997' },
+    },
+  ],
+  _count: { rentals: 2 },
 };
 
 function createRepository() {
@@ -70,6 +89,15 @@ describe('tenant-scoped client queries', () => {
       passportMasked: '45•• •••456',
       driverLicenseMasked: '99•• •••321',
       updatedAt: '2026-08-02T10:00:00.000Z',
+      rentalSummary: {
+        total: 2,
+        active: 1,
+        current: {
+          id: 'rental-current',
+          contractNumber: 'ME-2026-0015-VA',
+          vehicle: { label: 'Kia · K5', registrationNumber: 'В342НР797' },
+        },
+      },
     });
     expect(result.items[0]).not.toHaveProperty('phoneEncrypted');
     expect(result.items[0]).not.toHaveProperty('passportEncrypted');

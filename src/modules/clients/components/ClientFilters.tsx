@@ -34,7 +34,9 @@ export function ClientFilters({ filters }: { filters: ClientQueryFilters }) {
   const reset = () => {
     startTransition(() => {
       const params = new URLSearchParams(searchParams);
-      ['q', 'status', 'documents', 'license', 'page'].forEach((key) => params.delete(key));
+      ['q', 'status', 'documents', 'license', 'renting', 'page'].forEach((key) =>
+        params.delete(key),
+      );
       router.push(params.size ? `/clients?${params}` : '/clients');
     });
   };

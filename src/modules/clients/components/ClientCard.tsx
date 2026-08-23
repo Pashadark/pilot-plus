@@ -8,7 +8,7 @@ import { Badge, Card } from '@/shared/ui';
 import { ClientPhoto } from './ClientPhoto';
 import { ClientRatingStars } from '@/modules/client-rating/components/ClientRatingStars';
 
-const statusView: Record<
+export const clientStatusView: Record<
   ClientStatus,
   { label: string; tone: 'neutral' | 'warning' | 'success' | 'danger' }
 > = {
@@ -38,7 +38,7 @@ export function ClientCard({
   messenger?: ClientMessenger;
   rating?: ClientRatingSummary;
 }) {
-  const status = statusView[client.status];
+  const status = clientStatusView[client.status];
   const resolvedMessenger =
     messenger ??
     (client.telegramUrl
@@ -79,9 +79,14 @@ export function ClientCard({
             <Badge tone={status.tone}>{status.label}</Badge>
           </div>
           <dl className="mt-3 grid gap-1 text-sm text-[var(--color-text-secondary)]">
-            {client.email ? <div className="truncate">{client.email}</div> : null}
             <div>
-              {client.driverLicenseMasked ? `ВУ: ${client.driverLicenseMasked}` : 'ВУ: нет данных'}
+              Аренд:{' '}
+              <strong className="text-[var(--color-text)]">{client.rentalSummary.total}</strong>
+            </div>
+            <div>
+              {client.rentalSummary.current
+                ? `${client.rentalSummary.current.vehicle.label} · ${client.rentalSummary.current.vehicle.registrationNumber ?? 'Без номера'}`
+                : 'Сейчас не арендует'}
             </div>
           </dl>
           <div className="mt-3 flex flex-wrap gap-2">

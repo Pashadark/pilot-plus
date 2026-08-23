@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { FiPlus } from 'react-icons/fi';
 
@@ -35,9 +36,9 @@ export function ClientPage({
   return (
     <main className="grid min-w-0 gap-5 p-4 sm:p-6" data-testid="client-page">
       <PageHeader
-        eyebrow="Клиенты"
+        eyebrow="Клиентская база"
         title="Клиенты"
-        description="Контакты и документы клиентов в доступных компаниях."
+        description="Контакты, надёжность, история аренд и текущие автомобили клиентов."
         actions={
           canManage ? (
             <Button
@@ -52,6 +53,23 @@ export function ClientPage({
       {canManage && searchParams.get('form') === 'new' ? (
         <ClientForm companies={companies} />
       ) : null}
+      <nav aria-label="Быстрые фильтры клиентов" className="flex flex-wrap gap-2">
+        {[
+          { label: 'Все', href: '/clients' },
+          { label: 'Сейчас арендуют', href: '/clients?renting=active' },
+          { label: 'Постоянные', href: '/clients?status=REGULAR' },
+          { label: 'На проверке', href: '/clients?status=VERIFYING' },
+          { label: 'Заблокированные', href: '/clients?status=BLOCKED' },
+        ].map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="inline-flex min-h-10 items-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm font-semibold hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
       <ClientFilters filters={filters} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Badge tone="primary" size="lg">

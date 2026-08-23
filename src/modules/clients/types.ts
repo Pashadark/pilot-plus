@@ -20,6 +20,15 @@ export type ClientInput = {
 export type ClientInputResult =
   { ok: true; data: ClientInput } | { ok: false; fieldErrors: Record<string, string> };
 
+export type ClientListRentalSummary = {
+  id: string;
+  contractNumber: string | null;
+  status: 'DRAFT' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  startsAt: string;
+  endsAt: string;
+  vehicle: { label: string; registrationNumber: string | null };
+};
+
 export type ClientCardDto = {
   id: string;
   companyId: string;
@@ -33,6 +42,12 @@ export type ClientCardDto = {
   updatedAt: string;
   localPhotoUrl: string | null;
   telegramUrl: string | null;
+  rentalSummary: {
+    total: number;
+    active: number;
+    current: ClientListRentalSummary | null;
+    last: ClientListRentalSummary | null;
+  };
 };
 
 export type ClientDetailDto = ClientCardDto & {
@@ -52,6 +67,7 @@ export type ClientQueryFilters = {
   status?: ClientStatus;
   documents?: 'present' | 'missing';
   license?: 'present' | 'missing';
+  renting?: 'active';
   page?: number;
   pageSize?: number;
 };
