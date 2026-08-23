@@ -38,6 +38,34 @@ describe('SSE живой карты', () => {
     abort.abort();
     await reader.read();
     expect(subscriber.unsubscribe).toHaveBeenCalledWith('pilot:map:company-a');
-    expect(subscriber.quit).toHaveBeenCalled();
+    await vi.waitFor(() => expect(subscriber.quit).toHaveBeenCalled());
+  });
+
+  it('не закрывает контроллер повторно при одновременном abort и cancel', async () => {
+    let releaseUnsubscribe: (() => void) | undefined;
+    const subscriber = {
+      subscribe: vi.fn().mockResolvedValue(undefined),
+      unsubscribe: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseUnsubscribe = resolve;
+          }),
+      ),
+      quit: vi.fn().mockResolvedValue(undefined),
+    };
+    const abort = new AbortController();
+    const stream = createLiveMapStream({
+      channels: ['pilot:map:company-a'],
+      subscriber,
+      loadSnapshot: vi.fn().mockResolvedValue([]),
+      signal: abort.signal,
+    });
+    const reader = stream.getReader();
+    await reader.read();
+
+    abort.abort();
+    await expect(reader.cancel()).resolves.toBeUndefined();
+    releaseUnsubscribe?.();
+    await vi.waitFor(() => expect(subscriber.quit).toHaveBeenCalledOnce());
   });
 });

@@ -45,11 +45,20 @@ export function createLiveMapStream(options: LiveMapStreamOptions): ReadableStre
         if (closed) return;
         closed = true;
         if (heartbeat) clearInterval(heartbeat);
+        // Close the controller before asynchronous Redis cleanup. Otherwise a
+        // concurrent consumer cancellation can close the stream while we are
+        // awaiting unsubscribe(), causing ERR_INVALID_STATE here.
+        try {
+          controller.close();
+        } catch (error) {
+          if (!(error instanceof TypeError) || !String(error.message).includes('already closed')) {
+            throw error;
+          }
+        }
         await Promise.allSettled(
           options.channels.map((channel) => options.subscriber.unsubscribe(channel)),
         );
         await Promise.resolve(options.subscriber.quit()).catch(() => undefined);
-        controller.close();
       };
       options.signal.addEventListener('abort', () => void cleanup(), { once: true });
       if (options.signal.aborted) return cleanup();
