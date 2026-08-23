@@ -1,8 +1,10 @@
 import 'server-only';
 
-import { createClient, type RedisClientType } from 'redis';
+import { createClient } from 'redis';
 
-let client: RedisClientType | null = null;
+type PilotRedisClient = ReturnType<typeof createClient>;
+
+let client: PilotRedisClient | null = null;
 
 function redisUrl(): string {
   if (process.env.REDIS_URL) return process.env.REDIS_URL;
@@ -12,7 +14,7 @@ function redisUrl(): string {
   return `redis://${host}:${port}`;
 }
 
-export async function getRedisClient(): Promise<RedisClientType> {
+export async function getRedisClient(): Promise<PilotRedisClient> {
   if (!client) {
     client = createClient({
       url: redisUrl(),
@@ -28,4 +30,14 @@ export async function closeRedisClient(): Promise<void> {
   const current = client;
   client = null;
   if (current?.isOpen) await current.quit();
+}
+
+export async function createRedisSubscriber(): Promise<PilotRedisClient> {
+  const subscriber = createClient({
+    url: redisUrl(),
+    socket: { connectTimeout: 5_000, reconnectStrategy: false },
+  });
+  subscriber.on('error', () => undefined);
+  await subscriber.connect();
+  return subscriber;
 }
