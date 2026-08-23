@@ -1,0 +1,26 @@
+[Unit]
+Description=Pilot+ live GLONASSSoft GPS worker
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=pilot-plus
+Group=pilot-plus
+WorkingDirectory=/opt/pilot-plus/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/pilot-plus.env
+ExecStart=/usr/bin/npm run telematics:live-glonasssoft
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/pilot-plus/shared
+
+[Install]
+WantedBy=multi-user.target
