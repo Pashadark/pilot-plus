@@ -11,7 +11,7 @@ export default function EventsError({
   unstable_retry: () => void;
 }) {
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'История событий' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'История событий' }]}>
       <main className="p-4 sm:p-6">
         <SystemState
           code="500"

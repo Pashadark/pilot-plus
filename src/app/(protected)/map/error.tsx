@@ -17,7 +17,7 @@ export default function OnlineMapError({
     : 'Повторите попытку. Если ошибка сохранится, обратитесь в службу поддержки.';
 
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Онлайн-карта' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Онлайн-карта' }]}>
       <main className="-m-4 grid h-[calc(100dvh-var(--header-height))] place-items-center p-4 lg:-m-5">
         <section role="alert" aria-labelledby="online-map-error-title" className="w-full max-w-xl">
           <h1 id="online-map-error-title" className="sr-only">

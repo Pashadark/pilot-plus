@@ -6,7 +6,7 @@ def notification_text(job: dict) -> str:
     payload = job.get("payload") or {}
     if job.get("template") == "BOT_RENTAL_REQUEST_CREATED":
         return f"Новая заявка на аренду · ID {escape(str(payload.get('requestId', '')))}"
-    return escape(str(payload.get("message") or "Уведомление Pilot+"))
+    return escape(str(payload.get("message") or "Уведомление СУПА ПРО"))
 
 
 async def notification_worker(bot, api, stop_event: asyncio.Event, staff_chat_id: int, worker_id: str = "pilot-bot") -> None:

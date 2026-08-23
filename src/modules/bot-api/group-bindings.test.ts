@@ -24,7 +24,7 @@ describe('bindTelegramWorkGroup', () => {
           .mockResolvedValue({
             companyId: 'company-1',
             telegramChatId: '-100123',
-            title: 'Pilot+',
+            title: 'СУПА ПРО',
           }),
       },
       auditLog: { create: vi.fn().mockResolvedValue({}) },
@@ -33,10 +33,10 @@ describe('bindTelegramWorkGroup', () => {
     await expect(
       bindTelegramWorkGroup(
         identity,
-        { telegramChatId: '-100123', chatType: 'supergroup', title: 'Pilot+' },
+        { telegramChatId: '-100123', chatType: 'supergroup', title: 'СУПА ПРО' },
         db as never,
       ),
-    ).resolves.toEqual({ companyId: 'company-1', telegramChatId: '-100123', title: 'Pilot+' });
+    ).resolves.toEqual({ companyId: 'company-1', telegramChatId: '-100123', title: 'СУПА ПРО' });
     expect(tx.telegramGroupBinding.upsert).toHaveBeenCalledWith(
       expect.objectContaining({ where: { companyId: 'company-1' } }),
     );

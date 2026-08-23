@@ -37,7 +37,7 @@ export function SystemHealthPage({ services }: { services: ServiceHealth[] }) {
         eyebrow="Инфраструктура"
         title="Состояние системы"
         titleId="system-health-title"
-        description="Текущая доступность основных сервисов Pilot+. Результаты одной проверки не скрывают состояние остальных сервисов."
+        description="Текущая доступность основных сервисов СУПА ПРО. Результаты одной проверки не скрывают состояние остальных сервисов."
       />
 
       <section

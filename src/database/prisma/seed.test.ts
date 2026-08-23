@@ -30,7 +30,7 @@ function createFakeUserRepository() {
 const validEnvironment = {
   PILOT_ADMIN_EMAIL: ' Admin@Example.COM ',
   PILOT_ADMIN_PASSWORD: 'Надёжный пароль 2026',
-  PILOT_ADMIN_NAME: ' Администратор Pilot+ ',
+  PILOT_ADMIN_NAME: ' Администратор СУПА ПРО ',
 };
 
 describe('seedAdmin', () => {
@@ -79,12 +79,12 @@ describe('seedAdmin', () => {
     expect(call?.update.passwordHash).toBe(call?.create.passwordHash);
     expect(call?.create).toMatchObject({
       email: 'admin@example.com',
-      name: 'Администратор Pilot+',
+      name: 'Администратор СУПА ПРО',
       role: 'SUPER_ADMIN',
       isActive: true,
     });
     expect(call?.update).toMatchObject({
-      name: 'Администратор Pilot+',
+      name: 'Администратор СУПА ПРО',
       role: 'SUPER_ADMIN',
       isActive: true,
     });

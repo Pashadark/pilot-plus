@@ -5,7 +5,7 @@ export default function DeviceLoading() {
   return (
     <AppShell
       breadcrumbs={[
-        { label: 'Pilot+', href: '/' },
+        { label: 'СУПА ПРО', href: '/' },
         { label: 'Устройства', href: '/devices' },
         { label: 'Загрузка' },
       ]}

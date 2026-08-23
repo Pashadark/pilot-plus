@@ -16,7 +16,7 @@ export default async function WashRoute() {
   ]);
 
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Мойка' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Мойка' }]}>
       <WashPage
         records={records}
         vehicles={vehicles}

@@ -14,8 +14,8 @@ const themeInitializer =
   '(function(){try{var saved=localStorage.getItem("pilot-theme");var theme=saved==="dark"?"dark":"light";document.documentElement.dataset.theme=theme}catch(_){document.documentElement.dataset.theme="light"}})()';
 
 export const metadata: Metadata = {
-  title: 'Pilot+',
-  description: 'Управление автопарком и транспортной телематикой',
+  title: 'СУПА ПРО',
+  description: 'Система управления автопарком автомобилей',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

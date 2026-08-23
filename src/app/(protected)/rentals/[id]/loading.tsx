@@ -9,7 +9,7 @@ export default function Loading() {
   return (
     <AppShell
       breadcrumbs={[
-        { label: 'Pilot+', href: '/' },
+        { label: 'СУПА ПРО', href: '/' },
         { label: 'Аренда', href: '/rentals' },
         { label: 'Загрузка' },
       ]}

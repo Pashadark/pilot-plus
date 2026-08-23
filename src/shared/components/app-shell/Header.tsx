@@ -59,7 +59,7 @@ export function Header({
               />
               <SearchInput
                 aria-label="Глобальный поиск"
-                placeholder="Поиск в Pilot+"
+                placeholder="Поиск в СУПА ПРО"
                 className="h-10 pl-10"
               />
             </div>

@@ -170,7 +170,7 @@ export function createSystemHealthChecker({
       ]);
 
       return [
-        present('api', 'API Pilot+', api),
+        present('api', 'API СУПА ПРО', api),
         present('postgresql', 'PostgreSQL', postgresql),
         present('redis', 'Redis', redis),
         present('mqtt', 'MQTT', mqtt),

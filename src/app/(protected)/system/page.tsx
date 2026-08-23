@@ -8,7 +8,7 @@ export default async function SystemPage() {
   const services = await getSystemHealth();
 
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Состояние системы' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Состояние системы' }]}>
       <SystemHealthPage services={services} />
     </AppShell>
   );

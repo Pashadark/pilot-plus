@@ -11,13 +11,13 @@ export async function ProfilePage() {
   if (!session) redirect('/login');
 
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Профиль' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Профиль' }]}>
       <section aria-labelledby="profile-page-title" className="grid min-w-0 gap-5 p-4 sm:p-6">
         <PageHeader
           eyebrow="Учётная запись"
           title="Профиль администратора"
           titleId="profile-page-title"
-          description="Управляйте личными данными и безопасностью учётной записи Pilot+."
+          description="Управляйте личными данными и безопасностью учётной записи СУПА ПРО."
         />
         <Card className="flex min-w-0 items-center gap-4 p-4 sm:p-5">
           <Avatar name={session.user.name} size="lg" />

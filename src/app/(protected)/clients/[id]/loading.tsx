@@ -4,7 +4,7 @@ export default function ClientLoading() {
   return (
     <AppShell
       breadcrumbs={[
-        { label: 'Pilot+', href: '/' },
+        { label: 'СУПА ПРО', href: '/' },
         { label: 'Клиенты', href: '/clients' },
       ]}
     >

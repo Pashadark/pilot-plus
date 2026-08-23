@@ -17,12 +17,12 @@ export function LoginPage({ flash }: { flash: FlashToastKind | null }) {
         <div className="relative grid w-full max-w-md gap-6">
           <header className="text-center">
             <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--color-primary)] text-xl font-extrabold text-[var(--color-text-inverse)] shadow-[var(--shadow-card)]">
-              P+
+              СП
             </div>
-            <p className="text-sm font-semibold text-[var(--color-primary)]">PILOT+</p>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight">Вход в Pilot+</h1>
+            <p className="text-sm font-semibold text-[var(--color-primary)]">СУПА ПРО</p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight">Вход в СУПА ПРО</h1>
             <p className="mt-2 text-[var(--color-text-secondary)]">
-              Управление автопарком и телематикой
+              Система управления автопарком автомобилей
             </p>
           </header>
 

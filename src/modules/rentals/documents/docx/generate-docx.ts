@@ -61,7 +61,7 @@ export async function generateRentalDocx(
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 children: [
-                  new TextRun('Pilot+ · страница '),
+                  new TextRun('СУПА ПРО · страница '),
                   new TextRun({ children: [PageNumber.CURRENT] }),
                 ],
               }),

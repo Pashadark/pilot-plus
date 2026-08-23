@@ -5,7 +5,7 @@ import { getCurrentUser } from '@/modules/auth/dal';
 import { LoginPage } from '@/modules/auth/LoginPage';
 import type { FlashToastKind } from '@/shared/providers/ToastProvider';
 
-export const metadata: Metadata = { title: 'Вход — Pilot+' };
+export const metadata: Metadata = { title: 'Вход — СУПА ПРО' };
 
 export default async function LoginRoute({
   searchParams,

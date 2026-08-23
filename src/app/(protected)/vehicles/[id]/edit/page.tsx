@@ -76,7 +76,7 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
   return (
     <AppShell
       breadcrumbs={[
-        { label: 'Pilot+', href: '/' },
+        { label: 'СУПА ПРО', href: '/' },
         { label: 'Автомобили', href: '/vehicles' },
         { label: vehicle.modelName, href: `/vehicles/${vehicle.id}` },
         { label: 'Редактирование' },

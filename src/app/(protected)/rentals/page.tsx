@@ -16,7 +16,7 @@ export default async function RentalsPage({
   const filters = await searchParams;
   const records = await listFilteredRentalsForCurrentUser(filters);
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Аренда' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Аренда' }]}>
       {filters.view === 'calendar' ? (
         <main className="grid gap-5 p-4 sm:p-6">
           <div className="flex items-center justify-between gap-3">

@@ -11,7 +11,7 @@ export default function AdminError({
   unstable_retry: () => void;
 }) {
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Администрирование' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Администрирование' }]}>
       <main className="p-4 sm:p-6">
         <SystemState
           code="500"

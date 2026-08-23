@@ -13,7 +13,7 @@ export default function ClientError({
   return (
     <AppShell
       breadcrumbs={[
-        { label: 'Pilot+', href: '/' },
+        { label: 'СУПА ПРО', href: '/' },
         { label: 'Клиенты', href: '/clients' },
       ]}
     >

@@ -3,7 +3,7 @@ import { Card, Skeleton } from '@/shared/ui';
 
 export default function SystemLoading() {
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Состояние системы' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Состояние системы' }]}>
       <section aria-label="Проверка состояния системы" className="grid min-w-0 gap-5 p-4 sm:p-6">
         <div className="grid gap-2">
           <Skeleton className="h-4 w-28" />

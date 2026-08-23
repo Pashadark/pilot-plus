@@ -35,11 +35,11 @@ async def test_group_binding_sends_exact_group_context():
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
         client = PilotApiClient("https://pilot.example.com", "service-secret", http=http)
-        await client.bind_work_group("185185047", "-100777", "supergroup", "Pilot+ работа")
+        await client.bind_work_group("185185047", "-100777", "supergroup", "СУПА ПРО работа")
 
     assert captured.url.path == "/api/bot/v1/group-bindings"
     assert captured.headers["X-Telegram-User-Id"] == "185185047"
-    assert captured.read().decode() == '{"telegramChatId":"-100777","chatType":"supergroup","title":"Pilot+ работа"}'
+    assert captured.read().decode() == '{"telegramChatId":"-100777","chatType":"supergroup","title":"СУПА ПРО работа"}'
 
 
 @pytest.mark.asyncio

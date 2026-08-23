@@ -44,16 +44,14 @@ export function Sidebar({
       <div className="flex h-20 shrink-0 items-center overflow-hidden border-b px-4">
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--color-primary)] text-base font-black text-white">
-            P+
+            СП
           </span>
           <div
             className={`overflow-hidden whitespace-nowrap transition-all ${expanded ? 'w-32 opacity-100' : 'w-0 opacity-0'}`}
           >
-            <p className="text-xl leading-5 font-bold tracking-tight">
-              Pilot<span className="text-[var(--color-primary)]">+</span>
-            </p>
-            <p className="mt-1 text-[9px] tracking-[0.18em] text-[var(--color-text-secondary)] uppercase">
-              GPS monitoring
+            <p className="text-lg leading-5 font-black tracking-tight">СУПА ПРО</p>
+            <p className="mt-1 text-[8px] leading-tight tracking-[0.08em] text-[var(--color-text-secondary)] uppercase">
+              Управление автопарком
             </p>
           </div>
         </div>

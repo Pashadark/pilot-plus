@@ -3,7 +3,7 @@ import { Skeleton } from '@/shared/ui';
 
 export default function OnlineMapLoading() {
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Онлайн-карта' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Онлайн-карта' }]}>
       <main
         className="@container relative -m-4 h-[calc(100dvh-var(--header-height))] min-h-0 overflow-hidden bg-[var(--color-canvas)] lg:-m-5"
         aria-label="Загрузка онлайн-карты"

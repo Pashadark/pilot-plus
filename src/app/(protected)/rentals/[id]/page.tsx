@@ -66,7 +66,7 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
   return (
     <AppShell
       breadcrumbs={[
-        { label: 'Pilot+', href: '/' },
+        { label: 'СУПА ПРО', href: '/' },
         { label: 'Аренда', href: '/rentals' },
         { label: rental.contractNumber ?? 'Черновик' },
       ]}

@@ -31,5 +31,5 @@ def staff_main_menu() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
         is_persistent=True,
-        input_field_placeholder="Выберите раздел Pilot+",
+        input_field_placeholder="Выберите раздел СУПА ПРО",
     )

@@ -21,7 +21,7 @@ const overview = {
       action: 'UPDATE' as const,
       entityType: 'VEHICLE' as const,
       entityLabel: 'PLT-001',
-      companyLabel: 'Pilot+',
+      companyLabel: 'СУПА ПРО',
       createdAt: '2026-08-04T08:00:00.000Z',
     },
   ],

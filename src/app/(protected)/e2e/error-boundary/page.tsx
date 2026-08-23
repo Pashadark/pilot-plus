@@ -23,7 +23,7 @@ export default async function E2EErrorBoundaryPage({
   triggerE2EErrorOnce(id);
 
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Тест восстановления' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Тест восстановления' }]}>
       <section className="grid min-h-[22rem] place-items-center p-4 text-center sm:p-6">
         <div>
           <p className="text-xs font-semibold tracking-[0.16em] text-[var(--color-primary)] uppercase">

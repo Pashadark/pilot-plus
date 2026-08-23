@@ -25,7 +25,7 @@ export default async function VehiclesPage() {
       : [];
 
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Автомобили' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Автомобили' }]}>
       <VehicleListPage
         vehicles={vehicles}
         manageableCompanies={manageableCompanies.map((company) => ({

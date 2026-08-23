@@ -18,7 +18,7 @@ export default async function Home({
   const flash: FlashToastKind | null = query.welcome === '1' ? 'welcome' : null;
 
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Панель управления' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Панель управления' }]}>
       <FlashToast kind={flash} />
       <Dashboard
         stats={fleetStats}

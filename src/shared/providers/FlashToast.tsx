@@ -9,7 +9,7 @@ export type FlashToastKind = 'welcome' | 'loggedOut';
 const flashToasts = {
   welcome: {
     tone: 'success',
-    title: 'Вы вошли в Pilot+',
+    title: 'Вы вошли в СУПА ПРО',
   },
   loggedOut: {
     tone: 'success',

@@ -46,7 +46,7 @@ export default async function NewRentalRoute({ params }: { params: Promise<{ id:
   return (
     <AppShell
       breadcrumbs={[
-        { label: 'Pilot+', href: '/' },
+        { label: 'СУПА ПРО', href: '/' },
         { label: 'Клиенты', href: '/clients' },
         { label: client.fullName, href: `/clients/${client.id}` },
         { label: 'Новый договор' },

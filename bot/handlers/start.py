@@ -21,7 +21,7 @@ async def start(message: Message, command: CommandObject, pilot_api) -> None:
             await pilot_api.link_identity(command.args, telegram_id)
         profile = await pilot_api.profile(telegram_id)
     except PilotApiError:
-        await message.answer("Бот ещё не привязан. Попросите персональную ссылку у сотрудника Pilot+.")
+        await message.answer("Бот ещё не привязан. Попросите персональную ссылку у сотрудника СУПА ПРО.")
         return
     name = escape(str(profile.get("displayName") or "клиент"))
     markup = client_main_menu() if profile.get("kind") == "CLIENT" else staff_main_menu()

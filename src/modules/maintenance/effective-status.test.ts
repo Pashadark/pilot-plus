@@ -20,7 +20,7 @@ describe('effective maintenance status', () => {
     );
   });
 
-  it('calculates the four dashboard KPIs in Pilot+ business time', () => {
+  it('calculates the four dashboard KPIs in СУПА ПРО business time', () => {
     const records = [
       { status: 'PLANNED' as const, scheduledAt: '2026-07-23T09:00:00.000Z', completedAt: null },
       { status: 'PLANNED' as const, scheduledAt: '2026-08-15T09:00:00.000Z', completedAt: null },

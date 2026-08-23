@@ -7,7 +7,7 @@ import { normalizeVehicleTab } from '@/modules/vehicles/components/vehicle-tabs'
 import { getVehicleForUser } from '@/modules/vehicles/server/queries';
 import { AppShell } from '@/shared/components/app-shell/AppShell';
 
-export const metadata: Metadata = { title: 'Автомобиль | Pilot+' };
+export const metadata: Metadata = { title: 'Автомобиль | СУПА ПРО' };
 
 export default async function VehiclePage({
   params,
@@ -24,7 +24,7 @@ export default async function VehiclePage({
   return (
     <AppShell
       breadcrumbs={[
-        { label: 'Pilot+', href: '/' },
+        { label: 'СУПА ПРО', href: '/' },
         { label: 'Автомобили', href: '/vehicles' },
         { label: vehicle.model },
       ]}

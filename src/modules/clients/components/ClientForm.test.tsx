@@ -16,7 +16,7 @@ afterEach(cleanup);
 
 describe('ClientForm', () => {
   it('uses the submitter FormData intent for a draft, so an invalid native draft cannot leak into a later final submit', () => {
-    render(<ClientForm companies={[{ id: 'company-1', name: 'Pilot+' }]} />);
+    render(<ClientForm companies={[{ id: 'company-1', name: 'СУПА ПРО' }]} />);
 
     const draft = screen.getByRole('button', { name: 'Сохранить черновик' });
     expect(draft.getAttribute('name')).toBe('intent');

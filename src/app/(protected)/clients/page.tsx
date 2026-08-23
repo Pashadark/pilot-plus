@@ -26,7 +26,7 @@ export default async function ClientsPage({
       )
     : {};
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Клиенты' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Клиенты' }]}>
       <ClientPage
         result={result}
         filters={filters}

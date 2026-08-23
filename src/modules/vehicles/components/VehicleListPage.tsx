@@ -48,7 +48,7 @@ export function VehicleListPage({
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="mb-1 flex items-center gap-2 text-sm font-semibold text-[var(--color-primary)]">
-            <FiTruck aria-hidden="true" /> Автопарк Pilot+
+            <FiTruck aria-hidden="true" /> Автопарк СУПА ПРО
           </p>
           <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text)] sm:text-3xl">
             Автомобили

@@ -15,7 +15,7 @@ function FormSkeleton() {
 
 export default function ProfileLoading() {
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Профиль' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Профиль' }]}>
       <section aria-label="Загрузка профиля" className="grid min-w-0 gap-5 p-4 sm:p-6">
         <div className="grid gap-2">
           <Skeleton className="h-4 w-28" />

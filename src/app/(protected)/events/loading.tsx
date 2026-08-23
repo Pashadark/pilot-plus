@@ -3,7 +3,7 @@ import { AppShell } from '@/shared/components/app-shell/AppShell';
 
 export default function EventsLoading() {
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'История событий' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'История событий' }]}>
       <EventTimelineSkeleton />
     </AppShell>
   );

@@ -87,7 +87,7 @@ export function RentalListPage({
     <main className="grid min-w-0 gap-5 p-4 sm:p-6" data-testid="rental-list-page">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-[var(--color-primary)]">Аренда Pilot+</p>
+          <p className="text-sm font-semibold text-[var(--color-primary)]">Аренда СУПА ПРО</p>
           <h1 className="text-2xl font-bold sm:text-3xl">Договоры аренды</h1>
         </div>
         <div className="flex min-h-11 items-center gap-2">

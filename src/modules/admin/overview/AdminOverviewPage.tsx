@@ -41,7 +41,7 @@ export function AdminOverviewPage({ overview }: { overview: AdminOverview }) {
         eyebrow="Администрирование"
         title="Центр управления"
         titleId="admin-overview-title"
-        description="Сводка доступных компаний, пользователей и ресурсов Pilot+."
+        description="Сводка доступных компаний, пользователей и ресурсов СУПА ПРО."
         actions={
           <Badge tone="primary" size="lg">
             {scopeLabel[overview.scope]}

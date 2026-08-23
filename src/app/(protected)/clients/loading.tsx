@@ -2,7 +2,7 @@ import { AppShell } from '@/shared/components/app-shell/AppShell';
 import { Card, Skeleton } from '@/shared/ui';
 export default function ClientsLoading() {
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Клиенты' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Клиенты' }]}>
       <main aria-label="Загрузка клиентов" className="grid gap-5 p-4 sm:p-6">
         <Skeleton className="h-24" />
         <Skeleton className="h-36" />

@@ -10,7 +10,7 @@ export default function VehicleNotFound() {
   return (
     <AppShell
       breadcrumbs={[
-        { label: 'Pilot+', href: '/' },
+        { label: 'СУПА ПРО', href: '/' },
         { label: 'Автомобили', href: '/vehicles' },
         { label: 'Не найден' },
       ]}

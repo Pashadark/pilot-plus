@@ -51,7 +51,7 @@ export default async function EventsRoute({
   const filters = filtersFromSearchParams(await searchParams);
   const timeline = await getEventTimeline(filters);
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'История событий' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'История событий' }]}>
       <EventsPage {...timeline} filters={filters} />
     </AppShell>
   );

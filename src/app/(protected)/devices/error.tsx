@@ -11,7 +11,7 @@ export default function DevicesError({
   unstable_retry: () => void;
 }) {
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Устройства' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Устройства' }]}>
       <main className="p-4 sm:p-6">
         <SystemState
           code="500"

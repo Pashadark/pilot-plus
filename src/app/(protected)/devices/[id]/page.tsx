@@ -5,7 +5,7 @@ import { DeviceDetailPage } from '@/modules/devices/components/DeviceDetailPage'
 import { getAvailableVehicles, getDeviceDetails } from '@/modules/devices/server/queries';
 import { AppShell } from '@/shared/components/app-shell/AppShell';
 
-export const metadata: Metadata = { title: 'Устройство Pilot Connect | Pilot+' };
+export const metadata: Metadata = { title: 'Устройство Pilot Connect | СУПА ПРО' };
 
 export default async function DeviceRoute({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,7 +16,7 @@ export default async function DeviceRoute({ params }: { params: Promise<{ id: st
   return (
     <AppShell
       breadcrumbs={[
-        { label: 'Pilot+', href: '/' },
+        { label: 'СУПА ПРО', href: '/' },
         { label: 'Устройства', href: '/devices' },
         { label: device.name },
       ]}

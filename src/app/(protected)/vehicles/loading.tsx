@@ -3,7 +3,7 @@ import { Card, Skeleton } from '@/shared/ui';
 
 export default function VehiclesLoading() {
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Автомобили' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Автомобили' }]}>
       <main className="grid gap-5 p-4 sm:p-6" aria-label="Загрузка автомобилей">
         <Skeleton className="h-20" />
         <Skeleton className="h-24" />

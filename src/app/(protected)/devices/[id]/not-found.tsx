@@ -10,7 +10,7 @@ export default function DeviceNotFound() {
   return (
     <AppShell
       breadcrumbs={[
-        { label: 'Pilot+', href: '/' },
+        { label: 'СУПА ПРО', href: '/' },
         { label: 'Устройства', href: '/devices' },
         { label: 'Не найдено' },
       ]}

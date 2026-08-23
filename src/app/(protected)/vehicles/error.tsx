@@ -11,7 +11,7 @@ export default function VehiclesError({
   unstable_retry: () => void;
 }) {
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Автомобили' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Автомобили' }]}>
       <main className="p-4 sm:p-6">
         <SystemState
           code="500"

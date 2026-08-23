@@ -14,7 +14,7 @@ const record: MaintenanceRecordDto = {
   odometerKm: 12_000,
   currentOdometerKm: 12_500,
   targetOdometerKm: 15_000,
-  provider: 'Сервис Pilot+',
+  provider: 'Сервис СУПА ПРО',
   costMinor: 420_000,
   notes: null,
   createdAt: '2026-07-20T09:00:00.000Z',

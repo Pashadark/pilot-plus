@@ -21,7 +21,7 @@ export default async function FinesRoute({
   const filters = await searchParams;
   const data = await listFinesForCurrentUser(filters);
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Штрафы' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Штрафы' }]}>
       <FinesPage
         summary={data.summary}
         fines={data.fines}

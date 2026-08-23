@@ -12,7 +12,7 @@ export default async function MaintenanceRoute() {
   ]);
 
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Техническое обслуживание' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Техническое обслуживание' }]}>
       <MaintenancePage records={records} vehicles={vehicles} />
     </AppShell>
   );

@@ -10,7 +10,7 @@ vi.mock('@/shared/providers/ToastProvider', () => ({
 }));
 
 describe('RentalDetailWorkspace', () => {
-  it('показывает полную карточку импортированной аренды в едином стиле Pilot+', () => {
+  it('показывает полную карточку импортированной аренды в едином стиле СУПА ПРО', () => {
     const detail = rentalDetailPresentation({
       id: 'cmswhu2sq0001tu0ghdiulou2',
       contractNumber: 'ME-2026-0001-BK',

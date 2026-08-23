@@ -5,7 +5,7 @@ export default function NewRentalLoading() {
   return (
     <AppShell
       breadcrumbs={[
-        { label: 'Pilot+', href: '/' },
+        { label: 'СУПА ПРО', href: '/' },
         { label: 'Клиенты', href: '/clients' },
         { label: 'Новый договор' },
       ]}

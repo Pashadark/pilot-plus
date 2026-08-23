@@ -23,7 +23,7 @@ export function EventsPage({
       <header className="flex min-w-0 flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <p className="mb-1 flex items-center gap-2 text-sm font-semibold text-[var(--color-primary)]">
-            <FiActivity aria-hidden="true" /> Телематика Pilot+
+            <FiActivity aria-hidden="true" /> Телематика СУПА ПРО
           </p>
           <h1 className="text-2xl font-bold tracking-tight break-words sm:text-3xl">
             История событий

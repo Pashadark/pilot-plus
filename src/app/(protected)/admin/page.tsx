@@ -7,7 +7,7 @@ export default async function AdminPage() {
   const access = await getAdminCenterAccess();
 
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Администрирование' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Администрирование' }]}>
       {access ? (
         <AdminOverviewPage overview={await getAdminOverview(access)} />
       ) : (

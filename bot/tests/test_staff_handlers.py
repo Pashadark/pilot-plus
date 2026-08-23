@@ -88,7 +88,7 @@ async def test_client_cannot_use_staff_menu():
 
     await staff_menu_action(message, FakeApi({"kind": "CLIENT", "displayName": "Клиент"}))
 
-    assert message.answers == [("Этот раздел доступен только сотрудникам Pilot+.", None)]
+    assert message.answers == [("Этот раздел доступен только сотрудникам СУПА ПРО.", None)]
 
 
 @pytest.mark.asyncio
@@ -97,7 +97,7 @@ async def test_staff_menu_reports_api_failure():
 
     await staff_menu_action(message, FakeApi(error=PilotApiError("offline")))
 
-    assert message.answers == [("Не удалось связаться с Pilot+. Попробуйте ещё раз.", None)]
+    assert message.answers == [("Не удалось связаться с СУПА ПРО. Попробуйте ещё раз.", None)]
 
 
 @pytest.mark.asyncio
@@ -114,12 +114,12 @@ async def test_legacy_staff_callback_is_acknowledged():
 async def test_staff_admin_can_bind_current_work_group():
     api = FakeApi({"kind": "STAFF", "displayName": "Павел Седов"})
     message = FakeMessage("/pilot_setup", 185185047)
-    message.chat = SimpleNamespace(id=-100777, type="supergroup", title="Pilot+ работа")
+    message.chat = SimpleNamespace(id=-100777, type="supergroup", title="СУПА ПРО работа")
 
     await bind_work_group(message, api)
 
-    assert api.bind_calls == [("185185047", "-100777", "supergroup", "Pilot+ работа")]
-    assert message.answers[0][0] == "Группа Pilot+ привязана. Сюда будут приходить ежедневные сводки."
+    assert api.bind_calls == [("185185047", "-100777", "supergroup", "СУПА ПРО работа")]
+    assert message.answers[0][0] == "Группа СУПА ПРО привязана. Сюда будут приходить ежедневные сводки."
 
 
 @pytest.mark.asyncio

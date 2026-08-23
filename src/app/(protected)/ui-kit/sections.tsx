@@ -155,7 +155,7 @@ function CarPhoto({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' | 'xl' }) {
   return (
     <Image
       src={DEMO_PHOTO}
-      alt="Автомобиль из автопарка Pilot+"
+      alt="Автомобиль из автопарка СУПА ПРО"
       width={s}
       height={s}
       className="shrink-0 rounded-[var(--radius-md)] object-cover"
@@ -5370,7 +5370,7 @@ export function UiKitSections() {
         <div className="space-y-4">
           <div>
             <h3 className="mb-1 text-sm font-semibold">Хлебные крошки</h3>
-            <Breadcrumbs items={[{ label: 'Pilot+', href: '/' }, { label: 'Транспорт' }]} />
+            <Breadcrumbs items={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Транспорт' }]} />
           </div>
           <div>
             <h3 className="mb-1 text-sm font-semibold">Табы</h3>
@@ -5889,7 +5889,7 @@ export function UiKitSections() {
                 <EventCard
                   icon={FiAward}
                   title="Награда: лучший парк месяца"
-                  vehicleName="Pilot+"
+                  vehicleName="СУПА ПРО"
                   timeLabel="08:00"
                   tone="success"
                 />
@@ -6611,7 +6611,7 @@ export function UiKitSections() {
                 <EventCard
                   icon={FiTrendingUp}
                   title="Доход за день 45 000 ₽"
-                  vehicleName="Pilot+"
+                  vehicleName="СУПА ПРО"
                   timeLabel="23:00"
                   tone="neutral"
                 />
@@ -6660,7 +6660,7 @@ export function UiKitSections() {
                 <EventCard
                   icon={FiTrendingUp}
                   title="Прибыль за месяц 611 000 ₽"
-                  vehicleName="Pilot+"
+                  vehicleName="СУПА ПРО"
                   timeLabel="00:00"
                   tone="success"
                 />

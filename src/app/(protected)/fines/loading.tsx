@@ -3,7 +3,7 @@ import { Skeleton } from '@/shared/ui';
 
 export default function FinesLoading() {
   return (
-    <AppShell breadcrumbs={[{ label: 'Pilot+', href: '/' }, { label: 'Штрафы' }]}>
+    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Штрафы' }]}>
       <div aria-label="Загрузка штрафов" className="space-y-6">
         <Skeleton className="h-20 w-full" />
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

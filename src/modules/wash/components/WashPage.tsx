@@ -19,7 +19,7 @@ export function WashPage({
       <header className="flex min-w-0 flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <p className="mb-1 flex items-center gap-2 text-sm font-semibold text-[var(--color-primary)]">
-            <FiDroplet aria-hidden="true" /> Чистый автопарк Pilot+
+            <FiDroplet aria-hidden="true" /> Чистый автопарк СУПА ПРО
           </p>
           <h1 className="text-2xl font-bold tracking-tight break-words text-[var(--color-text)] sm:text-3xl">
             Мойка автомобилей

@@ -57,7 +57,7 @@ describe('getSystemHealth', () => {
     vi.useRealTimers();
   });
 
-  it('запускает API Pilot+, PostgreSQL, Redis и MQTT параллельно', async () => {
+  it('запускает API СУПА ПРО, PostgreSQL, Redis и MQTT параллельно', async () => {
     const application = deferred<typeof healthy>();
     const database = deferred<typeof healthy>();
     const redis = deferred<typeof healthy>();
@@ -114,7 +114,7 @@ describe('getSystemHealth', () => {
     const services = await getSystemHealth();
 
     expect(services).toEqual([
-      expect.objectContaining({ key: 'api', label: 'API Pilot+', status: 'healthy' }),
+      expect.objectContaining({ key: 'api', label: 'API СУПА ПРО', status: 'healthy' }),
       expect.objectContaining({ key: 'postgresql', label: 'PostgreSQL', status: 'healthy' }),
       expect.objectContaining({ key: 'redis', label: 'Redis', status: 'unavailable' }),
       expect.objectContaining({ key: 'mqtt', label: 'MQTT', status: 'unconfigured' }),

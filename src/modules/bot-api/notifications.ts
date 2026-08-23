@@ -26,7 +26,7 @@ interface DailyDigestInput {
 
 export function formatDailyOperationsDigest(input: DailyDigestInput) {
   const lines = [
-    `Сводка Pilot+ на ${input.date}`,
+    `Сводка СУПА ПРО на ${input.date}`,
     `Заявки: ${input.requests}`,
     `Аренды: ${input.rentals}`,
     `Возвраты сегодня: ${input.returns.length}`,

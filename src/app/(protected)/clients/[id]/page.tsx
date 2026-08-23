@@ -42,7 +42,7 @@ export default async function ClientRoute({ params }: { params: Promise<{ id: st
   return (
     <AppShell
       breadcrumbs={[
-        { label: 'Pilot+', href: '/' },
+        { label: 'СУПА ПРО', href: '/' },
         { label: 'Клиенты', href: '/clients' },
         { label: client.fullName },
       ]}
