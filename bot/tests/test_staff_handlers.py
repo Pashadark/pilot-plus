@@ -61,6 +61,14 @@ class FakeCallback:
         self.answers.append((text, kwargs))
 
 
+class FakeState:
+    def __init__(self):
+        self.cleared = False
+
+    async def clear(self):
+        self.cleared = True
+
+
 @pytest.mark.asyncio
 async def test_each_staff_label_returns_a_message_for_staff():
     api = FakeApi({"kind": "STAFF", "displayName": "Павел Седов"})
@@ -156,3 +164,13 @@ async def test_staff_rentals_are_sent_as_readable_individual_cards():
     assert "Volkswagen Polo · <b>А156АХ997</b>" in card
     assert "ME-2026-0003-BK" in card
     assert [row[0].text for row in markup.inline_keyboard] == ["Принять автомобиль", "Продлить аренду"]
+
+
+@pytest.mark.asyncio
+async def test_staff_menu_clears_stale_operation_before_opening_section():
+    state = FakeState()
+    message = FakeMessage(STAFF_RENTALS_TEXT, 185185047)
+
+    await staff_menu_action(message, FakeApi({"kind": "STAFF", "displayName": "Павел Седов"}), state)
+
+    assert state.cleared is True

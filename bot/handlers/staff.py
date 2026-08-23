@@ -1,5 +1,6 @@
 from aiogram import F, Router
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.callbacks import STAFF_REQUESTS
@@ -61,7 +62,7 @@ async def bind_work_group(message: Message, pilot_api) -> None:
 
 
 @router.message(F.text.in_(STAFF_MENU_LABELS))
-async def staff_menu_action(message: Message, pilot_api) -> None:
+async def staff_menu_action(message: Message, pilot_api, state: FSMContext | None = None) -> None:
     chat_type = getattr(message.chat.type, "value", message.chat.type)
     if not message.from_user or chat_type != "private":
         return
@@ -72,6 +73,8 @@ async def staff_menu_action(message: Message, pilot_api) -> None:
     if access == "forbidden":
         await message.answer("Этот раздел доступен только сотрудникам Pilot+.")
         return
+    if state is not None:
+        await state.clear()
     if message.text == STAFF_RENTALS_TEXT:
         try:
             rentals = (await pilot_api.staff_rentals(str(message.from_user.id))).get("items", [])

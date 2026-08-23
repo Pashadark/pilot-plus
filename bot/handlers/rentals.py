@@ -8,6 +8,7 @@ from aiogram.types import CallbackQuery, Message
 from bot.formatters.rentals import rental_card
 from bot.keyboards.callbacks import CLIENT_EXTEND, CLIENT_NEW_RENTAL, CLIENT_RENTALS
 from bot.keyboards.rentals import confirmation, document_links, extension_choices, extension_confirmation, fulfillment_choices, rental_documents, vehicle_choices
+from bot.keyboards.staff import STAFF_MENU_LABELS
 from bot.services.errors import PilotApiError
 from bot.states.rental import ExtensionForm, NewRentalForm
 
@@ -34,7 +35,7 @@ async def new_rental(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.message(NewRentalForm.starts_at)
+@router.message(NewRentalForm.starts_at, ~F.text.in_(STAFF_MENU_LABELS))
 async def rental_start(message: Message, state: FSMContext) -> None:
     value = parse_moscow(message.text or "")
     if not value or value <= datetime.now(MOSCOW):
@@ -45,7 +46,7 @@ async def rental_start(message: Message, state: FSMContext) -> None:
     await message.answer("Введите дату и время возврата по Москве: ДД.ММ.ГГГГ ЧЧ:ММ")
 
 
-@router.message(NewRentalForm.ends_at)
+@router.message(NewRentalForm.ends_at, ~F.text.in_(STAFF_MENU_LABELS))
 async def rental_end(message: Message, state: FSMContext, pilot_api) -> None:
     value = parse_moscow(message.text or "")
     data = await state.get_data()
@@ -98,7 +99,7 @@ async def rental_mode(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.message(NewRentalForm.delivery_address)
+@router.message(NewRentalForm.delivery_address, ~F.text.in_(STAFF_MENU_LABELS))
 async def rental_address(message: Message, state: FSMContext) -> None:
     address = (message.text or "").strip()
     if not 5 <= len(address) <= 500:
@@ -194,7 +195,7 @@ async def select_extension(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.message(ExtensionForm.ends_at)
+@router.message(ExtensionForm.ends_at, ~F.text.in_(STAFF_MENU_LABELS))
 async def extension_end(message: Message, state: FSMContext) -> None:
     value = parse_moscow(message.text or "")
     data = await state.get_data()

@@ -13,7 +13,7 @@ from bot.keyboards.rentals import (
     operation_confirmation,
     operation_media_skip,
 )
-from bot.keyboards.staff import staff_main_menu
+from bot.keyboards.staff import STAFF_MENU_LABELS, staff_main_menu
 from bot.services.errors import PilotApiError
 from bot.states.rental import StaffOperationForm
 
@@ -70,7 +70,7 @@ async def extension_start(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.message(StaffOperationForm.extension_end)
+@router.message(StaffOperationForm.extension_end, ~F.text.in_(STAFF_MENU_LABELS))
 async def extension_end(message: Message, state: FSMContext) -> None:
     try:
         value = datetime.strptime((message.text or "").strip(), "%d.%m.%Y %H:%M").replace(
@@ -120,7 +120,7 @@ async def extension_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer("Отменено")
 
 
-@router.message(StaffOperationForm.mileage)
+@router.message(StaffOperationForm.mileage, ~F.text.in_(STAFF_MENU_LABELS))
 async def operation_mileage(message: Message, state: FSMContext) -> None:
     mileage = positive_integer(message.text, 9_999_999)
     if mileage is None:
@@ -131,7 +131,7 @@ async def operation_mileage(message: Message, state: FSMContext) -> None:
     await message.answer("Введите уровень топлива от 0 до 100%:")
 
 
-@router.message(StaffOperationForm.fuel)
+@router.message(StaffOperationForm.fuel, ~F.text.in_(STAFF_MENU_LABELS))
 async def operation_fuel(message: Message, state: FSMContext) -> None:
     fuel = positive_integer(message.text, 100)
     if fuel is None:
@@ -169,7 +169,7 @@ async def operation_fulfillment(callback: CallbackQuery, state: FSMContext) -> N
     await callback.answer()
 
 
-@router.message(StaffOperationForm.fulfillment_address)
+@router.message(StaffOperationForm.fulfillment_address, ~F.text.in_(STAFF_MENU_LABELS))
 async def operation_address(message: Message, state: FSMContext) -> None:
     address = (message.text or "").strip()
     if not 5 <= len(address) <= 500:
@@ -180,7 +180,7 @@ async def operation_address(message: Message, state: FSMContext) -> None:
     await message.answer("Введите полученный депозит в рублях, 0 если без депозита:")
 
 
-@router.message(StaffOperationForm.deposit_amount)
+@router.message(StaffOperationForm.deposit_amount, ~F.text.in_(STAFF_MENU_LABELS))
 async def operation_deposit_amount(message: Message, state: FSMContext) -> None:
     amount = rubles_to_minor(message.text)
     if amount is None:
@@ -234,7 +234,7 @@ async def operation_deposit_resolution(callback: CallbackQuery, state: FSMContex
     await callback.answer()
 
 
-@router.message(StaffOperationForm.deposit_withheld)
+@router.message(StaffOperationForm.deposit_withheld, ~F.text.in_(STAFF_MENU_LABELS))
 async def operation_deposit_withheld(message: Message, state: FSMContext) -> None:
     amount = rubles_to_minor(message.text)
     if amount is None or amount <= 0:
@@ -310,7 +310,7 @@ async def finish_evidence(message: Message, state: FSMContext) -> None:
         await show_summary(message, state)
 
 
-@router.message(StaffOperationForm.missing_reason)
+@router.message(StaffOperationForm.missing_reason, ~F.text.in_(STAFF_MENU_LABELS))
 async def operation_missing_reason(message: Message, state: FSMContext) -> None:
     reason = (message.text or "").strip()
     if not 3 <= len(reason) <= 500:
