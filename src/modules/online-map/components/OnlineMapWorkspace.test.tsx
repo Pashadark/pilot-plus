@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 
 import type { OnlineFleetMapProps } from './OnlineFleetMap';
+import type { OnlineMapVehicle } from '../types';
 import { OnlineMapWorkspace } from './OnlineMapWorkspace';
 import { TrackDaySummary } from './TrackDaySummary';
 import { TrackPlayback } from './TrackPlayback';
@@ -12,6 +13,7 @@ import { TrackPlayback } from './TrackPlayback';
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 function FakeMap(props: OnlineFleetMapProps) {
@@ -28,6 +30,7 @@ function FakeMap(props: OnlineFleetMapProps) {
         data-selected-event={props.selectedEventId ?? ''}
         data-previewed-event={props.previewedEventId ?? ''}
         data-previewed-segment={props.previewedSegmentId ?? ''}
+        data-first-speed={vehicles[0]?.speedKph ?? ''}
       />
       {vehicles.map((vehicle) => (
         <button
@@ -48,6 +51,54 @@ function FakeMap(props: OnlineFleetMapProps) {
     </div>
   );
 }
+
+it('применяет живой SSE-снимок без перезагрузки страницы', async () => {
+  const sources: FakeEventSource[] = [];
+  class FakeEventSource {
+    listeners = new Map<string, (event: MessageEvent<string>) => void>();
+    close = vi.fn();
+    constructor(public readonly url: string) {
+      sources.push(this);
+    }
+    addEventListener(name: string, listener: (event: MessageEvent<string>) => void) {
+      this.listeners.set(name, listener);
+    }
+    emitSnapshot(vehicles: unknown[]) {
+      this.listeners.get('snapshot')?.(
+        new MessageEvent('snapshot', { data: JSON.stringify({ vehicles }) }),
+      );
+    }
+  }
+  vi.stubGlobal('EventSource', FakeEventSource);
+  const initial: OnlineMapVehicle[] = [
+    {
+      id: 'vehicle-live',
+      name: 'Kia Ceed',
+      plate: 'А429АУ997',
+      gpsStatus: {
+        key: 'IDLE',
+        label: 'Стоит',
+        tone: 'warning',
+        isConnected: true,
+      },
+      longitude: 37.6,
+      latitude: 55.7,
+      speedKph: 0,
+      fuelPercent: 50,
+      recordedAt: '2026-08-23T06:00:00.000Z',
+      lastSeenLabel: 'только что',
+      address: 'Москва',
+    },
+  ];
+  const view = render(<OnlineMapWorkspace mapComponent={FakeMap} vehicles={initial} />);
+
+  expect(sources[0]?.url).toBe('/api/map/live');
+  act(() => sources[0]?.emitSnapshot([{ ...initial[0], speedKph: 47, longitude: 37.7 }]));
+  expect(getMapTrackState().firstSpeed).toBe('47');
+
+  view.unmount();
+  expect(sources[0]?.close).toHaveBeenCalled();
+});
 
 function getMapTrackState(): DOMStringMap {
   return (screen.getByTestId('map-track-state') as HTMLOutputElement).dataset;

@@ -45,6 +45,7 @@ export function OnlineMapWorkspace({
   mapComponent: MapComponent = OnlineFleetMapClient,
   vehicles = onlineMapVehicles,
 }: OnlineMapWorkspaceProps) {
+  const [snapshotVehicles, setSnapshotVehicles] = useState<readonly OnlineMapVehicle[]>(vehicles);
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<OnlineMapFilter>('all');
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
@@ -58,11 +59,38 @@ export function OnlineMapWorkspace({
   const [previewedSegmentId, setPreviewedSegmentId] = useState<string | null>(null);
   const reducedMotion = useReducedMotion() ?? false;
   const minuteNow = useMinuteNow();
+
+  useEffect(() => setSnapshotVehicles(vehicles), [vehicles]);
+
+  useEffect(() => {
+    if (typeof EventSource === 'undefined') return;
+    const source = new EventSource('/api/map/live');
+    const onSnapshot = (event: MessageEvent<string>) => {
+      try {
+        const parsed: unknown = JSON.parse(event.data);
+        if (
+          typeof parsed !== 'object' ||
+          parsed === null ||
+          !('vehicles' in parsed) ||
+          !Array.isArray(parsed.vehicles) ||
+          !parsed.vehicles.every(isOnlineMapVehicle)
+        ) {
+          return;
+        }
+        setSnapshotVehicles(parsed.vehicles);
+      } catch {
+        // Keep the last authoritative snapshot when a malformed event arrives.
+      }
+    };
+    source.addEventListener('snapshot', onSnapshot as EventListener);
+    return () => source.close();
+  }, []);
+
   const liveVehicles = useMemo(
     () =>
       minuteNow === null
-        ? vehicles
-        : vehicles.map((vehicle) =>
+        ? snapshotVehicles
+        : snapshotVehicles.map((vehicle) =>
             vehicle.recordedAt === undefined
               ? vehicle
               : {
@@ -78,7 +106,7 @@ export function OnlineMapWorkspace({
                   ),
                 },
           ),
-    [minuteNow, vehicles],
+    [minuteNow, snapshotVehicles],
   );
 
   const filteredVehicles = useMemo(
@@ -410,5 +438,24 @@ export function OnlineMapWorkspace({
         © OpenStreetMap
       </a>
     </section>
+  );
+}
+
+function isOnlineMapVehicle(value: unknown): value is OnlineMapVehicle {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    typeof value.id === 'string' &&
+    'name' in value &&
+    typeof value.name === 'string' &&
+    'plate' in value &&
+    typeof value.plate === 'string' &&
+    'speedKph' in value &&
+    typeof value.speedKph === 'number' &&
+    Number.isFinite(value.speedKph) &&
+    'gpsStatus' in value &&
+    typeof value.gpsStatus === 'object' &&
+    value.gpsStatus !== null
   );
 }
