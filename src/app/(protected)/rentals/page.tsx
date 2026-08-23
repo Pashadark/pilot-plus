@@ -58,6 +58,10 @@ export default async function RentalsPage({
             currency: r.currency,
             hasExtension: r.operations.length > 0,
             documentFormats: [...new Set(r.documentVersions.map((document) => document.format))],
+            documents: r.documentVersions.map((document) => ({
+              format: document.format,
+              version: document.version,
+            })),
             vehicleLabel: [r.vehicle.make, r.vehicle.modelName, r.vehicle.registrationNumber]
               .filter(Boolean)
               .join(' · '),

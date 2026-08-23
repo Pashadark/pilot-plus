@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { FaFilePdf, FaFileWord } from 'react-icons/fa6';
 
 import { presentRentalListRow, type RentalListSource } from './rental-list-presentation';
 
@@ -32,6 +33,35 @@ function queryString(filters: Filters, extra: Record<string, string>) {
   for (const [key, value] of Object.entries({ ...filters, ...extra }))
     if (value) params.set(key, value);
   return `/rentals?${params.toString()}`;
+}
+
+function RentalFiles({ row }: { row: ReturnType<typeof presentRentalListRow> }) {
+  if (!row.documents.length)
+    return <span className="text-xs text-[var(--color-text-secondary)]">Нет файлов</span>;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {row.documents.map((document) => {
+        const isWord = document.format === 'DOCX';
+        const label = isWord ? 'Word' : 'PDF';
+        const Icon = isWord ? FaFileWord : FaFilePdf;
+        return (
+          <a
+            key={`${document.version}-${document.format}`}
+            href={`/rentals/${row.id}/documents/${document.version}/${document.format}`}
+            download
+            aria-label={`Скачать ${label} ${row.contractNumber ?? 'договора'}`}
+            title={`Скачать ${label}`}
+            className={`inline-flex min-h-10 items-center gap-2 rounded-xl border bg-white px-3 text-xs font-bold shadow-sm transition hover:-translate-y-0.5 hover:shadow ${
+              isWord ? 'text-blue-700' : 'text-rose-700'
+            }`}
+          >
+            <Icon aria-hidden className="text-lg" />
+            {label}
+          </a>
+        );
+      })}
+    </div>
+  );
 }
 
 export function RentalListPage({
@@ -154,6 +184,7 @@ export function RentalListPage({
                     'Срок',
                     'Сумма / залог',
                     'Статус',
+                    'Файлы',
                     'Действия',
                   ].map((label) => (
                     <th key={label} className="px-4 py-3">
@@ -185,7 +216,7 @@ export function RentalListPage({
                     <td className="px-4 py-3 whitespace-nowrap text-[var(--color-text-primary)]">
                       <div>{dateTime(row.startsAt)}</div>
                       <div className="text-xs text-[var(--color-text-secondary)]">
-                        до {dateTime(row.endsAt)}
+                        Окончание: {dateTime(row.endsAt)}
                       </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-[var(--color-text-primary)]">
@@ -202,17 +233,10 @@ export function RentalListPage({
                       </span>
                     </td>
                     <td className="px-4 py-3">
+                      <RentalFiles row={row} />
+                    </td>
+                    <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
-                        <div className="flex gap-1">
-                          {row.documentFormats.map((format) => (
-                            <span
-                              key={format}
-                              className="rounded-md border bg-white px-1.5 py-1 text-[10px] font-bold text-slate-600"
-                            >
-                              {format}
-                            </span>
-                          ))}
-                        </div>
                         <Link
                           href={`/rentals/${row.id}`}
                           className="min-h-11 content-center rounded-xl border bg-white px-3 font-semibold text-slate-900"
@@ -252,8 +276,13 @@ export function RentalListPage({
                 </div>
                 <p className="mt-2 text-sm text-[var(--color-text-primary)]">{row.vehicleLabel}</p>
                 <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-                  {dateTime(row.startsAt)} — {dateTime(row.endsAt)}
+                  Начало: {dateTime(row.startsAt)}
+                  <br />
+                  <b>Окончание: {dateTime(row.endsAt)}</b>
                 </p>
+                <div className="mt-3">
+                  <RentalFiles row={row} />
+                </div>
                 <div className="mt-3 flex items-end justify-between gap-3">
                   <div>
                     <div className="font-bold text-[var(--color-text-primary)]">{row.total}</div>

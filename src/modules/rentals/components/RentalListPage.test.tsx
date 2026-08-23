@@ -40,6 +40,10 @@ describe('RentalListPage', () => {
             clientLabel: 'Филатов Илья',
             hasExtension: true,
             documentFormats: ['DOCX', 'PDF'],
+            documents: [
+              { format: 'DOCX', version: 2 },
+              { format: 'PDF', version: 2 },
+            ],
           },
           {
             id: 'closed',
@@ -54,6 +58,7 @@ describe('RentalListPage', () => {
             clientLabel: 'Коломенцев Александр',
             hasExtension: false,
             documentFormats: [],
+            documents: [],
           },
         ]}
       />,
@@ -65,6 +70,17 @@ describe('RentalListPage', () => {
     expect(screen.getAllByText(/25.000.₽/u).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/100.000.₽/u).length).toBeGreaterThan(0);
     expect(screen.getAllByText('PDF').length).toBeGreaterThan(0);
+    expect(
+      screen
+        .getAllByRole('link', { name: 'Скачать Word ME-2026-0014' })
+        .every((link) => link.getAttribute('href') === '/rentals/active/documents/2/DOCX'),
+    ).toBe(true);
+    expect(
+      screen
+        .getAllByRole('link', { name: 'Скачать PDF ME-2026-0014' })
+        .every((link) => link.getAttribute('href') === '/rentals/active/documents/2/PDF'),
+    ).toBe(true);
+    expect(screen.getAllByText(/Окончание:/u).length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'Календарь' }).getAttribute('href')).toContain(
       'view=calendar',
     );

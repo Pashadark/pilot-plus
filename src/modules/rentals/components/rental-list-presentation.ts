@@ -14,6 +14,7 @@ export type RentalListSource = {
   vehicleLabel: string;
   hasExtension: boolean;
   documentFormats: readonly string[];
+  documents: readonly { format: string; version: number }[];
 };
 
 const presentation = {
@@ -42,6 +43,7 @@ export function presentRentalListRow(row: RentalListSource, now: Date) {
   const isOverdue = ['ACTIVE', 'EXTENDED'].includes(lifecycle) && endsAt < now;
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' });
   const returnsToday = today.format(endsAt) === today.format(now);
+  const isReturnDue = returnsToday && ['ACTIVE', 'EXTENDED'].includes(lifecycle);
   const priority = isOverdue
     ? 0
     : returnsToday
@@ -56,7 +58,8 @@ export function presentRentalListRow(row: RentalListSource, now: Date) {
   return {
     ...row,
     lifecycle,
-    ...view,
+    ...(isReturnDue ? { label: 'Возврат', tone: 'warning' as const } : view),
+    returnsToday: isReturnDue,
     priority,
     total: money(row.totalPriceMinor, row.currency),
     deposit: row.depositMinor === null ? 'Не указан' : money(row.depositMinor, row.currency),

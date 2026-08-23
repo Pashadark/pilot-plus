@@ -29,7 +29,7 @@ export async function listRentalsForCompany(companyId: string) {
         take: 1,
       },
       documentVersions: {
-        select: { format: true },
+        select: { format: true, version: true },
         orderBy: [{ version: 'desc' }, { format: 'asc' }],
         take: 2,
       },
@@ -64,7 +64,7 @@ export async function listRentalsForCurrentUser() {
         take: 1,
       },
       documentVersions: {
-        select: { format: true },
+        select: { format: true, version: true },
         orderBy: [{ version: 'desc' }, { format: 'asc' }],
         take: 2,
       },
@@ -155,7 +155,7 @@ export async function listFilteredRentalsForCurrentUser(filters: RentalListFilte
         take: 1,
       },
       documentVersions: {
-        select: { format: true },
+        select: { format: true, version: true },
         orderBy: [{ version: 'desc' }, { format: 'asc' }],
         take: 2,
       },
