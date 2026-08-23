@@ -18,6 +18,7 @@
     "rental-operations:reconcile-media": "tsx scripts/reconcile-rental-operation-media.ts",
     "vehicles:sync-images": "tsx scripts/sync-vehicle-images.ts",
     "telematics:sync-glonasssoft": "tsx --conditions=react-server scripts/sync-glonasssoft.ts",
+    "telematics:live-glonasssoft": "tsx --conditions=react-server scripts/run-glonasssoft-live-worker.ts",
     "telematics:configure-glonasssoft": "tsx --conditions=react-server scripts/configure-glonasssoft.ts",
     "vehicles:reconcile-real": "tsx --conditions=react-server scripts/reconcile-real-fleet.ts",
     "test:e2e": "playwright test",
