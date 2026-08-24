@@ -35,6 +35,7 @@ type RentalSource = {
   status: 'DRAFT' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
   startsAt: Date;
   endsAt: Date;
+  completedAt?: Date | null;
   totalPriceMinor: bigint;
   depositMinor: bigint | null;
   contractNumber: string | null;
@@ -108,10 +109,6 @@ function latestCommittedDepositOperation(operations: readonly RentalOperationSou
     )[0];
 }
 
-function rentalBillableDays(rental: RentalSource) {
-  return Math.max(1, Math.ceil((rental.endsAt.getTime() - rental.startsAt.getTime()) / DAY_MS));
-}
-
 function moscowDayStart(value: Date) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: MOSCOW_TIME_ZONE,
@@ -128,14 +125,20 @@ function moscowDayStart(value: Date) {
 function allocatedRentalEarnedMinor(rental: RentalSource, period: DashboardDateWindow) {
   if (rental.status === 'DRAFT' || rental.status === 'CANCELLED') return 0n;
 
-  const days = rentalBillableDays(rental);
-  const baseShare = rental.totalPriceMinor / BigInt(days);
-  const remainder = rental.totalPriceMinor % BigInt(days);
-  const firstDay = moscowDayStart(rental.startsAt);
+  const billableDays: Date[] = [];
+  for (
+    let dayStart = moscowDayStart(rental.startsAt);
+    dayStart < rental.endsAt;
+    dayStart = new Date(dayStart.getTime() + DAY_MS)
+  ) {
+    if (new Date(dayStart.getTime() + DAY_MS) > rental.startsAt) billableDays.push(dayStart);
+  }
+
+  const baseShare = rental.totalPriceMinor / BigInt(billableDays.length);
+  const remainder = rental.totalPriceMinor % BigInt(billableDays.length);
   let earned = 0n;
 
-  for (let dayIndex = 0; dayIndex < days; dayIndex += 1) {
-    const dayStart = new Date(firstDay.getTime() + dayIndex * DAY_MS);
+  for (const [dayIndex, dayStart] of billableDays.entries()) {
     if (!occursIn(dayStart, period)) continue;
     earned += baseShare + (BigInt(dayIndex) < remainder ? 1n : 0n);
   }
@@ -162,7 +165,10 @@ function rentalWorkItems(
   if (rental.status === 'CONFIRMED' && occursIn(rental.startsAt, source.period)) {
     const handover = rental.operations
       .filter((operation) => operation.status === 'COMMITTED' && operation.type === 'HANDOVER')
-      .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime())[0];
+      .sort(
+        (left, right) =>
+          right.occurredAt.getTime() - left.occurredAt.getTime() || right.id.localeCompare(left.id),
+      )[0];
     const isDelivery = handover?.fulfillmentMethod === 'DELIVERY';
     items.push({
       id: `${isDelivery ? 'rental-delivery' : 'rental-handover'}:${rental.id}`,
@@ -196,20 +202,27 @@ function rentalWorkItems(
   }
 
   const deposit = latestCommittedDepositOperation(rental.operations);
+  const committedReturn = rental.operations
+    .filter((operation) => operation.status === 'COMMITTED' && operation.type === 'RETURN')
+    .sort(
+      (left, right) =>
+        right.occurredAt.getTime() - left.occurredAt.getTime() || right.id.localeCompare(left.id),
+    )[0];
+  const depositReturnDueAt = committedReturn?.occurredAt ?? rental.completedAt ?? rental.endsAt;
   if (
     rental.status === 'COMPLETED' &&
     deposit?.depositStatus === 'COLLECTED' &&
-    occursIn(deposit.occurredAt, source.period)
+    occursIn(depositReturnDueAt, source.period)
   ) {
     items.push({
       id: `deposit-return:${rental.id}`,
       kind: 'DEPOSIT_RETURN',
-      scheduledAt: deposit.occurredAt.toISOString(),
+      scheduledAt: depositReturnDueAt.toISOString(),
       title: 'Вернуть депозит',
       tone: 'warning',
       address: null,
       amountMinor: rental.depositMinor?.toString() ?? null,
-      overdue: deposit.occurredAt < source.now,
+      overdue: depositReturnDueAt < source.now,
       ...shared,
     });
   }
@@ -306,8 +319,21 @@ function attentionItems(
 
 export function buildDashboardOverview(source: DashboardOverviewSource): DashboardOverviewDto {
   const companyVehicles = source.vehicles.filter(isCompanyRealVehicle);
+  const realVehicleIds = new Set(companyVehicles.map((vehicle) => vehicle.id));
+  const rentals = source.rentals.filter((rental) => realVehicleIds.has(rental.vehicleId));
+  const maintenanceRecords = source.maintenanceRecords.filter((record) =>
+    realVehicleIds.has(record.vehicleId),
+  );
+  const washRecords = source.washRecords.filter((record) => realVehicleIds.has(record.vehicleId));
+  const companySource: DashboardOverviewSource = {
+    ...source,
+    vehicles: companyVehicles,
+    rentals,
+    maintenanceRecords,
+    washRecords,
+  };
   const serviceVehicleIds = new Set([
-    ...source.maintenanceRecords
+    ...maintenanceRecords
       .filter(
         (record) =>
           ['PLANNED', 'IN_PROGRESS'].includes(record.status) &&
@@ -315,7 +341,7 @@ export function buildDashboardOverview(source: DashboardOverviewSource): Dashboa
           overlaps(record.scheduledAt, record.scheduledEndsAt, source.period),
       )
       .map((record) => record.vehicleId),
-    ...source.washRecords
+    ...washRecords
       .filter(
         (record) =>
           ['PLANNED', 'IN_PROGRESS'].includes(record.status) &&
@@ -324,7 +350,7 @@ export function buildDashboardOverview(source: DashboardOverviewSource): Dashboa
       .map((record) => record.vehicleId),
   ]);
   const occupiedVehicleIds = new Set(
-    source.rentals
+    rentals
       .filter(
         (rental) =>
           ['CONFIRMED', 'ACTIVE'].includes(rental.status) &&
@@ -333,8 +359,8 @@ export function buildDashboardOverview(source: DashboardOverviewSource): Dashboa
       .map((rental) => rental.vehicleId),
   );
   const workItems = [
-    ...source.rentals.flatMap((rental) => rentalWorkItems(rental, source)),
-    ...serviceWorkItems(source),
+    ...rentals.flatMap((rental) => rentalWorkItems(rental, companySource)),
+    ...serviceWorkItems(companySource),
   ].sort(
     (left, right) =>
       Number(right.overdue) - Number(left.overdue) ||
@@ -346,11 +372,11 @@ export function buildDashboardOverview(source: DashboardOverviewSource): Dashboa
       !vehicle.position ||
       source.now.getTime() - vehicle.position.recordedAt.getTime() > OFFLINE_AFTER_MS,
   ).length;
-  const earnedMinor = source.rentals.reduce(
+  const earnedMinor = rentals.reduce(
     (total, rental) => total + allocatedRentalEarnedMinor(rental, source.period),
     0n,
   );
-  const heldDepositsMinor = source.rentals.reduce((total, rental) => {
+  const heldDepositsMinor = rentals.reduce((total, rental) => {
     const latestDeposit = latestCommittedDepositOperation(rental.operations);
     return latestDeposit?.depositStatus === 'COLLECTED'
       ? total + (rental.depositMinor ?? 0n)

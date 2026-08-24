@@ -119,7 +119,24 @@ describe('buildDashboardOverview', () => {
       }),
     );
 
-    expect(result.kpis.earnedMinor).toBe('20000');
+    expect(result.kpis.earnedMinor).toBe('13334');
+  });
+
+  it('allocates a 23:30–00:30 Moscow rental across both intersecting calendar days', () => {
+    const result = buildDashboardOverview(
+      source({
+        period: { key: 'today' as const, ...moscowDay('2026-08-25') },
+        rentals: [
+          rental({
+            startsAt: new Date('2026-08-24T20:30:00.000Z'),
+            endsAt: new Date('2026-08-24T21:30:00.000Z'),
+            totalPriceMinor: 10_001n,
+          }),
+        ],
+      }),
+    );
+
+    expect(result.kpis.earnedMinor).toBe('5000');
   });
 
   it('counts only the latest committed collected deposit as held', () => {
@@ -173,6 +190,37 @@ describe('buildDashboardOverview', () => {
     expect(result.kpis).toMatchObject({ freeVehicles: 1, occupiedVehicles: 0, serviceVehicles: 0 });
   });
 
+  it('does not leak demo or archived vehicle records into dashboard finance, work, or service', () => {
+    const result = buildDashboardOverview(
+      source({
+        vehicles: [
+          vehicle(),
+          vehicle({ id: 'demo', isDemoImport: true }),
+          vehicle({ id: 'archived', archivedAt: new Date('2026-08-01T00:00:00.000Z') }),
+        ],
+        rentals: [
+          rental({
+            vehicleId: 'demo',
+            totalPriceMinor: 99_999n,
+            depositMinor: 15_000n,
+            operations: [operation('COLLECTED', '2026-08-24')],
+          }),
+        ],
+        maintenanceRecords: [maintenance({ vehicleId: 'archived' })],
+        washRecords: [wash({ vehicleId: 'demo' })],
+      }),
+    );
+
+    expect(result.kpis).toMatchObject({
+      earnedMinor: '0',
+      heldDepositsMinor: '0',
+      freeVehicles: 1,
+      occupiedVehicles: 0,
+      serviceVehicles: 0,
+    });
+    expect(result.workItems).toEqual([]);
+  });
+
   it('gives maintenance and wash precedence over rental availability', () => {
     const result = buildDashboardOverview(
       source({
@@ -204,5 +252,58 @@ describe('buildDashboardOverview', () => {
     );
 
     expect(result.workItems).toEqual([]);
+  });
+
+  it('schedules a pending deposit return on the completed rental obligation, not collection time', () => {
+    const result = buildDashboardOverview(
+      source({
+        rentals: [
+          rental({
+            status: 'COMPLETED',
+            depositMinor: 15_000n,
+            endsAt: new Date('2026-08-24T17:00:00.000Z'),
+            operations: [{ ...operation('COLLECTED', '2026-08-20'), type: 'HANDOVER' }],
+          }),
+        ],
+      }),
+    );
+
+    expect(result.workItems).toContainEqual(
+      expect.objectContaining({
+        id: 'deposit-return:rental-1',
+        kind: 'DEPOSIT_RETURN',
+        scheduledAt: '2026-08-24T17:00:00.000Z',
+      }),
+    );
+  });
+
+  it('uses the ID tie-breaker for committed handovers at the same timestamp', () => {
+    const result = buildDashboardOverview(
+      source({
+        rentals: [
+          rental({
+            operations: [
+              {
+                ...operation('COLLECTED', '2026-08-24'),
+                id: 'handover-a',
+                type: 'HANDOVER',
+                fulfillmentMethod: 'OFFICE',
+              },
+              {
+                ...operation('COLLECTED', '2026-08-24'),
+                id: 'handover-z',
+                type: 'HANDOVER',
+                fulfillmentMethod: 'DELIVERY',
+                fulfillmentAddress: 'Москва, Тверская 1',
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+
+    expect(result.workItems).toContainEqual(
+      expect.objectContaining({ kind: 'DELIVERY', address: 'Москва, Тверская 1' }),
+    );
   });
 });
