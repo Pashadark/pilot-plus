@@ -13,7 +13,7 @@ const statusView: Record<
   WITHHELD: { label: 'Удержан', tone: 'danger' },
 };
 
-function money(value: string) {
+export function formatMinorMoney(value: string) {
   return new Intl.NumberFormat('ru-RU', {
     style: 'currency',
     currency: 'RUB',
@@ -37,8 +37,26 @@ export function presentClientDeposit(
       };
 
   return {
-    amount: money(rental.depositMinor),
+    amount: formatMinorMoney(rental.depositMinor),
     label: isCurrent ? status.label : `Последний · ${status.label}`,
     tone: status.tone,
   };
+}
+
+export function clientRentalColor(
+  rental: ClientListRentalSummary | null,
+  isCurrent: boolean,
+): 'neutral' | 'success' | 'primary' | 'warning' {
+  if (!rental) return 'neutral';
+  if (isCurrent) return 'success';
+  if (!rental.depositMinor || BigInt(rental.depositMinor) === BigInt(0)) return 'primary';
+  if (
+    rental.depositStatus === 'RETURNED' ||
+    rental.depositStatus === 'PARTIALLY_WITHHELD' ||
+    rental.depositStatus === 'WITHHELD' ||
+    rental.depositStatus === 'NOT_COLLECTED'
+  ) {
+    return 'primary';
+  }
+  return 'warning';
 }

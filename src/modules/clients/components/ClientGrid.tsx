@@ -7,7 +7,14 @@ import { ClientRatingStars } from '@/modules/client-rating/components/ClientRati
 
 import { ClientCard, clientStatusView } from './ClientCard';
 import { ClientPhoto } from './ClientPhoto';
-import { presentClientDeposit } from './client-deposit';
+import { clientRentalColor, formatMinorMoney, presentClientDeposit } from './client-deposit';
+
+const rentalRowClasses = {
+  neutral: 'hover:bg-[var(--color-elevated)]',
+  success: 'bg-[var(--color-success-soft)] hover:brightness-[0.98]',
+  primary: 'bg-[var(--color-primary-soft)] hover:brightness-[0.98]',
+  warning: 'bg-[var(--color-warning-soft)] hover:brightness-[0.98]',
+} as const;
 
 function formatRentalDate(value: string) {
   return new Intl.DateTimeFormat('ru-RU', {
@@ -49,8 +56,10 @@ export function ClientGrid({
               <th className="px-4 py-3">Телефон</th>
               <th className="px-4 py-3">Рейтинг</th>
               <th className="px-4 py-3">Аренды</th>
-              <th className="px-4 py-3">Текущая машина</th>
+              <th className="px-4 py-3">Машина</th>
+              <th className="px-4 py-3">Стоимость аренды</th>
               <th className="px-4 py-3">Депозит</th>
+              <th className="px-4 py-3">Статус депозита</th>
               <th className="px-4 py-3">Статус</th>
               <th className="px-4 py-3 text-right">Действия</th>
             </tr>
@@ -62,8 +71,12 @@ export function ClientGrid({
               const last = client.rentalSummary.last;
               const depositRental = current ?? last;
               const deposit = presentClientDeposit(depositRental, Boolean(current));
+              const rentalColor = clientRentalColor(depositRental, Boolean(current));
               return (
-                <tr key={client.id} className="transition-colors hover:bg-[var(--color-elevated)]">
+                <tr
+                  key={client.id}
+                  className={`transition-[filter] ${rentalRowClasses[rentalColor]}`}
+                >
                   <td className="px-4 py-3">
                     <div className="flex min-w-[250px] items-center gap-3">
                       <ClientPhoto
@@ -98,27 +111,31 @@ export function ClientGrid({
                     </p>
                   </td>
                   <td className="px-4 py-3">
-                    {current ? (
+                    {depositRental ? (
                       <div className="min-w-[190px]">
-                        <p className="font-semibold">{current.vehicle.label}</p>
+                        <p className="font-semibold">{depositRental.vehicle.label}</p>
                         <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                          {current.vehicle.registrationNumber ?? 'Без номера'}
-                          {current.contractNumber ? ` · ${current.contractNumber}` : ''}
+                          {depositRental.vehicle.registrationNumber ?? 'Без номера'}
+                          {depositRental.contractNumber ? ` · ${depositRental.contractNumber}` : ''}
                         </p>
                       </div>
                     ) : (
-                      <span className="text-sm text-[var(--color-text-secondary)]">
-                        Сейчас не арендует
-                      </span>
+                      <span className="text-sm text-[var(--color-text-secondary)]">Нет аренды</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <p className="font-semibold whitespace-nowrap">{deposit.amount}</p>
-                    {deposit.label ? (
-                      <div className="mt-1">
-                        <Badge tone={deposit.tone}>{deposit.label}</Badge>
-                      </div>
+                    <p className="font-semibold whitespace-nowrap">
+                      {depositRental ? formatMinorMoney(depositRental.totalPriceMinor) : '—'}
+                    </p>
+                    {!current && depositRental ? (
+                      <p className="mt-1 text-xs text-[var(--color-text-secondary)]">Последняя</p>
                     ) : null}
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="font-semibold whitespace-nowrap">{deposit.amount}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    {deposit.label ? <Badge tone={deposit.tone}>{deposit.label}</Badge> : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <Badge tone={status.tone}>{status.label}</Badge>

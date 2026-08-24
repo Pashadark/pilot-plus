@@ -7,7 +7,7 @@ import { Badge, Card } from '@/shared/ui';
 
 import { ClientPhoto } from './ClientPhoto';
 import { ClientRatingStars } from '@/modules/client-rating/components/ClientRatingStars';
-import { presentClientDeposit } from './client-deposit';
+import { formatMinorMoney, presentClientDeposit } from './client-deposit';
 
 export const clientStatusView: Record<
   ClientStatus,
@@ -44,6 +44,7 @@ export function ClientCard({
     client.rentalSummary.current ?? client.rentalSummary.last,
     Boolean(client.rentalSummary.current),
   );
+  const selectedRental = client.rentalSummary.current ?? client.rentalSummary.last;
   const resolvedMessenger =
     messenger ??
     (client.telegramUrl
@@ -89,9 +90,15 @@ export function ClientCard({
               <strong className="text-[var(--color-text)]">{client.rentalSummary.total}</strong>
             </div>
             <div>
-              {client.rentalSummary.current
-                ? `${client.rentalSummary.current.vehicle.label} · ${client.rentalSummary.current.vehicle.registrationNumber ?? 'Без номера'}`
-                : 'Сейчас не арендует'}
+              {selectedRental
+                ? `${selectedRental.vehicle.label} · ${selectedRental.vehicle.registrationNumber ?? 'Без номера'}`
+                : 'Нет аренды'}
+            </div>
+            <div>
+              Стоимость:{' '}
+              <strong className="text-[var(--color-text)]">
+                {selectedRental ? formatMinorMoney(selectedRental.totalPriceMinor) : '—'}
+              </strong>
             </div>
             <div>
               Депозит: <strong className="text-[var(--color-text)]">{deposit.amount}</strong>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { presentClientDeposit } from './client-deposit';
+import { clientRentalColor, presentClientDeposit } from './client-deposit';
 
 const rental = {
   id: 'rental-1',
@@ -9,6 +9,7 @@ const rental = {
   startsAt: '2026-08-20T10:00:00.000Z',
   endsAt: '2026-08-26T10:00:00.000Z',
   vehicle: { label: 'Kia K5', registrationNumber: 'В342НР797' },
+  totalPriceMinor: '3000000',
   depositMinor: '2000000',
   depositStatus: 'COLLECTED' as const,
 };
@@ -27,5 +28,11 @@ describe('client deposit presentation', () => {
       label: 'Последний · Возвращён',
       tone: 'success',
     });
+  });
+
+  it('uses operational colors for active, resolved and unresolved rentals', () => {
+    expect(clientRentalColor(rental, true)).toBe('success');
+    expect(clientRentalColor({ ...rental, depositStatus: 'RETURNED' }, false)).toBe('primary');
+    expect(clientRentalColor({ ...rental, depositStatus: null }, false)).toBe('warning');
   });
 });

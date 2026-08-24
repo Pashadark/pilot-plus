@@ -36,7 +36,7 @@ describe('ClientCard', () => {
     expect(screen.getByTestId('client-card').className).toContain(
       'grid-cols-[5.5rem_minmax(0,1fr)]',
     );
-    expect(screen.getByText('Сейчас не арендует')).toBeTruthy();
+    expect(screen.getByText('Нет аренды')).toBeTruthy();
   });
 
   it('shows a compact five-star reliability score when staff provides one', () => {

@@ -27,6 +27,7 @@ export type ClientListRentalSummary = {
   startsAt: string;
   endsAt: string;
   vehicle: { label: string; registrationNumber: string | null };
+  totalPriceMinor: string;
   depositMinor: string | null;
   depositStatus:
     'NOT_COLLECTED' | 'COLLECTED' | 'RETURNED' | 'PARTIALLY_WITHHELD' | 'WITHHELD' | null;

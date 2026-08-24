@@ -45,6 +45,7 @@ type RawClient = {
     status: 'DRAFT' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
     startsAt: Date;
     endsAt: Date;
+    totalPriceMinor: bigint;
     depositMinor: bigint | null;
     vehicle: { make: string; model: string; registrationNumber: string | null };
     operations: Array<{
@@ -80,6 +81,7 @@ const clientSelect = {
       status: true,
       startsAt: true,
       endsAt: true,
+      totalPriceMinor: true,
       depositMinor: true,
       vehicle: { select: { make: true, model: true, registrationNumber: true } },
       operations: {
@@ -178,6 +180,7 @@ function mapCard(client: RawClient, encryptionKey: string): ClientCardDto {
     status: rental.status,
     startsAt: rental.startsAt.toISOString(),
     endsAt: rental.endsAt.toISOString(),
+    totalPriceMinor: rental.totalPriceMinor.toString(),
     depositMinor: rental.depositMinor?.toString() ?? null,
     depositStatus: rental.operations[0]?.depositStatus ?? null,
     vehicle: {
