@@ -7,4 +7,5 @@ export interface PilotNotification {
   createdAt: string;
   tone: NotificationTone;
   href: string;
+  isRead?: boolean;
 }

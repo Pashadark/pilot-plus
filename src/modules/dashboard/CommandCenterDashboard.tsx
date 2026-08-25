@@ -4,6 +4,8 @@ import type { DashboardOverviewDto } from './overview-types';
 import { AttentionPanel } from './AttentionPanel';
 import { CommandCenterKpis } from './CommandCenterKpis';
 import { WorkdayBoard } from './WorkdayBoard';
+import { MoscowWeatherCard } from '@/modules/weather/MoscowWeatherCard';
+import type { MoscowWeather } from '@/modules/weather/server/get-moscow-weather';
 
 const periods = [
   ['today', 'Сегодня'],
@@ -19,7 +21,7 @@ const quickActions = [
   ['/wash', 'Отправить на мойку'],
 ] as const;
 
-export function CommandCenterDashboard({ overview }: { overview: DashboardOverviewDto }) {
+export function CommandCenterDashboard({ overview, weather = null }: { overview: DashboardOverviewDto; weather?: MoscowWeather | null }) {
   return (
     <div className="grid gap-4 pb-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -64,7 +66,8 @@ export function CommandCenterDashboard({ overview }: { overview: DashboardOvervi
         ))}
       </nav>
 
-      <div className="order-1 grid gap-4 lg:order-2 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+      <div className="order-1"><MoscowWeatherCard weather={weather} /></div>
+      <div className="order-2 grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
         <div className="order-2 lg:order-1">
           <WorkdayBoard items={overview.workItems} />
         </div>
@@ -72,10 +75,10 @@ export function CommandCenterDashboard({ overview }: { overview: DashboardOvervi
           <AttentionPanel items={overview.attentionItems} />
         </div>
       </div>
-      <div className="order-2 lg:order-1">
+      <div className="order-3">
         <CommandCenterKpis kpis={overview.kpis} />
       </div>
-      <nav aria-label="Подробные разделы" className="order-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <nav aria-label="Подробные разделы" className="order-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
           ['/rentals', 'Все аренды'],
           ['/map', 'Карта машин'],

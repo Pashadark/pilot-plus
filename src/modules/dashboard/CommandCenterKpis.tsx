@@ -17,7 +17,6 @@ export function CommandCenterKpis({ kpis }: { kpis: DashboardKpiDto }) {
   const items = [
     { label: 'Заработано за всё время', value: formatMinor(kpis.lifetimeEarnedMinor), hint: 'Без депозитов', icon: FiDollarSign, tone: 'text-[var(--color-success)]', href: '/rentals?finance=income' },
     { label: 'Депозиты по договорам', value: formatMinor(kpis.lifetimeDepositsMinor), hint: 'За всё время', icon: FiClock, tone: 'text-[var(--color-warning)]', href: '/rentals?finance=deposits' },
-    { label: 'Сейчас на руках', value: formatMinor(kpis.heldDepositsMinor), hint: 'Нужно контролировать', icon: FiClock, tone: 'text-[var(--color-warning)]', href: '/rentals?deposit=held' },
     { label: 'Свободно', value: String(kpis.freeVehicles), hint: 'Можно выдавать', icon: FiCheckCircle, tone: 'text-[var(--color-success)]' },
     { label: 'В аренде', value: String(kpis.occupiedVehicles), hint: 'Заняты сейчас', icon: FiClock, tone: 'text-[var(--color-primary)]' },
     { label: 'ТО и мойка', value: String(kpis.serviceVehicles), hint: 'Недоступны', icon: FiTool, tone: 'text-[var(--color-warning)]' },

@@ -5,14 +5,16 @@ import { getFineAccessForUser } from '@/modules/fines/access';
 import { getCachedSystemHealthSummary } from '@/modules/system-health/get-system-health-summary';
 import { AppShellUserProvider } from '@/shared/components/app-shell/AppShell';
 import { ToastProvider } from '@/shared/providers/ToastProvider';
+import { listNotificationsForCurrentUser } from '@/modules/notifications/server/queries';
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const user = await requireAdmin();
-  const [systemHealthSummary, clientAccess, rentalAccess, fineAccess] = await Promise.all([
+  const [systemHealthSummary, clientAccess, rentalAccess, fineAccess, notifications] = await Promise.all([
     getCachedSystemHealthSummary(),
     getClientAccess('VIEW_CLIENTS'),
     getRentalAccessForUser(user),
     getFineAccessForUser(user),
+    listNotificationsForCurrentUser(),
   ]);
   const shellUser = {
     ...user,
@@ -23,7 +25,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     ].filter(Boolean) as ('CLIENTS' | 'RENTALS' | 'FINES')[],
   };
   return (
-    <AppShellUserProvider user={shellUser} systemHealthSummary={systemHealthSummary}>
+    <AppShellUserProvider user={shellUser} systemHealthSummary={systemHealthSummary} notifications={notifications}>
       <ToastProvider>{children}</ToastProvider>
     </AppShellUserProvider>
   );

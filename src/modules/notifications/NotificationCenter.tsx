@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FiBell } from 'react-icons/fi';
 
 import { Badge, IconButton } from '@/shared/ui';
+import { markAllEventsReadAction, markEventReadAction } from '@/modules/events/actions';
 
 import type { NotificationTone, PilotNotification } from './types';
 
@@ -21,7 +22,9 @@ export function NotificationCenter({
   notifications: readonly PilotNotification[];
 }) {
   const [open, setOpen] = useState(false);
-  const [readIds, setReadIds] = useState<Set<string>>(() => new Set());
+  const [readIds, setReadIds] = useState<Set<string>>(
+    () => new Set(notifications.filter(({ isRead }) => isRead).map(({ id }) => id)),
+  );
   const rootRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const wasOpenRef = useRef(false);
@@ -92,7 +95,10 @@ export function NotificationCenter({
             {unreadCount > 0 && (
               <button
                 type="button"
-                onClick={() => setReadIds(new Set(notifications.map(({ id }) => id)))}
+                onClick={() => {
+                  setReadIds(new Set(notifications.map(({ id }) => id)));
+                  void markAllEventsReadAction({ read: 'unread', limit: 50 });
+                }}
                 className="min-h-11 rounded-[var(--radius-sm)] px-2 text-sm font-medium text-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
               >
                 Отметить всё прочитанным
@@ -112,6 +118,7 @@ export function NotificationCenter({
                     href={notification.href}
                     onClick={() => {
                       setReadIds((current) => new Set(current).add(notification.id));
+                      void markEventReadAction(notification.id);
                       setOpen(false);
                     }}
                     className="flex min-h-11 gap-3 px-4 py-3 transition-colors hover:bg-[var(--color-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-primary)]"

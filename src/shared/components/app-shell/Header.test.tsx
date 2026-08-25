@@ -33,12 +33,13 @@ describe('шапка приложения', () => {
           mobileNavigationOpen={false}
           onOpenMobileNavigation={vi.fn()}
           onCloseMobileNavigation={vi.fn()}
-          systemHealthSummary={{
+        systemHealthSummary={{
             state: 'healthy',
             count: 3,
             total: 4,
             checkedAt: '2026-08-03T09:00:00.000Z',
-          }}
+        }}
+        notifications={[]}
         />
       </ThemeProvider>,
     );

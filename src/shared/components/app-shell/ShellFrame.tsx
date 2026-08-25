@@ -10,6 +10,7 @@ import {
 
 import type { SafeUser } from '@/modules/auth/types';
 import type { SystemHealthSummary } from '@/modules/system-health/types';
+import type { PilotNotification } from '@/modules/notifications/types';
 import { useGlobalShortcuts } from '@/shared/hooks/useGlobalShortcuts';
 import { useTheme } from '@/shared/providers/ThemeProvider';
 
@@ -48,11 +49,13 @@ export function ShellFrame({
   breadcrumbs,
   systemHealthSummary,
   user,
+  notifications,
 }: {
   children: ReactNode;
   breadcrumbs: readonly Breadcrumb[];
   systemHealthSummary: SystemHealthSummary;
   user: SafeUser;
+  notifications: readonly PilotNotification[];
 }) {
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const { toggleTheme } = useTheme();
@@ -117,6 +120,7 @@ export function ShellFrame({
         onOpenMobileNavigation={openMobileNavigation}
         onCloseMobileNavigation={closeMobileNavigation}
         systemHealthSummary={systemHealthSummary}
+        notifications={notifications}
       />
       <aside
         data-testid="desktop-sidebar"

@@ -3,6 +3,12 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
+import { vi } from 'vitest';
+
+vi.mock('@/modules/events/actions', () => ({
+  markEventReadAction: vi.fn().mockResolvedValue({ status: 'success' }),
+  markAllEventsReadAction: vi.fn().mockResolvedValue({ status: 'success' }),
+}));
 
 import { NotificationCenter } from './NotificationCenter';
 import type { PilotNotification } from './types';

@@ -5,8 +5,8 @@ import { FiLogOut, FiMenu, FiMoon, FiSearch, FiSun } from 'react-icons/fi';
 
 import { logoutAction } from '@/modules/auth/actions';
 import type { SafeUser } from '@/modules/auth/types';
-import { demoNotifications } from '@/modules/notifications/fixtures';
 import { NotificationCenter } from '@/modules/notifications/NotificationCenter';
+import type { PilotNotification } from '@/modules/notifications/types';
 import type { SystemHealthSummary } from '@/modules/system-health/types';
 import { useTheme } from '@/shared/providers/ThemeProvider';
 import { Avatar, Breadcrumbs, DropdownMenu, IconButton, SearchInput } from '@/shared/ui';
@@ -21,6 +21,7 @@ export function Header({
   onOpenMobileNavigation,
   onCloseMobileNavigation,
   systemHealthSummary,
+  notifications,
 }: {
   breadcrumbs: readonly Breadcrumb[];
   user: SafeUser;
@@ -28,6 +29,7 @@ export function Header({
   onOpenMobileNavigation: () => void;
   onCloseMobileNavigation: () => void;
   systemHealthSummary: SystemHealthSummary;
+  notifications: readonly PilotNotification[];
 }) {
   const { theme, toggleTheme } = useTheme();
 
@@ -63,7 +65,7 @@ export function Header({
                 className="h-10 pl-10"
               />
             </div>
-            <NotificationCenter notifications={demoNotifications} />
+            <NotificationCenter notifications={notifications} />
             <IconButton
               label={theme === 'light' ? 'Включить тёмную тему' : 'Включить светлую тему'}
               variant="ghost"
