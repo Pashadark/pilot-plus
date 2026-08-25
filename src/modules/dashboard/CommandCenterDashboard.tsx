@@ -4,7 +4,6 @@ import type { DashboardOverviewDto } from './overview-types';
 import { AttentionPanel } from './AttentionPanel';
 import { CommandCenterKpis } from './CommandCenterKpis';
 import { WorkdayBoard } from './WorkdayBoard';
-import { MoscowWeatherCard } from '@/modules/weather/MoscowWeatherCard';
 import type { MoscowWeather } from '@/modules/weather/server/get-moscow-weather';
 
 const periods = [
@@ -66,7 +65,6 @@ export function CommandCenterDashboard({ overview, weather = null }: { overview:
         ))}
       </nav>
 
-      <div className="order-1"><MoscowWeatherCard weather={weather} /></div>
       <div className="order-2 grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
         <div className="order-2 lg:order-1">
           <WorkdayBoard items={overview.workItems} />
@@ -76,7 +74,7 @@ export function CommandCenterDashboard({ overview, weather = null }: { overview:
         </div>
       </div>
       <div className="order-3">
-        <CommandCenterKpis kpis={overview.kpis} />
+        <CommandCenterKpis kpis={overview.kpis} weather={weather} />
       </div>
       <nav aria-label="Подробные разделы" className="order-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[

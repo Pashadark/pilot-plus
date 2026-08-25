@@ -2,6 +2,8 @@ import { FiAlertTriangle, FiCheckCircle, FiClock, FiDollarSign, FiTool } from 'r
 import Link from 'next/link';
 import { Card } from '@/shared/ui';
 import type { DashboardKpiDto } from './overview-types';
+import { MoscowWeatherCard } from '@/modules/weather/MoscowWeatherCard';
+import type { MoscowWeather } from '@/modules/weather/server/get-moscow-weather';
 
 const money = new Intl.NumberFormat('ru-RU', {
   style: 'currency',
@@ -13,7 +15,7 @@ function formatMinor(value: string) {
   return money.format(Number(BigInt(value)) / 100);
 }
 
-export function CommandCenterKpis({ kpis }: { kpis: DashboardKpiDto }) {
+export function CommandCenterKpis({ kpis, weather }: { kpis: DashboardKpiDto; weather: MoscowWeather | null }) {
   const items = [
     { label: 'Заработано за всё время', value: formatMinor(kpis.lifetimeEarnedMinor), hint: 'Без депозитов', icon: FiDollarSign, tone: 'text-[var(--color-success)]', href: '/rentals?finance=income' },
     { label: 'Депозиты по договорам', value: formatMinor(kpis.lifetimeDepositsMinor), hint: 'За всё время', icon: FiClock, tone: 'text-[var(--color-warning)]', href: '/rentals?finance=deposits' },
@@ -25,6 +27,7 @@ export function CommandCenterKpis({ kpis }: { kpis: DashboardKpiDto }) {
 
   return (
     <section aria-label="Показатели автопарка" className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+      <MoscowWeatherCard weather={weather} />
       {items.map(({ label, value, hint, icon: Icon, tone, href }) => {
         const card = <Card className="min-w-0 p-4">
           <div className="flex items-start justify-between gap-2">

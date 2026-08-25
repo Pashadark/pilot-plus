@@ -83,4 +83,11 @@ describe('CommandCenterDashboard', () => {
       '/?period=tomorrow',
     );
   });
+
+  it('places compact Moscow weather first in the KPI grid', () => {
+    render(<CommandCenterDashboard overview={overviewFixture()} weather={null} />);
+    const grid = screen.getByLabelText('Показатели автопарка');
+    expect(grid.firstElementChild?.getAttribute('aria-label')).toBe('Погода в Москве');
+    expect(grid.textContent).toContain('Свободно');
+  });
 });

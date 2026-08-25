@@ -15,6 +15,8 @@ describe('MoscowWeatherCard', () => {
     expect(screen.getByText('+17°')).toBeTruthy();
     expect(screen.getByText(/Дождь/)).toBeTruthy();
     expect(container.innerHTML).not.toContain('transform:');
+    expect(screen.getByLabelText('Погода в Москве').className).toContain('p-4');
+    expect(screen.getByLabelText('Погода в Москве').className).not.toContain('p-5');
   });
 
   it('does not break the dashboard when weather is unavailable', () => {
