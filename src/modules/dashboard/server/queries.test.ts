@@ -145,7 +145,7 @@ describe('dashboard server queries', () => {
     expect(unauthorizedQuery).not.toHaveProperty('select.client.select.phoneEncrypted');
   });
 
-  it('bounds committed rental operations while retaining their dashboard fields', async () => {
+  it('does not truncate committed operations needed for deposit and return state', async () => {
     const repository = repositoryFixture();
 
     await createDashboardQueries(
@@ -160,7 +160,6 @@ describe('dashboard server queries', () => {
           operations: expect.objectContaining({
             where: { status: 'COMMITTED' },
             orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
-            take: 24,
             select: expect.objectContaining({
               type: true,
               occurredAt: true,
@@ -172,5 +171,8 @@ describe('dashboard server queries', () => {
         }),
       }),
     );
+
+    const operations = repository.rentalFindMany.mock.calls[0]?.[0]?.select?.operations;
+    expect(operations).not.toHaveProperty('take');
   });
 });

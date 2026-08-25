@@ -102,8 +102,6 @@ const vehicleSelect = {
   },
 } satisfies Prisma.VehicleSelect;
 
-const DASHBOARD_RENTAL_OPERATION_LIMIT = 24;
-
 function rentalSelect(canViewClientPhone: boolean) {
   return {
     id: true,
@@ -138,7 +136,6 @@ function rentalSelect(canViewClientPhone: boolean) {
         extensionChargeMinor: true,
       },
       orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
-      take: DASHBOARD_RENTAL_OPERATION_LIMIT,
     },
   } satisfies Prisma.RentalSelect;
 }
