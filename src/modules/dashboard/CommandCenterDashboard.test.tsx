@@ -90,4 +90,11 @@ describe('CommandCenterDashboard', () => {
     expect(grid.firstElementChild?.getAttribute('aria-label')).toBe('Погода в Москве');
     expect(grid.textContent).toContain('Свободно');
   });
+
+  it('places KPI cards above the period navigation', () => {
+    render(<CommandCenterDashboard overview={overviewFixture()} weather={null} />);
+    const cards = screen.getByLabelText('Показатели автопарка');
+    const periods = screen.getByRole('navigation', { name: 'Период командного центра' });
+    expect(cards.compareDocumentPosition(periods) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

@@ -45,6 +45,8 @@ export function CommandCenterDashboard({ overview, weather = null }: { overview:
         </div>
       </header>
 
+      <CommandCenterKpis kpis={overview.kpis} weather={weather} />
+
       <nav
         aria-label="Период командного центра"
         className="flex gap-1 overflow-x-auto rounded-[var(--radius-md)] border bg-[var(--color-surface)] p-1"
@@ -65,7 +67,7 @@ export function CommandCenterDashboard({ overview, weather = null }: { overview:
         ))}
       </nav>
 
-      <div className="order-2 grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
         <div className="order-2 lg:order-1">
           <WorkdayBoard items={overview.workItems} />
         </div>
@@ -73,10 +75,7 @@ export function CommandCenterDashboard({ overview, weather = null }: { overview:
           <AttentionPanel items={overview.attentionItems} />
         </div>
       </div>
-      <div className="order-3">
-        <CommandCenterKpis kpis={overview.kpis} weather={weather} />
-      </div>
-      <nav aria-label="Подробные разделы" className="order-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <nav aria-label="Подробные разделы" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
           ['/rentals', 'Все аренды'],
           ['/map', 'Карта машин'],
