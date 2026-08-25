@@ -78,6 +78,7 @@ export type DashboardOverviewSource = {
   /** The server query supplies only non-archived, non-demo vehicles from the authenticated company. */
   vehicles: readonly VehicleSource[];
   rentals: readonly RentalSource[];
+  financeRentals?: readonly RentalSource[];
   maintenanceRecords: readonly MaintenanceSource[];
   washRecords: readonly WashSource[];
 };
@@ -376,6 +377,26 @@ export function buildDashboardOverview(source: DashboardOverviewSource): Dashboa
     (total, rental) => total + allocatedRentalEarnedMinor(rental, source.period),
     BigInt(0),
   );
+  const financeRentals = (source.financeRentals ?? rentals).filter(
+    (rental) => rental.status !== 'DRAFT' && rental.status !== 'CANCELLED',
+  );
+  const lifetimeEarnedMinor = financeRentals.reduce(
+    (total, rental) =>
+      total +
+      rental.totalPriceMinor +
+      rental.operations.reduce(
+        (operationTotal, operation) =>
+          operation.status === 'COMMITTED' && operation.type === 'EXTENSION'
+            ? operationTotal + (operation.extensionChargeMinor ?? BigInt(0))
+            : operationTotal,
+        BigInt(0),
+      ),
+    BigInt(0),
+  );
+  const lifetimeDepositsMinor = financeRentals.reduce(
+    (total, rental) => total + (rental.depositMinor ?? BigInt(0)),
+    BigInt(0),
+  );
   const heldDepositsMinor = rentals.reduce((total, rental) => {
     const latestDeposit = latestCommittedDepositOperation(rental.operations);
     return latestDeposit?.depositStatus === 'COLLECTED'
@@ -399,6 +420,8 @@ export function buildDashboardOverview(source: DashboardOverviewSource): Dashboa
     kpis: {
       earnedMinor: earnedMinor.toString(),
       earnedIsEstimated: true,
+      lifetimeEarnedMinor: lifetimeEarnedMinor.toString(),
+      lifetimeDepositsMinor: lifetimeDepositsMinor.toString(),
       heldDepositsMinor: heldDepositsMinor.toString(),
       freeVehicles: companyVehicles.length - serviceVehicles - occupiedVehicles,
       occupiedVehicles,

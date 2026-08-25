@@ -80,6 +80,7 @@ function source(overrides = {}) {
     now: DEFAULT_NOW,
     vehicles: [vehicle()],
     rentals: [],
+    financeRentals: [],
     maintenanceRecords: [],
     washRecords: [],
     ...overrides,
@@ -87,6 +88,32 @@ function source(overrides = {}) {
 }
 
 describe('buildDashboardOverview', () => {
+  it('calculates lifetime earnings and deposits independently from the selected work period', () => {
+    const historical = rental({
+      status: 'COMPLETED',
+      startsAt: new Date('2026-07-01T07:00:00.000Z'),
+      endsAt: new Date('2026-07-03T07:00:00.000Z'),
+      totalPriceMinor: BigInt(40_000),
+      depositMinor: BigInt(15_000),
+      operations: [
+        {
+          ...operation('RETURNED', '2026-07-03'),
+          id: 'extension-1',
+          type: 'EXTENSION',
+          extensionChargeMinor: BigInt(5_000),
+        },
+      ],
+    });
+
+    const result = buildDashboardOverview(source({ financeRentals: [historical] }));
+
+    expect(result.kpis).toMatchObject({
+      lifetimeEarnedMinor: '45000',
+      lifetimeDepositsMinor: '15000',
+      heldDepositsMinor: '0',
+    });
+  });
+
   it('excludes deposits from earned rental money', () => {
     const result = buildDashboardOverview(
       source({

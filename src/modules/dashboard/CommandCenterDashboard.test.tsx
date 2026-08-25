@@ -18,6 +18,8 @@ function overviewFixture(
     kpis: {
       earnedMinor: '400000',
       earnedIsEstimated: true,
+      lifetimeEarnedMinor: '18680200',
+      lifetimeDepositsMinor: '27500000',
       heldDepositsMinor: '1500000',
       freeVehicles: 4,
       occupiedVehicles: 5,
@@ -71,9 +73,12 @@ describe('CommandCenterDashboard', () => {
     expect(screen.getByText('На выбранный день обязательных действий нет')).toBeTruthy();
   });
 
-  it('marks earned money as estimated and exposes period navigation', () => {
+  it('shows lifetime contract money separately from deposits and exposes period navigation', () => {
     render(<CommandCenterDashboard overview={overviewFixture()} />);
-    expect(screen.getByText('Расчёт по договорам')).toBeTruthy();
+    expect(screen.getByText('Заработано за всё время')).toBeTruthy();
+    expect(screen.getByText(/186\s*802\s*₽/)).toBeTruthy();
+    expect(screen.getByText('Депозиты по договорам')).toBeTruthy();
+    expect(screen.getByText(/275\s*000\s*₽/)).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Завтра' }).getAttribute('href')).toBe(
       '/?period=tomorrow',
     );

@@ -200,7 +200,7 @@ export function createDashboardQueries(
         OR: [{ completedAt: { gt: window.from } }, { completedAt: null }],
       };
 
-      const [vehicles, rentals, maintenanceRecords, washRecords] = await Promise.all([
+      const [vehicles, rentals, financeRentals, maintenanceRecords, washRecords] = await Promise.all([
         repository.vehicleFindMany({
           where: { companyId, archivedAt: null, isDemoImport: false },
           select: {
@@ -219,6 +219,14 @@ export function createDashboardQueries(
               { startsAt: { lt: window.toExclusive }, endsAt: { gt: window.from } },
               { completedAt: { gte: window.from, lt: window.toExclusive } },
             ],
+          },
+          select: rentalSelect(session.canViewClientPhone),
+          orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
+        }),
+        repository.rentalFindMany({
+          where: {
+            companyId,
+            status: { in: ['CONFIRMED', 'ACTIVE', 'COMPLETED'] },
           },
           select: rentalSelect(session.canViewClientPhone),
           orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
@@ -265,6 +273,16 @@ export function createDashboardQueries(
               session.canViewClientPhone && rental.client.phoneEncrypted
                 ? decryptField(rental.client.phoneEncrypted, dependencies.encryptionKey)
                 : null,
+          },
+          vehicleLabel: vehicleLabel(rental.vehicle),
+        })),
+        financeRentals: (financeRentals as RawRental[]).map((rental) => ({
+          ...rental,
+          client: {
+            firstName: rental.client.firstName,
+            middleName: rental.client.middleName,
+            lastName: rental.client.lastName,
+            phone: null,
           },
           vehicleLabel: vehicleLabel(rental.vehicle),
         })),

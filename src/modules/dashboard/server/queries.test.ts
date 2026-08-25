@@ -37,6 +37,26 @@ function repositoryFixture() {
 }
 
 describe('dashboard server queries', () => {
+  it('loads lifetime finance rentals without the selected dashboard window', async () => {
+    const repository = repositoryFixture();
+
+    await createDashboardQueries(
+      repository,
+      async () => ({ companyId: 'company-1', canViewClientPhone: false }),
+      { encryptionKey: ENCRYPTION_KEY },
+    ).getOverview('today', NOW);
+
+    expect(repository.rentalFindMany).toHaveBeenCalledTimes(2);
+    expect(repository.rentalFindMany.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        where: {
+          companyId: 'company-1',
+          status: { in: ['CONFIRMED', 'ACTIVE', 'COMPLETED'] },
+        },
+      }),
+    );
+  });
+
   it('scopes every source to the same authenticated company', async () => {
     const repository = repositoryFixture();
 
@@ -135,7 +155,7 @@ describe('dashboard server queries', () => {
     ).getOverview('today', NOW);
 
     const authorizedQuery = repository.rentalFindMany.mock.calls[0]?.[0];
-    const unauthorizedQuery = repository.rentalFindMany.mock.calls[1]?.[0];
+    const unauthorizedQuery = repository.rentalFindMany.mock.calls[2]?.[0];
 
     expect(authorized.workItems[0]?.phone).toBe('+79990000000');
     expect(unauthorized.workItems[0]?.phone).toBeNull();

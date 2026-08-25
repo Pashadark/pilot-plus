@@ -29,6 +29,8 @@ export type DashboardWorkItemDto = {
 export type DashboardKpiDto = {
   earnedMinor: string;
   earnedIsEstimated: true;
+  lifetimeEarnedMinor: string;
+  lifetimeDepositsMinor: string;
   heldDepositsMinor: string;
   freeVehicles: number;
   occupiedVehicles: number;
