@@ -123,7 +123,7 @@ function moscowDayStart(value: Date) {
 }
 
 function allocatedRentalEarnedMinor(rental: RentalSource, period: DashboardDateWindow) {
-  if (rental.status === 'DRAFT' || rental.status === 'CANCELLED') return 0n;
+  if (rental.status === 'DRAFT' || rental.status === 'CANCELLED') return BigInt(0);
 
   const billableDays: Date[] = [];
   for (
@@ -136,11 +136,11 @@ function allocatedRentalEarnedMinor(rental: RentalSource, period: DashboardDateW
 
   const baseShare = rental.totalPriceMinor / BigInt(billableDays.length);
   const remainder = rental.totalPriceMinor % BigInt(billableDays.length);
-  let earned = 0n;
+  let earned = BigInt(0);
 
   for (const [dayIndex, dayStart] of billableDays.entries()) {
     if (!occursIn(dayStart, period)) continue;
-    earned += baseShare + (BigInt(dayIndex) < remainder ? 1n : 0n);
+    earned += baseShare + (BigInt(dayIndex) < remainder ? BigInt(1) : BigInt(0));
   }
 
   return earned;
@@ -374,14 +374,14 @@ export function buildDashboardOverview(source: DashboardOverviewSource): Dashboa
   ).length;
   const earnedMinor = rentals.reduce(
     (total, rental) => total + allocatedRentalEarnedMinor(rental, source.period),
-    0n,
+    BigInt(0),
   );
   const heldDepositsMinor = rentals.reduce((total, rental) => {
     const latestDeposit = latestCommittedDepositOperation(rental.operations);
     return latestDeposit?.depositStatus === 'COLLECTED'
-      ? total + (rental.depositMinor ?? 0n)
+      ? total + (rental.depositMinor ?? BigInt(0))
       : total;
-  }, 0n);
+  }, BigInt(0));
   const serviceVehicles = companyVehicles.filter((vehicle) =>
     serviceVehicleIds.has(vehicle.id),
   ).length;

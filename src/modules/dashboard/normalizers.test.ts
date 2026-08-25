@@ -40,7 +40,7 @@ function rental(overrides = {}) {
     status: 'CONFIRMED' as const,
     startsAt: new Date('2026-08-24T07:00:00.000Z'),
     endsAt: new Date('2026-08-24T17:00:00.000Z'),
-    totalPriceMinor: 40_000n,
+    totalPriceMinor: BigInt(40_000),
     depositMinor: null,
     contractNumber: 'R-1',
     client: { lastName: 'Иванов', firstName: 'Иван', middleName: null, phone: '+79990000000' },
@@ -94,8 +94,8 @@ describe('buildDashboardOverview', () => {
           rental({
             startsAt: new Date('2026-08-24T07:00:00.000Z'),
             endsAt: new Date('2026-08-24T17:00:00.000Z'),
-            totalPriceMinor: 40_000n,
-            depositMinor: 15_000n,
+            totalPriceMinor: BigInt(40_000),
+            depositMinor: BigInt(15_000),
           }),
         ],
       }),
@@ -113,7 +113,7 @@ describe('buildDashboardOverview', () => {
           rental({
             startsAt: new Date('2026-08-24T07:00:00.000Z'),
             endsAt: new Date('2026-08-26T07:00:00.000Z'),
-            totalPriceMinor: 40_001n,
+            totalPriceMinor: BigInt(40_001),
           }),
         ],
       }),
@@ -130,7 +130,7 @@ describe('buildDashboardOverview', () => {
           rental({
             startsAt: new Date('2026-08-24T20:30:00.000Z'),
             endsAt: new Date('2026-08-24T21:30:00.000Z'),
-            totalPriceMinor: 10_001n,
+            totalPriceMinor: BigInt(10_001),
           }),
         ],
       }),
@@ -144,7 +144,7 @@ describe('buildDashboardOverview', () => {
       source({
         rentals: [
           rental({
-            depositMinor: 15_000n,
+            depositMinor: BigInt(15_000),
             operations: [operation('COLLECTED', '2026-08-20'), operation('RETURNED', '2026-08-24')],
           }),
         ],
@@ -201,8 +201,8 @@ describe('buildDashboardOverview', () => {
         rentals: [
           rental({
             vehicleId: 'demo',
-            totalPriceMinor: 99_999n,
-            depositMinor: 15_000n,
+            totalPriceMinor: BigInt(99_999),
+            depositMinor: BigInt(15_000),
             operations: [operation('COLLECTED', '2026-08-24')],
           }),
         ],
@@ -260,7 +260,7 @@ describe('buildDashboardOverview', () => {
         rentals: [
           rental({
             status: 'COMPLETED',
-            depositMinor: 15_000n,
+            depositMinor: BigInt(15_000),
             endsAt: new Date('2026-08-24T17:00:00.000Z'),
             operations: [{ ...operation('COLLECTED', '2026-08-20'), type: 'HANDOVER' }],
           }),
