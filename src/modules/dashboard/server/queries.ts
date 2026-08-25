@@ -50,7 +50,7 @@ type RawRental = {
     firstName: string;
     middleName: string | null;
     lastName: string;
-    phoneEncrypted: string;
+    phoneEncrypted?: string;
   };
   vehicle: { make: string | null; model: string; registrationNumber: string | null };
   operations: Array<{
@@ -59,12 +59,7 @@ type RawRental = {
     status: 'DRAFT' | 'COMMITTED' | 'ERROR';
     occurredAt: Date;
     depositStatus:
-      | 'NOT_COLLECTED'
-      | 'COLLECTED'
-      | 'RETURNED'
-      | 'PARTIALLY_WITHHELD'
-      | 'WITHHELD'
-      | null;
+      'NOT_COLLECTED' | 'COLLECTED' | 'RETURNED' | 'PARTIALLY_WITHHELD' | 'WITHHELD' | null;
     fulfillmentMethod: 'OFFICE' | 'DELIVERY' | null;
     fulfillmentAddress: string | null;
     nextEndsAt: Date | null;
@@ -107,41 +102,46 @@ const vehicleSelect = {
   },
 } satisfies Prisma.VehicleSelect;
 
-const rentalSelect = {
-  id: true,
-  vehicleId: true,
-  status: true,
-  startsAt: true,
-  endsAt: true,
-  completedAt: true,
-  totalPriceMinor: true,
-  depositMinor: true,
-  contractNumber: true,
-  client: {
-    select: {
-      firstName: true,
-      middleName: true,
-      lastName: true,
-      phoneEncrypted: true,
+const DASHBOARD_RENTAL_OPERATION_LIMIT = 24;
+
+function rentalSelect(canViewClientPhone: boolean) {
+  return {
+    id: true,
+    vehicleId: true,
+    status: true,
+    startsAt: true,
+    endsAt: true,
+    completedAt: true,
+    totalPriceMinor: true,
+    depositMinor: true,
+    contractNumber: true,
+    client: {
+      select: {
+        firstName: true,
+        middleName: true,
+        lastName: true,
+        ...(canViewClientPhone ? { phoneEncrypted: true } : {}),
+      },
     },
-  },
-  vehicle: { select: { make: true, model: true, registrationNumber: true } },
-  operations: {
-    where: { status: 'COMMITTED' },
-    select: {
-      id: true,
-      type: true,
-      status: true,
-      occurredAt: true,
-      depositStatus: true,
-      fulfillmentMethod: true,
-      fulfillmentAddress: true,
-      nextEndsAt: true,
-      extensionChargeMinor: true,
+    vehicle: { select: { make: true, model: true, registrationNumber: true } },
+    operations: {
+      where: { status: 'COMMITTED' },
+      select: {
+        id: true,
+        type: true,
+        status: true,
+        occurredAt: true,
+        depositStatus: true,
+        fulfillmentMethod: true,
+        fulfillmentAddress: true,
+        nextEndsAt: true,
+        extensionChargeMinor: true,
+      },
+      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+      take: DASHBOARD_RENTAL_OPERATION_LIMIT,
     },
-    orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
-  },
-} satisfies Prisma.RentalSelect;
+  } satisfies Prisma.RentalSelect;
+}
 
 const maintenanceSelect = {
   id: true,
@@ -223,7 +223,7 @@ export function createDashboardQueries(
               { completedAt: { gte: window.from, lt: window.toExclusive } },
             ],
           },
-          select: rentalSelect,
+          select: rentalSelect(session.canViewClientPhone),
           orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
         }),
         repository.maintenanceFindMany({

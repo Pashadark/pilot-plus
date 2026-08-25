@@ -134,9 +134,43 @@ describe('dashboard server queries', () => {
       { encryptionKey: ENCRYPTION_KEY },
     ).getOverview('today', NOW);
 
+    const authorizedQuery = repository.rentalFindMany.mock.calls[0]?.[0];
+    const unauthorizedQuery = repository.rentalFindMany.mock.calls[1]?.[0];
+
     expect(authorized.workItems[0]?.phone).toBe('+79990000000');
     expect(unauthorized.workItems[0]?.phone).toBeNull();
     expect(JSON.stringify(authorized)).not.toContain(encryptedPhone);
     expect(JSON.stringify(unauthorized)).not.toContain(encryptedPhone);
+    expect(authorizedQuery).toHaveProperty('select.client.select.phoneEncrypted', true);
+    expect(unauthorizedQuery).not.toHaveProperty('select.client.select.phoneEncrypted');
+  });
+
+  it('bounds committed rental operations while retaining their dashboard fields', async () => {
+    const repository = repositoryFixture();
+
+    await createDashboardQueries(
+      repository,
+      async () => ({ companyId: 'company-1', canViewClientPhone: false }),
+      { encryptionKey: ENCRYPTION_KEY },
+    ).getOverview('today', NOW);
+
+    expect(repository.rentalFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          operations: expect.objectContaining({
+            where: { status: 'COMMITTED' },
+            orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+            take: 24,
+            select: expect.objectContaining({
+              type: true,
+              occurredAt: true,
+              depositStatus: true,
+              fulfillmentMethod: true,
+              fulfillmentAddress: true,
+            }),
+          }),
+        }),
+      }),
+    );
   });
 });
