@@ -5,47 +5,12 @@ import { decryptField } from '@/services/security/field-encryption';
 
 import { BotApiError } from './auth';
 import { moscowDayRange } from './daily-operations';
+import { formatOperationsDigest } from './operations-digest';
+import { OFFLINE_AFTER_MS } from '@/modules/vehicles/gps-status';
 
 type ClaimDb = Pick<typeof prisma, '$transaction'>;
 type UpdateDb = Pick<typeof prisma, 'botNotificationJob'>;
 const LEASE_MS = 60_000;
-
-interface DailyDigestInput {
-  date: string;
-  requests: number;
-  rentals: number;
-  returns: Array<{
-    at: Date;
-    client: string;
-    vehicle: string;
-    contractNumber: string | null;
-  }>;
-  freeVehicles: string[];
-  service: number;
-}
-
-export function formatDailyOperationsDigest(input: DailyDigestInput) {
-  const lines = [
-    `Сводка СУПА ПРО на ${input.date}`,
-    `Заявки: ${input.requests}`,
-    `Аренды: ${input.rentals}`,
-    `Возвраты сегодня: ${input.returns.length}`,
-  ];
-  lines.push(
-    ...input.returns.map((item) => {
-      const at = new Intl.DateTimeFormat('ru-RU', {
-        timeZone: 'Europe/Moscow',
-        hour: '2-digit',
-        minute: '2-digit',
-      }).format(item.at);
-      return `• ${at} · ${item.vehicle} · ${item.client} · ${item.contractNumber ?? 'без номера'}`;
-    }),
-  );
-  lines.push(`Свободные машины: ${input.freeVehicles.length}`);
-  lines.push(...input.freeVehicles.map((vehicle) => `• ${vehicle}`));
-  lines.push(`На ТО / недоступны: ${input.service}`);
-  return lines.join('\n');
-}
 
 function vehicleLabel(vehicle: {
   make: string | null;
@@ -55,6 +20,24 @@ function vehicleLabel(vehicle: {
 }) {
   const title = `${vehicle.make ?? ''} ${vehicle.modelName ?? vehicle.model}`.trim();
   return `${title} · ${vehicle.registrationNumber ?? 'без номера'}`;
+}
+
+function vehicleTitle(vehicle: { make: string | null; modelName: string | null; model: string }) {
+  return `${vehicle.make ?? ''} ${vehicle.modelName ?? vehicle.model}`.trim();
+}
+
+function personName(person: { firstName: string; middleName: string | null; lastName: string }) {
+  return [person.lastName, person.firstName, person.middleName].filter(Boolean).join(' ');
+}
+
+function decryptedPhone(value: string | null | undefined): string | null {
+  const key = process.env.CLIENT_DATA_ENCRYPTION_KEY;
+  if (!key || !value) return null;
+  try {
+    return decryptField(value, key);
+  } catch {
+    return null;
+  }
 }
 
 export async function enqueueDailyOperationsDigests(now: Date, database = prisma) {
@@ -126,6 +109,7 @@ export async function enqueueReturnReminders(now: Date, database = prisma) {
 
 async function hydrateJob(
   tx: Parameters<Parameters<ClaimDb['$transaction']>[0]>[0],
+  now: Date,
   job: {
     id: string;
     companyId: string;
@@ -143,7 +127,8 @@ async function hydrateJob(
         : undefined;
     const range = moscowDayRange(date);
     const overlap = { startsAt: { lt: range.end }, endsAt: { gt: range.start } };
-    const [requests, rentals, returns, vehicles] = await Promise.all([
+    const [requests, rentals, dayRentals, vehicles, depositReturns, maintenance, washes] =
+      await Promise.all([
       tx.botRentalRequest.count({
         where: { companyId: job.companyId, status: 'PENDING', ...overlap },
       }),
@@ -154,14 +139,22 @@ async function hydrateJob(
         where: {
           companyId: job.companyId,
           status: { in: ['CONFIRMED', 'ACTIVE'] },
-          endsAt: { gte: range.start, lt: range.end },
+          ...overlap,
         },
-        orderBy: [{ endsAt: 'asc' }, { id: 'asc' }],
+        orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
         take: 200,
         select: {
+          startsAt: true,
           endsAt: true,
           contractNumber: true,
-          client: { select: { firstName: true, lastName: true } },
+          client: {
+            select: {
+              firstName: true,
+              middleName: true,
+              lastName: true,
+              phoneEncrypted: true,
+            },
+          },
           vehicle: {
             select: {
               make: true,
@@ -173,9 +166,10 @@ async function hydrateJob(
         },
       }),
       tx.vehicle.findMany({
-        where: { companyId: job.companyId, archivedAt: null },
+        where: { companyId: job.companyId, archivedAt: null, isDemoImport: false },
         select: {
           status: true,
+          isDemoImport: true,
           make: true,
           modelName: true,
           model: true,
@@ -194,8 +188,85 @@ async function hydrateJob(
             select: { id: true },
             take: 1,
           },
+          positions: {
+            where: { provider: 'GLONASSSOFT' },
+            select: { recordedAt: true },
+            orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+            take: 1,
+          },
         },
         take: 300,
+      }),
+      tx.rentalOperation.findMany({
+        where: {
+          companyId: job.companyId,
+          status: 'COMMITTED',
+          type: 'RETURN',
+          depositStatus: 'COLLECTED',
+          occurredAt: { gte: range.start, lt: range.end },
+        },
+        orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+        take: 200,
+        select: {
+          occurredAt: true,
+          depositAmountMinor: true,
+          rental: {
+            select: {
+              contractNumber: true,
+              depositMinor: true,
+              client: {
+                select: {
+                  firstName: true,
+                  middleName: true,
+                  lastName: true,
+                  phoneEncrypted: true,
+                },
+              },
+              vehicle: {
+                select: {
+                  make: true,
+                  modelName: true,
+                  model: true,
+                  registrationNumber: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      tx.maintenanceRecord.findMany({
+        where: {
+          vehicle: { companyId: job.companyId, archivedAt: null, isDemoImport: false },
+          status: { in: ['PLANNED', 'IN_PROGRESS', 'OVERDUE'] },
+          scheduledAt: { gte: range.start, lt: range.end },
+        },
+        orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
+        take: 200,
+        select: {
+          scheduledAt: true,
+          title: true,
+          status: true,
+          vehicle: {
+            select: { make: true, modelName: true, model: true, registrationNumber: true },
+          },
+        },
+      }),
+      tx.washRecord.findMany({
+        where: {
+          vehicle: { companyId: job.companyId, archivedAt: null, isDemoImport: false },
+          status: { in: ['PLANNED', 'IN_PROGRESS'] },
+          scheduledAt: { gte: range.start, lt: range.end },
+        },
+        orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
+        take: 200,
+        select: {
+          scheduledAt: true,
+          kind: true,
+          status: true,
+          vehicle: {
+            select: { make: true, modelName: true, model: true, registrationNumber: true },
+          },
+        },
       }),
     ]);
     const freeVehicles = vehicles.filter(
@@ -204,25 +275,88 @@ async function hydrateJob(
         !vehicle.rentals.length &&
         !vehicle.maintenanceRecords.length,
     );
-    const service = vehicles.filter(
-      (vehicle) => vehicle.status === 'MAINTENANCE' || vehicle.maintenanceRecords.length,
-    ).length;
+    const rentalItem = (rental: (typeof dayRentals)[number], at: Date, title: string) => ({
+      at,
+      title,
+      contractNumber: rental.contractNumber,
+      vehicle: vehicleTitle(rental.vehicle),
+      registrationNumber: rental.vehicle.registrationNumber,
+      client: personName(rental.client),
+      phone: decryptedPhone(rental.client.phoneEncrypted),
+    });
+    const washTitles: Record<string, string> = {
+      BODY: 'Мойка кузова',
+      INTERIOR: 'Уборка салона',
+      COMPLEX: 'Комплексная мойка',
+    };
     return {
       ...job,
       payload: {
-        message: formatDailyOperationsDigest({
+        message: formatOperationsDigest({
           date: range.date,
           requests,
-          rentals,
-          returns: returns.map((rental) => ({
-            at: rental.endsAt,
-            client: `${rental.client.lastName} ${rental.client.firstName}`.trim(),
-            vehicle: vehicleLabel(rental.vehicle),
-            contractNumber: rental.contractNumber,
+          activeRentals: rentals,
+          handovers: dayRentals
+            .filter((rental) => rental.startsAt >= range.start && rental.startsAt < range.end)
+            .map((rental) => rentalItem(rental, rental.startsAt, 'Выдать автомобиль')),
+          returns: dayRentals
+            .filter((rental) => rental.endsAt >= range.start && rental.endsAt < range.end)
+            .map((rental) => rentalItem(rental, rental.endsAt, 'Принять возврат автомобиля')),
+          deposits: depositReturns.map((operation) => ({
+            at: operation.occurredAt,
+            title: 'Вернуть депозит',
+            contractNumber: operation.rental.contractNumber,
+            vehicle: vehicleTitle(operation.rental.vehicle),
+            registrationNumber: operation.rental.vehicle.registrationNumber,
+            client: personName(operation.rental.client),
+            phone: decryptedPhone(operation.rental.client.phoneEncrypted),
+            amountMinor: (
+              operation.depositAmountMinor ?? operation.rental.depositMinor
+            )?.toString() ?? null,
           })),
-          freeVehicles: freeVehicles.map(vehicleLabel),
-          service,
+          washes: washes.flatMap((wash) =>
+            wash.scheduledAt
+              ? [
+                  {
+                    at: wash.scheduledAt,
+                    title: washTitles[wash.kind] ?? 'Мойка автомобиля',
+                    vehicle: vehicleTitle(wash.vehicle),
+                    registrationNumber: wash.vehicle.registrationNumber,
+                  },
+                ]
+              : [],
+          ),
+          maintenance: maintenance.flatMap((record) =>
+            record.scheduledAt
+              ? [
+                  {
+                    at: record.scheduledAt,
+                    title: record.title,
+                    vehicle: vehicleTitle(record.vehicle),
+                    registrationNumber: record.vehicle.registrationNumber,
+                    overdue: record.status === 'OVERDUE' || record.scheduledAt < now,
+                  },
+                ]
+              : [],
+          ),
+          offlineVehicles: vehicles.flatMap((vehicle) => {
+            const lastSignalAt = vehicle.positions[0]?.recordedAt ?? null;
+            return !lastSignalAt || now.getTime() - lastSignalAt.getTime() > OFFLINE_AFTER_MS
+              ? [
+                  {
+                    vehicle: vehicleTitle(vehicle),
+                    registrationNumber: vehicle.registrationNumber,
+                    lastSignalAt,
+                  },
+                ]
+              : [];
+          }),
+          freeVehicles: freeVehicles.map((vehicle) => ({
+            vehicle: vehicleTitle(vehicle),
+            registrationNumber: vehicle.registrationNumber,
+          })),
         }),
+        parseMode: 'HTML',
       },
     };
   }
@@ -318,7 +452,7 @@ export async function claimNotificationJobs(
           identity: { select: { telegramUserId: true, isActive: true } },
         },
       });
-      if (job) claimed.push(await hydrateJob(tx, job));
+      if (job) claimed.push(await hydrateJob(tx, now, job));
     }
     return claimed;
   });

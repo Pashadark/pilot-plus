@@ -5,41 +5,9 @@ import {
   claimNotificationJobs,
   enqueueDailyOperationsDigests,
   enqueueReturnReminders,
-  formatDailyOperationsDigest,
 } from './notifications';
 
 describe('bot notification leases', () => {
-  it('lists today returns and every free vehicle in the group digest', () => {
-    expect(
-      formatDailyOperationsDigest({
-        date: '2026-08-21',
-        requests: 0,
-        rentals: 2,
-        returns: [
-          {
-            at: new Date('2026-08-21T12:00:00Z'),
-            client: 'Иванов Иван',
-            vehicle: 'Kia K5 · В342НР797',
-            contractNumber: 'ME-2026-0011-II',
-          },
-        ],
-        freeVehicles: ['Skoda Octavia · Е435АН997', 'Toyota Camry · Н726АХ550'],
-        service: 1,
-      }),
-    ).toContain(
-      'Возвраты сегодня: 1\n• 15:00 · Kia K5 · В342НР797 · Иванов Иван · ME-2026-0011-II',
-    );
-    expect(
-      formatDailyOperationsDigest({
-        date: '2026-08-21',
-        requests: 0,
-        rentals: 0,
-        returns: [],
-        freeVehicles: ['Toyota Camry · Н726АХ550'],
-        service: 0,
-      }),
-    ).toContain('Свободные машины: 1\n• Toyota Camry · Н726АХ550');
-  });
   it('enqueues one idempotent daily digest per bound company after 00:05 Moscow', async () => {
     const createMany = vi.fn().mockResolvedValue({ count: 1 });
     const database = {
@@ -90,6 +58,135 @@ describe('bot notification leases', () => {
       database as never,
     );
     expect(jobs.map((job) => job.id)).toEqual(['job-1']);
+  });
+
+  it('hydrates the nightly job with safe HTML for rentals, deposits, service and stale GPS', async () => {
+    const tx = {
+      botNotificationJob: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'daily-1', claimToken: null, leaseExpiresAt: null, status: 'PENDING' },
+        ]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'daily-1',
+          companyId: 'company-1',
+          claimToken: 'worker:daily-1',
+          template: 'DAILY_OPERATIONS_DIGEST',
+          payload: { date: '2026-08-27' },
+          identity: null,
+          chatId: '-100777',
+        }),
+      },
+      botRentalRequest: { count: vi.fn().mockResolvedValue(1) },
+      rental: {
+        count: vi.fn().mockResolvedValue(2),
+        findMany: vi.fn().mockResolvedValue([
+          {
+            startsAt: new Date('2026-08-27T06:00:00Z'),
+            endsAt: new Date('2026-08-27T17:30:00Z'),
+            contractNumber: 'ME-2026-0020-KS',
+            client: {
+              firstName: 'Семен',
+              middleName: 'Юрьевич',
+              lastName: 'Клементьев',
+              phoneEncrypted: 'encrypted',
+            },
+            vehicle: {
+              make: 'Mercedes-Benz',
+              modelName: 'E220d 4Matic',
+              model: 'E220d',
+              registrationNumber: 'М283АМ997',
+            },
+          },
+        ]),
+      },
+      rentalOperation: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            occurredAt: new Date('2026-08-27T18:00:00Z'),
+            depositAmountMinor: BigInt(20_000_00),
+            rental: {
+              contractNumber: 'ME-2026-0020-KS',
+              client: {
+                firstName: 'Семен',
+                middleName: 'Юрьевич',
+                lastName: 'Клементьев',
+                phoneEncrypted: 'encrypted',
+              },
+              vehicle: {
+                make: 'Mercedes-Benz',
+                modelName: 'E220d 4Matic',
+                model: 'E220d',
+                registrationNumber: 'М283АМ997',
+              },
+            },
+          },
+        ]),
+      },
+      maintenanceRecord: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            scheduledAt: new Date('2026-08-27T07:00:00Z'),
+            title: 'Замена масла',
+            status: 'PLANNED',
+            vehicle: {
+              make: 'Kia',
+              modelName: 'K5',
+              model: 'K5',
+              registrationNumber: 'В342НР797',
+            },
+          },
+        ]),
+      },
+      washRecord: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            scheduledAt: new Date('2026-08-27T08:00:00Z'),
+            kind: 'COMPLEX',
+            status: 'PLANNED',
+            vehicle: {
+              make: 'Kia',
+              modelName: 'Rio',
+              model: 'Rio',
+              registrationNumber: 'Р604АО997',
+            },
+          },
+        ]),
+      },
+      vehicle: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            status: 'AVAILABLE',
+            isDemoImport: false,
+            make: 'Toyota',
+            modelName: 'Camry',
+            model: 'Camry',
+            registrationNumber: 'Н726АХ550',
+            rentals: [],
+            maintenanceRecords: [],
+            positions: [{ recordedAt: new Date('2026-08-26T18:00:00Z') }],
+          },
+        ]),
+      },
+    };
+    const database = { $transaction: vi.fn(async (callback) => callback(tx)) };
+
+    const [job] = await claimNotificationJobs(
+      new Date('2026-08-27T20:00:00Z'),
+      'worker',
+      database as never,
+    );
+
+    expect(job.payload).toMatchObject({ parseMode: 'HTML' });
+    expect((job.payload as { message: string }).message).toContain(
+      '<code>20:30</code>  <b>Принять возврат автомобиля</b>',
+    );
+    expect((job.payload as { message: string }).message).toContain('💰 <b>Возврат депозитов</b>');
+    expect((job.payload as { message: string }).message).toContain('🧼 <b>Мойки</b>');
+    expect((job.payload as { message: string }).message).toContain(
+      '🔧 <b>Техническое обслуживание</b>',
+    );
+    expect((job.payload as { message: string }).message).toContain('📡 <b>Нет GPS-связи</b>');
   });
 
   it('acks only the exact live claim token', async () => {
