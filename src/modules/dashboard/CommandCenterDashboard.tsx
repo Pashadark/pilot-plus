@@ -75,7 +75,7 @@ export function CommandCenterDashboard({ overview }: { overview: DashboardOvervi
       <div className="order-2 lg:order-1">
         <CommandCenterKpis kpis={overview.kpis} />
       </div>
-      <nav aria-label="Подробные разделы" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <nav aria-label="Подробные разделы" className="order-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
           ['/rentals', 'Все аренды'],
           ['/map', 'Карта машин'],
