@@ -75,22 +75,6 @@ export function CommandCenterDashboard({ overview, weather = null }: { overview:
           <AttentionPanel items={overview.attentionItems} />
         </div>
       </div>
-      <nav aria-label="Подробные разделы" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {[
-          ['/rentals', 'Все аренды'],
-          ['/map', 'Карта машин'],
-          ['/maintenance', 'Техобслуживание'],
-          ['/wash', 'Мойки'],
-        ].map(([href, label]) => (
-          <Link
-            key={href}
-            href={href}
-            className="rounded-[var(--radius-md)] border bg-[var(--color-surface)] px-4 py-3 text-center text-sm font-semibold hover:bg-[var(--color-elevated)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
-          >
-            {label}
-          </Link>
-        ))}
-      </nav>
     </div>
   );
 }

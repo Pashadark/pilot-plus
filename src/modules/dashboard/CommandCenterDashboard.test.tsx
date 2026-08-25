@@ -97,4 +97,9 @@ describe('CommandCenterDashboard', () => {
     const periods = screen.getByRole('navigation', { name: 'Период командного центра' });
     expect(cards.compareDocumentPosition(periods) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
+
+  it('does not duplicate sidebar navigation below the dashboard', () => {
+    render(<CommandCenterDashboard overview={overviewFixture()} weather={null} />);
+    expect(screen.queryByRole('navigation', { name: 'Подробные разделы' })).toBeNull();
+  });
 });
