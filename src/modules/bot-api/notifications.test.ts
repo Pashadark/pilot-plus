@@ -14,8 +14,11 @@ describe('bot notification leases', () => {
       telegramGroupBinding: {
         findMany: vi
           .fn()
-          .mockResolvedValue([{ companyId: 'company-1', telegramChatId: '-100777' }]),
+          .mockResolvedValue([
+            { companyId: 'company-1', telegramChatId: '-100777', boundByUserId: 'user-1' },
+          ]),
       },
+      telegramIdentity: { findMany: vi.fn().mockResolvedValue([]) },
       botNotificationJob: { createMany },
     };
     await expect(
@@ -25,13 +28,52 @@ describe('bot notification leases', () => {
       expect.objectContaining({
         data: [
           expect.objectContaining({
-            eventKey: 'daily-operations:company-1:2026-08-20',
+            eventKey: 'daily-operations:company-1:2026-08-20:group',
             chatId: '-100777',
             template: 'DAILY_OPERATIONS_DIGEST',
           }),
         ],
       }),
     );
+  });
+
+  it('enqueues independent nightly jobs for the group and the binding staff identity', async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 2 });
+    const database = {
+      telegramGroupBinding: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            companyId: 'company-1',
+            telegramChatId: '-100777',
+            boundByUserId: 'user-1',
+          },
+        ]),
+      },
+      telegramIdentity: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'identity-1', companyId: 'company-1', userId: 'user-1' },
+        ]),
+      },
+      botNotificationJob: { createMany },
+    };
+
+    await expect(
+      enqueueDailyOperationsDigests(new Date('2026-08-19T21:05:00Z'), database as never),
+    ).resolves.toBe(2);
+
+    expect(createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          eventKey: 'daily-operations:company-1:2026-08-20:group',
+          chatId: '-100777',
+        }),
+        expect.objectContaining({
+          eventKey: 'daily-operations:company-1:2026-08-20:staff:identity-1',
+          identityId: 'identity-1',
+        }),
+      ],
+      skipDuplicates: true,
+    });
   });
   it('returns only rows successfully claimed by this worker', async () => {
     const tx = {

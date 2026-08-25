@@ -2,11 +2,22 @@ import asyncio
 from html import escape
 
 
-def notification_text(job: dict) -> str:
+def notification_content(job: dict) -> tuple[str, str | None]:
     payload = job.get("payload") or {}
     if job.get("template") == "BOT_RENTAL_REQUEST_CREATED":
-        return f"Новая заявка на аренду · ID {escape(str(payload.get('requestId', '')))}"
-    return escape(str(payload.get("message") or "Уведомление СУПА ПРО"))
+        return f"Новая заявка на аренду · ID {escape(str(payload.get('requestId', '')))}", None
+    message = str(payload.get("message") or "Уведомление СУПА ПРО")
+    if payload.get("parseMode") == "HTML":
+        return message, "HTML"
+    return escape(message), None
+
+
+async def send_notification(bot, target, job: dict) -> None:
+    text, parse_mode = notification_content(job)
+    if parse_mode:
+        await bot.send_message(target, text, parse_mode=parse_mode)
+    else:
+        await bot.send_message(target, text)
 
 
 async def notification_worker(bot, api, stop_event: asyncio.Event, staff_chat_id: int, worker_id: str = "pilot-bot") -> None:
@@ -22,12 +33,12 @@ async def notification_worker(bot, api, stop_event: asyncio.Event, staff_chat_id
                 elif not target and chat_id.lstrip("-").isdigit():
                     target = int(chat_id)
                 try:
-                    await bot.send_message(target, notification_text(job))
+                    await send_notification(bot, target, job)
                 except Exception as exc:
                     migrated_chat_id = getattr(exc, "migrate_to_chat_id", None)
                     if migrated_chat_id is not None:
                         print(f"notification_group_migrated={migrated_chat_id}", flush=True)
-                        await bot.send_message(migrated_chat_id, notification_text(job))
+                        await send_notification(bot, migrated_chat_id, job)
                         await api.ack_notification(job["id"], job["claimToken"], True)
                     else:
                         print(f"notification_send_failed={type(exc).__name__}", flush=True)

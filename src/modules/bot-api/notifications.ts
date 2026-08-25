@@ -45,19 +45,51 @@ export async function enqueueDailyOperationsDigests(now: Date, database = prisma
   if (moscow.getUTCHours() === 0 && moscow.getUTCMinutes() < 5) return 0;
   const date = moscow.toISOString().slice(0, 10);
   const bindings = await database.telegramGroupBinding.findMany({
-    select: { companyId: true, telegramChatId: true },
+    select: { companyId: true, telegramChatId: true, boundByUserId: true },
     take: 500,
   });
   if (!bindings.length) return 0;
-  const result = await database.botNotificationJob.createMany({
-    data: bindings.map((binding) => ({
+  const identities = await database.telegramIdentity.findMany({
+    where: {
+      kind: 'STAFF',
+      isActive: true,
+      OR: bindings.map((binding) => ({
+        companyId: binding.companyId,
+        userId: binding.boundByUserId,
+      })),
+    },
+    select: { id: true, companyId: true, userId: true },
+    take: 500,
+  });
+  const identityByBinding = new Map(
+    identities.map((identity) => [`${identity.companyId}:${identity.userId}`, identity.id]),
+  );
+  const rows = bindings.flatMap((binding) => {
+    const common = {
       companyId: binding.companyId,
-      chatId: binding.telegramChatId,
-      eventKey: `daily-operations:${binding.companyId}:${date}`,
       template: 'DAILY_OPERATIONS_DIGEST',
       payload: { date },
       availableAt: now,
-    })),
+    };
+    const group = {
+      ...common,
+      chatId: binding.telegramChatId,
+      eventKey: `daily-operations:${binding.companyId}:${date}:group`,
+    };
+    const identityId = identityByBinding.get(`${binding.companyId}:${binding.boundByUserId}`);
+    return identityId
+      ? [
+          group,
+          {
+            ...common,
+            identityId,
+            eventKey: `daily-operations:${binding.companyId}:${date}:staff:${identityId}`,
+          },
+        ]
+      : [group];
+  });
+  const result = await database.botNotificationJob.createMany({
+    data: rows,
     skipDuplicates: true,
   });
   return result.count;

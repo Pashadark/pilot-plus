@@ -30,7 +30,10 @@ async def test_worker_sends_group_job_with_null_identity():
                     "id": "daily-1",
                     "claimToken": "token",
                     "template": "DAILY_OPERATIONS_DIGEST",
-                    "payload": {"message": "Свободные машины"},
+                    "payload": {
+                        "message": "<b>Сводка СУПА ПРО</b>",
+                        "parseMode": "HTML",
+                    },
                     "identity": None,
                     "chatId": "-100777",
                 }
@@ -46,7 +49,11 @@ async def test_worker_sends_group_job_with_null_identity():
     api.ack_notification.side_effect = ack
     await notification_worker(bot, api, stop, 0)
 
-    bot.send_message.assert_awaited_once_with(-100777, "Свободные машины")
+    bot.send_message.assert_awaited_once_with(
+        -100777,
+        "<b>Сводка СУПА ПРО</b>",
+        parse_mode="HTML",
+    )
     api.ack_notification.assert_awaited_once_with("daily-1", "token", True)
 
 
