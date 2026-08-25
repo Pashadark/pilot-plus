@@ -206,6 +206,41 @@ Use a confirmation dialog and surface active-rental conflicts. Archive «Про�
 
 Expected: PASS.
 
+### Task 2A: Погода Москвы и состав финансовых карточек
+
+**Files:**
+- Create: `src/modules/weather/server/get-moscow-weather.ts`
+- Create: `src/modules/weather/server/get-moscow-weather.test.ts`
+- Create: `src/modules/weather/MoscowWeatherCard.tsx`
+- Create: `src/modules/weather/MoscowWeatherCard.test.tsx`
+- Modify: `src/app/(protected)/page.tsx`
+- Modify: `src/modules/dashboard/CommandCenterDashboard.tsx`
+- Modify: `src/modules/dashboard/CommandCenterKpis.tsx`
+
+**Interfaces:**
+- Produces: `getMoscowWeather(): Promise<MoscowWeather | null>` with temperature, apparent temperature, weather code, wind, precipitation and observed time.
+
+- [ ] **Step 1: Write failing parser and component tests**
+
+Cover valid Open-Meteo response, invalid response fallback, Russian WMO description, strict weather card, and absence of «Сейчас на руках».
+
+- [ ] **Step 2: Run tests and verify failure**
+
+Run: `npx vitest run src/modules/weather/server/get-moscow-weather.test.ts src/modules/weather/MoscowWeatherCard.test.tsx src/modules/dashboard/CommandCenterDashboard.test.tsx`
+Expected: FAIL because the weather module does not exist.
+
+- [ ] **Step 3: Implement cached server weather fetch and card**
+
+Fetch Moscow coordinates from Open-Meteo with a 15-minute revalidation window. Return `null` for network, HTTP or schema errors and render a neutral fallback.
+
+- [ ] **Step 4: Remove «Сейчас на руках» from KPI cards and render weather first**
+
+Keep held-deposit state in domain data for reminders, but do not render it as a command-center KPI.
+
+- [ ] **Step 5: Run targeted tests**
+
+Expected: PASS.
+
 ### Task 6: Риск клиента в мастере аренды
 
 **Files:**
@@ -265,4 +300,3 @@ Check dashboard totals/drill-down, GPS timestamps, notification persistence/dedu
 
 Run: `git diff --check` and `git status --short`.
 Expected: no whitespace errors and no unrelated files staged.
-
