@@ -23,7 +23,7 @@ export function ClientPhoto({
   name: string;
   localPhotoUrl?: string | null;
   confirmedMessengerAvatarUrl?: string | null;
-  size?: 'sm' | 'lg';
+  size?: 'xs' | 'sm' | 'lg';
 }) {
   const src = isApprovedClientPhotoPath(localPhotoUrl) ? localPhotoUrl : null;
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export function ClientPhoto({
     <div
       data-testid="client-photo"
       data-source={source}
-      className={`${size === 'sm' ? 'size-14' : 'size-[5.5rem]'} shrink-0 overflow-hidden`}
+      className={`${size === 'xs' ? 'size-9' : size === 'sm' ? 'size-14' : 'size-[5.5rem]'} shrink-0 overflow-hidden`}
     >
       {visibleSrc ? (
         // Защищённый photo route требует session cookie текущего браузера.

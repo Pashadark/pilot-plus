@@ -72,5 +72,11 @@ describe('ClientGrid', () => {
     expect(markup).toContain('Нужно вернуть');
     expect(markup).toContain('bg-[var(--color-success-soft)]');
     expect(markup).toContain('Открыть');
+    expect(markup).toContain('aria-label="Открыть карточку клиента"');
+    expect(markup).toContain('title="Открыть карточку клиента"');
+    expect(markup).toContain('h-[72px]');
+    expect(markup).toContain('size-9');
+    expect(markup).toContain('text-right tabular-nums');
+    expect(markup).not.toContain('class="font-bold');
   });
 });

@@ -12,18 +12,18 @@ export function ClientRatingStars({
   return (
     <div
       aria-label={`Рейтинг клиента: ${rating.display} из 5`}
-      className="flex flex-wrap items-center gap-2 text-sm"
+      className="flex items-center gap-1.5 text-sm"
     >
       <span aria-hidden="true" className="flex text-amber-500">
         {Array.from({ length: 5 }, (_, index) => (
           <FiStar
             key={index}
             data-testid="rating-star"
-            className={index < rating.stars ? 'fill-current' : 'opacity-30'}
+            className={`size-3.5 ${index < rating.stars ? 'fill-current' : 'opacity-30'}`}
           />
         ))}
       </span>
-      <strong className="tabular-nums">{rating.display}</strong>
+      <span className="tabular-nums text-[var(--color-text-secondary)]">{rating.display}</span>
       {compact ? null : <span className="text-[var(--color-text-secondary)]">{rating.label}</span>}
     </div>
   );

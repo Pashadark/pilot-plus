@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { FiEye } from 'react-icons/fi';
 
 import type { ClientCardDto } from '../types';
 import type { ClientRatingSummary } from '@/modules/client-rating/types';
@@ -49,19 +50,19 @@ export function ClientGrid({
       </div>
 
       <div className="hidden overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)] md:block">
-        <table className="w-full min-w-[1180px] border-collapse text-left">
-          <thead className="bg-[var(--color-elevated)] text-xs font-semibold tracking-wide text-[var(--color-text-secondary)] uppercase">
+        <table className="w-full min-w-[1180px] border-collapse text-left text-sm font-normal">
+          <thead className="bg-[var(--color-elevated)] text-xs font-medium tracking-wide text-[var(--color-text-secondary)] uppercase">
             <tr>
-              <th className="px-4 py-3">Клиент</th>
-              <th className="px-4 py-3">Телефон</th>
-              <th className="px-4 py-3">Рейтинг</th>
-              <th className="px-4 py-3">Аренды</th>
-              <th className="px-4 py-3">Машина</th>
-              <th className="px-4 py-3">Стоимость аренды</th>
-              <th className="px-4 py-3">Депозит</th>
-              <th className="px-4 py-3">Статус депозита</th>
-              <th className="px-4 py-3">Статус</th>
-              <th className="px-4 py-3 text-right">Действия</th>
+              <th className="px-3 py-2.5">Клиент</th>
+              <th className="px-3 py-2.5">Телефон</th>
+              <th className="px-3 py-2.5">Рейтинг</th>
+              <th className="px-3 py-2.5">Аренды</th>
+              <th className="px-3 py-2.5">Машина</th>
+              <th className="px-3 py-2.5 text-right">Стоимость аренды</th>
+              <th className="px-3 py-2.5 text-right">Депозит</th>
+              <th className="px-3 py-2.5">Статус депозита</th>
+              <th className="px-3 py-2.5">Статус</th>
+              <th className="px-3 py-2.5 text-right">Действия</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-border)]">
@@ -75,45 +76,45 @@ export function ClientGrid({
               return (
                 <tr
                   key={client.id}
-                  className={`transition-[filter] ${rentalRowClasses[rentalColor]}`}
+                  className={`h-[72px] transition-[filter] ${rentalRowClasses[rentalColor]}`}
                 >
-                  <td className="px-4 py-3">
-                    <div className="flex min-w-[250px] items-center gap-3">
+                  <td className="px-3 py-2.5">
+                    <div className="flex min-w-[220px] items-center gap-2.5">
                       <ClientPhoto
                         name={client.fullName}
                         localPhotoUrl={client.localPhotoUrl}
-                        size="sm"
+                        size="xs"
                       />
                       <div className="min-w-0">
                         <Link
                           href={`/clients/${client.id}`}
-                          className="font-bold hover:text-[var(--color-primary)]"
+                          className="font-medium hover:text-[var(--color-primary)]"
                         >
                           {client.fullName}
                         </Link>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm font-semibold whitespace-nowrap">
+                  <td className="px-3 py-2.5 whitespace-nowrap">
                     {client.phoneMasked}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2.5">
                     {ratings[client.id] ? (
                       <ClientRatingStars rating={ratings[client.id]} compact />
                     ) : (
                       <span className="text-sm text-[var(--color-text-secondary)]">Нет оценки</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
-                    <p className="font-semibold tabular-nums">{client.rentalSummary.total}</p>
+                  <td className="px-3 py-2.5">
+                    <p className="tabular-nums">{client.rentalSummary.total}</p>
                     <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
                       {last ? `Последняя: ${formatRentalDate(last.endsAt)}` : 'Нет аренд'}
                     </p>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2.5">
                     {depositRental ? (
                       <div className="min-w-[190px]">
-                        <p className="font-semibold">{depositRental.vehicle.label}</p>
+                        <p>{depositRental.vehicle.label}</p>
                         <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
                           {depositRental.vehicle.registrationNumber ?? 'Без номера'}
                           {depositRental.contractNumber ? ` · ${depositRental.contractNumber}` : ''}
@@ -123,29 +124,28 @@ export function ClientGrid({
                       <span className="text-sm text-[var(--color-text-secondary)]">Нет аренды</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
-                    <p className="font-semibold whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    <p className="whitespace-nowrap">
                       {depositRental ? formatMinorMoney(depositRental.totalPriceMinor) : '—'}
                     </p>
-                    {!current && depositRental ? (
-                      <p className="mt-1 text-xs text-[var(--color-text-secondary)]">Последняя</p>
-                    ) : null}
                   </td>
-                  <td className="px-4 py-3">
-                    <p className="font-semibold whitespace-nowrap">{deposit.amount}</p>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    <p className="whitespace-nowrap">{deposit.amount}</p>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2.5">
                     {deposit.label ? <Badge tone={deposit.tone}>{deposit.label}</Badge> : '—'}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2.5">
                     <Badge tone={status.tone}>{status.label}</Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-3 py-2.5 text-right">
                     <Link
                       href={`/clients/${client.id}`}
-                      className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 text-sm font-semibold hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+                      aria-label="Открыть карточку клиента"
+                      title="Открыть карточку клиента"
+                      className="inline-flex size-10 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
                     >
-                      Открыть
+                      <FiEye aria-hidden="true" className="size-4" />
                     </Link>
                   </td>
                 </tr>
