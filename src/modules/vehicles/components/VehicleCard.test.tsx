@@ -94,4 +94,29 @@ describe('VehicleCard', () => {
     );
     expect(screen.getByText('Обслуживание')).toBeTruthy();
   });
+
+  it('показывает место популярности на фотографии и не рисует медаль без места', () => {
+    const moving = {
+      key: 'MOVING',
+      label: 'В движении',
+      tone: 'primary',
+      isConnected: true,
+    } as const;
+    const popularVehicle = vehicle(moving, 'IDLE');
+    popularVehicle.popularityRank = 1;
+    const { rerender } = render(
+      <ToastProvider>
+        <VehicleCard vehicle={popularVehicle} />
+      </ToastProvider>,
+    );
+
+    expect(screen.getByRole('img', { name: '1 место по количеству заказов' })).toBeTruthy();
+
+    rerender(
+      <ToastProvider>
+        <VehicleCard vehicle={{ ...popularVehicle, popularityRank: null }} />
+      </ToastProvider>,
+    );
+    expect(screen.queryByRole('img', { name: /место по количеству заказов/ })).toBeNull();
+  });
 });

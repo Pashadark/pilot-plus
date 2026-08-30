@@ -16,6 +16,7 @@ import {
 import type { VehicleCardDto } from '../types';
 import { formatDailyPrice, formatOptionalMetric } from '../utils';
 import { VehiclePhoto } from './VehiclePhoto';
+import { VehiclePopularityMedal } from './VehiclePopularityMedal';
 import { useToast } from '@/shared/providers/ToastProvider';
 import { Badge, Button, Card } from '@/shared/ui';
 
@@ -54,12 +55,19 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
         className="grid h-full grid-rows-[auto_auto_auto_1fr_auto]"
         data-testid="vehicle-card"
       >
-        <VehiclePhoto
-          image={vehicle.primaryImage}
-          model={vehicle.model}
-          city={vehicle.city}
-          sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
-        />
+        <div className="relative">
+          <VehiclePhoto
+            image={vehicle.primaryImage}
+            model={vehicle.model}
+            city={vehicle.city}
+            sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
+          />
+          {vehicle.popularityRank ? (
+            <span className="pointer-events-none absolute top-2.5 right-2.5 z-10 sm:top-3 sm:right-3">
+              <VehiclePopularityMedal rank={vehicle.popularityRank} />
+            </span>
+          ) : null}
+        </div>
         <header className="flex items-start gap-3 border-b border-[var(--color-border)] p-4">
           <span className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]">
             <FiTruck aria-hidden="true" className="size-5" />

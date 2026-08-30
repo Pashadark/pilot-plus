@@ -43,6 +43,7 @@ export interface VehicleCardDto {
   gpsStatus: VehicleGpsStatusView;
   primaryImage: VehicleImageDto | null;
   telemetry: VehicleTelemetrySummary;
+  popularityRank?: 1 | 2 | 3 | null;
 }
 
 export interface VehicleTripDto {

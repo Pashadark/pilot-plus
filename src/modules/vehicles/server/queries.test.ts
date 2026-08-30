@@ -84,6 +84,79 @@ function createRepository() {
 }
 
 describe('запросы автопарка', () => {
+  it('присваивает три места по подтверждённым заказам с устойчивым разрешением ничьей', async () => {
+    const rankedFixtures = [
+      {
+        ...rawVehicle,
+        id: 'vehicle-bronze',
+        _count: { rentals: 2 },
+        rentals: [{ createdAt: new Date('2026-08-28T10:00:00.000Z') }],
+      },
+      {
+        ...rawVehicle,
+        id: 'vehicle-without-orders',
+        _count: { rentals: 0 },
+        rentals: [],
+      },
+      {
+        ...rawVehicle,
+        id: 'vehicle-silver',
+        _count: { rentals: 3 },
+        rentals: [{ createdAt: new Date('2026-08-29T09:00:00.000Z') }],
+      },
+      {
+        ...rawVehicle,
+        id: 'vehicle-gold',
+        _count: { rentals: 3 },
+        rentals: [{ createdAt: new Date('2026-08-29T12:00:00.000Z') }],
+      },
+      {
+        ...rawVehicle,
+        id: 'vehicle-fourth',
+        _count: { rentals: 1 },
+        rentals: [{ createdAt: new Date('2026-08-30T12:00:00.000Z') }],
+      },
+    ];
+    let listArgs: unknown;
+    const queries = createVehicleQueries({
+      async findMany(args: unknown) {
+        listArgs = args;
+        return rankedFixtures;
+      },
+      async findFirst() {
+        return null;
+      },
+    });
+
+    const vehicles = await queries.listVehiclesForUser('user-1');
+
+    expect(listArgs).toMatchObject({
+      where: { archivedAt: null, company: { members: { some: { userId: 'user-1' } } } },
+      select: {
+        _count: {
+          select: {
+            rentals: { where: { status: { in: ['CONFIRMED', 'ACTIVE', 'COMPLETED'] } } },
+          },
+        },
+        rentals: {
+          where: { status: { in: ['CONFIRMED', 'ACTIVE', 'COMPLETED'] } },
+          select: { createdAt: true },
+          orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+          take: 1,
+        },
+      },
+    });
+    expect(
+      Object.fromEntries(vehicles.map((vehicle) => [vehicle.id, vehicle.popularityRank])),
+    ).toEqual({
+      'vehicle-bronze': 3,
+      'vehicle-without-orders': null,
+      'vehicle-silver': 2,
+      'vehicle-gold': 1,
+      'vehicle-fourth': null,
+    });
+  });
+
   it('ограничивает список членством текущего пользователя', async () => {
     const fake = createRepository();
     const queries = createVehicleQueries(fake.repository);

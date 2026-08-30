@@ -126,6 +126,17 @@ type RawVehicleCard = Pick<
   | 'images'
 >;
 
+type RawRankedVehicleCard = RawVehicleCard & {
+  _count?: { rentals: number };
+  rentals?: { createdAt: Date }[];
+};
+
+const popularityRentalStatuses: ('CONFIRMED' | 'ACTIVE' | 'COMPLETED')[] = [
+  'CONFIRMED',
+  'ACTIVE',
+  'COMPLETED',
+];
+
 const vehicleCardSelect = {
   id: true,
   internalNumber: true,
@@ -163,6 +174,15 @@ const vehicleCardSelect = {
     where: { isPrimary: true },
     select: { localPath: true, alt: true },
     orderBy: { position: 'asc' as const },
+    take: 1,
+  },
+  _count: {
+    select: { rentals: { where: { status: { in: popularityRentalStatuses } } } },
+  },
+  rentals: {
+    where: { status: { in: popularityRentalStatuses } },
+    select: { createdAt: true },
+    orderBy: [{ createdAt: 'desc' as const }, { id: 'asc' as const }],
     take: 1,
   },
 } satisfies Prisma.VehicleSelect;
@@ -314,7 +334,11 @@ function optionalNumber(value: unknown | null | undefined) {
   return value === null || value === undefined ? null : Number(value);
 }
 
-function mapCard(vehicle: RawVehicleCard, referenceTime: Date): VehicleCardDto {
+function mapCard(
+  vehicle: RawVehicleCard,
+  referenceTime: Date,
+  popularityRank: 1 | 2 | 3 | null = null,
+): VehicleCardDto {
   const position = vehicle.positions[0];
   const trip = vehicle.trips[0];
   return {
@@ -352,7 +376,30 @@ function mapCard(vehicle: RawVehicleCard, referenceTime: Date): VehicleCardDto {
       hasPosition: Boolean(position),
       address: position?.address ?? null,
     },
+    popularityRank,
   };
+}
+
+function mapRankedCards(vehicles: RawRankedVehicleCard[], referenceTime: Date) {
+  const ranked = vehicles
+    .filter((vehicle) => (vehicle._count?.rentals ?? 0) > 0)
+    .toSorted((left, right) => {
+      const countDifference = (right._count?.rentals ?? 0) - (left._count?.rentals ?? 0);
+      if (countDifference !== 0) return countDifference;
+
+      const leftNewest = left.rentals?.[0]?.createdAt.getTime() ?? 0;
+      const rightNewest = right.rentals?.[0]?.createdAt.getTime() ?? 0;
+      if (leftNewest !== rightNewest) return rightNewest - leftNewest;
+      return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+    })
+    .slice(0, 3);
+  const rankByVehicleId = new Map(
+    ranked.map((vehicle, index) => [vehicle.id, (index + 1) as 1 | 2 | 3]),
+  );
+
+  return vehicles.map((vehicle) =>
+    mapCard(vehicle, referenceTime, rankByVehicleId.get(vehicle.id) ?? null),
+  );
 }
 
 function mapDetail(vehicle: RawVehicle, referenceTime: Date): VehicleDetailDto {
@@ -422,7 +469,7 @@ export function createVehicleQueries(repository: VehicleRepository) {
         select: vehicleCardSelect,
         orderBy: [{ city: 'asc' }, { model: 'asc' }, { internalNumber: 'asc' }],
       });
-      return (vehicles as RawVehicleCard[]).map((vehicle) => mapCard(vehicle, referenceTime));
+      return mapRankedCards(vehicles as RawRankedVehicleCard[], referenceTime);
     },
     async listVehicleOptionsForUser(userId: string): Promise<VehicleOptionDto[]> {
       const vehicles = await repository.findMany({
