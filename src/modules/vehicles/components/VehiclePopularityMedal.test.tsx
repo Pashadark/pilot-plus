@@ -19,5 +19,7 @@ describe('VehiclePopularityMedal', () => {
     expect(medal.tagName.toLowerCase()).toBe('svg');
     expect(medal.textContent).toContain(String(rank));
     expect(medal.getAttribute('data-medal-tone')).toBe(tone);
+    expect(medal.getAttribute('data-medal-style')).toBe('seal-ribbon');
+    expect(medal.getAttribute('class')).toContain('size-9');
   });
 });

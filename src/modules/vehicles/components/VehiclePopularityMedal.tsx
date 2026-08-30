@@ -15,8 +15,9 @@ export function VehiclePopularityMedal({ rank }: { rank: PopularityRank }) {
       role="img"
       aria-label={`${rank} место по количеству заказов`}
       data-medal-tone={palette.tone}
+      data-medal-style="seal-ribbon"
       viewBox="0 0 48 58"
-      className="size-11 overflow-visible drop-shadow-[0_3px_7px_rgba(15,23,42,0.28)] sm:size-12"
+      className="size-9 overflow-visible drop-shadow-[0_2px_5px_rgba(15,23,42,0.25)] sm:size-10"
     >
       <title>{`${rank} место по количеству заказов`}</title>
       <defs>
@@ -26,18 +27,19 @@ export function VehiclePopularityMedal({ rank }: { rank: PopularityRank }) {
           <stop offset="1" stopColor={palette.dark} />
         </linearGradient>
       </defs>
-      <path d="M12 35 9 56l15-8 15 8-3-21Z" fill={palette.dark} />
-      <circle cx="24" cy="23" r="20" fill={`url(#${gradientId})`} />
-      <circle cx="24" cy="23" r="16.5" fill="none" stroke="rgba(255,255,255,.7)" />
+      <path d="m13 34-1 22 12-7 2-15Z" fill={palette.dark} />
+      <path d="m35 34 1 22-12-7-2-15Z" fill={palette.main} />
       <path
-        d="m24 7 3.2 5.1 5.8-1.4.5 6 5.6 2.2-2.3 5.5 4.1 4.3-4.8 3.5 1 5.9-6-.2-3 5.2-5.3-2.8-5.3 2.8-3-5.2-6 .2 1-5.9-4.8-3.5 4.1-4.3-2.3-5.5 5.6-2.2.5-6 5.8 1.4Z"
-        fill="rgba(255,255,255,.18)"
+        d="m24 3 3 2.2 3.7-.9 2.2 3.1 3.8.3.7 3.7 3.4 1.7-.9 3.7 2.2 3-2.2 3 .9 3.7-3.4 1.7-.7 3.7-3.8.3-2.2 3.1-3.7-.9-3 2.2-3-2.2-3.7.9-2.2-3.1-3.8-.3-.7-3.7-3.4-1.7.9-3.7-2.2-3 2.2-3-.9-3.7 3.4-1.7.7-3.7 3.8-.3 2.2-3.1 3.7.9Z"
+        fill={`url(#${gradientId})`}
       />
+      <circle cx="24" cy="22" r="14.5" fill={`url(#${gradientId})`} stroke={palette.dark} strokeWidth="1" />
+      <circle cx="24" cy="22" r="11.5" fill="none" stroke="rgba(255,255,255,.72)" />
       <text
         x="24"
-        y="30"
+        y="28"
         textAnchor="middle"
-        fontSize="20"
+        fontSize="18"
         fontWeight="900"
         fill="#172033"
         stroke="rgba(255,255,255,.55)"
