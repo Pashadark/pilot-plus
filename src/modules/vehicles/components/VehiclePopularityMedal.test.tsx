@@ -19,7 +19,10 @@ describe('VehiclePopularityMedal', () => {
     expect(medal.tagName.toLowerCase()).toBe('svg');
     expect(medal.textContent).toContain(String(rank));
     expect(medal.getAttribute('data-medal-tone')).toBe(tone);
-    expect(medal.getAttribute('data-medal-style')).toBe('seal-ribbon');
+    expect(medal.getAttribute('data-medal-style')).toBe('premium-rosette-ribbon');
     expect(medal.getAttribute('class')).toContain('size-9');
+    expect(medal.querySelectorAll('radialGradient')).toHaveLength(2);
+    expect(medal.querySelectorAll('[data-medal-ribbon]')).toHaveLength(2);
+    expect(medal.querySelector('[data-medal-scalloped-edge]')).toBeTruthy();
   });
 });
