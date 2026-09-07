@@ -558,7 +558,7 @@ model Lead {
   source           String?
   commentEncrypted String?
   status           LeadStatus @default(NEW)
-  nextContactAt    DateTime?   @db.Timestamptz(3)
+  nextContactAt    DateTime?  @db.Timestamptz(3)
   createdByUserId  String
   createdBy        User       @relation("LeadCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   assignedToUserId String?
