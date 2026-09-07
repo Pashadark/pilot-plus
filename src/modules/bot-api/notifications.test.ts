@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { encryptField } from '@/services/security/field-encryption';
+
 import {
   ackNotificationJob,
   claimNotificationJobs,
@@ -50,9 +52,9 @@ describe('bot notification leases', () => {
         ]),
       },
       telegramIdentity: {
-        findMany: vi.fn().mockResolvedValue([
-          { id: 'identity-1', companyId: 'company-1', userId: 'user-1' },
-        ]),
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ id: 'identity-1', companyId: 'company-1', userId: 'user-1' }]),
       },
       botNotificationJob: { createMany },
     };
@@ -105,9 +107,11 @@ describe('bot notification leases', () => {
   it('hydrates the nightly job with safe HTML for rentals, deposits, service and stale GPS', async () => {
     const tx = {
       botNotificationJob: {
-        findMany: vi.fn().mockResolvedValue([
-          { id: 'daily-1', claimToken: null, leaseExpiresAt: null, status: 'PENDING' },
-        ]),
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            { id: 'daily-1', claimToken: null, leaseExpiresAt: null, status: 'PENDING' },
+          ]),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         findUnique: vi.fn().mockResolvedValue({
           id: 'daily-1',
@@ -229,6 +233,65 @@ describe('bot notification leases', () => {
       '🔧 <b>Техническое обслуживание</b>',
     );
     expect((job.payload as { message: string }).message).toContain('📡 <b>Нет GPS-связи</b>');
+  });
+
+  it('hydrates a lead status job from tenant-scoped database rows', async () => {
+    const encryptionKey = Buffer.alloc(32, 23).toString('base64');
+    process.env.CLIENT_DATA_ENCRYPTION_KEY = encryptionKey;
+    const tx = {
+      botNotificationJob: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            { id: 'lead-job-1', claimToken: null, leaseExpiresAt: null, status: 'PENDING' },
+          ]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'lead-job-1',
+          companyId: 'company-1',
+          claimToken: 'worker:lead-job-1',
+          template: 'LEAD_STATUS_CHANGED',
+          payload: { leadId: 'lead-1', auditId: 'audit-1' },
+          identity: null,
+          chatId: '-100777',
+        }),
+      },
+      lead: {
+        findFirst: vi.fn().mockResolvedValue({
+          name: 'Анна',
+          lastName: 'Петрова',
+          phoneEncrypted: encryptField('+7 999 123-45-67', encryptionKey),
+          source: 'Авито',
+          status: 'CONTACTED',
+          nextContactAt: null,
+          createdAt: new Date('2026-09-07T08:00:00.000Z'),
+          assignedTo: { name: 'Павел Седов' },
+        }),
+      },
+      auditLog: {
+        findFirst: vi.fn().mockResolvedValue({
+          changes: { status: { from: 'NEW', to: 'CONTACTED' } },
+          actorUser: { name: 'Оператор' },
+        }),
+      },
+    };
+    const database = { $transaction: vi.fn(async (callback) => callback(tx)) };
+
+    const [job] = await claimNotificationJobs(
+      new Date('2026-09-07T09:00:00.000Z'),
+      'worker',
+      database as never,
+    );
+
+    expect(tx.lead.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'lead-1', companyId: 'company-1' } }),
+    );
+    expect(tx.auditLog.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'audit-1', companyId: 'company-1' } }),
+    );
+    expect(job.payload).toMatchObject({ parseMode: 'HTML' });
+    expect((job.payload as { message: string }).message).toContain('Новая → Связались');
+    expect((job.payload as { message: string }).message).toContain('+7 999 123-45-67');
   });
 
   it('acks only the exact live claim token', async () => {

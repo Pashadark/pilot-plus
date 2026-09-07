@@ -5,6 +5,10 @@ import { decryptField } from '@/services/security/field-encryption';
 
 import { BotApiError } from './auth';
 import { moscowDayRange } from './daily-operations';
+import {
+  formatLeadCreatedMessage,
+  formatLeadStatusChangedMessage,
+} from './lead-notifications';
 import { formatOperationsDigest } from './operations-digest';
 import { OFFLINE_AFTER_MS } from '@/modules/vehicles/gps-status';
 
@@ -37,6 +41,43 @@ function decryptedPhone(value: string | null | undefined): string | null {
     return decryptField(value, key);
   } catch {
     return null;
+  }
+}
+
+function leadPayloadId(payload: unknown, key: 'leadId' | 'auditId') {
+  return typeof payload === 'object' && payload !== null && key in payload
+    ? String(payload[key])
+    : '';
+}
+
+function leadStatusTransition(
+  changes: unknown,
+  fallbackStatus: 'NEW' | 'CONTACTED' | 'QUALIFIED' | 'BOOKED' | 'LOST',
+) {
+  const allowed = new Set(['NEW', 'CONTACTED', 'QUALIFIED', 'BOOKED', 'LOST']);
+  if (!changes || typeof changes !== 'object' || !('status' in changes)) {
+    return { previousStatus: fallbackStatus, status: fallbackStatus };
+  }
+  const status = changes.status;
+  if (!status || typeof status !== 'object') {
+    return { previousStatus: fallbackStatus, status: fallbackStatus };
+  }
+  const from = 'from' in status ? String(status.from) : '';
+  const to = 'to' in status ? String(status.to) : '';
+  return {
+    previousStatus: allowed.has(from) ? (from as typeof fallbackStatus) : fallbackStatus,
+    status: allowed.has(to) ? (to as typeof fallbackStatus) : fallbackStatus,
+  };
+}
+
+function publicLeadsUrl() {
+  const configured = process.env.PILOT_PUBLIC_APP_URL?.trim();
+  if (!configured) return 'https://supapro.ru/leads';
+  try {
+    const url = new URL('/leads', configured);
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : 'https://supapro.ru/leads';
+  } catch {
+    return 'https://supapro.ru/leads';
   }
 }
 
@@ -152,6 +193,53 @@ async function hydrateJob(
     identity: { telegramUserId: string; isActive: boolean } | null;
   },
 ) {
+  if (job.template === 'LEAD_CREATED' || job.template === 'LEAD_STATUS_CHANGED') {
+    const leadId = leadPayloadId(job.payload, 'leadId');
+    const auditId = leadPayloadId(job.payload, 'auditId');
+    const [lead, audit] = await Promise.all([
+      tx.lead.findFirst({
+        where: { id: leadId, companyId: job.companyId },
+        select: {
+          name: true,
+          lastName: true,
+          phoneEncrypted: true,
+          source: true,
+          status: true,
+          nextContactAt: true,
+          createdAt: true,
+          assignedTo: { select: { name: true } },
+        },
+      }),
+      job.template === 'LEAD_STATUS_CHANGED'
+        ? tx.auditLog.findFirst({
+            where: { id: auditId, companyId: job.companyId },
+            select: { changes: true, actorUser: { select: { name: true } } },
+          })
+        : Promise.resolve(null),
+    ]);
+    if (!lead) {
+      return { ...job, payload: { message: 'Заявка уже недоступна.' } };
+    }
+    const common = {
+      name: lead.name,
+      lastName: lead.lastName,
+      phone: decryptedPhone(lead.phoneEncrypted),
+      source: lead.source,
+      nextContactAt: lead.nextContactAt,
+      assignedToName: lead.assignedTo?.name ?? null,
+      createdAt: lead.createdAt,
+      leadsUrl: publicLeadsUrl(),
+    };
+    const message =
+      job.template === 'LEAD_CREATED'
+        ? formatLeadCreatedMessage(common)
+        : formatLeadStatusChangedMessage({
+            ...common,
+            actorName: audit?.actorUser?.name ?? null,
+            ...leadStatusTransition(audit?.changes, lead.status),
+          });
+    return { ...job, payload: { message, parseMode: 'HTML' } };
+  }
   if (job.template === 'DAILY_OPERATIONS_DIGEST') {
     const date =
       typeof job.payload === 'object' && job.payload !== null && 'date' in job.payload
@@ -161,146 +249,146 @@ async function hydrateJob(
     const overlap = { startsAt: { lt: range.end }, endsAt: { gt: range.start } };
     const [requests, rentals, dayRentals, vehicles, depositReturns, maintenance, washes] =
       await Promise.all([
-      tx.botRentalRequest.count({
-        where: { companyId: job.companyId, status: 'PENDING', ...overlap },
-      }),
-      tx.rental.count({
-        where: { companyId: job.companyId, status: { in: ['CONFIRMED', 'ACTIVE'] }, ...overlap },
-      }),
-      tx.rental.findMany({
-        where: {
-          companyId: job.companyId,
-          status: { in: ['CONFIRMED', 'ACTIVE'] },
-          ...overlap,
-        },
-        orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
-        take: 200,
-        select: {
-          startsAt: true,
-          endsAt: true,
-          contractNumber: true,
-          client: {
-            select: {
-              firstName: true,
-              middleName: true,
-              lastName: true,
-              phoneEncrypted: true,
-            },
+        tx.botRentalRequest.count({
+          where: { companyId: job.companyId, status: 'PENDING', ...overlap },
+        }),
+        tx.rental.count({
+          where: { companyId: job.companyId, status: { in: ['CONFIRMED', 'ACTIVE'] }, ...overlap },
+        }),
+        tx.rental.findMany({
+          where: {
+            companyId: job.companyId,
+            status: { in: ['CONFIRMED', 'ACTIVE'] },
+            ...overlap,
           },
-          vehicle: {
-            select: {
-              make: true,
-              modelName: true,
-              model: true,
-              registrationNumber: true,
-            },
-          },
-        },
-      }),
-      tx.vehicle.findMany({
-        where: { companyId: job.companyId, archivedAt: null, isDemoImport: false },
-        select: {
-          status: true,
-          isDemoImport: true,
-          make: true,
-          modelName: true,
-          model: true,
-          registrationNumber: true,
-          rentals: {
-            where: { status: { in: ['CONFIRMED', 'ACTIVE'] }, ...overlap },
-            select: { id: true },
-            take: 1,
-          },
-          maintenanceRecords: {
-            where: {
-              status: { in: ['PLANNED', 'IN_PROGRESS', 'OVERDUE'] },
-              scheduledAt: { lt: range.end },
-              OR: [{ scheduledEndsAt: { gt: range.start } }, { scheduledEndsAt: null }],
-            },
-            select: { id: true },
-            take: 1,
-          },
-          positions: {
-            where: { provider: 'GLONASSSOFT' },
-            select: { recordedAt: true },
-            orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
-            take: 1,
-          },
-        },
-        take: 300,
-      }),
-      tx.rentalOperation.findMany({
-        where: {
-          companyId: job.companyId,
-          status: 'COMMITTED',
-          type: 'RETURN',
-          depositStatus: 'COLLECTED',
-          occurredAt: { gte: range.start, lt: range.end },
-        },
-        orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
-        take: 200,
-        select: {
-          occurredAt: true,
-          depositAmountMinor: true,
-          rental: {
-            select: {
-              contractNumber: true,
-              depositMinor: true,
-              client: {
-                select: {
-                  firstName: true,
-                  middleName: true,
-                  lastName: true,
-                  phoneEncrypted: true,
-                },
+          orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
+          take: 200,
+          select: {
+            startsAt: true,
+            endsAt: true,
+            contractNumber: true,
+            client: {
+              select: {
+                firstName: true,
+                middleName: true,
+                lastName: true,
+                phoneEncrypted: true,
               },
-              vehicle: {
-                select: {
-                  make: true,
-                  modelName: true,
-                  model: true,
-                  registrationNumber: true,
-                },
+            },
+            vehicle: {
+              select: {
+                make: true,
+                modelName: true,
+                model: true,
+                registrationNumber: true,
               },
             },
           },
-        },
-      }),
-      tx.maintenanceRecord.findMany({
-        where: {
-          vehicle: { companyId: job.companyId, archivedAt: null, isDemoImport: false },
-          status: { in: ['PLANNED', 'IN_PROGRESS', 'OVERDUE'] },
-          scheduledAt: { gte: range.start, lt: range.end },
-        },
-        orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
-        take: 200,
-        select: {
-          scheduledAt: true,
-          title: true,
-          status: true,
-          vehicle: {
-            select: { make: true, modelName: true, model: true, registrationNumber: true },
+        }),
+        tx.vehicle.findMany({
+          where: { companyId: job.companyId, archivedAt: null, isDemoImport: false },
+          select: {
+            status: true,
+            isDemoImport: true,
+            make: true,
+            modelName: true,
+            model: true,
+            registrationNumber: true,
+            rentals: {
+              where: { status: { in: ['CONFIRMED', 'ACTIVE'] }, ...overlap },
+              select: { id: true },
+              take: 1,
+            },
+            maintenanceRecords: {
+              where: {
+                status: { in: ['PLANNED', 'IN_PROGRESS', 'OVERDUE'] },
+                scheduledAt: { lt: range.end },
+                OR: [{ scheduledEndsAt: { gt: range.start } }, { scheduledEndsAt: null }],
+              },
+              select: { id: true },
+              take: 1,
+            },
+            positions: {
+              where: { provider: 'GLONASSSOFT' },
+              select: { recordedAt: true },
+              orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+              take: 1,
+            },
           },
-        },
-      }),
-      tx.washRecord.findMany({
-        where: {
-          vehicle: { companyId: job.companyId, archivedAt: null, isDemoImport: false },
-          status: { in: ['PLANNED', 'IN_PROGRESS'] },
-          scheduledAt: { gte: range.start, lt: range.end },
-        },
-        orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
-        take: 200,
-        select: {
-          scheduledAt: true,
-          kind: true,
-          status: true,
-          vehicle: {
-            select: { make: true, modelName: true, model: true, registrationNumber: true },
+          take: 300,
+        }),
+        tx.rentalOperation.findMany({
+          where: {
+            companyId: job.companyId,
+            status: 'COMMITTED',
+            type: 'RETURN',
+            depositStatus: 'COLLECTED',
+            occurredAt: { gte: range.start, lt: range.end },
           },
-        },
-      }),
-    ]);
+          orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+          take: 200,
+          select: {
+            occurredAt: true,
+            depositAmountMinor: true,
+            rental: {
+              select: {
+                contractNumber: true,
+                depositMinor: true,
+                client: {
+                  select: {
+                    firstName: true,
+                    middleName: true,
+                    lastName: true,
+                    phoneEncrypted: true,
+                  },
+                },
+                vehicle: {
+                  select: {
+                    make: true,
+                    modelName: true,
+                    model: true,
+                    registrationNumber: true,
+                  },
+                },
+              },
+            },
+          },
+        }),
+        tx.maintenanceRecord.findMany({
+          where: {
+            vehicle: { companyId: job.companyId, archivedAt: null, isDemoImport: false },
+            status: { in: ['PLANNED', 'IN_PROGRESS', 'OVERDUE'] },
+            scheduledAt: { gte: range.start, lt: range.end },
+          },
+          orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
+          take: 200,
+          select: {
+            scheduledAt: true,
+            title: true,
+            status: true,
+            vehicle: {
+              select: { make: true, modelName: true, model: true, registrationNumber: true },
+            },
+          },
+        }),
+        tx.washRecord.findMany({
+          where: {
+            vehicle: { companyId: job.companyId, archivedAt: null, isDemoImport: false },
+            status: { in: ['PLANNED', 'IN_PROGRESS'] },
+            scheduledAt: { gte: range.start, lt: range.end },
+          },
+          orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
+          take: 200,
+          select: {
+            scheduledAt: true,
+            kind: true,
+            status: true,
+            vehicle: {
+              select: { make: true, modelName: true, model: true, registrationNumber: true },
+            },
+          },
+        }),
+      ]);
     const freeVehicles = vehicles.filter(
       (vehicle) =>
         vehicle.status !== 'MAINTENANCE' &&
@@ -342,9 +430,8 @@ async function hydrateJob(
             registrationNumber: operation.rental.vehicle.registrationNumber,
             client: personName(operation.rental.client),
             phone: decryptedPhone(operation.rental.client.phoneEncrypted),
-            amountMinor: (
-              operation.depositAmountMinor ?? operation.rental.depositMinor
-            )?.toString() ?? null,
+            amountMinor:
+              (operation.depositAmountMinor ?? operation.rental.depositMinor)?.toString() ?? null,
           })),
           washes: washes.flatMap((wash) =>
             wash.scheduledAt
