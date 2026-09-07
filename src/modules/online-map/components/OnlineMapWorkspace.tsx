@@ -60,8 +60,6 @@ export function OnlineMapWorkspace({
   const reducedMotion = useReducedMotion() ?? false;
   const minuteNow = useMinuteNow();
 
-  useEffect(() => setSnapshotVehicles(vehicles), [vehicles]);
-
   useEffect(() => {
     if (typeof EventSource === 'undefined') return;
     const source = new EventSource('/api/map/live');

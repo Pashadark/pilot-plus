@@ -18,16 +18,6 @@ type ClaimDb = Pick<typeof prisma, '$transaction'>;
 type UpdateDb = Pick<typeof prisma, 'botNotificationJob'>;
 const LEASE_MS = 60_000;
 
-function vehicleLabel(vehicle: {
-  make: string | null;
-  modelName: string | null;
-  model: string;
-  registrationNumber: string | null;
-}) {
-  const title = `${vehicle.make ?? ''} ${vehicle.modelName ?? vehicle.model}`.trim();
-  return `${title} · ${vehicle.registrationNumber ?? 'без номера'}`;
-}
-
 function vehicleTitle(vehicle: { make: string | null; modelName: string | null; model: string }) {
   return `${vehicle.make ?? ''} ${vehicle.modelName ?? vehicle.model}`.trim();
 }

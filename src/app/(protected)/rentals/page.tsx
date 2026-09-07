@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { AppShell } from '@/shared/components/app-shell/AppShell';
 import { RentalListPage } from '@/modules/rentals/components/RentalListPage';
 import { RentalCalendar } from '@/modules/rentals/components/RentalCalendar';
@@ -21,12 +23,12 @@ export default async function RentalsPage({
         <main className="grid gap-5 p-4 sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <h1 className="text-2xl font-bold sm:text-3xl">Календарь аренды</h1>
-            <a
+            <Link
               className="min-h-11 content-center rounded-xl border px-4 font-semibold"
               href="/rentals"
             >
               Вернуться к списку
-            </a>
+            </Link>
           </div>
           <RentalCalendar
             month={new Date().toISOString().slice(0, 7)}
