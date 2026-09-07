@@ -73,9 +73,7 @@ export function ClientCard({
                   {client.fullName}
                 </Link>
               </h2>
-              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                {client.phoneMasked}
-              </p>
+              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{client.phone}</p>
               {rating ? (
                 <div className="mt-2">
                   <ClientRatingStars rating={rating} compact />
@@ -88,6 +86,14 @@ export function ClientCard({
             <div>
               Аренд:{' '}
               <strong className="text-[var(--color-text)]">{client.rentalSummary.total}</strong>
+            </div>
+            <div>
+              Штрафы:{' '}
+              <strong className="text-[var(--color-text)]">{client.fineSummary.total}</strong>
+              {' · '}Оплачено:{' '}
+              <strong className="text-[var(--color-text)]">
+                {formatMinorMoney(client.fineSummary.paidAmountMinor)}
+              </strong>
             </div>
             <div>
               {selectedRental
@@ -103,6 +109,10 @@ export function ClientCard({
             <div>
               Депозит: <strong className="text-[var(--color-text)]">{deposit.amount}</strong>
               {deposit.label ? ` · ${deposit.label}` : ''}
+            </div>
+            <div>
+              Дата возврата:{' '}
+              <strong className="text-[var(--color-text)]">{deposit.returnedAtLabel}</strong>
             </div>
           </dl>
           <div className="mt-3 flex flex-wrap gap-2">

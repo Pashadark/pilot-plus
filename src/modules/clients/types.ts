@@ -11,6 +11,8 @@ export type ClientInput = {
   phone: string;
   email: string | null;
   passport: string | null;
+  registrationAddress: string | null;
+  actualAddress: string | null;
   driverLicense: string | null;
   driverLicenseIssuedAt: Date | null;
   driverLicenseExpiresAt: Date | null;
@@ -31,6 +33,7 @@ export type ClientListRentalSummary = {
   depositMinor: string | null;
   depositStatus:
     'NOT_COLLECTED' | 'COLLECTED' | 'RETURNED' | 'PARTIALLY_WITHHELD' | 'WITHHELD' | null;
+  depositReturnedAt: string | null;
 };
 
 export type ClientCardDto = {
@@ -38,6 +41,7 @@ export type ClientCardDto = {
   companyId: string;
   fullName: string;
   email: string | null;
+  phone: string;
   phoneMasked: string;
   passportMasked: string | null;
   driverLicenseMasked: string | null;
@@ -46,6 +50,10 @@ export type ClientCardDto = {
   updatedAt: string;
   localPhotoUrl: string | null;
   telegramUrl: string | null;
+  fineSummary: {
+    total: number;
+    paidAmountMinor: string;
+  };
   rentalSummary: {
     total: number;
     active: number;
@@ -61,6 +69,8 @@ export type ClientDetailDto = ClientCardDto & {
   birthDate: string | null;
   phone: string;
   passport: string | null;
+  registrationAddress?: string | null;
+  actualAddress?: string | null;
   driverLicense: string | null;
   driverLicenseIssuedAt: string | null;
   createdAt: string;

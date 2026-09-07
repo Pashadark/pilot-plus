@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { encryptField } from '@/services/security/field-encryption';
 
@@ -47,7 +47,12 @@ const rawClient = {
       totalPriceMinor: BigInt(3_000_000),
       depositMinor: BigInt(2_000_000),
       vehicle: { make: 'Kia', model: 'K5', registrationNumber: 'В342НР797' },
-      operations: [{ depositStatus: 'COLLECTED' as const }],
+      operations: [
+        {
+          depositStatus: 'COLLECTED' as const,
+          occurredAt: new Date('2026-08-20T10:15:00.000Z'),
+        },
+      ],
     },
     {
       id: 'rental-old',
@@ -58,7 +63,12 @@ const rawClient = {
       totalPriceMinor: BigInt(1_400_000),
       depositMinor: BigInt(1_000_000),
       vehicle: { make: 'Kia', model: 'Rio', registrationNumber: 'Р604АО997' },
-      operations: [{ depositStatus: 'RETURNED' as const }],
+      operations: [
+        {
+          depositStatus: 'RETURNED' as const,
+          occurredAt: new Date('2026-08-03T12:30:00.000Z'),
+        },
+      ],
     },
   ],
   _count: { rentals: 2 },
@@ -73,44 +83,75 @@ function createRepository() {
     calls.findFirst = args;
     return rawClient;
   };
-  const calls: { findMany?: unknown; findFirst?: unknown } = {};
-  return { calls, repository: { findMany, findFirst } };
+  const fineFindMany = async (args: unknown) => {
+    calls.fineFindMany = args;
+    return [
+      { clientId: 'client-1', status: 'UNPAID', currentAmountMinor: BigInt(5_000_00) },
+      { clientId: 'client-1', status: 'PAID', currentAmountMinor: BigInt(2_500_00) },
+    ];
+  };
+  const calls: { findMany?: unknown; findFirst?: unknown; fineFindMany?: unknown } = {};
+  return { calls, repository: { findMany, findFirst, fineFindMany } };
 }
 
 describe('tenant-scoped client queries', () => {
   it('limits cards to permitted non-archived clients and never exposes ciphertext', async () => {
-    const fake = createRepository();
-    const queries = createClientQueries(fake.repository, { encryptionKey });
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-23T12:00:00.000Z'));
+    try {
+      const fake = createRepository();
+      const queries = createClientQueries(fake.repository, { encryptionKey });
 
-    const result = await queries.getClients(access, { status: 'VERIFIED', page: 1, pageSize: 24 });
+      const result = await queries.getClients(access, {
+        status: 'VERIFIED',
+        page: 1,
+        pageSize: 24,
+      });
 
-    expect(fake.calls.findMany).toMatchObject({
-      where: { companyId: { in: ['c1'] }, archivedAt: null, status: 'VERIFIED' },
-    });
-    expect(result.items).toHaveLength(1);
-    expect(result.items[0]).toMatchObject({
-      id: 'client-1',
-      fullName: 'Воронова Анна Сергеевна',
-      phoneMasked: '+7 ••• •••-45-67',
-      passportMasked: '45•• •••456',
-      driverLicenseMasked: '99•• •••321',
-      updatedAt: '2026-08-02T10:00:00.000Z',
-      rentalSummary: {
-        total: 2,
-        active: 1,
-        current: {
-          id: 'rental-current',
-          contractNumber: 'ME-2026-0015-VA',
-          vehicle: { label: 'Kia · K5', registrationNumber: 'В342НР797' },
-          totalPriceMinor: '3000000',
-          depositMinor: '2000000',
-          depositStatus: 'COLLECTED',
+      expect(fake.calls.findMany).toMatchObject({
+        where: { companyId: { in: ['c1'] }, archivedAt: null, status: 'VERIFIED' },
+      });
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]).toMatchObject({
+        id: 'client-1',
+        fullName: 'Воронова Анна Сергеевна',
+        phone: '+7 999 123-45-67',
+        phoneMasked: '+7 ••• •••-45-67',
+        passportMasked: '45•• •••456',
+        driverLicenseMasked: '99•• •••321',
+        updatedAt: '2026-08-02T10:00:00.000Z',
+        rentalSummary: {
+          total: 2,
+          active: 1,
+          current: {
+            id: 'rental-current',
+            contractNumber: 'ME-2026-0015-VA',
+            vehicle: { label: 'Kia · K5', registrationNumber: 'В342НР797' },
+            totalPriceMinor: '3000000',
+            depositMinor: '2000000',
+            depositStatus: 'COLLECTED',
+            depositReturnedAt: null,
+          },
+          last: {
+            id: 'rental-current',
+            depositReturnedAt: null,
+          },
         },
-      },
-    });
-    expect(result.items[0]).not.toHaveProperty('phoneEncrypted');
-    expect(result.items[0]).not.toHaveProperty('passportEncrypted');
-    expect(result.items[0]).not.toHaveProperty('driverLicenseEncrypted');
+        fineSummary: { total: 2, paidAmountMinor: '250000' },
+      });
+      expect(fake.calls.fineFindMany).toMatchObject({
+        where: {
+          companyId: { in: ['c1'] },
+          clientId: { in: ['client-1'] },
+          status: { not: 'CANCELLED' },
+        },
+      });
+      expect(result.items[0]).not.toHaveProperty('phoneEncrypted');
+      expect(result.items[0]).not.toHaveProperty('passportEncrypted');
+      expect(result.items[0]).not.toHaveProperty('driverLicenseEncrypted');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('decrypts plaintext contact and document fields only for the authorized detail DTO', async () => {
@@ -136,6 +177,29 @@ describe('tenant-scoped client queries', () => {
     expect(result).not.toHaveProperty('passportEncrypted');
   });
 
+  it('uses the committed return operation time as the deposit return date', async () => {
+    const returnedClient = { ...rawClient, rentals: [rawClient.rentals[1]] };
+    const repository = {
+      async findMany() {
+        return [returnedClient];
+      },
+      async findFirst() {
+        return returnedClient;
+      },
+      async fineFindMany() {
+        return [];
+      },
+    };
+    const queries = createClientQueries(repository, { encryptionKey });
+
+    const result = await queries.getClients(access);
+
+    expect(result.items[0]?.rentalSummary.last).toMatchObject({
+      depositStatus: 'RETURNED',
+      depositReturnedAt: '2026-08-03T12:30:00.000Z',
+    });
+  });
+
   it('returns null when the requested client is outside the tenant scope', async () => {
     const repository = {
       async findMany() {
@@ -143,6 +207,9 @@ describe('tenant-scoped client queries', () => {
       },
       async findFirst() {
         return null;
+      },
+      async fineFindMany() {
+        return [];
       },
     };
     const queries = createClientQueries(repository, { encryptionKey });

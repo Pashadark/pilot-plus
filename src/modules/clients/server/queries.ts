@@ -15,6 +15,7 @@ import { decryptField } from '@/services/security/field-encryption';
 type ClientRepository = {
   findMany(args: unknown): Promise<unknown[]>;
   findFirst(args: unknown): Promise<unknown | null>;
+  fineFindMany(args: unknown): Promise<unknown[]>;
 };
 
 type QueryDependencies = {
@@ -31,6 +32,8 @@ type RawClient = {
   phoneEncrypted: string;
   email: string | null;
   passportEncrypted: string | null;
+  registrationAddressEncrypted?: string | null;
+  actualAddressEncrypted?: string | null;
   driverLicenseEncrypted: string | null;
   driverLicenseIssuedAt: Date | null;
   driverLicenseExpiresAt: Date | null;
@@ -51,10 +54,19 @@ type RawClient = {
     operations: Array<{
       depositStatus:
         'NOT_COLLECTED' | 'COLLECTED' | 'RETURNED' | 'PARTIALLY_WITHHELD' | 'WITHHELD' | null;
+      occurredAt: Date;
     }>;
   }>;
   _count: { rentals: number };
 };
+
+type RawFine = {
+  clientId: string | null;
+  status: 'NEW' | 'UNPAID' | 'PAID' | 'CANCELLED' | 'OVERDUE';
+  currentAmountMinor: bigint;
+};
+
+type FineSummary = { total: number; paidAmountMinor: bigint };
 
 const clientSelect = {
   id: true,
@@ -66,6 +78,8 @@ const clientSelect = {
   phoneEncrypted: true,
   email: true,
   passportEncrypted: true,
+  registrationAddressEncrypted: true,
+  actualAddressEncrypted: true,
   driverLicenseEncrypted: true,
   driverLicenseIssuedAt: true,
   driverLicenseExpiresAt: true,
@@ -86,7 +100,7 @@ const clientSelect = {
       vehicle: { select: { make: true, model: true, registrationNumber: true } },
       operations: {
         where: { status: 'COMMITTED', depositStatus: { not: null } },
-        select: { depositStatus: true },
+        select: { depositStatus: true, occurredAt: true },
         orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
         take: 1,
       },
@@ -156,6 +170,16 @@ function maskPhone(value: string): string {
   return '••••••••';
 }
 
+function formatPhone(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  const normalized =
+    digits.length === 11 && digits.startsWith('8') ? `7${digits.slice(1)}` : digits;
+  if (normalized.length === 11 && normalized.startsWith('7')) {
+    return `+7 ${normalized.slice(1, 4)} ${normalized.slice(4, 7)}-${normalized.slice(7, 9)}-${normalized.slice(9)}`;
+  }
+  return value;
+}
+
 function fullName(client: RawClient): string {
   return [client.lastName, client.firstName, client.middleName].filter(Boolean).join(' ');
 }
@@ -166,7 +190,11 @@ function vehicleLabel(make: string, model: string): string {
     : [make, model].filter(Boolean).join(' · ');
 }
 
-function mapCard(client: RawClient, encryptionKey: string): ClientCardDto {
+function mapCard(
+  client: RawClient,
+  encryptionKey: string,
+  fineSummary: FineSummary = { total: 0, paidAmountMinor: BigInt(0) },
+): ClientCardDto {
   const phone = decryptField(client.phoneEncrypted, encryptionKey);
   const passport = client.passportEncrypted
     ? decryptField(client.passportEncrypted, encryptionKey)
@@ -183,6 +211,10 @@ function mapCard(client: RawClient, encryptionKey: string): ClientCardDto {
     totalPriceMinor: rental.totalPriceMinor.toString(),
     depositMinor: rental.depositMinor?.toString() ?? null,
     depositStatus: rental.operations[0]?.depositStatus ?? null,
+    depositReturnedAt:
+      rental.operations[0]?.depositStatus === 'RETURNED'
+        ? rental.operations[0].occurredAt.toISOString()
+        : null,
     vehicle: {
       label: vehicleLabel(rental.vehicle.make, rental.vehicle.model),
       registrationNumber: rental.vehicle.registrationNumber,
@@ -201,6 +233,7 @@ function mapCard(client: RawClient, encryptionKey: string): ClientCardDto {
     companyId: client.companyId,
     fullName: fullName(client),
     email: client.email,
+    phone: formatPhone(phone),
     phoneMasked: maskPhone(phone),
     passportMasked: passport ? maskDocument(passport) : null,
     driverLicenseMasked: driverLicense ? maskDocument(driverLicense) : null,
@@ -214,6 +247,10 @@ function mapCard(client: RawClient, encryptionKey: string): ClientCardDto {
       client.telegramUsername && /^[a-zA-Z0-9_]{5,32}$/.test(client.telegramUsername)
         ? `https://t.me/${client.telegramUsername}`
         : null,
+    fineSummary: {
+      total: fineSummary.total,
+      paidAmountMinor: fineSummary.paidAmountMinor.toString(),
+    },
     rentalSummary: {
       total: client._count.rentals,
       active: currentRentals.length,
@@ -223,9 +260,13 @@ function mapCard(client: RawClient, encryptionKey: string): ClientCardDto {
   };
 }
 
-function mapDetail(client: RawClient, encryptionKey: string): ClientDetailDto {
+function mapDetail(
+  client: RawClient,
+  encryptionKey: string,
+  fineSummary?: FineSummary,
+): ClientDetailDto {
   return {
-    ...mapCard(client, encryptionKey),
+    ...mapCard(client, encryptionKey, fineSummary),
     firstName: client.firstName,
     middleName: client.middleName,
     lastName: client.lastName,
@@ -234,12 +275,46 @@ function mapDetail(client: RawClient, encryptionKey: string): ClientDetailDto {
     passport: client.passportEncrypted
       ? decryptField(client.passportEncrypted, encryptionKey)
       : null,
+    registrationAddress: client.registrationAddressEncrypted
+      ? decryptField(client.registrationAddressEncrypted, encryptionKey)
+      : null,
+    actualAddress: client.actualAddressEncrypted
+      ? decryptField(client.actualAddressEncrypted, encryptionKey)
+      : null,
     driverLicense: client.driverLicenseEncrypted
       ? decryptField(client.driverLicenseEncrypted, encryptionKey)
       : null,
     driverLicenseIssuedAt: client.driverLicenseIssuedAt?.toISOString() ?? null,
     createdAt: client.createdAt.toISOString(),
   };
+}
+
+async function loadFineSummaries(repository: ClientRepository, clients: readonly RawClient[]) {
+  if (clients.length === 0) return new Map<string, FineSummary>();
+
+  const companyIds = [...new Set(clients.map((client) => client.companyId))];
+  const clientIds = clients.map((client) => client.id);
+  const fines = (await repository.fineFindMany({
+    where: {
+      companyId: { in: companyIds },
+      clientId: { in: clientIds },
+      status: { not: 'CANCELLED' },
+    },
+    select: { clientId: true, status: true, currentAmountMinor: true },
+    orderBy: [{ clientId: 'asc' }, { id: 'asc' }],
+  })) as RawFine[];
+
+  const summaries = new Map<string, FineSummary>();
+  for (const fine of fines) {
+    if (!fine.clientId || !clientIds.includes(fine.clientId)) continue;
+    const current = summaries.get(fine.clientId) ?? { total: 0, paidAmountMinor: BigInt(0) };
+    summaries.set(fine.clientId, {
+      total: current.total + 1,
+      paidAmountMinor:
+        current.paidAmountMinor + (fine.status === 'PAID' ? fine.currentAmountMinor : BigInt(0)),
+    });
+  }
+  return summaries;
 }
 
 function normalizedPagination(filters: ClientQueryFilters): { page: number; pageSize: number } {
@@ -266,10 +341,12 @@ export function createClientQueries(repository: ClientRepository, dependencies: 
         skip: (page - 1) * pageSize,
         take: pageSize,
       });
+      const rawClients = clients as RawClient[];
+      const fineSummaries = await loadFineSummaries(repository, rawClients);
 
       return {
-        items: (clients as RawClient[]).map((client) =>
-          mapCard(client, dependencies.encryptionKey),
+        items: rawClients.map((client) =>
+          mapCard(client, dependencies.encryptionKey, fineSummaries.get(client.id)),
         ),
         page,
         pageSize,
@@ -280,7 +357,10 @@ export function createClientQueries(repository: ClientRepository, dependencies: 
         where: { id, ...tenantWhere(access), archivedAt: null },
         select: clientSelect,
       });
-      return client ? mapDetail(client as RawClient, dependencies.encryptionKey) : null;
+      if (!client) return null;
+      const rawClient = client as RawClient;
+      const fineSummaries = await loadFineSummaries(repository, [rawClient]);
+      return mapDetail(rawClient, dependencies.encryptionKey, fineSummaries.get(rawClient.id));
     },
   };
 }
@@ -289,6 +369,7 @@ const queries = createClientQueries(
   {
     findMany: (args) => prisma.client.findMany(args as Prisma.ClientFindManyArgs),
     findFirst: (args) => prisma.client.findFirst(args as Prisma.ClientFindFirstArgs),
+    fineFindMany: (args) => prisma.fine.findMany(args as Prisma.FineFindManyArgs),
   },
   { encryptionKey: process.env.CLIENT_DATA_ENCRYPTION_KEY ?? '' },
 );

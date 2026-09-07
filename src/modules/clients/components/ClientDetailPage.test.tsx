@@ -39,6 +39,7 @@ describe('ClientDetailPage', () => {
             updatedAt: '2026-08-04T00:00:00.000Z',
             localPhotoUrl: null,
             telegramUrl: null,
+            fineSummary: { total: 0, paidAmountMinor: '0' },
             rentalSummary: { total: 0, active: 0, current: null, last: null },
           },
         }),
@@ -47,6 +48,8 @@ describe('ClientDetailPage', () => {
     expect(markup).toContain('Файлы и фотография');
     expect(markup).toContain('Документы пока не загружены');
     expect(markup).not.toContain('Файлы документов ещё не загружаются');
+    expect(markup).toContain('Готовность к аренде');
+    expect(markup).toContain('Загрузите файл паспорта');
   });
 
   it('keeps the staff-only reliability explanation out of a non-staff detail surface', () => {
@@ -82,6 +85,7 @@ describe('ClientDetailPage', () => {
             updatedAt: '2026-08-04T00:00:00.000Z',
             localPhotoUrl: null,
             telegramUrl: null,
+            fineSummary: { total: 0, paidAmountMinor: '0' },
             rentalSummary: { total: 0, active: 0, current: null, last: null },
           },
           rating: {

@@ -50,17 +50,19 @@ export function ClientGrid({
       </div>
 
       <div className="hidden overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)] md:block">
-        <table className="w-full min-w-[1180px] border-collapse text-left text-sm font-normal">
+        <table className="w-full min-w-[1420px] border-collapse text-left text-sm font-normal">
           <thead className="bg-[var(--color-elevated)] text-xs font-medium tracking-wide text-[var(--color-text-secondary)] uppercase">
             <tr>
               <th className="px-3 py-2.5">Клиент</th>
               <th className="px-3 py-2.5">Телефон</th>
               <th className="px-3 py-2.5">Рейтинг</th>
               <th className="px-3 py-2.5">Аренды</th>
+              <th className="px-3 py-2.5 text-right">Штрафы</th>
               <th className="px-3 py-2.5">Машина</th>
               <th className="px-3 py-2.5 text-right">Стоимость аренды</th>
               <th className="px-3 py-2.5 text-right">Депозит</th>
               <th className="px-3 py-2.5">Статус депозита</th>
+              <th className="px-3 py-2.5">Дата возврата</th>
               <th className="px-3 py-2.5">Статус</th>
               <th className="px-3 py-2.5 text-right">Действия</th>
             </tr>
@@ -95,9 +97,7 @@ export function ClientGrid({
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">
-                    {client.phoneMasked}
-                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">{client.phone}</td>
                   <td className="px-3 py-2.5">
                     {ratings[client.id] ? (
                       <ClientRatingStars rating={ratings[client.id]} compact />
@@ -109,6 +109,12 @@ export function ClientGrid({
                     <p className="tabular-nums">{client.rentalSummary.total}</p>
                     <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
                       {last ? `Последняя: ${formatRentalDate(last.endsAt)}` : 'Нет аренд'}
+                    </p>
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    <p>{client.fineSummary.total}</p>
+                    <p className="mt-1 text-xs whitespace-nowrap text-[var(--color-text-secondary)]">
+                      Оплачено: {formatMinorMoney(client.fineSummary.paidAmountMinor)}
                     </p>
                   </td>
                   <td className="px-3 py-2.5">
@@ -134,6 +140,9 @@ export function ClientGrid({
                   </td>
                   <td className="px-3 py-2.5">
                     {deposit.label ? <Badge tone={deposit.tone}>{deposit.label}</Badge> : '—'}
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap tabular-nums">
+                    {deposit.returnedAtLabel}
                   </td>
                   <td className="px-3 py-2.5">
                     <Badge tone={status.tone}>{status.label}</Badge>

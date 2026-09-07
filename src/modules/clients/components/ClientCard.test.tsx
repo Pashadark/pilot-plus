@@ -14,6 +14,7 @@ describe('ClientCard', () => {
           companyId: 'company-1',
           fullName: 'Анна Воронова',
           email: 'anna@example.test',
+          phone: '+7 999 123-45-67',
           phoneMasked: '+7 ••• •••-12-34',
           passportMasked: null,
           driverLicenseMasked: '12 ••• 456',
@@ -22,6 +23,7 @@ describe('ClientCard', () => {
           updatedAt: '2026-08-04T10:00:00.000Z',
           localPhotoUrl: null,
           telegramUrl: null,
+          fineSummary: { total: 2, paidAmountMinor: '750000' },
           rentalSummary: { total: 0, active: 0, current: null, last: null },
         }}
         messenger={{ type: 'telegram', href: 'https://t.me/anna', confirmedAvatarUrl: null }}
@@ -37,6 +39,8 @@ describe('ClientCard', () => {
       'grid-cols-[5.5rem_minmax(0,1fr)]',
     );
     expect(screen.getByText('Нет аренды')).toBeTruthy();
+    expect(screen.getByTestId('client-card').textContent).toMatch(/Штрафы:\s*2/);
+    expect(screen.getByTestId('client-card').textContent).toMatch(/Оплачено:\s*7\s*500\s*₽/);
   });
 
   it('shows a compact five-star reliability score when staff provides one', () => {
@@ -47,6 +51,7 @@ describe('ClientCard', () => {
           companyId: 'company-1',
           fullName: 'Анна Воронова',
           email: null,
+          phone: '+7 999 123-45-67',
           phoneMasked: '+7 ••• •••-12-34',
           passportMasked: null,
           driverLicenseMasked: null,
@@ -55,6 +60,7 @@ describe('ClientCard', () => {
           updatedAt: '2026-08-04T10:00:00.000Z',
           localPhotoUrl: null,
           telegramUrl: null,
+          fineSummary: { total: 0, paidAmountMinor: '0' },
           rentalSummary: { total: 0, active: 0, current: null, last: null },
         }}
         rating={{
