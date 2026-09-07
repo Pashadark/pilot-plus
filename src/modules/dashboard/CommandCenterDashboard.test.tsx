@@ -5,9 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { CommandCenterDashboard } from './CommandCenterDashboard';
 import type { DashboardOverviewDto } from './overview-types';
 
-function overviewFixture(
-  overrides: Partial<DashboardOverviewDto> = {},
-): DashboardOverviewDto {
+function overviewFixture(overrides: Partial<DashboardOverviewDto> = {}): DashboardOverviewDto {
   return {
     period: {
       key: 'today',
@@ -63,7 +61,7 @@ describe('CommandCenterDashboard', () => {
     render(<CommandCenterDashboard overview={overviewFixture()} />);
     expect(screen.getByRole('heading', { name: 'Рабочий день' })).toBeTruthy();
     expect(screen.getByText('Вернуть депозит')).toBeTruthy();
-    expect(screen.getByRole('link', { name: /открыть договор/i }).getAttribute('href')).toBe(
+    expect(screen.getByRole('link', { name: /^открыть$/i }).getAttribute('href')).toBe(
       '/rentals/rental-1',
     );
   });
@@ -81,6 +79,17 @@ describe('CommandCenterDashboard', () => {
     expect(screen.getByText(/275\s*000\s*₽/)).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Завтра' }).getAttribute('href')).toBe(
       '/?period=tomorrow',
+    );
+    expect(screen.getByRole('link', { name: 'Месяц' }).getAttribute('href')).toBe('/?period=month');
+  });
+
+  it('links primary creation actions to existing workflows', () => {
+    render(<CommandCenterDashboard overview={overviewFixture()} />);
+    expect(screen.getByRole('link', { name: /новый клиент/i }).getAttribute('href')).toBe(
+      '/clients?form=new',
+    );
+    expect(screen.getByRole('link', { name: /новая аренда/i }).getAttribute('href')).toBe(
+      '/rentals/new',
     );
   });
 
@@ -101,5 +110,35 @@ describe('CommandCenterDashboard', () => {
   it('does not duplicate sidebar navigation below the dashboard', () => {
     render(<CommandCenterDashboard overview={overviewFixture()} weather={null} />);
     expect(screen.queryByRole('navigation', { name: 'Подробные разделы' })).toBeNull();
+  });
+
+  it('labels a lead without a follow-up time instead of rendering a fake time', () => {
+    render(
+      <CommandCenterDashboard
+        overview={overviewFixture({
+          workItems: [
+            {
+              id: 'lead:lead-1',
+              kind: 'LEAD',
+              scheduledAt: '2026-08-24T08:00:00.000Z',
+              title: 'Связаться по заявке',
+              tone: 'info',
+              href: '/leads',
+              vehicleLabel: 'Петрова Анна',
+              clientLabel: 'Источник: ВКонтакте',
+              phone: '+79991112233',
+              contractNumber: null,
+              address: null,
+              amountMinor: null,
+              overdue: false,
+              unscheduled: true,
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText('Время не назначено')).toBeTruthy();
+    expect(screen.getByText(/Петрова Анна/)).toBeTruthy();
   });
 });

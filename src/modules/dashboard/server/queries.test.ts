@@ -11,6 +11,8 @@ vi.mock('@/database/prisma/client', () => ({
     rental: { findMany: vi.fn() },
     maintenanceRecord: { findMany: vi.fn() },
     washRecord: { findMany: vi.fn() },
+    operationsTask: { findMany: vi.fn() },
+    lead: { findMany: vi.fn() },
   },
 }));
 
@@ -33,6 +35,8 @@ function repositoryFixture() {
     rentalFindMany: vi.fn().mockResolvedValue([]),
     maintenanceFindMany: vi.fn().mockResolvedValue([]),
     washFindMany: vi.fn().mockResolvedValue([]),
+    taskFindMany: vi.fn().mockResolvedValue([]),
+    leadFindMany: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -71,6 +75,8 @@ describe('dashboard server queries', () => {
       repository.rentalFindMany,
       repository.maintenanceFindMany,
       repository.washFindMany,
+      repository.taskFindMany,
+      repository.leadFindMany,
     ]) {
       expect(query).toHaveBeenCalledWith(
         expect.objectContaining({ where: expect.objectContaining({ companyId: 'company-1' }) }),
@@ -116,6 +122,8 @@ describe('dashboard server queries', () => {
     expect(repository.rentalFindMany).not.toHaveBeenCalled();
     expect(repository.maintenanceFindMany).not.toHaveBeenCalled();
     expect(repository.washFindMany).not.toHaveBeenCalled();
+    expect(repository.taskFindMany).not.toHaveBeenCalled();
+    expect(repository.leadFindMany).not.toHaveBeenCalled();
   });
 
   it('decrypts a client phone only for an authorized caller and never returns ciphertext', async () => {
@@ -194,5 +202,71 @@ describe('dashboard server queries', () => {
 
     const operations = repository.rentalFindMany.mock.calls[0]?.[0]?.select?.operations;
     expect(operations).not.toHaveProperty('take');
+  });
+
+  it('loads active rentals that ended before the selected day so overdue returns stay visible', async () => {
+    const repository = repositoryFixture();
+
+    await createDashboardQueries(
+      repository,
+      async () => ({ companyId: 'company-1', canViewClientPhone: false }),
+      { encryptionKey: ENCRYPTION_KEY },
+    ).getOverview('today', NOW);
+
+    expect(repository.rentalFindMany.mock.calls[0]?.[0]?.where).toMatchObject({
+      companyId: 'company-1',
+      OR: expect.arrayContaining([
+        {
+          status: { in: ['CONFIRMED', 'ACTIVE'] },
+          startsAt: { lt: new Date('2026-08-24T21:00:00.000Z') },
+        },
+      ]),
+    });
+  });
+
+  it('loads active leads for the workday and decrypts their phones only when permitted', async () => {
+    const encryptedPhone = encryptField('+79991112233', ENCRYPTION_KEY);
+    const repository = repositoryFixture();
+    repository.leadFindMany.mockResolvedValue([
+      {
+        id: 'lead-1',
+        name: 'Анна',
+        lastName: 'Петрова',
+        source: 'ВКонтакте',
+        status: 'CONTACTED',
+        nextContactAt: null,
+        createdAt: new Date('2026-08-24T08:00:00.000Z'),
+        phoneEncrypted: encryptedPhone,
+        assignedTo: { name: 'Павел Седов' },
+      },
+    ]);
+
+    const overview = await createDashboardQueries(
+      repository,
+      async () => ({ companyId: 'company-1', canViewClientPhone: true }),
+      { encryptionKey: ENCRYPTION_KEY },
+    ).getOverview('today', NOW);
+
+    expect(repository.leadFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          companyId: 'company-1',
+          status: { in: ['NEW', 'CONTACTED', 'QUALIFIED'] },
+        }),
+      }),
+    );
+    expect(repository.leadFindMany.mock.calls[0]?.[0]).toHaveProperty(
+      'select.phoneEncrypted',
+      true,
+    );
+    expect(overview.workItems).toContainEqual(
+      expect.objectContaining({
+        id: 'lead:lead-1',
+        kind: 'LEAD',
+        phone: '+79991112233',
+        unscheduled: true,
+      }),
+    );
+    expect(JSON.stringify(overview)).not.toContain(encryptedPhone);
   });
 });

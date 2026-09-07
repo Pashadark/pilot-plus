@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { FiArrowRight, FiMapPin, FiPhone } from 'react-icons/fi';
+import { FiArrowRight, FiCheck, FiMapPin, FiPhone } from 'react-icons/fi';
 import { Badge, Card, CardContent, CardHeader } from '@/shared/ui';
 import type { DashboardWorkItemDto } from './overview-types';
+import { completeOperationsTaskAction } from './task-actions';
 
 const money = new Intl.NumberFormat('ru-RU', {
   style: 'currency',
@@ -46,14 +47,23 @@ export function WorkdayBoard({ items }: { items: DashboardWorkItemDto[] }) {
                   key={item.id}
                   className="grid gap-3 px-5 py-4 sm:grid-cols-[4.25rem_minmax(0,1fr)_auto] sm:items-center"
                 >
-                  <time className="text-sm font-bold" dateTime={item.scheduledAt}>
-                    {time.format(new Date(item.scheduledAt))}
-                  </time>
+                  {item.unscheduled ? (
+                    <span className="text-xs font-semibold text-[var(--color-text-secondary)]">
+                      Время не назначено
+                    </span>
+                  ) : (
+                    <time className="text-sm font-bold" dateTime={item.scheduledAt}>
+                      {time.format(new Date(item.scheduledAt))}
+                    </time>
+                  )}
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-semibold">{item.title}</p>
                       <Badge tone={item.tone}>
-                        {item.overdue ? 'Просрочено' : (item.contractNumber ?? 'Запланировано')}
+                        {item.overdue
+                          ? 'Просрочено'
+                          : (item.contractNumber ??
+                            (item.kind === 'LEAD' ? 'Заявка' : 'Запланировано'))}
                       </Badge>
                     </div>
                     <p className="mt-1 truncate text-sm">
@@ -81,13 +91,29 @@ export function WorkdayBoard({ items }: { items: DashboardWorkItemDto[] }) {
                       ) : null}
                     </div>
                   </div>
-                  <Link
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-md)] border px-4 text-sm font-semibold hover:bg-[var(--color-elevated)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
-                    href={item.href}
-                  >
-                    Открыть договор
-                    <FiArrowRight aria-hidden="true" />
-                  </Link>
+                  {item.completable ? (
+                    <form action={completeOperationsTaskAction}>
+                      <input
+                        type="hidden"
+                        name="taskId"
+                        value={item.id.replace('manual-task:', '')}
+                      />
+                      <button
+                        type="submit"
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-success)] px-4 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
+                      >
+                        <FiCheck aria-hidden="true" /> Выполнено
+                      </button>
+                    </form>
+                  ) : (
+                    <Link
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-md)] border px-4 text-sm font-semibold hover:bg-[var(--color-elevated)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
+                      href={item.href}
+                    >
+                      Открыть
+                      <FiArrowRight aria-hidden="true" />
+                    </Link>
+                  )}
                 </li>
               ))}
             </ol>

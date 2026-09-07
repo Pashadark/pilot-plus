@@ -5,10 +5,7 @@ import { decryptField } from '@/services/security/field-encryption';
 
 import { BotApiError } from './auth';
 import { moscowDayRange } from './daily-operations';
-import {
-  formatLeadCreatedMessage,
-  formatLeadStatusChangedMessage,
-} from './lead-notifications';
+import { formatLeadCreatedMessage, formatLeadStatusChangedMessage } from './lead-notifications';
 import { formatOperationsDigest } from './operations-digest';
 import { OFFLINE_AFTER_MS } from '@/modules/vehicles/gps-status';
 
@@ -45,9 +42,9 @@ function decryptedPhone(value: string | null | undefined): string | null {
 }
 
 function leadPayloadId(payload: unknown, key: 'leadId' | 'auditId') {
-  return typeof payload === 'object' && payload !== null && key in payload
-    ? String(payload[key])
-    : '';
+  const record =
+    typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : null;
+  return record && key in record ? String(record[key]) : '';
 }
 
 function leadStatusTransition(

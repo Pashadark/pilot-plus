@@ -1,9 +1,11 @@
 import Link from 'next/link';
-import { FiCalendar, FiPlus } from 'react-icons/fi';
+import { FiPlus } from 'react-icons/fi';
 import type { DashboardOverviewDto } from './overview-types';
 import { AttentionPanel } from './AttentionPanel';
 import { CommandCenterKpis } from './CommandCenterKpis';
+import { DashboardDatePicker } from './DashboardDatePicker';
 import { WorkdayBoard } from './WorkdayBoard';
+import { TaskComposer } from './TaskComposer';
 import type { MoscowWeather } from '@/modules/weather/server/get-moscow-weather';
 
 const periods = [
@@ -11,16 +13,23 @@ const periods = [
   ['tomorrow', 'Завтра'],
   ['day-after-tomorrow', 'Послезавтра'],
   ['week', 'Неделя'],
+  ['month', 'Месяц'],
 ] as const;
 
 const quickActions = [
-  ['/clients/new', 'Новый клиент'],
+  ['/clients?form=new', 'Новый клиент'],
   ['/rentals/new', 'Новая аренда'],
   ['/maintenance', 'Поставить на ТО'],
   ['/wash', 'Отправить на мойку'],
 ] as const;
 
-export function CommandCenterDashboard({ overview, weather = null }: { overview: DashboardOverviewDto; weather?: MoscowWeather | null }) {
+export function CommandCenterDashboard({
+  overview,
+  weather = null,
+}: {
+  overview: DashboardOverviewDto;
+  weather?: MoscowWeather | null;
+}) {
   return (
     <div className="grid gap-4 pb-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -49,11 +58,11 @@ export function CommandCenterDashboard({ overview, weather = null }: { overview:
 
       <nav
         aria-label="Период командного центра"
-        className="flex gap-1 overflow-x-auto rounded-[var(--radius-md)] border bg-[var(--color-surface)] p-1"
+        className="flex flex-wrap gap-1 rounded-[var(--radius-md)] border bg-[var(--color-surface)] p-1"
       >
-        <FiCalendar
-          aria-hidden="true"
-          className="m-2 size-4 shrink-0 text-[var(--color-text-secondary)]"
+        <DashboardDatePicker
+          selectionLabel={overview.period.label}
+          isCustom={overview.period.key === 'custom'}
         />
         {periods.map(([key, label]) => (
           <Link
@@ -72,7 +81,10 @@ export function CommandCenterDashboard({ overview, weather = null }: { overview:
           <WorkdayBoard items={overview.workItems} />
         </div>
         <div className="order-1 lg:order-2">
-          <AttentionPanel items={overview.attentionItems} />
+          <div className="grid gap-4">
+            <AttentionPanel items={overview.attentionItems} />
+            <TaskComposer />
+          </div>
         </div>
       </div>
     </div>

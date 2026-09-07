@@ -8,7 +8,9 @@ export type DashboardWorkItemKind =
   | 'EXTENSION'
   | 'DEPOSIT_RETURN'
   | 'MAINTENANCE'
-  | 'WASH';
+  | 'WASH'
+  | 'LEAD'
+  | 'MANUAL_TASK';
 
 export type DashboardWorkItemDto = {
   id: string;
@@ -24,6 +26,8 @@ export type DashboardWorkItemDto = {
   address: string | null;
   amountMinor: string | null;
   overdue: boolean;
+  unscheduled?: boolean;
+  completable?: boolean;
 };
 
 export type DashboardKpiDto = {
@@ -47,7 +51,7 @@ export type DashboardAttentionItemDto = {
 };
 
 export type DashboardOverviewDto = {
-  period: { key: DashboardPeriod; label: string; from: string; toExclusive: string };
+  period: { key: DashboardPeriod | 'custom'; label: string; from: string; toExclusive: string };
   kpis: DashboardKpiDto;
   workItems: DashboardWorkItemDto[];
   attentionItems: DashboardAttentionItemDto[];

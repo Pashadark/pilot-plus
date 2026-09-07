@@ -6,7 +6,7 @@ import { hasCompanyPermission } from '@/modules/admin/access/permissions';
 import { decryptField } from '@/services/security/field-encryption';
 import { getAuthenticatedSession } from '@/services/auth/session';
 
-import { getDashboardWindow, type DashboardPeriod } from '../date-window';
+import { getDashboardWindow, type DashboardPeriod, type DashboardWindow } from '../date-window';
 import { buildDashboardOverview } from '../normalizers';
 import type { DashboardOverviewDto } from '../overview-types';
 
@@ -20,6 +20,8 @@ type DashboardRepository = {
   rentalFindMany(args: unknown): Promise<unknown[]>;
   maintenanceFindMany(args: unknown): Promise<unknown[]>;
   washFindMany(args: unknown): Promise<unknown[]>;
+  taskFindMany(args: unknown): Promise<unknown[]>;
+  leadFindMany(args: unknown): Promise<unknown[]>;
 };
 
 type DashboardQueryDependencies = {
@@ -85,6 +87,28 @@ type RawWash = {
   startedAt: Date | null;
   completedAt: Date | null;
   vehicle: { make: string | null; model: string; registrationNumber: string | null };
+};
+
+type RawTask = {
+  id: string;
+  title: string;
+  description: string | null;
+  dueAt: Date;
+  priority: 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
+  href: string | null;
+  assignedTo: { name: string } | null;
+};
+
+type RawLead = {
+  id: string;
+  name: string;
+  lastName: string | null;
+  source: string | null;
+  status: 'NEW' | 'CONTACTED' | 'QUALIFIED';
+  nextContactAt: Date | null;
+  createdAt: Date;
+  phoneEncrypted?: string;
+  assignedTo: { name: string } | null;
 };
 
 const vehicleSelect = {
@@ -175,13 +199,14 @@ export function createDashboardQueries(
 ) {
   return {
     async getOverview(
-      period: DashboardPeriod,
+      period: DashboardPeriod | DashboardWindow,
       now: Date = new Date(),
     ): Promise<DashboardOverviewDto> {
       const session = await getSession();
       if (!session) throw new Error('Доступ к панели управления запрещён.');
 
-      const window = getDashboardWindow(period, now);
+      const window = typeof period === 'string' ? getDashboardWindow(period, now) : period;
+      const periodKey = typeof period === 'string' ? period : period.key;
       const companyId = session.companyId;
       const activeRentalWhere = {
         companyId,
@@ -200,7 +225,15 @@ export function createDashboardQueries(
         OR: [{ completedAt: { gt: window.from } }, { completedAt: null }],
       };
 
-      const [vehicles, rentals, financeRentals, maintenanceRecords, washRecords] = await Promise.all([
+      const [
+        vehicles,
+        rentals,
+        financeRentals,
+        maintenanceRecords,
+        washRecords,
+        manualTasks,
+        leads,
+      ] = await Promise.all([
         repository.vehicleFindMany({
           where: { companyId, archivedAt: null, isDemoImport: false },
           select: {
@@ -214,10 +247,15 @@ export function createDashboardQueries(
         repository.rentalFindMany({
           where: {
             companyId,
-            status: { in: ['CONFIRMED', 'ACTIVE', 'COMPLETED'] },
             OR: [
-              { startsAt: { lt: window.toExclusive }, endsAt: { gt: window.from } },
-              { completedAt: { gte: window.from, lt: window.toExclusive } },
+              {
+                status: { in: ['CONFIRMED', 'ACTIVE'] },
+                startsAt: { lt: window.toExclusive },
+              },
+              {
+                status: 'COMPLETED',
+                completedAt: { gte: window.from, lt: window.toExclusive },
+              },
             ],
           },
           select: rentalSelect(session.canViewClientPhone),
@@ -251,10 +289,52 @@ export function createDashboardQueries(
           select: washSelect,
           orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
         }),
+        repository.taskFindMany({
+          where: {
+            companyId,
+            status: 'OPEN',
+            dueAt:
+              window.toExclusive > now
+                ? { lt: window.toExclusive }
+                : { gte: window.from, lt: window.toExclusive },
+          },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            dueAt: true,
+            priority: true,
+            href: true,
+            assignedTo: { select: { name: true } },
+          },
+          orderBy: [{ dueAt: 'asc' }, { id: 'asc' }],
+        }),
+        repository.leadFindMany({
+          where: {
+            companyId,
+            status: { in: ['NEW', 'CONTACTED', 'QUALIFIED'] },
+            OR:
+              window.toExclusive > now
+                ? [{ nextContactAt: null }, { nextContactAt: { lt: window.toExclusive } }]
+                : [{ nextContactAt: { gte: window.from, lt: window.toExclusive } }],
+          },
+          select: {
+            id: true,
+            name: true,
+            lastName: true,
+            source: true,
+            status: true,
+            nextContactAt: true,
+            createdAt: true,
+            ...(session.canViewClientPhone ? { phoneEncrypted: true } : {}),
+            assignedTo: { select: { name: true } },
+          },
+          orderBy: [{ nextContactAt: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+        }),
       ]);
 
       return buildDashboardOverview({
-        period: { key: period, ...window },
+        period: { key: periodKey, ...window },
         now,
         vehicles: (vehicles as RawVehicle[]).map((vehicle) => ({
           id: vehicle.id,
@@ -294,6 +374,18 @@ export function createDashboardQueries(
           ...record,
           vehicleLabel: vehicleLabel(record.vehicle),
         })),
+        manualTasks: (manualTasks as RawTask[]).map((task) => ({
+          ...task,
+          assignedToName: task.assignedTo?.name ?? null,
+        })),
+        leads: (leads as RawLead[]).map((lead) => ({
+          ...lead,
+          phone:
+            session.canViewClientPhone && lead.phoneEncrypted
+              ? decryptField(lead.phoneEncrypted, dependencies.encryptionKey)
+              : null,
+          assignedToName: lead.assignedTo?.name ?? null,
+        })),
       });
     },
   };
@@ -328,16 +420,21 @@ const queries = createDashboardQueries(
       const query = args as Prisma.MaintenanceRecordFindManyArgs & {
         where: Prisma.MaintenanceRecordWhereInput & { companyId?: string };
       };
-      const { companyId: _companyId, ...where } = query.where;
+      const { companyId, ...where } = query.where;
+      void companyId;
       return prisma.maintenanceRecord.findMany({ ...query, where });
     },
     washFindMany: (args) => {
       const query = args as Prisma.WashRecordFindManyArgs & {
         where: Prisma.WashRecordWhereInput & { companyId?: string };
       };
-      const { companyId: _companyId, ...where } = query.where;
+      const { companyId, ...where } = query.where;
+      void companyId;
       return prisma.washRecord.findMany({ ...query, where });
     },
+    taskFindMany: (args) =>
+      prisma.operationsTask.findMany(args as Prisma.OperationsTaskFindManyArgs),
+    leadFindMany: (args) => prisma.lead.findMany(args as Prisma.LeadFindManyArgs),
   },
   getCurrentDashboardSession,
   { encryptionKey: process.env.CLIENT_DATA_ENCRYPTION_KEY ?? '' },

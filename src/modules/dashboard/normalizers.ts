@@ -72,8 +72,30 @@ type WashSource = {
   vehicleLabel: string;
 };
 
+type ManualTaskSource = {
+  id: string;
+  title: string;
+  description: string | null;
+  dueAt: Date;
+  priority: 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
+  href: string | null;
+  assignedToName: string | null;
+};
+
+type LeadSource = {
+  id: string;
+  name: string;
+  lastName: string | null;
+  source: string | null;
+  status: 'NEW' | 'CONTACTED' | 'QUALIFIED';
+  nextContactAt: Date | null;
+  createdAt: Date;
+  phone: string | null;
+  assignedToName: string | null;
+};
+
 export type DashboardOverviewSource = {
-  period: DashboardDateWindow & { key: DashboardPeriod };
+  period: DashboardDateWindow & { key: DashboardPeriod | 'custom' };
   now: Date;
   /** The server query supplies only non-archived, non-demo vehicles from the authenticated company. */
   vehicles: readonly VehicleSource[];
@@ -81,6 +103,8 @@ export type DashboardOverviewSource = {
   financeRentals?: readonly RentalSource[];
   maintenanceRecords: readonly MaintenanceSource[];
   washRecords: readonly WashSource[];
+  manualTasks?: readonly ManualTaskSource[];
+  leads?: readonly LeadSource[];
 };
 
 function overlaps(startsAt: Date, endsAt: Date | null | undefined, window: DashboardDateWindow) {
@@ -89,6 +113,10 @@ function overlaps(startsAt: Date, endsAt: Date | null | undefined, window: Dashb
 
 function occursIn(date: Date, window: DashboardDateWindow) {
   return date >= window.from && date < window.toExclusive;
+}
+
+function isVisibleOverdue(date: Date, source: DashboardOverviewSource) {
+  return date < source.now && source.period.toExclusive > source.now;
 }
 
 function isCompanyRealVehicle(vehicle: VehicleSource) {
@@ -186,7 +214,7 @@ function rentalWorkItems(
 
   if (
     (rental.status === 'CONFIRMED' || rental.status === 'ACTIVE') &&
-    occursIn(rental.endsAt, source.period)
+    (occursIn(rental.endsAt, source.period) || isVisibleOverdue(rental.endsAt, source))
   ) {
     const overdue = rental.endsAt < source.now;
     items.push({
@@ -286,6 +314,63 @@ function serviceWorkItems(source: DashboardOverviewSource): DashboardWorkItemDto
   return [...maintenanceItems, ...washItems];
 }
 
+function manualTaskWorkItems(source: DashboardOverviewSource): DashboardWorkItemDto[] {
+  return (source.manualTasks ?? []).map((task) => {
+    const overdue = task.dueAt < source.now;
+    const urgent = task.priority === 'HIGH' || task.priority === 'CRITICAL';
+    return {
+      id: `manual-task:${task.id}`,
+      kind: 'MANUAL_TASK',
+      scheduledAt: task.dueAt.toISOString(),
+      title: task.title,
+      tone: overdue || task.priority === 'CRITICAL' ? 'danger' : urgent ? 'warning' : 'info',
+      href: task.href ?? '/',
+      vehicleLabel: task.description ?? 'Ручная задача',
+      clientLabel: task.assignedToName ? `Ответственный: ${task.assignedToName}` : null,
+      phone: null,
+      contractNumber: null,
+      address: null,
+      amountMinor: null,
+      overdue,
+      completable: true,
+    };
+  });
+}
+
+function leadWorkItems(source: DashboardOverviewSource): DashboardWorkItemDto[] {
+  return (source.leads ?? []).flatMap((lead) => {
+    const scheduledAt = lead.nextContactAt;
+    if (
+      scheduledAt &&
+      !occursIn(scheduledAt, source.period) &&
+      !isVisibleOverdue(scheduledAt, source)
+    ) {
+      return [];
+    }
+
+    const overdue = scheduledAt !== null && scheduledAt < source.now;
+    const fullName = [lead.lastName, lead.name].filter(Boolean).join(' ');
+    return [
+      {
+        id: `lead:${lead.id}`,
+        kind: 'LEAD' as const,
+        scheduledAt: (scheduledAt ?? lead.createdAt).toISOString(),
+        title: 'Связаться по заявке',
+        tone: overdue ? ('danger' as const) : ('info' as const),
+        href: '/leads',
+        vehicleLabel: fullName,
+        clientLabel: lead.source ? `Источник: ${lead.source}` : 'Источник не указан',
+        phone: lead.phone,
+        contractNumber: null,
+        address: null,
+        amountMinor: null,
+        overdue,
+        unscheduled: scheduledAt === null,
+      },
+    ];
+  });
+}
+
 function attentionItems(
   workItems: readonly DashboardWorkItemDto[],
   vehicles: readonly VehicleSource[],
@@ -355,16 +440,22 @@ export function buildDashboardOverview(source: DashboardOverviewSource): Dashboa
       .filter(
         (rental) =>
           ['CONFIRMED', 'ACTIVE'].includes(rental.status) &&
-          overlaps(rental.startsAt, rental.endsAt, source.period),
+          (overlaps(rental.startsAt, rental.endsAt, source.period) ||
+            (rental.status === 'ACTIVE' &&
+              rental.startsAt < source.period.toExclusive &&
+              isVisibleOverdue(rental.endsAt, companySource))),
       )
       .map((rental) => rental.vehicleId),
   );
   const workItems = [
     ...rentals.flatMap((rental) => rentalWorkItems(rental, companySource)),
     ...serviceWorkItems(companySource),
+    ...manualTaskWorkItems(companySource),
+    ...leadWorkItems(companySource),
   ].sort(
     (left, right) =>
       Number(right.overdue) - Number(left.overdue) ||
+      Number(Boolean(left.unscheduled)) - Number(Boolean(right.unscheduled)) ||
       left.scheduledAt.localeCompare(right.scheduledAt) ||
       left.id.localeCompare(right.id),
   );

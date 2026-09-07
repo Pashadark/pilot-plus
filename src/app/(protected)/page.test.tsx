@@ -29,7 +29,9 @@ describe('Home command center', () => {
 
     const page = await Home({ searchParams: Promise.resolve({ period: 'tomorrow' }) });
 
-    expect(mocks.getDashboardOverviewForCurrentUser).toHaveBeenCalledWith('tomorrow');
+    expect(mocks.getDashboardOverviewForCurrentUser).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'tomorrow', label: 'Завтра' }),
+    );
     expect(page.props.children[1].type).toBe(mocks.CommandCenterDashboard);
     expect(page.props.children[1].props.overview).toBe(overview);
   });

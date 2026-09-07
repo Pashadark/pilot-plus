@@ -74,6 +74,21 @@ function wash(overrides = {}) {
   };
 }
 
+function lead(overrides = {}) {
+  return {
+    id: 'lead-1',
+    name: 'Иван',
+    lastName: 'Иванов',
+    source: 'Авито',
+    status: 'NEW' as const,
+    nextContactAt: new Date('2026-08-24T15:00:00.000Z'),
+    createdAt: new Date('2026-08-24T08:00:00.000Z'),
+    phone: '+79990000000',
+    assignedToName: null,
+    ...overrides,
+  };
+}
+
 function source(overrides = {}) {
   return {
     period: { key: 'today' as const, ...moscowDay('2026-08-24') },
@@ -83,6 +98,7 @@ function source(overrides = {}) {
     financeRentals: [],
     maintenanceRecords: [],
     washRecords: [],
+    leads: [],
     ...overrides,
   };
 }
@@ -195,6 +211,30 @@ describe('buildDashboardOverview', () => {
     );
 
     expect(result.workItems[0]).toMatchObject({ kind: 'RETURN', overdue: true, tone: 'danger' });
+  });
+
+  it('keeps an uncompleted overdue return visible on the current workday', () => {
+    const result = buildDashboardOverview(
+      source({
+        rentals: [
+          rental({
+            status: 'ACTIVE',
+            startsAt: new Date('2026-08-20T10:00:00.000Z'),
+            endsAt: new Date('2026-08-23T10:00:00.000Z'),
+          }),
+        ],
+      }),
+    );
+
+    expect(result.workItems).toContainEqual(
+      expect.objectContaining({
+        id: 'rental-return:rental-1',
+        kind: 'RETURN',
+        overdue: true,
+        scheduledAt: '2026-08-23T10:00:00.000Z',
+      }),
+    );
+    expect(result.kpis).toMatchObject({ occupiedVehicles: 1, freeVehicles: 0 });
   });
 
   it('treats an overlapping active rental as occupied', () => {
@@ -332,5 +372,72 @@ describe('buildDashboardOverview', () => {
     expect(result.workItems).toContainEqual(
       expect.objectContaining({ kind: 'DELIVERY', address: 'Москва, Тверская 1' }),
     );
+  });
+
+  it('adds an assigned manual task to the same prioritized workday queue', () => {
+    const result = buildDashboardOverview(
+      source({
+        manualTasks: [
+          {
+            id: 'task-1',
+            title: 'Позвонить клиенту',
+            description: 'Уточнить продление',
+            dueAt: new Date('2026-08-24T10:00:00.000Z'),
+            priority: 'HIGH',
+            href: null,
+            assignedToName: 'Павел Седов',
+          },
+        ],
+      }),
+    );
+
+    expect(result.workItems).toContainEqual(
+      expect.objectContaining({
+        id: 'manual-task:task-1',
+        kind: 'MANUAL_TASK',
+        title: 'Позвонить клиенту',
+        completable: true,
+        overdue: true,
+      }),
+    );
+  });
+
+  it('adds active leads after scheduled work and keeps unscheduled leads last', () => {
+    const result = buildDashboardOverview(
+      source({
+        leads: [
+          lead({
+            id: 'overdue',
+            nextContactAt: new Date('2026-08-24T10:00:00.000Z'),
+          }),
+          lead({ id: 'scheduled', nextContactAt: new Date('2026-08-24T15:00:00.000Z') }),
+          lead({ id: 'unscheduled', nextContactAt: null }),
+        ],
+        manualTasks: [
+          {
+            id: 'task-1',
+            title: 'Плановая задача',
+            description: null,
+            dueAt: new Date('2026-08-24T13:00:00.000Z'),
+            priority: 'NORMAL',
+            href: null,
+            assignedToName: null,
+          },
+        ],
+      }),
+    );
+
+    expect(result.workItems.map((item) => item.id)).toEqual([
+      'lead:overdue',
+      'manual-task:task-1',
+      'lead:scheduled',
+      'lead:unscheduled',
+    ]);
+    expect(result.workItems.at(-1)).toMatchObject({
+      kind: 'LEAD',
+      vehicleLabel: 'Иванов Иван',
+      clientLabel: 'Источник: Авито',
+      unscheduled: true,
+    });
   });
 });
