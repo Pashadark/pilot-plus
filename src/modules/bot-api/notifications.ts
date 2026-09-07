@@ -6,6 +6,11 @@ import { decryptField } from '@/services/security/field-encryption';
 import { BotApiError } from './auth';
 import { moscowDayRange } from './daily-operations';
 import { formatLeadCreatedMessage, formatLeadStatusChangedMessage } from './lead-notifications';
+import {
+  classifyGpsSilence,
+  classifyRentalDeadline,
+  formatOperationalAlert,
+} from './operational-alerts';
 import { formatOperationsDigest } from './operations-digest';
 import { OFFLINE_AFTER_MS } from '@/modules/vehicles/gps-status';
 
@@ -80,7 +85,7 @@ function publicLeadsUrl() {
 
 export async function enqueueDailyOperationsDigests(now: Date, database = prisma) {
   const moscow = new Date(now.getTime() + 3 * 60 * 60 * 1000);
-  if (moscow.getUTCHours() === 0 && moscow.getUTCMinutes() < 5) return 0;
+  if (moscow.getUTCHours() !== 8 || moscow.getUTCMinutes() >= 15) return 0;
   const date = moscow.toISOString().slice(0, 10);
   const bindings = await database.telegramGroupBinding.findMany({
     select: { companyId: true, telegramChatId: true, boundByUserId: true },
@@ -130,6 +135,172 @@ export async function enqueueDailyOperationsDigests(now: Date, database = prisma
     data: rows,
     skipDuplicates: true,
   });
+  return result.count;
+}
+
+export async function enqueueOperationalAlerts(now: Date, database = prisma) {
+  if (now.getUTCMinutes() % 15 !== 0 || now.getUTCSeconds() >= 10) return 0;
+  const bindings = await database.telegramGroupBinding.findMany({
+    select: { companyId: true, telegramChatId: true, boundByUserId: true },
+    take: 500,
+  });
+  if (!bindings.length) return 0;
+  const companyIds = [...new Set(bindings.map((binding) => binding.companyId))];
+  const identities = await database.telegramIdentity.findMany({
+    where: {
+      kind: 'STAFF',
+      isActive: true,
+      OR: bindings.map((binding) => ({
+        companyId: binding.companyId,
+        userId: binding.boundByUserId,
+      })),
+    },
+    select: { id: true, companyId: true, userId: true },
+    take: 500,
+  });
+  const identityByBinding = new Map(
+    identities.map((identity) => [`${identity.companyId}:${identity.userId}`, identity.id]),
+  );
+  const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60_000);
+  const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60_000);
+  const recentEventsSince = new Date(now.getTime() - 20 * 60_000);
+  const [vehicles, rentals, events, fines] = await Promise.all([
+    database.vehicle.findMany({
+      where: { companyId: { in: companyIds }, archivedAt: null, isDemoImport: false },
+      select: {
+        id: true,
+        companyId: true,
+        positions: {
+          where: { provider: 'GLONASSSOFT' },
+          select: { recordedAt: true },
+          orderBy: [{ recordedAt: 'desc' as const }, { id: 'desc' as const }],
+          take: 1,
+        },
+        rentals: {
+          where: { status: { in: ['CONFIRMED' as const, 'ACTIVE' as const] } },
+          select: { id: true },
+          orderBy: { endsAt: 'desc' as const },
+          take: 1,
+        },
+      },
+      take: 500,
+    }),
+    database.rental.findMany({
+      where: {
+        companyId: { in: companyIds },
+        status: { in: ['CONFIRMED', 'ACTIVE'] },
+        OR: [{ endsAt: { gte: now, lte: twoHoursFromNow } }, { endsAt: { lte: twoHoursAgo } }],
+      },
+      select: { id: true, companyId: true, vehicleId: true, endsAt: true },
+      take: 500,
+    }),
+    database.vehicleEvent.findMany({
+      where: {
+        vehicle: { companyId: { in: companyIds }, archivedAt: null, isDemoImport: false },
+        recordedAt: { gte: recentEventsSince, lte: now },
+      },
+      select: { id: true, vehicleId: true, type: true, vehicle: { select: { companyId: true } } },
+      take: 500,
+    }),
+    database.fine.findMany({
+      where: {
+        companyId: { in: companyIds },
+        createdAt: { gte: recentEventsSince, lte: now },
+        status: { not: 'CANCELLED' },
+      },
+      select: { id: true, companyId: true, vehicleId: true },
+      take: 500,
+    }),
+  ]);
+
+  type Alert = {
+    companyId: string;
+    eventKey: string;
+    payload: {
+      kind: string;
+      vehicleId: string;
+      rentalId?: string;
+      eventId?: string;
+      fineId?: string;
+    };
+  };
+  const alerts: Alert[] = [];
+  for (const vehicle of vehicles) {
+    const rentalId = vehicle.rentals[0]?.id;
+    const lastSignalAt = vehicle.positions[0]?.recordedAt ?? null;
+    const kind = classifyGpsSilence({
+      isRented: Boolean(rentalId),
+      silentForMs: lastSignalAt ? now.getTime() - lastSignalAt.getTime() : 365 * 24 * 60 * 60_000,
+    });
+    if (!kind) continue;
+    alerts.push({
+      companyId: vehicle.companyId,
+      eventKey: `gps:${vehicle.id}:${kind}:${lastSignalAt?.toISOString() ?? 'never'}`,
+      payload: { kind, vehicleId: vehicle.id, ...(rentalId ? { rentalId } : {}) },
+    });
+  }
+  for (const rental of rentals) {
+    const kind = classifyRentalDeadline(now.getTime() - rental.endsAt.getTime());
+    if (!kind) continue;
+    alerts.push({
+      companyId: rental.companyId,
+      eventKey: `rental:${rental.id}:${kind}:${rental.endsAt.toISOString()}`,
+      payload: { kind, vehicleId: rental.vehicleId, rentalId: rental.id },
+    });
+  }
+  for (const event of events) {
+    const normalizedType = event.type.toUpperCase();
+    const kind = /GEOFENCE|ZONE|ГЕОЗОН/iu.test(normalizedType)
+      ? 'GEOFENCE_EXIT'
+      : /SPEED|СКОРОСТ/iu.test(normalizedType)
+        ? 'SPEEDING'
+        : null;
+    if (!kind) continue;
+    alerts.push({
+      companyId: event.vehicle.companyId,
+      eventKey: `telemetry:${event.id}:${kind}`,
+      payload: { kind, vehicleId: event.vehicleId, eventId: event.id },
+    });
+  }
+  for (const fine of fines) {
+    if (!fine.vehicleId) continue;
+    alerts.push({
+      companyId: fine.companyId,
+      eventKey: `fine:${fine.id}:created`,
+      payload: { kind: 'NEW_FINE', vehicleId: fine.vehicleId, fineId: fine.id },
+    });
+  }
+
+  const rows = alerts.flatMap((alert) =>
+    bindings
+      .filter((binding) => binding.companyId === alert.companyId)
+      .flatMap((binding) => {
+        const common = {
+          companyId: alert.companyId,
+          template: 'OPERATIONAL_ALERT',
+          payload: alert.payload,
+          availableAt: now,
+        };
+        const group = {
+          ...common,
+          chatId: binding.telegramChatId,
+          eventKey: `operational:${alert.eventKey}:group:${binding.telegramChatId}`,
+        };
+        const identityId = identityByBinding.get(`${binding.companyId}:${binding.boundByUserId}`);
+        return identityId
+          ? [
+              group,
+              {
+                ...common,
+                identityId,
+                eventKey: `operational:${alert.eventKey}:staff:${identityId}`,
+              },
+            ]
+          : [group];
+      }),
+  );
+  if (!rows.length) return 0;
+  const result = await database.botNotificationJob.createMany({ data: rows, skipDuplicates: true });
   return result.count;
 }
 
@@ -237,155 +408,356 @@ async function hydrateJob(
           });
     return { ...job, payload: { message, parseMode: 'HTML' } };
   }
+  if (job.template === 'OPERATIONAL_ALERT') {
+    const payload =
+      typeof job.payload === 'object' && job.payload !== null
+        ? (job.payload as Record<string, unknown>)
+        : {};
+    const kind = String(payload.kind ?? '');
+    const vehicleId = String(payload.vehicleId ?? '');
+    const rentalId = payload.rentalId ? String(payload.rentalId) : null;
+    const eventId = payload.eventId ? String(payload.eventId) : null;
+    const fineId = payload.fineId ? String(payload.fineId) : null;
+    const allowedKinds = new Set([
+      'RENTED_GPS_WARNING',
+      'RENTED_GPS_CRITICAL',
+      'RENTED_GPS_THEFT_RISK',
+      'FREE_GPS_TRACKER_PROBLEM',
+      'RETURN_SOON',
+      'RETURN_OVERDUE',
+      'GEOFENCE_EXIT',
+      'SPEEDING',
+      'NEW_FINE',
+    ]);
+    if (!vehicleId || !allowedKinds.has(kind)) {
+      return { ...job, payload: { message: 'Оперативное событие уже недоступно.' } };
+    }
+    const [vehicle, rental, event, fine] = await Promise.all([
+      tx.vehicle.findFirst({
+        where: { id: vehicleId, companyId: job.companyId },
+        select: {
+          make: true,
+          modelName: true,
+          model: true,
+          registrationNumber: true,
+          positions: {
+            where: { provider: 'GLONASSSOFT' },
+            select: { recordedAt: true },
+            orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+            take: 1,
+          },
+        },
+      }),
+      rentalId
+        ? tx.rental.findFirst({
+            where: { id: rentalId, companyId: job.companyId },
+            select: {
+              endsAt: true,
+              client: {
+                select: {
+                  firstName: true,
+                  middleName: true,
+                  lastName: true,
+                  phoneEncrypted: true,
+                },
+              },
+            },
+          })
+        : Promise.resolve(null),
+      eventId
+        ? tx.vehicleEvent.findFirst({
+            where: { id: eventId, vehicleId },
+            select: { title: true, description: true },
+          })
+        : Promise.resolve(null),
+      fineId
+        ? tx.fine.findFirst({
+            where: { id: fineId, companyId: job.companyId },
+            select: {
+              currentAmountMinor: true,
+              articleCode: true,
+              clientId: true,
+              client: {
+                select: {
+                  firstName: true,
+                  middleName: true,
+                  lastName: true,
+                  phoneEncrypted: true,
+                },
+              },
+            },
+          })
+        : Promise.resolve(null),
+    ]);
+    if (!vehicle) {
+      return { ...job, payload: { message: 'Автомобиль уже недоступен.' } };
+    }
+    const lastSignalAt = vehicle.positions[0]?.recordedAt ?? null;
+    return {
+      ...job,
+      payload: {
+        message: formatOperationalAlert({
+          kind: kind as Parameters<typeof formatOperationalAlert>[0]['kind'],
+          vehicle: vehicleTitle(vehicle),
+          registrationNumber: vehicle.registrationNumber,
+          silentForMs: lastSignalAt ? now.getTime() - lastSignalAt.getTime() : null,
+          clientName: rental
+            ? personName(rental.client)
+            : fine?.client
+              ? personName(fine.client)
+              : null,
+          clientPhone: rental
+            ? decryptedPhone(rental.client.phoneEncrypted)
+            : fine?.client
+              ? decryptedPhone(fine.client.phoneEncrypted)
+              : null,
+          rentalEndsAt: rental?.endsAt ?? null,
+          eventTitle: event?.title ?? null,
+          eventDescription: event?.description ?? null,
+          fineAmountMinor: fine?.currentAmountMinor.toString() ?? null,
+          fineArticle: fine?.articleCode ?? null,
+          fineAttributedToClient: Boolean(fine?.clientId),
+        }),
+        parseMode: 'HTML',
+      },
+    };
+  }
   if (job.template === 'DAILY_OPERATIONS_DIGEST') {
     const date =
       typeof job.payload === 'object' && job.payload !== null && 'date' in job.payload
         ? String(job.payload.date)
         : undefined;
     const range = moscowDayRange(date);
+    const previousRange = {
+      start: new Date(range.start.getTime() - 24 * 60 * 60_000),
+      end: range.start,
+    };
+    const isMonday = new Date(range.start.getTime() + 3 * 60 * 60_000).getUTCDay() === 1;
+    const weekRange = {
+      start: new Date(range.start.getTime() - 7 * 24 * 60 * 60_000),
+      end: range.start,
+    };
     const overlap = { startsAt: { lt: range.end }, endsAt: { gt: range.start } };
-    const [requests, rentals, dayRentals, vehicles, depositReturns, maintenance, washes] =
-      await Promise.all([
-        tx.botRentalRequest.count({
-          where: { companyId: job.companyId, status: 'PENDING', ...overlap },
-        }),
-        tx.rental.count({
-          where: { companyId: job.companyId, status: { in: ['CONFIRMED', 'ACTIVE'] }, ...overlap },
-        }),
-        tx.rental.findMany({
-          where: {
-            companyId: job.companyId,
-            status: { in: ['CONFIRMED', 'ACTIVE'] },
-            ...overlap,
-          },
-          orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
-          take: 200,
-          select: {
-            startsAt: true,
-            endsAt: true,
-            contractNumber: true,
-            client: {
-              select: {
-                firstName: true,
-                middleName: true,
-                lastName: true,
-                phoneEncrypted: true,
-              },
-            },
-            vehicle: {
-              select: {
-                make: true,
-                modelName: true,
-                model: true,
-                registrationNumber: true,
-              },
-            },
-          },
-        }),
-        tx.vehicle.findMany({
-          where: { companyId: job.companyId, archivedAt: null, isDemoImport: false },
-          select: {
-            status: true,
-            isDemoImport: true,
-            make: true,
-            modelName: true,
-            model: true,
-            registrationNumber: true,
-            rentals: {
-              where: { status: { in: ['CONFIRMED', 'ACTIVE'] }, ...overlap },
-              select: { id: true },
-              take: 1,
-            },
-            maintenanceRecords: {
-              where: {
-                status: { in: ['PLANNED', 'IN_PROGRESS', 'OVERDUE'] },
-                scheduledAt: { lt: range.end },
-                OR: [{ scheduledEndsAt: { gt: range.start } }, { scheduledEndsAt: null }],
-              },
-              select: { id: true },
-              take: 1,
-            },
-            positions: {
-              where: { provider: 'GLONASSSOFT' },
-              select: { recordedAt: true },
-              orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
-              take: 1,
+    const [
+      requests,
+      rentals,
+      dayRentals,
+      vehicles,
+      depositReturns,
+      maintenance,
+      washes,
+      leads,
+      recentFines,
+      fineIntegration,
+      yesterdayRentals,
+      yesterdayIncidents,
+      weeklyRentals,
+    ] = await Promise.all([
+      tx.botRentalRequest.count({
+        where: { companyId: job.companyId, status: 'PENDING', ...overlap },
+      }),
+      tx.rental.count({
+        where: { companyId: job.companyId, status: { in: ['CONFIRMED', 'ACTIVE'] }, ...overlap },
+      }),
+      tx.rental.findMany({
+        where: {
+          companyId: job.companyId,
+          status: { in: ['CONFIRMED', 'ACTIVE'] },
+          ...overlap,
+        },
+        orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
+        take: 200,
+        select: {
+          startsAt: true,
+          endsAt: true,
+          contractNumber: true,
+          client: {
+            select: {
+              firstName: true,
+              middleName: true,
+              lastName: true,
+              phoneEncrypted: true,
             },
           },
-          take: 300,
-        }),
-        tx.rentalOperation.findMany({
-          where: {
-            companyId: job.companyId,
-            status: 'COMMITTED',
-            type: 'RETURN',
-            depositStatus: 'COLLECTED',
-            occurredAt: { gte: range.start, lt: range.end },
+          vehicle: {
+            select: {
+              make: true,
+              modelName: true,
+              model: true,
+              registrationNumber: true,
+            },
           },
-          orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
-          take: 200,
-          select: {
-            occurredAt: true,
-            depositAmountMinor: true,
-            rental: {
-              select: {
-                contractNumber: true,
-                depositMinor: true,
-                client: {
-                  select: {
-                    firstName: true,
-                    middleName: true,
-                    lastName: true,
-                    phoneEncrypted: true,
-                  },
+        },
+      }),
+      tx.vehicle.findMany({
+        where: { companyId: job.companyId, archivedAt: null, isDemoImport: false },
+        select: {
+          status: true,
+          isDemoImport: true,
+          make: true,
+          modelName: true,
+          model: true,
+          registrationNumber: true,
+          rentals: {
+            where: { status: { in: ['CONFIRMED', 'ACTIVE'] }, ...overlap },
+            select: { id: true, status: true },
+            take: 1,
+          },
+          maintenanceRecords: {
+            where: {
+              status: { in: ['PLANNED', 'IN_PROGRESS', 'OVERDUE'] },
+              scheduledAt: { lt: range.end },
+              OR: [{ scheduledEndsAt: { gt: range.start } }, { scheduledEndsAt: null }],
+            },
+            select: { id: true },
+            take: 1,
+          },
+          positions: {
+            where: { provider: 'GLONASSSOFT' },
+            select: { recordedAt: true },
+            orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+            take: 1,
+          },
+        },
+        take: 300,
+      }),
+      tx.rentalOperation.findMany({
+        where: {
+          companyId: job.companyId,
+          status: 'COMMITTED',
+          type: 'RETURN',
+          depositStatus: 'COLLECTED',
+          occurredAt: { gte: range.start, lt: range.end },
+        },
+        orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+        take: 200,
+        select: {
+          occurredAt: true,
+          depositAmountMinor: true,
+          rental: {
+            select: {
+              contractNumber: true,
+              depositMinor: true,
+              client: {
+                select: {
+                  firstName: true,
+                  middleName: true,
+                  lastName: true,
+                  phoneEncrypted: true,
                 },
-                vehicle: {
-                  select: {
-                    make: true,
-                    modelName: true,
-                    model: true,
-                    registrationNumber: true,
-                  },
+              },
+              vehicle: {
+                select: {
+                  make: true,
+                  modelName: true,
+                  model: true,
+                  registrationNumber: true,
                 },
               },
             },
           },
-        }),
-        tx.maintenanceRecord.findMany({
-          where: {
-            vehicle: { companyId: job.companyId, archivedAt: null, isDemoImport: false },
-            status: { in: ['PLANNED', 'IN_PROGRESS', 'OVERDUE'] },
-            scheduledAt: { gte: range.start, lt: range.end },
+        },
+      }),
+      tx.maintenanceRecord.findMany({
+        where: {
+          vehicle: { companyId: job.companyId, archivedAt: null, isDemoImport: false },
+          status: { in: ['PLANNED', 'IN_PROGRESS', 'OVERDUE'] },
+          scheduledAt: { gte: range.start, lt: range.end },
+        },
+        orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
+        take: 200,
+        select: {
+          scheduledAt: true,
+          title: true,
+          status: true,
+          vehicle: {
+            select: { make: true, modelName: true, model: true, registrationNumber: true },
           },
-          orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
-          take: 200,
-          select: {
-            scheduledAt: true,
-            title: true,
-            status: true,
-            vehicle: {
-              select: { make: true, modelName: true, model: true, registrationNumber: true },
+        },
+      }),
+      tx.washRecord.findMany({
+        where: {
+          vehicle: { companyId: job.companyId, archivedAt: null, isDemoImport: false },
+          status: { in: ['PLANNED', 'IN_PROGRESS'] },
+          scheduledAt: { gte: range.start, lt: range.end },
+        },
+        orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
+        take: 200,
+        select: {
+          scheduledAt: true,
+          kind: true,
+          status: true,
+          vehicle: {
+            select: { make: true, modelName: true, model: true, registrationNumber: true },
+          },
+        },
+      }),
+      tx.lead.findMany({
+        where: {
+          companyId: job.companyId,
+          status: { in: ['NEW', 'CONTACTED', 'QUALIFIED'] },
+          nextContactAt: { gte: range.start, lt: range.end },
+        },
+        orderBy: [{ nextContactAt: 'asc' }, { id: 'asc' }],
+        take: 200,
+        select: {
+          name: true,
+          lastName: true,
+          source: true,
+          phoneEncrypted: true,
+          nextContactAt: true,
+        },
+      }),
+      tx.fine.findMany({
+        where: {
+          companyId: job.companyId,
+          createdAt: { gte: new Date(now.getTime() - 24 * 60 * 60_000), lte: now },
+          status: { not: 'CANCELLED' },
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 100,
+        select: {
+          currentAmountMinor: true,
+          articleCode: true,
+          offenseAt: true,
+          clientId: true,
+          vehicle: {
+            select: { make: true, modelName: true, model: true, registrationNumber: true },
+          },
+        },
+      }),
+      tx.fineIntegration.findUnique({
+        where: { companyId: job.companyId },
+        select: { enabled: true, lastAttemptAt: true, lastSuccessAt: true, lastErrorCode: true },
+      }),
+      tx.rental.findMany({
+        where: {
+          companyId: job.companyId,
+          status: 'COMPLETED',
+          completedAt: { gte: previousRange.start, lt: previousRange.end },
+        },
+        select: { totalPriceMinor: true, startsAt: true, endsAt: true },
+        take: 500,
+      }),
+      tx.vehicleEvent.count({
+        where: {
+          vehicle: { companyId: job.companyId },
+          severity: 'DANGER',
+          recordedAt: { gte: previousRange.start, lt: previousRange.end },
+        },
+      }),
+      isMonday
+        ? tx.rental.findMany({
+            where: {
+              companyId: job.companyId,
+              status: 'COMPLETED',
+              completedAt: { gte: weekRange.start, lt: weekRange.end },
             },
-          },
-        }),
-        tx.washRecord.findMany({
-          where: {
-            vehicle: { companyId: job.companyId, archivedAt: null, isDemoImport: false },
-            status: { in: ['PLANNED', 'IN_PROGRESS'] },
-            scheduledAt: { gte: range.start, lt: range.end },
-          },
-          orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
-          take: 200,
-          select: {
-            scheduledAt: true,
-            kind: true,
-            status: true,
-            vehicle: {
-              select: { make: true, modelName: true, model: true, registrationNumber: true },
-            },
-          },
-        }),
-      ]);
+            select: { totalPriceMinor: true, startsAt: true, endsAt: true },
+            take: 1000,
+          })
+        : Promise.resolve([]),
+    ]);
     const freeVehicles = vehicles.filter(
       (vehicle) =>
         vehicle.status !== 'MAINTENANCE' &&
@@ -406,6 +778,60 @@ async function hydrateJob(
       INTERIOR: 'Уборка салона',
       COMPLEX: 'Комплексная мойка',
     };
+    const rentedVehicles = vehicles.filter((vehicle) => vehicle.rentals.length > 0);
+    const bookedVehicles = vehicles.filter((vehicle) => vehicle.rentals[0]?.status === 'CONFIRMED');
+    const maintenanceVehicles = vehicles.filter(
+      (vehicle) => vehicle.status === 'MAINTENANCE' || vehicle.maintenanceRecords.length > 0,
+    );
+    const unknownVehicles = vehicles.filter((vehicle) => vehicle.status === 'UNKNOWN');
+    const previousRevenueMinor = yesterdayRentals.reduce(
+      (total, rental) => total + rental.totalPriceMinor,
+      BigInt(0),
+    );
+    const fleetLoad = vehicles.length
+      ? Math.round((rentedVehicles.length / vehicles.length) * 100)
+      : 0;
+    const finesApiAvailable = Boolean(
+      fineIntegration?.enabled &&
+      fineIntegration.lastSuccessAt &&
+      (!fineIntegration.lastAttemptAt ||
+        fineIntegration.lastSuccessAt >= fineIntegration.lastAttemptAt) &&
+      !fineIntegration.lastErrorCode,
+    );
+    const problemRows = vehicles.flatMap((vehicle) => {
+      const lastSignalAt = vehicle.positions[0]?.recordedAt ?? null;
+      const silentForMs = lastSignalAt
+        ? Math.max(0, now.getTime() - lastSignalAt.getTime())
+        : 365 * 24 * 60 * 60_000;
+      const kind = classifyGpsSilence({
+        isRented: vehicle.rentals.length > 0,
+        silentForMs,
+      });
+      if (!kind) return [];
+      const hours = Math.floor(silentForMs / (60 * 60_000));
+      const duration = `${Math.floor(hours / 24)} дн. ${hours % 24} ч.`;
+      return [
+        {
+          kind,
+          vehicle: vehicleTitle(vehicle),
+          registrationNumber: vehicle.registrationNumber,
+          details: `Нет связи ${duration}`,
+          action:
+            kind === 'FREE_GPS_TRACKER_PROBLEM'
+              ? 'Проверить АКБ, питание и SIM-карту трекера.'
+              : kind === 'RENTED_GPS_THEFT_RISK'
+                ? 'Срочно позвонить клиенту. Возможен угон или работа глушилки.'
+                : 'Позвонить клиенту и уточнить местоположение.',
+        },
+      ];
+    });
+    const recommendations = [
+      ...problemRows.slice(0, 3).map((problem) => problem.action),
+      ...(leads.length ? [`Обработать ${leads.length} запланированных заявок.`] : []),
+      ...(maintenance.some((record) => record.status === 'OVERDUE')
+        ? ['Закрыть просроченное техническое обслуживание.']
+        : []),
+    ];
     return {
       ...job,
       payload: {
@@ -413,6 +839,74 @@ async function hydrateJob(
           date: range.date,
           requests,
           activeRentals: rentals,
+          yesterday: {
+            revenueMinor: previousRevenueMinor.toString(),
+            completedRentals: yesterdayRentals.length,
+            incidents: yesterdayIncidents,
+            loadPercent: fleetLoad,
+          },
+          fleet: {
+            rented: rentedVehicles.length,
+            free: freeVehicles.length,
+            booked: bookedVehicles.length,
+            maintenance: maintenanceVehicles.length,
+            unknown: unknownVehicles.length,
+            total: vehicles.length,
+          },
+          criticalProblems: problemRows.filter(
+            (problem) =>
+              problem.kind === 'RENTED_GPS_CRITICAL' || problem.kind === 'RENTED_GPS_THEFT_RISK',
+          ),
+          trackerProblems: problemRows.filter(
+            (problem) =>
+              problem.kind === 'RENTED_GPS_WARNING' || problem.kind === 'FREE_GPS_TRACKER_PROBLEM',
+          ),
+          finesApiAvailable,
+          newFines: recentFines.flatMap((fine) =>
+            fine.vehicle
+              ? [
+                  {
+                    vehicle: vehicleTitle(fine.vehicle),
+                    registrationNumber: fine.vehicle.registrationNumber,
+                    amountMinor: fine.currentAmountMinor.toString(),
+                    article: fine.articleCode,
+                    offenseAt: fine.offenseAt,
+                    attributedToClient: Boolean(fine.clientId),
+                  },
+                ]
+              : [],
+          ),
+          leads: leads.map((lead) => ({
+            at: lead.nextContactAt,
+            name: [lead.lastName, lead.name].filter(Boolean).join(' '),
+            source: lead.source,
+            phone: decryptedPhone(lead.phoneEncrypted),
+            overdue: Boolean(lead.nextContactAt && lead.nextContactAt < now),
+          })),
+          recommendations,
+          weekly:
+            isMonday && weeklyRentals.length
+              ? {
+                  startDate: weekRange.start.toISOString().slice(0, 10),
+                  endDate: new Date(weekRange.end.getTime() - 1).toISOString().slice(0, 10),
+                  revenueMinor: weeklyRentals
+                    .reduce((total, rental) => total + rental.totalPriceMinor, BigInt(0))
+                    .toString(),
+                  rentals: weeklyRentals.length,
+                  averageDurationDays: Number(
+                    (
+                      weeklyRentals.reduce(
+                        (total, rental) =>
+                          total +
+                          (rental.endsAt.getTime() - rental.startsAt.getTime()) /
+                            (24 * 60 * 60_000),
+                        0,
+                      ) / weeklyRentals.length
+                    ).toFixed(1),
+                  ),
+                  loadPercent: fleetLoad,
+                }
+              : undefined,
           handovers: dayRentals
             .filter((rental) => rental.startsAt >= range.start && rental.startsAt < range.end)
             .map((rental) => rentalItem(rental, rental.startsAt, 'Выдать автомобиль')),

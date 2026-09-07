@@ -37,6 +37,57 @@ export type OperationsDigestInput = {
   maintenance: DigestServiceItem[];
   offlineVehicles: DigestOfflineVehicle[];
   freeVehicles: Array<{ vehicle: string; registrationNumber: string | null }>;
+  yesterday?: {
+    revenueMinor: string;
+    completedRentals: number;
+    incidents: number;
+    loadPercent: number;
+  };
+  fleet?: {
+    rented: number;
+    free: number;
+    booked: number;
+    maintenance: number;
+    unknown: number;
+    total: number;
+  };
+  criticalProblems?: Array<{
+    vehicle: string;
+    registrationNumber: string | null;
+    details: string;
+    action: string;
+  }>;
+  trackerProblems?: Array<{
+    vehicle: string;
+    registrationNumber: string | null;
+    details: string;
+    action: string;
+  }>;
+  newFines?: Array<{
+    vehicle: string;
+    registrationNumber: string | null;
+    amountMinor: string;
+    article: string | null;
+    offenseAt: Date;
+    attributedToClient: boolean;
+  }>;
+  finesApiAvailable?: boolean;
+  leads?: Array<{
+    at: Date | null;
+    name: string;
+    source: string | null;
+    phone: string | null;
+    overdue: boolean;
+  }>;
+  recommendations?: string[];
+  weekly?: {
+    startDate: string;
+    endDate: string;
+    revenueMinor: string;
+    rentals: number;
+    averageDurationDays: number;
+    loadPercent: number;
+  };
 };
 
 function escapeHtml(value: string | number | null | undefined): string {
@@ -110,16 +161,38 @@ function serviceCard(item: DigestServiceItem): string {
   ].join('\n');
 }
 
+function problemSection(
+  heading: string,
+  items: OperationsDigestInput['criticalProblems'] | OperationsDigestInput['trackerProblems'],
+) {
+  if (!items?.length) return null;
+  return [
+    heading,
+    ...items.map(
+      (item, index) =>
+        `${index + 1}. ${escapeHtml(item.vehicle)} · <code>${escapeHtml(item.registrationNumber ?? 'без номера')}</code>\n${escapeHtml(item.details)}\n<b>Действие:</b> ${escapeHtml(item.action)}`,
+    ),
+  ].join('\n\n');
+}
+
 function section<T>(heading: string, items: T[], card: (item: T) => string): string | null {
   if (!items.length) return null;
-  return [heading, ...[...items].sort((a, b) => {
-    const left = (a as { at: Date }).at;
-    const right = (b as { at: Date }).at;
-    return left.getTime() - right.getTime();
-  }).map(card)].join('\n\n');
+  return [
+    heading,
+    ...[...items]
+      .sort((a, b) => {
+        const left = (a as { at: Date }).at;
+        const right = (b as { at: Date }).at;
+        return left.getTime() - right.getTime();
+      })
+      .map(card),
+  ].join('\n\n');
 }
 
 export function formatOperationsDigest(input: OperationsDigestInput): string {
+  const fleetLoad = input.fleet?.total
+    ? Math.round((input.fleet.rented / input.fleet.total) * 100)
+    : null;
   const blocks: Array<string | null> = [
     [
       '🌙 <b>Сводка СУПА ПРО</b>',
@@ -127,8 +200,59 @@ export function formatOperationsDigest(input: OperationsDigestInput): string {
       '',
       `📋 Заявки: <b>${input.requests}</b> · В аренде: <b>${input.activeRentals}</b> · Свободно: <b>${input.freeVehicles.length}</b>`,
     ].join('\n'),
+    problemSection('🔴 <b>Критические проблемы</b>', input.criticalProblems),
+    problemSection('🟠 <b>Проблемы с трекерами</b>', input.trackerProblems),
+    input.newFines?.length
+      ? [
+          '🟡 <b>Новые штрафы за 24 часа</b>',
+          ...input.newFines.map(
+            (fine, index) =>
+              `${index + 1}. ${escapeHtml(fine.vehicle)} · <code>${escapeHtml(fine.registrationNumber ?? 'без номера')}</code>\n⚡ ${escapeHtml(money(fine.amountMinor))}${fine.article ? ` · ${escapeHtml(fine.article)}` : ''}\n${escapeHtml(shortDateTime(fine.offenseAt))} · На клиента: <b>${fine.attributedToClient ? 'ДА' : 'НЕТ'}</b>`,
+          ),
+        ].join('\n\n')
+      : input.finesApiAvailable === false
+        ? '🟡 <b>Штрафы</b>\nШтрафы не проверены (API недоступен)'
+        : null,
+    input.yesterday
+      ? [
+          '📊 <b>Итоги вчера</b>',
+          `💰 Выручка: <b>${escapeHtml(money(input.yesterday.revenueMinor))}</b>`,
+          `📈 Загрузка парка: <b>${input.yesterday.loadPercent}%</b>`,
+          `🏁 Завершено аренд: <b>${input.yesterday.completedRentals}</b>`,
+          `⚠️ Инциденты: <b>${input.yesterday.incidents}</b>`,
+        ].join('\n')
+      : null,
+    input.fleet
+      ? [
+          '📋 <b>Текущий статус</b>',
+          `🚗 В аренде: <b>${input.fleet.rented}</b>`,
+          `🅿️ Свободно: <b>${input.fleet.free}</b>`,
+          `📅 Бронь: <b>${input.fleet.booked}</b>`,
+          `🔧 Ремонт: <b>${input.fleet.maintenance}</b>`,
+          `❓ Неизвестно: <b>${input.fleet.unknown}</b>`,
+          `Загрузка парка: <b>${fleetLoad ?? 0}%</b>`,
+        ].join('\n')
+      : null,
     section('🚘 <b>Выдачи и подачи</b>', input.handovers, rentalCard),
     section('🔄 <b>Возвраты автомобилей</b>', input.returns, rentalCard),
+    input.leads?.length
+      ? [
+          '📞 <b>Заявки на сегодня</b>',
+          ...[...input.leads]
+            .sort((left, right) => {
+              if (left.overdue !== right.overdue) return left.overdue ? -1 : 1;
+              return (
+                (left.at?.getTime() ?? Number.MAX_SAFE_INTEGER) -
+                (right.at?.getTime() ?? Number.MAX_SAFE_INTEGER)
+              );
+            })
+            .map((lead) => {
+              const when = lead.at ? `<code>${escapeHtml(time(lead.at))}</code>  ` : '';
+              const late = lead.overdue ? '⚠️ ' : '';
+              return `${when}${late}<b>${escapeHtml(lead.name)}</b>${lead.source ? ` · ${escapeHtml(lead.source)}` : ''}${lead.phone ? `\n☎️ ${escapeHtml(lead.phone)}` : ''}`;
+            }),
+        ].join('\n\n')
+      : null,
     section('💰 <b>Возврат депозитов</b>', input.deposits, rentalCard),
     section('🧼 <b>Мойки</b>', input.washes, serviceCard),
     section('🔧 <b>Техническое обслуживание</b>', input.maintenance, serviceCard),
@@ -152,6 +276,23 @@ export function formatOperationsDigest(input: OperationsDigestInput): string {
             (item) =>
               `${escapeHtml(item.vehicle)} · <code>${escapeHtml(item.registrationNumber ?? 'без номера')}</code>`,
           ),
+        ].join('\n')
+      : null,
+    input.recommendations?.length
+      ? [
+          '🤖 <b>Рекомендации</b>',
+          ...input.recommendations.map(
+            (recommendation, index) => `${index + 1}. ${escapeHtml(recommendation)}`,
+          ),
+        ].join('\n')
+      : null,
+    input.weekly
+      ? [
+          '📊 <b>Недельный отчёт</b>',
+          `<i>${escapeHtml(input.weekly.startDate)} — ${escapeHtml(input.weekly.endDate)}</i>`,
+          `Выручка: <b>${escapeHtml(money(input.weekly.revenueMinor))}</b>`,
+          `Загрузка: <b>${input.weekly.loadPercent}%</b>`,
+          `Аренд: <b>${input.weekly.rentals}</b> · Средняя длительность: <b>${input.weekly.averageDurationDays} дн.</b>`,
         ].join('\n')
       : null,
   ];

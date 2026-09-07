@@ -125,4 +125,47 @@ describe('formatOperationsDigest', () => {
     expect(html).toContain('&lt;Kia&gt;');
     expect(html).toContain('Иванов &amp; сын');
   });
+
+  it('renders yesterday, fleet, leads, honest fine status and Monday weekly totals', () => {
+    const html = formatOperationsDigest(
+      fixture({
+        yesterday: {
+          revenueMinor: '12500000',
+          completedRentals: 4,
+          incidents: 1,
+          loadPercent: 64,
+        },
+        fleet: { rented: 7, free: 3, booked: 2, maintenance: 1, unknown: 1, total: 14 },
+        finesApiAvailable: false,
+        leads: [
+          {
+            at: new Date('2026-08-27T07:30:00Z'),
+            name: 'Петрова Анна',
+            source: 'Авито',
+            phone: '+7 999 000-00-00',
+            overdue: false,
+          },
+        ],
+        recommendations: ['Позвонить по заявке Петровой в 10:30'],
+        weekly: {
+          startDate: '2026-08-20',
+          endDate: '2026-08-26',
+          revenueMinor: '70000000',
+          rentals: 12,
+          averageDurationDays: 3.5,
+          loadPercent: 61,
+        },
+      }),
+    );
+
+    expect(html).toContain('📊 <b>Итоги вчера</b>');
+    expect(html).toContain('Выручка: <b>125 000 ₽</b>');
+    expect(html).toContain('📋 <b>Текущий статус</b>');
+    expect(html).toContain('Загрузка парка: <b>50%</b>');
+    expect(html).toContain('Штрафы не проверены (API недоступен)');
+    expect(html).toContain('📞 <b>Заявки на сегодня</b>');
+    expect(html).toContain('<b>Петрова Анна</b> · Авито');
+    expect(html).toContain('🤖 <b>Рекомендации</b>');
+    expect(html).toContain('📊 <b>Недельный отчёт</b>');
+  });
 });
