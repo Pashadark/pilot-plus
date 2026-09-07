@@ -11,8 +11,8 @@ const migration = readFileSync(
 describe('схема внутренних комментариев клиента', () => {
   it('добавляет tenant-scoped soft-hide модель и аддитивную миграцию', () => {
     expect(schema).toContain('model ClientComment {');
-    expect(schema).toContain('category       ClientCommentCategory');
-    expect(schema).toContain('hiddenAt       DateTime?');
+    expect(schema).toMatch(/category\s+ClientCommentCategory/u);
+    expect(schema).toMatch(/hiddenAt\s+DateTime\?/u);
     expect(schema).toContain('@@index([companyId, clientId, isPinned, createdAt])');
     expect(migration).toContain('CREATE TABLE "ClientComment"');
     expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN)/iu);

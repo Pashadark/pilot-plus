@@ -32,6 +32,7 @@ describe('Sidebar health summary', () => {
       '/map',
       '/vehicles',
       '/clients',
+      '/leads',
       '/rentals',
       '/fines',
       '/maintenance',

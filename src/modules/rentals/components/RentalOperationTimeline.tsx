@@ -16,7 +16,13 @@ export type RentalOperationTimelineItem = {
   nextEndsAt: string | null;
   totalChargeMinor: string | null;
   media: Array<{
-    kind: 'INSPECTION_VIDEO' | 'DASHBOARD_PHOTO';
+    kind:
+      | 'INSPECTION_VIDEO'
+      | 'DASHBOARD_PHOTO'
+      | 'BODY_PHOTO_FRONT'
+      | 'BODY_PHOTO_REAR'
+      | 'BODY_PHOTO_LEFT'
+      | 'BODY_PHOTO_RIGHT';
     verifiedMime: string | null;
   }>;
 };
@@ -30,6 +36,14 @@ const evidenceLabels: Record<string, string> = {
   VIDEO_MISSING: 'Нет видео осмотра',
   DASHBOARD_PHOTO_MISSING: 'Нет фото приборной панели',
   MISSING: 'Фиксация пропущена',
+};
+const mediaLabels: Record<RentalOperationTimelineItem['media'][number]['kind'], string> = {
+  INSPECTION_VIDEO: 'Открыть видео',
+  DASHBOARD_PHOTO: 'Открыть фото приборки',
+  BODY_PHOTO_FRONT: 'Кузов спереди',
+  BODY_PHOTO_REAR: 'Кузов сзади',
+  BODY_PHOTO_LEFT: 'Кузов слева',
+  BODY_PHOTO_RIGHT: 'Кузов справа',
 };
 
 function date(value: string) {
@@ -110,9 +124,7 @@ export function RentalOperationTimeline({
                         rel="noreferrer"
                         className="inline-flex min-h-11 items-center rounded-[var(--radius-md)] border px-3 text-sm font-semibold hover:bg-[var(--color-elevated)]"
                       >
-                        {media.kind === 'INSPECTION_VIDEO'
-                          ? 'Открыть видео'
-                          : 'Открыть фото приборки'}
+                        {mediaLabels[media.kind]}
                       </Link>
                     ))}
                   </div>

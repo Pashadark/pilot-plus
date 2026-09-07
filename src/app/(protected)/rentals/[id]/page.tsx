@@ -79,7 +79,7 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
           <RentalDetailWorkspace detail={detail} />
           <RentalOperationTimeline
             rentalId={rental.id}
-            operations={rental.operations.map((operation) => ({
+            operations={(rental.operations ?? []).map((operation) => ({
               id: operation.id,
               type: operation.type,
               occurredAt: operation.occurredAt.toISOString(),

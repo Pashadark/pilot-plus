@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   getCachedSystemHealthSummary: vi.fn(),
   getClientAccess: vi.fn(),
   getRentalAccessForUser: vi.fn(),
+  getFineAccessForUser: vi.fn(),
+  listNotificationsForCurrentUser: vi.fn(),
   requireAdmin: vi.fn(),
 }));
 
@@ -14,6 +16,10 @@ vi.mock('@/modules/system-health/get-system-health-summary', () => ({
 vi.mock('@/modules/clients/access', () => ({ getClientAccess: mocks.getClientAccess }));
 vi.mock('@/modules/rentals/server/access', () => ({
   getRentalAccessForUser: mocks.getRentalAccessForUser,
+}));
+vi.mock('@/modules/fines/access', () => ({ getFineAccessForUser: mocks.getFineAccessForUser }));
+vi.mock('@/modules/notifications/server/queries', () => ({
+  listNotificationsForCurrentUser: mocks.listNotificationsForCurrentUser,
 }));
 
 import ProtectedLayout from './layout';
@@ -33,6 +39,8 @@ describe('ProtectedLayout', () => {
     });
     mocks.getClientAccess.mockResolvedValue({ scope: 'SYSTEM' });
     mocks.getRentalAccessForUser.mockResolvedValue({ scope: 'SYSTEM' });
+    mocks.getFineAccessForUser.mockResolvedValue({ scope: 'SYSTEM' });
+    mocks.listNotificationsForCurrentUser.mockResolvedValue([]);
     mocks.getCachedSystemHealthSummary.mockResolvedValue({
       state: 'healthy',
       count: 3,

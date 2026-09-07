@@ -26,6 +26,7 @@ describe('RentalOperationTimeline', () => {
             media: [
               { kind: 'INSPECTION_VIDEO', verifiedMime: 'video/mp4' },
               { kind: 'DASHBOARD_PHOTO', verifiedMime: 'image/jpeg' },
+              { kind: 'BODY_PHOTO_FRONT', verifiedMime: 'image/jpeg' },
             ],
           },
         ]}
@@ -39,5 +40,6 @@ describe('RentalOperationTimeline', () => {
       '/rentals/rental-1/operations/operation-1/media/INSPECTION_VIDEO',
     );
     expect(screen.getByRole('link', { name: 'Открыть фото приборки' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Кузов спереди' })).toBeTruthy();
   });
 });

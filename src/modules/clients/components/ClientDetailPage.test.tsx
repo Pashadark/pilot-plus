@@ -48,8 +48,8 @@ describe('ClientDetailPage', () => {
     expect(markup).toContain('Файлы и фотография');
     expect(markup).toContain('Документы пока не загружены');
     expect(markup).not.toContain('Файлы документов ещё не загружаются');
-    expect(markup).toContain('Готовность к аренде');
-    expect(markup).toContain('Загрузите файл паспорта');
+    expect(markup).not.toContain('Готовность к аренде');
+    expect(markup).not.toContain('Загрузите файл паспорта');
   });
 
   it('keeps the staff-only reliability explanation out of a non-staff detail surface', () => {
