@@ -52,7 +52,7 @@ describe('доменная схема автопарка', () => {
     expect(schema).toContain('SUPER_ADMIN');
     expect(schema).toContain('MEMBER');
     expect(schema).toContain('COMPANY_ADMIN');
-    expect(schema).toContain('additionalPermissions CompanyPermission[]');
+    expect(schema).toMatch(/additionalPermissions\s+CompanyPermission\[\]/);
     expect(schema).toContain('VIEW_CLIENTS');
     expect(schema).toContain('MANAGE_CLIENTS');
     expect(schema).toContain('model AuditLog {');
@@ -69,6 +69,15 @@ describe('доменная схема автопарка', () => {
     expect(schema).toContain('@@index([companyId, status])');
     expect(schema).toMatch(/registrationNumber\s+String\?/);
     expect(schema).toMatch(/vin\s+String\?/);
+  });
+
+  it('хранит фамилию и необязательное время следующего контакта заявки', () => {
+    const leadModel = schema.match(/model Lead \{([\s\S]*?)\n\}/u)?.[1];
+
+    expect(leadModel).toBeDefined();
+    expect(leadModel).toMatch(/lastName\s+String\?/u);
+    expect(leadModel).toMatch(/nextContactAt\s+DateTime\?\s+@db\.Timestamptz\(3\)/u);
+    expect(leadModel).toContain('@@index([companyId, status, nextContactAt])');
   });
 
   it('хранит реквизиты демонстрационной компании без обязательного заполнения старых записей', () => {
@@ -95,6 +104,14 @@ describe('доменная схема автопарка', () => {
     expect(schema).toContain('model MaintenanceRecord {');
     expect(schema).toContain('model VehicleDocument {');
     expect(schema).toContain('@@index([vehicleId, recordedAt])');
+  });
+
+  it('хранит файлы документов автомобиля только в приватном хранилище', () => {
+    expect(schema).toMatch(/storageKey\s+String\?\s+@unique/);
+    expect(schema).toMatch(/originalName\s+String\?/);
+    expect(schema).toMatch(/verifiedMime\s+String\?/);
+    expect(schema).toMatch(/sha256\s+String\?/);
+    expect(schema).toMatch(/bytes\s+Int\?/);
   });
 
   it('хранит локальные и исходные адреса фотографий автомобиля', () => {
