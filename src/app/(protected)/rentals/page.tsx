@@ -13,6 +13,7 @@ export default async function RentalsPage({
     from?: string;
     to?: string;
     view?: string;
+    archive?: string;
   }>;
 }) {
   const filters = await searchParams;
@@ -51,6 +52,8 @@ export default async function RentalsPage({
           now={new Date().toISOString()}
           rentals={records.map((r) => ({
             id: r.id,
+            clientId: r.client.id,
+            vehicleId: r.vehicle.id,
             startsAt: r.startsAt.toISOString(),
             endsAt: r.endsAt.toISOString(),
             status: r.status,
@@ -64,9 +67,8 @@ export default async function RentalsPage({
               format: document.format,
               version: document.version,
             })),
-            vehicleLabel: [r.vehicle.make, r.vehicle.modelName, r.vehicle.registrationNumber]
-              .filter(Boolean)
-              .join(' · '),
+            vehicleName: [r.vehicle.make, r.vehicle.modelName].filter(Boolean).join(' · '),
+            registrationNumber: r.vehicle.registrationNumber ?? 'Не указан',
             clientLabel: [r.client.lastName, r.client.firstName, r.client.middleName]
               .filter(Boolean)
               .join(' '),

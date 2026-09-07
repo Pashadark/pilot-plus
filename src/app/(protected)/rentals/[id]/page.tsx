@@ -4,11 +4,13 @@ import { RentalDetailPanel } from '@/modules/rentals/components/RentalDetailPane
 import { RentalDetailWorkspace } from '@/modules/rentals/components/RentalDetailWorkspace';
 import { RentalActionRail } from '@/modules/rentals/components/RentalActionRail';
 import { RentalOperationTimeline } from '@/modules/rentals/components/RentalOperationTimeline';
+import { RentalSettlementCard } from '@/modules/rentals/settlement/components/RentalSettlementCard';
 import {
   getRentalDetailForCurrentUser,
   listRentalAuditForCurrentUser,
 } from '@/modules/rentals/server/queries';
 import { rentalDetailPresentation } from '@/modules/rentals/components/rental-detail-presentation';
+import { evaluateHandoverReadiness } from '@/modules/rentals/readiness/evaluate-handover-readiness';
 export default async function RentalDetail({ params }: { params: Promise<{ id: string }> }) {
   const rental = await getRentalDetailForCurrentUser((await params).id);
   if (!rental) notFound();
@@ -63,6 +65,32 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
       };
     }),
   });
+  const confirmedRentMinor = rental.payments
+    .filter((payment) => payment.kind === 'RENT' && payment.status === 'CONFIRMED')
+    .reduce((total, payment) => total + payment.amountMinor, BigInt(0));
+  const confirmedDepositMinor = rental.payments
+    .filter((payment) => payment.kind === 'DEPOSIT' && payment.status === 'CONFIRMED')
+    .reduce((total, payment) => total + payment.amountMinor, BigInt(0));
+  const requiredDepositMinor = rental.depositMinor ?? BigInt(0);
+  const handoverReadiness = evaluateHandoverReadiness({
+    rentalStatus: rental.status,
+    occurredAt: new Date(),
+    hasCommittedPdf: rental.documentVersions.some((document) => document.format === 'PDF'),
+    clientSigned: rental.signatures.some(
+      (signature) => signature.party === 'CLIENT' && signature.status === 'SIGNED',
+    ),
+    companySigned: rental.signatures.some(
+      (signature) => signature.party === 'COMPANY' && signature.status === 'SIGNED',
+    ),
+    totalPriceMinor: rental.totalPriceMinor,
+    confirmedRentMinor,
+    requiredDepositMinor,
+    confirmedDepositMinor,
+    selectedDepositStatus:
+      requiredDepositMinor === BigInt(0) || confirmedDepositMinor >= requiredDepositMinor
+        ? 'COLLECTED'
+        : 'NOT_COLLECTED',
+  });
   return (
     <AppShell
       breadcrumbs={[
@@ -77,6 +105,30 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
       >
         <div className="grid min-w-0 gap-5">
           <RentalDetailWorkspace detail={detail} />
+          <RentalSettlementCard
+            companyId={rental.companyId}
+            rentalId={rental.id}
+            currency={rental.currency}
+            totalPriceMinor={rental.totalPriceMinor.toString()}
+            depositRequiredMinor={rental.depositMinor?.toString() ?? null}
+            canEdit={rental.canEdit ?? false}
+            payments={rental.payments.map((payment) => ({
+              id: payment.id,
+              kind: payment.kind,
+              status: payment.status,
+              amountMinor: payment.amountMinor.toString(),
+              method: payment.method,
+              recordedAt: payment.recordedAt.toISOString(),
+              actorName: payment.recordedBy.name,
+            }))}
+            signatures={rental.signatures.map((signature) => ({
+              party: signature.party,
+              status: signature.status,
+              signedByName: signature.signedByName,
+              signedAt: signature.signedAt?.toISOString() ?? null,
+              actorName: signature.recordedBy.name,
+            }))}
+          />
           <RentalOperationTimeline
             rentalId={rental.id}
             operations={(rental.operations ?? []).map((operation) => ({
@@ -106,6 +158,8 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
             generations={rental.documentGenerations.map((item) => ({
               version: item.version,
               status: item.status,
+              docxReady: Boolean(item.docxSha256),
+              pdfReady: Boolean(item.pdfSha256),
               updatedAt: item.updatedAt.toISOString(),
             }))}
             history={history.map((item) => ({
@@ -118,7 +172,9 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
           />
         </div>
         <RentalActionRail
+          canEdit={rental.canEdit ?? false}
           rental={{ id: rental.id, companyId: rental.companyId, status: rental.status }}
+          handoverReadiness={handoverReadiness}
         />
       </main>
     </AppShell>

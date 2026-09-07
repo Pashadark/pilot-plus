@@ -39,16 +39,20 @@ const filters: readonly { value: OnlineMapFilter; label: string }[] = [
 export interface OnlineMapWorkspaceProps {
   mapComponent?: ComponentType<OnlineFleetMapProps>;
   vehicles?: readonly OnlineMapVehicle[];
+  initialSelectedVehicleId?: string | null;
 }
 
 export function OnlineMapWorkspace({
   mapComponent: MapComponent = OnlineFleetMapClient,
   vehicles = onlineMapVehicles,
+  initialSelectedVehicleId = null,
 }: OnlineMapWorkspaceProps) {
   const [snapshotVehicles, setSnapshotVehicles] = useState<readonly OnlineMapVehicle[]>(vehicles);
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<OnlineMapFilter>('all');
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
+    initialSelectedVehicleId,
+  );
   const [trackDate, setTrackDate] = useState('');
   const [trackPeriod, setTrackPeriod] = useState<TrackPeriodMode>('day');
   const [playbackTripId, setPlaybackTripId] = useState<string | null>(null);
