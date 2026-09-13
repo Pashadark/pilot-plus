@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,6 +16,7 @@ afterEach(() => {
   cleanup();
   showToast.mockReset();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('RentalRowActionsMenu', () => {
@@ -84,10 +85,14 @@ describe('RentalRowActionsMenu', () => {
 
   it('stays open and follows its trigger while the page scrolls', async () => {
     const user = userEvent.setup();
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
-      window.setTimeout(() => callback(0), 0),
-    );
-    vi.stubGlobal('cancelAnimationFrame', (id: number) => window.clearTimeout(id));
+    vi.stubGlobal('innerWidth', 1200);
+    vi.stubGlobal('innerHeight', 520);
+    const animationFrames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      animationFrames.push(callback);
+      return animationFrames.length;
+    });
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
     render(
       <RentalRowActionsMenu
         rentalId="rental-1"
@@ -116,12 +121,30 @@ describe('RentalRowActionsMenu', () => {
 
     await user.click(trigger);
     const menu = screen.getByRole('menu', { name: 'Действия ME-2026-0001' });
-    expect(menu.style.top).toBe('180px');
+    await waitFor(() => expect(menu.style.top).toBe('180px'));
+    act(() => animationFrames.splice(0).forEach((callback) => callback(0)));
+    vi.spyOn(menu, 'getBoundingClientRect').mockReturnValue({
+      top: 0,
+      right: 0,
+      bottom: 500,
+      left: 0,
+      width: 304,
+      height: 500,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    fireEvent.scroll(window);
+    act(() => animationFrames.splice(0).forEach((callback) => callback(0)));
+    await waitFor(() => expect(menu.style.top).toBe('180px'));
+    expect(menu.style.maxHeight).toBe('328px');
 
     triggerTop = 260;
     fireEvent.scroll(window);
+    act(() => animationFrames.splice(0).forEach((callback) => callback(0)));
 
     expect(screen.getByRole('menu', { name: 'Действия ME-2026-0001' })).toBe(menu);
     await waitFor(() => expect(menu.style.top).toBe('260px'));
+    expect(menu.style.maxHeight).toBe('248px');
   });
 });

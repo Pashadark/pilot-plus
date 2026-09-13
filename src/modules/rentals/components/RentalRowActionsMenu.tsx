@@ -50,7 +50,7 @@ export function RentalRowActionsMenu({
   documents,
 }: RentalRowActionsMenuProps) {
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const [position, setPosition] = useState({ top: 0, left: 0, maxHeight: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
@@ -63,11 +63,13 @@ export function RentalRowActionsMenu({
     if (!rect) return;
     const menuRect = menuRef.current?.getBoundingClientRect();
     const width = Math.min(menuRect?.width || 304, window.innerWidth - 24);
-    const height = Math.min(menuRect?.height || 0, window.innerHeight - 24);
-    const maximumTop = Math.max(12, window.innerHeight - height - 12);
+    const minimumUsableHeight = Math.min(240, window.innerHeight - 24);
+    const maximumTop = Math.max(12, window.innerHeight - minimumUsableHeight - 12);
+    const top = Math.max(12, Math.min(rect.top, maximumTop));
     setPosition({
-      top: Math.max(12, Math.min(rect.top, maximumTop)),
+      top,
       left: Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12)),
+      maxHeight: Math.max(0, window.innerHeight - top - 12),
     });
   }
 
@@ -133,8 +135,8 @@ export function RentalRowActionsMenu({
       ref={menuRef}
       role="menu"
       aria-label={`Действия ${label}`}
-      className="fixed z-[120] grid max-h-[min(36rem,calc(100vh-2rem))] w-[min(19rem,calc(100vw-1.5rem))] overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-[0_18px_48px_rgba(15,23,42,0.18)]"
-      style={{ top: position.top, left: position.left }}
+      className="fixed z-[120] grid w-[min(19rem,calc(100vw-1.5rem))] overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-[0_18px_48px_rgba(15,23,42,0.18)]"
+      style={{ top: position.top, left: position.left, maxHeight: position.maxHeight }}
       onKeyDown={(event) => {
         if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
         event.preventDefault();
