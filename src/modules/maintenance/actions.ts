@@ -227,8 +227,11 @@ export async function createRepairAction(
     });
   } catch (error) {
     if (storage) {
+      const cleanupStorage = storage;
       await Promise.all(
-        promotedKeys.map((storageKey) => storage.removePrivate(storageKey).catch(() => undefined)),
+        promotedKeys.map((storageKey) =>
+          cleanupStorage.removePrivate(storageKey).catch(() => undefined),
+        ),
       );
     }
     return {
