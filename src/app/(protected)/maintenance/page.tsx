@@ -1,19 +1,25 @@
 import { requireAdmin } from '@/modules/auth/dal';
 import { MaintenancePage } from '@/modules/maintenance/components/MaintenancePage';
-import { listMaintenanceForUser } from '@/modules/maintenance/server/queries';
+import {
+  listMaintenanceForUser,
+  listRepairRentalOptionsForUser,
+} from '@/modules/maintenance/server/queries';
 import { listVehicleOptionsForUser } from '@/modules/vehicles/server/queries';
 import { AppShell } from '@/shared/components/app-shell/AppShell';
 
 export default async function MaintenanceRoute() {
   const user = await requireAdmin();
-  const [records, vehicles] = await Promise.all([
+  const [records, vehicles, rentals] = await Promise.all([
     listMaintenanceForUser(user.id),
     listVehicleOptionsForUser(user.id),
+    listRepairRentalOptionsForUser(user.id),
   ]);
 
   return (
-    <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Техническое обслуживание' }]}>
-      <MaintenancePage records={records} vehicles={vehicles} />
+    <AppShell
+      breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Техническое обслуживание' }]}
+    >
+      <MaintenancePage records={records} vehicles={vehicles} rentals={rentals} />
     </AppShell>
   );
 }

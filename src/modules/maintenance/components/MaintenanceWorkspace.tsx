@@ -1,14 +1,20 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import { useActionState, useCallback, useEffect, useMemo, useState } from 'react';
 import { FiAlertTriangle, FiCheckCircle, FiClock, FiPlus, FiSearch, FiTool } from 'react-icons/fi';
 
 import { transitionMaintenanceAction } from '../actions';
 import { maintenanceToCalendarEvent } from '../calendar';
 import { calculateMaintenanceSummary } from '../effective-status';
-import type { MaintenanceRecordDto } from '../server/queries';
-import type { MaintenanceKind, MaintenanceStatus, OperationActionState } from '../types';
+import type { MaintenanceRecordDto, RepairRentalOptionDto } from '../server/queries';
+import type {
+  MaintenanceKind,
+  MaintenanceRecordType,
+  MaintenanceStatus,
+  OperationActionState,
+} from '../types';
 import type { VehicleOptionDto } from '@/modules/vehicles/types';
 import {
   canonicalizeOperationsCalendarQuery,
@@ -21,6 +27,7 @@ import { useToast } from '@/shared/providers/ToastProvider';
 import { Badge, Button, Card, EmptyState, Modal, SearchInput, Select, Tabs } from '@/shared/ui';
 
 import { MaintenanceForm } from './MaintenanceForm';
+import { RepairForm } from './RepairForm';
 import {
   formatMaintenanceCost,
   formatMaintenanceDate,
@@ -32,9 +39,14 @@ import {
   maintenanceStatusView,
 } from './MaintenanceRecordCard';
 
-type Filters = { query: string; status: '' | MaintenanceStatus; kind: '' | MaintenanceKind };
+type Filters = {
+  query: string;
+  status: '' | MaintenanceStatus;
+  kind: '' | MaintenanceKind;
+  recordType: '' | MaintenanceRecordType;
+};
 
-const initialFilters: Filters = { query: '', status: '', kind: '' };
+const initialFilters: Filters = { query: '', status: '', kind: '', recordType: '' };
 const initialTransitionState: OperationActionState = { status: 'idle' };
 const viewTabs = [
   { value: 'list', label: 'Список' },
@@ -59,7 +71,8 @@ function matchesFilters(record: MaintenanceRecordDto, filters: Filters) {
   return (
     (!query || searchable.includes(query)) &&
     (!filters.status || record.status === filters.status) &&
-    (!filters.kind || record.kind === filters.kind)
+    (!filters.kind || record.kind === filters.kind) &&
+    (!filters.recordType || record.recordType === filters.recordType)
   );
 }
 
@@ -92,15 +105,19 @@ function StatCard({
 export function MaintenanceWorkspace({
   records,
   vehicles,
+  rentals,
 }: {
   records: readonly MaintenanceRecordDto[];
   vehicles: readonly VehicleOptionDto[];
+  rentals: readonly RepairRentalOptionDto[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState(initialFilters);
-  const [formOpen, setFormOpen] = useState(false);
+  const initialCreateMode = searchParams.get('create') === 'repair' ? 'repair' : null;
+  const [createMode, setCreateMode] = useState<'maintenance' | 'repair' | null>(initialCreateMode);
+  const initialVehicleId = searchParams.get('vehicleId') ?? '';
   const [referenceTime] = useState(() => Date.now());
   const [transitionState, transitionFormAction, transitionPending] = useActionState(
     transitionMaintenanceAction,
@@ -160,7 +177,7 @@ export function MaintenanceWorkspace({
   const handleCreateSuccess = useCallback(
     (message: string) => {
       showToast({ tone: 'success', title: message });
-      setFormOpen(false);
+      setCreateMode(null);
       router.refresh();
     },
     [router, showToast],
@@ -239,7 +256,7 @@ export function MaintenanceWorkspace({
       {view === 'list' ? (
         <section
           aria-label="Фильтры технического обслуживания"
-          className="grid min-w-0 gap-3 rounded-[var(--radius-panel)] border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)] lg:grid-cols-[minmax(16rem,1fr)_minmax(10rem,0.35fr)_minmax(10rem,0.35fr)_auto] lg:items-end"
+          className="grid min-w-0 gap-3 rounded-[var(--radius-panel)] border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)] lg:grid-cols-[minmax(15rem,1fr)_repeat(3,minmax(9rem,0.35fr))_auto] lg:items-end"
         >
           <label className="grid min-w-0 gap-1.5">
             <span className="text-sm font-medium">Поиск</span>
@@ -272,6 +289,17 @@ export function MaintenanceWorkspace({
             ))}
           </Select>
           <Select
+            label="Раздел"
+            value={filters.recordType}
+            onChange={(event) =>
+              setFilters({ ...filters, recordType: event.target.value as Filters['recordType'] })
+            }
+          >
+            <option value="">ТО и ремонты</option>
+            <option value="MAINTENANCE">Только ТО</option>
+            <option value="REPAIR">Только ремонты</option>
+          </Select>
+          <Select
             label="Вид ТО"
             value={filters.kind}
             onChange={(event) =>
@@ -291,7 +319,8 @@ export function MaintenanceWorkspace({
             disabled={
               filters.query === initialFilters.query &&
               filters.status === initialFilters.status &&
-              filters.kind === initialFilters.kind
+              filters.kind === initialFilters.kind &&
+              filters.recordType === initialFilters.recordType
             }
           >
             Сбросить
@@ -305,14 +334,25 @@ export function MaintenanceWorkspace({
             ? `Показано ${visibleRecords.length} из ${records.length}`
             : `Событий в календаре: ${calendarEvents.length}`}
         </Badge>
-        <Button
-          onClick={() => setFormOpen(true)}
-          leadingIcon={<FiPlus aria-hidden="true" />}
-          disabled={!vehicles.length}
-          title={vehicles.length ? undefined : 'Нет доступных автомобилей'}
-        >
-          Запланировать ТО
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => setCreateMode('maintenance')}
+            leadingIcon={<FiPlus aria-hidden="true" />}
+            disabled={!vehicles.length}
+            title={vehicles.length ? undefined : 'Нет доступных автомобилей'}
+          >
+            Запланировать ТО
+          </Button>
+          <Button
+            onClick={() => setCreateMode('repair')}
+            leadingIcon={<FiTool aria-hidden="true" />}
+            disabled={!vehicles.length}
+            title={vehicles.length ? undefined : 'Нет доступных автомобилей'}
+          >
+            Добавить ремонт
+          </Button>
+        </div>
       </div>
 
       {view === 'list' ? (
@@ -355,10 +395,32 @@ export function MaintenanceWorkspace({
                         <th scope="row" className="max-w-64 px-4 py-4 font-semibold">
                           <span className="block break-words">{record.title}</span>
                           <span className="mt-1 block text-xs font-normal text-[var(--color-text-secondary)]">
-                            {maintenanceKindLabels[record.kind]}
+                            {record.recordType === 'REPAIR'
+                              ? 'Ремонт и повреждение'
+                              : maintenanceKindLabels[record.kind]}
                           </span>
                         </th>
-                        <td className="max-w-56 px-4 py-4 break-words">{vehicleLabel(record)}</td>
+                        <td className="max-w-64 px-4 py-4">
+                          <div className="flex min-w-0 items-center gap-3">
+                            {record.vehicle.imagePath ? (
+                              <Image
+                                src={record.vehicle.imagePath}
+                                alt=""
+                                width={72}
+                                height={48}
+                                unoptimized
+                                className="h-12 w-[4.5rem] shrink-0 rounded-lg object-cover"
+                              />
+                            ) : (
+                              <span className="grid h-12 w-[4.5rem] shrink-0 place-items-center rounded-lg bg-[var(--color-elevated)] text-[var(--color-text-tertiary)]">
+                                <FiTool aria-hidden />
+                              </span>
+                            )}
+                            <span className="min-w-0 font-medium break-words">
+                              {vehicleLabel(record)}
+                            </span>
+                          </div>
+                        </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           {formatMaintenanceDate(record.scheduledAt)}
                         </td>
@@ -442,15 +504,30 @@ export function MaintenanceWorkspace({
       )}
 
       <Modal
-        open={formOpen}
-        onOpenChange={setFormOpen}
+        open={createMode === 'maintenance'}
+        onOpenChange={(open) => setCreateMode(open ? 'maintenance' : null)}
         title="Запланировать ТО"
         description="Создайте работу для автомобиля вашей компании."
         className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl"
       >
         <MaintenanceForm
           vehicles={vehicles}
-          onCancel={() => setFormOpen(false)}
+          onCancel={() => setCreateMode(null)}
+          onSuccess={handleCreateSuccess}
+        />
+      </Modal>
+      <Modal
+        open={createMode === 'repair'}
+        onOpenChange={(open) => setCreateMode(open ? 'repair' : null)}
+        title="Добавить ремонт"
+        description="Зафиксируйте повреждение, ход ремонта, фото, документы и связь с договором."
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-4xl"
+      >
+        <RepairForm
+          vehicles={vehicles}
+          rentals={rentals}
+          initialVehicleId={initialVehicleId}
+          onCancel={() => setCreateMode(null)}
           onSuccess={handleCreateSuccess}
         />
       </Modal>

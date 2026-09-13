@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createMaintenanceQueries } from './queries';
+import { createMaintenanceQueries, createRepairRentalOptionsQuery } from './queries';
 
 const record = {
   id: 'maintenance-1',
@@ -98,9 +98,20 @@ describe('запросы технического обслуживания', () 
             startedAt: new Date('2026-09-12T10:00:00.000Z'),
             scheduledAt: null,
             rental: { id: 'rental-1', contractNumber: 'ME-2026-0030-GA' },
-            client: { id: 'client-1', firstName: 'Артём', middleName: 'Денисович', lastName: 'Горбунов' },
+            client: {
+              id: 'client-1',
+              firstName: 'Артём',
+              middleName: 'Денисович',
+              lastName: 'Горбунов',
+            },
             workItems: [
-              { id: 'work-1', title: 'Диагностика', description: null, costMinor: null, position: 0 },
+              {
+                id: 'work-1',
+                title: 'Диагностика',
+                description: null,
+                costMinor: null,
+                position: 0,
+              },
             ],
             attachments: [
               {
@@ -159,5 +170,36 @@ describe('запросы технического обслуживания', () 
     const [result] = await queries.listMaintenanceForUser('user-1');
 
     expect(result?.currentOdometerKm).toBe(83273);
+  });
+});
+
+describe('варианты договоров для ремонта', () => {
+  it('возвращает только договоры доступной компании с подписью клиента', async () => {
+    let receivedArgs: unknown;
+    const listOptions = createRepairRentalOptionsQuery({
+      async findMany(args: unknown) {
+        receivedArgs = args;
+        return [
+          {
+            id: 'rental-1',
+            vehicleId: 'vehicle-1',
+            contractNumber: 'ME-2026-0030-GA',
+            startsAt: new Date('2026-09-01T10:00:00.000Z'),
+            client: { firstName: 'Артём', middleName: 'Денисович', lastName: 'Горбунов' },
+          },
+        ];
+      },
+    });
+
+    await expect(listOptions('user-1')).resolves.toEqual([
+      {
+        id: 'rental-1',
+        vehicleId: 'vehicle-1',
+        label: 'ME-2026-0030-GA · Горбунов Артём Денисович',
+      },
+    ]);
+    expect(receivedArgs).toMatchObject({
+      where: { company: { members: { some: { userId: 'user-1' } } } },
+    });
   });
 });

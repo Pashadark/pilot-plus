@@ -42,6 +42,12 @@ export interface VehicleCardDto {
   status: VehicleStatus;
   gpsStatus: VehicleGpsStatusView;
   primaryImage: VehicleImageDto | null;
+  activeRental?: {
+    id: string;
+    contractNumber: string | null;
+    clientName: string;
+    endsAt: string;
+  } | null;
   telemetry: VehicleTelemetrySummary;
   popularityRank?: 1 | 2 | 3 | null;
 }
@@ -66,18 +72,38 @@ export type VehicleMaintenanceKind =
   'OIL' | 'FILTERS' | 'BRAKES' | 'TIRES' | 'TIMING' | 'INSPECTION' | 'OTHER';
 
 export type VehicleMaintenanceStatus =
-  'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE' | 'CANCELLED';
+  | 'PLANNED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'OVERDUE'
+  | 'CANCELLED'
+  | 'DAMAGE_REPORTED'
+  | 'WAITING_REPAIR';
 
 export interface VehicleMaintenanceHistorySummary {
   id: string;
   title: string;
+  recordType?: 'MAINTENANCE' | 'REPAIR';
+  description?: string | null;
   kind: VehicleMaintenanceKind;
   status: VehicleMaintenanceStatus;
   scheduledAt: string | null;
+  damageReportedAt?: string | null;
+  startedAt?: string | null;
   completedAt: string | null;
   targetOdometerKm: number | null;
   provider: string | null;
   costMinor: number | null;
+  rental?: { id: string; contractNumber: string | null } | null;
+  client?: { id: string; fullName: string } | null;
+  workItems?: { id: string; title: string; description: string | null; costMinor: number | null }[];
+  attachments?: {
+    id: string;
+    kind: 'DAMAGE_BEFORE' | 'REPAIR_AFTER' | 'DOCUMENT' | 'RECEIPT';
+    originalName: string;
+    url: string;
+    isImage: boolean;
+  }[];
 }
 
 export type VehicleWashKind = 'BODY' | 'COMPLEX' | 'INTERIOR' | 'MATS' | 'ENGINE' | 'OTHER';
@@ -97,12 +123,21 @@ export interface VehicleWashHistorySummary {
 export interface VehicleDetailDto extends VehicleCardDto {
   vin: string | null;
   createdAt: string;
+  currentRentalId?: string | null;
+  galleryImages?: VehicleImageDto[];
   trips: VehicleTripDto[];
   events: VehicleEventDto[];
   fuelRecords: { id: string; recordedAt: string; volumeLiters: number | null }[];
   maintenanceRecords: VehicleMaintenanceHistorySummary[];
   washRecords: VehicleWashHistorySummary[];
-  documents: { id: string; title: string; type: string; expiresAt: string | null }[];
+  documents: {
+    id: string;
+    title: string;
+    type: string;
+    expiresAt: string | null;
+    originalName: string | null;
+    hasFile: boolean;
+  }[];
   rentals?: {
     id: string;
     contractNumber: string | null;
@@ -110,6 +145,7 @@ export interface VehicleDetailDto extends VehicleCardDto {
     startsAt: string;
     endsAt: string;
     client: { id: string; fullName: string };
+    drivers?: { id: string; fullName: string }[];
     documents: { id: string; version: number; format: 'DOCX' | 'PDF' }[];
     operations: {
       id: string;

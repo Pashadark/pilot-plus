@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily cleanup of old Pilot Plus application releases
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=20m
+
+[Install]
+WantedBy=timers.target

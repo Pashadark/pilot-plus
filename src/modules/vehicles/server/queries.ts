@@ -24,6 +24,7 @@ interface RawVehicle {
   seats: number;
   dailyPriceMinor: number;
   currency: string;
+  odometerKm: unknown | null;
   originalPrice: string;
   features: string[];
   status: VehicleCardDto['status'];
@@ -34,6 +35,11 @@ interface RawVehicle {
     fuelLevelPercent: unknown | null;
     recordedAt: Date;
     address: string | null;
+  }[];
+  rentalOperations: {
+    mileageKm: unknown | null;
+    fuelLevelPercent: unknown | null;
+    occurredAt: Date;
   }[];
   trips: {
     id?: string;
@@ -57,13 +63,31 @@ interface RawVehicle {
   maintenanceRecords: {
     id: string;
     title: string;
+    recordType: VehicleDetailDto['maintenanceRecords'][number]['recordType'];
+    description: string | null;
     kind: VehicleDetailDto['maintenanceRecords'][number]['kind'];
     status: VehicleDetailDto['maintenanceRecords'][number]['status'];
     scheduledAt: Date | null;
+    damageReportedAt: Date | null;
+    startedAt: Date | null;
     completedAt: Date | null;
     targetOdometerKm: unknown | null;
     provider: string | null;
     costMinor: number | null;
+    rental: { id: string; contractNumber: string | null } | null;
+    client: { id: string; firstName: string; middleName: string | null; lastName: string } | null;
+    workItems: {
+      id: string;
+      title: string;
+      description: string | null;
+      costMinor: number | null;
+    }[];
+    attachments: {
+      id: string;
+      kind: 'DAMAGE_BEFORE' | 'REPAIR_AFTER' | 'DOCUMENT' | 'RECEIPT';
+      originalName: string;
+      verifiedMime: string;
+    }[];
   }[];
   washRecords: {
     id: string;
@@ -80,6 +104,8 @@ interface RawVehicle {
     title: string;
     type: string;
     expiresAt: Date | null;
+    originalName: string | null;
+    storageKey: string | null;
   }[];
   rentals?: Array<{
     id: string;
@@ -88,6 +114,10 @@ interface RawVehicle {
     startsAt: Date;
     endsAt: Date;
     client: { id: string; firstName: string; middleName: string | null; lastName: string };
+    drivers?: Array<{
+      id: string;
+      client: { firstName: string; middleName: string | null; lastName: string } | null;
+    }>;
     documentVersions: { id: string; version: number; format: 'DOCX' | 'PDF' }[];
     operations: Array<{
       id: string;
@@ -118,17 +148,27 @@ type RawVehicleCard = Pick<
   | 'seats'
   | 'dailyPriceMinor'
   | 'currency'
+  | 'odometerKm'
   | 'originalPrice'
   | 'features'
   | 'status'
   | 'positions'
+  | 'rentalOperations'
   | 'trips'
   | 'images'
 >;
 
 type RawRankedVehicleCard = RawVehicleCard & {
   _count?: { rentals: number };
-  rentals?: { createdAt: Date }[];
+  rentals?: Array<{
+    id?: string;
+    status?: 'CONFIRMED' | 'ACTIVE' | 'COMPLETED';
+    createdAt: Date;
+    startsAt?: Date;
+    endsAt?: Date;
+    contractNumber?: string | null;
+    client?: { firstName: string; middleName: string | null; lastName: string };
+  }>;
 };
 
 const popularityRentalStatuses: ('CONFIRMED' | 'ACTIVE' | 'COMPLETED')[] = [
@@ -150,6 +190,7 @@ const vehicleCardSelect = {
   seats: true,
   dailyPriceMinor: true,
   currency: true,
+  odometerKm: true,
   originalPrice: true,
   features: true,
   status: true,
@@ -163,6 +204,19 @@ const vehicleCardSelect = {
       address: true,
     },
     orderBy: { recordedAt: 'desc' as const },
+    take: 1,
+  },
+  rentalOperations: {
+    where: {
+      status: 'COMMITTED',
+      type: { in: ['HANDOVER', 'RETURN'] as const },
+    },
+    select: {
+      mileageKm: true,
+      fuelLevelPercent: true,
+      occurredAt: true,
+    },
+    orderBy: [{ occurredAt: 'desc' as const }, { id: 'desc' as const }],
     take: 1,
   },
   trips: {
@@ -181,9 +235,17 @@ const vehicleCardSelect = {
   },
   rentals: {
     where: { status: { in: popularityRentalStatuses } },
-    select: { createdAt: true },
+    select: {
+      id: true,
+      status: true,
+      createdAt: true,
+      startsAt: true,
+      endsAt: true,
+      contractNumber: true,
+      client: { select: { firstName: true, middleName: true, lastName: true } },
+    },
     orderBy: [{ createdAt: 'desc' as const }, { id: 'asc' as const }],
-    take: 1,
+    take: 100,
   },
 } satisfies Prisma.VehicleSelect;
 
@@ -201,6 +263,7 @@ const vehicleDetailSelect = {
   seats: true,
   dailyPriceMinor: true,
   currency: true,
+  odometerKm: true,
   originalPrice: true,
   features: true,
   status: true,
@@ -215,6 +278,19 @@ const vehicleDetailSelect = {
       address: true,
     },
     orderBy: { recordedAt: 'desc' as const },
+    take: 1,
+  },
+  rentalOperations: {
+    where: {
+      status: 'COMMITTED',
+      type: { in: ['HANDOVER', 'RETURN'] as const },
+    },
+    select: {
+      mileageKm: true,
+      fuelLevelPercent: true,
+      occurredAt: true,
+    },
+    orderBy: [{ occurredAt: 'desc' as const }, { id: 'desc' as const }],
     take: 1,
   },
   trips: {
@@ -242,13 +318,27 @@ const vehicleDetailSelect = {
     select: {
       id: true,
       title: true,
+      recordType: true,
+      description: true,
       kind: true,
       status: true,
       scheduledAt: true,
+      damageReportedAt: true,
+      startedAt: true,
       completedAt: true,
       targetOdometerKm: true,
       provider: true,
       costMinor: true,
+      rental: { select: { id: true, contractNumber: true } },
+      client: { select: { id: true, firstName: true, middleName: true, lastName: true } },
+      workItems: {
+        orderBy: { position: 'asc' as const },
+        select: { id: true, title: true, description: true, costMinor: true },
+      },
+      attachments: {
+        orderBy: { createdAt: 'asc' as const },
+        select: { id: true, kind: true, originalName: true, verifiedMime: true },
+      },
     },
     orderBy: { createdAt: 'desc' as const },
     take: 50,
@@ -268,7 +358,14 @@ const vehicleDetailSelect = {
     take: 50,
   },
   documents: {
-    select: { id: true, title: true, type: true, expiresAt: true },
+    select: {
+      id: true,
+      title: true,
+      type: true,
+      expiresAt: true,
+      originalName: true,
+      storageKey: true,
+    },
     orderBy: { createdAt: 'desc' as const },
     take: 50,
   },
@@ -280,6 +377,13 @@ const vehicleDetailSelect = {
       startsAt: true,
       endsAt: true,
       client: { select: { id: true, firstName: true, middleName: true, lastName: true } },
+      drivers: {
+        select: {
+          id: true,
+          client: { select: { firstName: true, middleName: true, lastName: true } },
+        },
+        orderBy: { sortOrder: 'asc' as const },
+      },
       documentVersions: {
         select: { id: true, version: true, format: true },
         orderBy: [{ version: 'desc' as const }, { format: 'asc' as const }],
@@ -302,10 +406,9 @@ const vehicleDetailSelect = {
     take: 100,
   },
   images: {
-    where: { isPrimary: true },
     select: { localPath: true, alt: true },
-    orderBy: { position: 'asc' as const },
-    take: 1,
+    orderBy: [{ isPrimary: 'desc' as const }, { position: 'asc' as const }],
+    take: 6,
   },
 } satisfies Prisma.VehicleSelect;
 
@@ -334,13 +437,22 @@ function optionalNumber(value: unknown | null | undefined) {
   return value === null || value === undefined ? null : Number(value);
 }
 
+function currentOdometerKm(...readings: Array<unknown | null | undefined>) {
+  const values = readings
+    .map(optionalNumber)
+    .filter((value): value is number => value !== null && Number.isFinite(value));
+  return values.length ? Math.max(...values) : null;
+}
+
 function mapCard(
-  vehicle: RawVehicleCard,
+  vehicle: RawRankedVehicleCard,
   referenceTime: Date,
   popularityRank: 1 | 2 | 3 | null = null,
 ): VehicleCardDto {
   const position = vehicle.positions[0];
+  const operationalReading = vehicle.rentalOperations[0];
   const trip = vehicle.trips[0];
+  const activeRental = vehicle.rentals?.find((rental) => rental.status === 'ACTIVE');
   return {
     id: vehicle.id,
     internalNumber: vehicle.internalNumber,
@@ -367,9 +479,30 @@ function mapCard(
       referenceTime,
     ),
     primaryImage: vehicle.images[0] ?? null,
+    activeRental:
+      activeRental?.id && activeRental.endsAt && activeRental.client
+        ? {
+            id: activeRental.id,
+            contractNumber: activeRental.contractNumber ?? null,
+            clientName: [
+              activeRental.client.lastName,
+              activeRental.client.firstName,
+              activeRental.client.middleName,
+            ]
+              .filter(Boolean)
+              .join(' '),
+            endsAt: activeRental.endsAt.toISOString(),
+          }
+        : null,
     telemetry: {
-      odometerKm: optionalNumber(position?.odometerKm),
-      fuelLevelPercent: optionalNumber(position?.fuelLevelPercent),
+      odometerKm: currentOdometerKm(
+        vehicle.odometerKm,
+        position?.odometerKm,
+        operationalReading?.mileageKm,
+      ),
+      fuelLevelPercent:
+        optionalNumber(position?.fuelLevelPercent) ??
+        optionalNumber(operationalReading?.fuelLevelPercent),
       speedKph: position?.speedKph ?? null,
       lastSeenAt: position?.recordedAt.toISOString() ?? null,
       lastTripAt: trip?.startedAt.toISOString() ?? null,
@@ -380,8 +513,8 @@ function mapCard(
   };
 }
 
-function mapRankedCards(vehicles: RawRankedVehicleCard[], referenceTime: Date) {
-  const ranked = vehicles
+function rankPopularVehicles(vehicles: RawRankedVehicleCard[]) {
+  return vehicles
     .filter((vehicle) => (vehicle._count?.rentals ?? 0) > 0)
     .toSorted((left, right) => {
       const countDifference = (right._count?.rentals ?? 0) - (left._count?.rentals ?? 0);
@@ -393,6 +526,10 @@ function mapRankedCards(vehicles: RawRankedVehicleCard[], referenceTime: Date) {
       return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
     })
     .slice(0, 3);
+}
+
+function mapRankedCards(vehicles: RawRankedVehicleCard[], referenceTime: Date) {
+  const ranked = rankPopularVehicles(vehicles);
   const rankByVehicleId = new Map(
     ranked.map((vehicle, index) => [vehicle.id, (index + 1) as 1 | 2 | 3]),
   );
@@ -402,11 +539,29 @@ function mapRankedCards(vehicles: RawRankedVehicleCard[], referenceTime: Date) {
   );
 }
 
-function mapDetail(vehicle: RawVehicle, referenceTime: Date): VehicleDetailDto {
+function getPopularityRank(vehicles: RawRankedVehicleCard[], vehicleId: string) {
+  const ranked = rankPopularVehicles(vehicles);
+  const index = ranked.findIndex((vehicle) => vehicle.id === vehicleId);
+  return index === -1 ? null : ((index + 1) as 1 | 2 | 3);
+}
+
+function mapDetail(
+  vehicle: RawVehicle,
+  referenceTime: Date,
+  popularityRank: 1 | 2 | 3 | null = null,
+): VehicleDetailDto {
+  const currentRental = vehicle.rentals?.find(
+    (rental) =>
+      rental.status === 'ACTIVE' &&
+      rental.startsAt <= referenceTime &&
+      rental.endsAt > referenceTime,
+  );
   return {
-    ...mapCard(vehicle, referenceTime),
+    ...mapCard(vehicle as RawRankedVehicleCard, referenceTime, popularityRank),
     vin: vehicle.vin,
     createdAt: vehicle.createdAt.toISOString(),
+    currentRentalId: currentRental?.id ?? null,
+    galleryImages: vehicle.images,
     trips: vehicle.trips.map((trip) => ({
       id: trip.id ?? `${vehicle.id}-${trip.startedAt.toISOString()}`,
       startedAt: trip.startedAt.toISOString(),
@@ -425,10 +580,31 @@ function mapDetail(vehicle: RawVehicle, referenceTime: Date): VehicleDetailDto {
     })),
     maintenanceRecords: vehicle.maintenanceRecords.map((record) => ({
       ...record,
+      recordType: record.recordType ?? 'MAINTENANCE',
+      description: record.description ?? null,
       status: getEffectiveMaintenanceStatus(record.status, record.scheduledAt, referenceTime),
       scheduledAt: record.scheduledAt?.toISOString() ?? null,
+      damageReportedAt: record.damageReportedAt?.toISOString() ?? null,
+      startedAt: record.startedAt?.toISOString() ?? null,
       completedAt: record.completedAt?.toISOString() ?? null,
       targetOdometerKm: optionalNumber(record.targetOdometerKm),
+      rental: record.rental ?? null,
+      client: record.client
+        ? {
+            id: record.client.id,
+            fullName: [record.client.lastName, record.client.firstName, record.client.middleName]
+              .filter(Boolean)
+              .join(' '),
+          }
+        : null,
+      workItems: record.workItems ?? [],
+      attachments: (record.attachments ?? []).map((attachment) => ({
+        id: attachment.id,
+        kind: attachment.kind,
+        originalName: attachment.originalName,
+        url: `/maintenance/${record.id}/attachments/${attachment.id}`,
+        isImage: attachment.verifiedMime.startsWith('image/'),
+      })),
     })),
     washRecords: vehicle.washRecords.map((record) => ({
       ...record,
@@ -437,7 +613,11 @@ function mapDetail(vehicle: RawVehicle, referenceTime: Date): VehicleDetailDto {
       completedAt: record.completedAt?.toISOString() ?? null,
     })),
     documents: vehicle.documents.map((document) => ({
-      ...document,
+      id: document.id,
+      title: document.title,
+      type: document.type,
+      originalName: document.originalName,
+      hasFile: Boolean(document.storageKey),
       expiresAt: document.expiresAt?.toISOString() ?? null,
     })),
     rentals: (vehicle.rentals ?? []).map((rental) => ({
@@ -452,6 +632,14 @@ function mapDetail(vehicle: RawVehicle, referenceTime: Date): VehicleDetailDto {
           .filter(Boolean)
           .join(' '),
       },
+      drivers: (rental.drivers ?? [])
+        .filter((driver) => driver.client)
+        .map((driver) => ({
+          id: driver.id,
+          fullName: [driver.client?.lastName, driver.client?.firstName, driver.client?.middleName]
+            .filter(Boolean)
+            .join(' '),
+        })),
       documents: rental.documentVersions,
       operations: rental.operations.map((operation) => ({
         ...operation,
@@ -495,7 +683,24 @@ export function createVehicleQueries(repository: VehicleRepository) {
         },
         select: vehicleDetailSelect,
       });
-      return vehicle ? mapDetail(vehicle as RawVehicle, referenceTime) : null;
+      if (!vehicle) return null;
+      const rankedVehicles = await repository.findMany({
+        where: { archivedAt: null, company: { members: { some: { userId } } } },
+        select: {
+          id: true,
+          _count: {
+            select: { rentals: { where: { status: { in: popularityRentalStatuses } } } },
+          },
+          rentals: {
+            where: { status: { in: popularityRentalStatuses } },
+            select: { createdAt: true },
+            orderBy: [{ createdAt: 'desc' as const }, { id: 'asc' as const }],
+            take: 1,
+          },
+        },
+      });
+      const popularityRank = getPopularityRank(rankedVehicles as RawRankedVehicleCard[], vehicleId);
+      return mapDetail(vehicle as RawVehicle, referenceTime, popularityRank);
     },
   };
 }

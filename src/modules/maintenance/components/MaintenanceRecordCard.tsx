@@ -1,6 +1,8 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
 import {
   FiAlertTriangle,
   FiCalendar,
@@ -8,9 +10,11 @@ import {
   FiCheckCircle,
   FiClock,
   FiMapPin,
+  FiFileText,
   FiPlay,
   FiSlash,
   FiTool,
+  FiUser,
   FiX,
 } from 'react-icons/fi';
 
@@ -33,6 +37,16 @@ export const maintenanceStatusView: Record<
   COMPLETED: { label: 'Завершено', tone: 'success', icon: <FiCheck aria-hidden="true" /> },
   OVERDUE: { label: 'Просрочено', tone: 'danger', icon: <FiAlertTriangle aria-hidden="true" /> },
   CANCELLED: { label: 'Отменено', tone: 'neutral', icon: <FiSlash aria-hidden="true" /> },
+  DAMAGE_REPORTED: {
+    label: 'Повреждение зафиксировано',
+    tone: 'danger',
+    icon: <FiAlertTriangle aria-hidden="true" />,
+  },
+  WAITING_REPAIR: {
+    label: 'Ожидает ремонта',
+    tone: 'warning',
+    icon: <FiClock aria-hidden="true" />,
+  },
 };
 
 export const maintenanceKindLabels: Record<MaintenanceKind, string> = {
@@ -78,7 +92,11 @@ export function MaintenanceRecordActions({
   const formRef = useRef<HTMLFormElement>(null);
   const cancelSubmitRef = useRef<HTMLButtonElement>(null);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
-  const canStart = record.status === 'PLANNED' || record.status === 'OVERDUE';
+  const canStart =
+    record.status === 'PLANNED' ||
+    record.status === 'OVERDUE' ||
+    record.status === 'DAMAGE_REPORTED' ||
+    record.status === 'WAITING_REPAIR';
   const canComplete = record.status === 'IN_PROGRESS';
   const canCancel = canStart || canComplete;
 
@@ -139,7 +157,7 @@ export function MaintenanceRecordActions({
       <ConfirmationDialog
         open={confirmationOpen}
         onOpenChange={setConfirmationOpen}
-        title="Отменить ТО?"
+        title={record.recordType === 'REPAIR' ? 'Отменить ремонт?' : 'Отменить ТО?'}
         description="Запись будет отменена, и это действие нельзя будет вернуть."
         onConfirm={() => {
           setConfirmationOpen(false);
@@ -207,7 +225,9 @@ export function MaintenanceRecordCard({
         <header className="flex min-w-0 flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-xs font-semibold tracking-wide text-[var(--color-text-tertiary)]">
-              {maintenanceKindLabels[record.kind]}
+              {record.recordType === 'REPAIR'
+                ? 'Ремонт и повреждение'
+                : maintenanceKindLabels[record.kind]}
             </p>
             <h2 className="text-base font-bold break-words text-[var(--color-text)]">
               {record.title}
@@ -215,6 +235,18 @@ export function MaintenanceRecordCard({
           </div>
           <MaintenanceStatusBadge status={record.status} />
         </header>
+        {record.vehicle.imagePath ? (
+          <div className="relative aspect-[16/7] overflow-hidden rounded-xl bg-[var(--color-elevated)]">
+            <Image
+              src={record.vehicle.imagePath}
+              alt={record.vehicle.model}
+              fill
+              unoptimized
+              sizes="(max-width: 768px) 100vw, 33vw"
+              className="object-cover"
+            />
+          </div>
+        ) : null}
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
           <div className="flex min-w-0 gap-2">
             <FiMapPin aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--color-primary)]" />
@@ -231,8 +263,14 @@ export function MaintenanceRecordCard({
               className="mt-0.5 shrink-0 text-[var(--color-primary)]"
             />
             <div>
-              <dt className="text-xs text-[var(--color-text-tertiary)]">Плановая дата</dt>
-              <dd>{formatMaintenanceDate(record.scheduledAt)}</dd>
+              <dt className="text-xs text-[var(--color-text-tertiary)]">
+                {record.recordType === 'REPAIR' ? 'Дата повреждения' : 'Плановая дата'}
+              </dt>
+              <dd>
+                {formatMaintenanceDate(
+                  record.recordType === 'REPAIR' ? record.damageReportedAt : record.scheduledAt,
+                )}
+              </dd>
             </div>
           </div>
           <div className="flex min-w-0 gap-2">
@@ -249,6 +287,96 @@ export function MaintenanceRecordCard({
             <dd>{formatMaintenanceCost(record.costMinor)}</dd>
           </div>
         </dl>
+        {record.recordType === 'REPAIR' && (record.client || record.rental) ? (
+          <div className="grid gap-2 rounded-[var(--radius-md)] bg-[var(--color-elevated)] p-3 text-sm sm:grid-cols-2">
+            {record.client ? (
+              <span className="flex min-w-0 items-center gap-2">
+                <FiUser aria-hidden className="shrink-0 text-[var(--color-primary)]" />
+                <Link
+                  className="font-semibold break-words text-[var(--color-primary)] hover:underline"
+                  href={`/clients/${record.client.id}`}
+                >
+                  {record.client.fullName}
+                </Link>
+              </span>
+            ) : null}
+            {record.rental ? (
+              <span className="flex min-w-0 items-center gap-2">
+                <FiFileText aria-hidden className="shrink-0 text-[var(--color-primary)]" />
+                <Link
+                  className="font-semibold break-words text-[var(--color-primary)] hover:underline"
+                  href={`/rentals/${record.rental.id}`}
+                >
+                  {record.rental.contractNumber ?? 'Договор без номера'}
+                </Link>
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+        {record.description ? (
+          <p className="text-sm break-words text-[var(--color-text-secondary)]">
+            {record.description}
+          </p>
+        ) : null}
+        {record.workItems.length ? (
+          <div className="grid gap-2">
+            <h3 className="text-sm font-semibold text-[var(--color-text)]">Виды работ</h3>
+            <ul className="grid gap-1.5 text-sm text-[var(--color-text-secondary)]">
+              {record.workItems.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex items-start justify-between gap-3 rounded-[var(--radius-sm)] bg-[var(--color-elevated)] px-3 py-2"
+                >
+                  <span>
+                    {item.title}
+                    {item.description ? ` · ${item.description}` : ''}
+                  </span>
+                  {item.costMinor !== null ? (
+                    <strong className="shrink-0 text-[var(--color-text)]">
+                      {formatMaintenanceCost(item.costMinor)}
+                    </strong>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {record.attachments.length ? (
+          <div className="grid gap-2">
+            <h3 className="text-sm font-semibold text-[var(--color-text)]">Фото и документы</h3>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {record.attachments.map((attachment) =>
+                attachment.isImage ? (
+                  <Link
+                    key={attachment.id}
+                    href={attachment.url}
+                    target="_blank"
+                    className="relative aspect-[4/3] overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-elevated)]"
+                  >
+                    <Image
+                      src={attachment.url}
+                      alt={`${record.title} — ${attachment.kind === 'DAMAGE_BEFORE' ? 'фото повреждения' : 'фото после ремонта'}`}
+                      fill
+                      unoptimized
+                      sizes="(max-width: 640px) 50vw, 220px"
+                      className="object-cover transition-transform hover:scale-[1.02]"
+                    />
+                  </Link>
+                ) : (
+                  <Link
+                    key={attachment.id}
+                    href={attachment.url}
+                    target="_blank"
+                    className="flex min-w-0 items-center gap-2 rounded-[var(--radius-md)] border p-3 text-sm font-semibold text-[var(--color-primary)] hover:bg-[var(--color-primary-soft)]"
+                  >
+                    <FiFileText aria-hidden className="shrink-0" />
+                    <span className="truncate">{attachment.originalName}</span>
+                  </Link>
+                ),
+              )}
+            </div>
+          </div>
+        ) : null}
         {record.provider || record.notes ? (
           <p className="text-sm break-words text-[var(--color-text-secondary)]">
             {[record.provider, record.notes].filter(Boolean).join(' · ')}

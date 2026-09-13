@@ -12,12 +12,15 @@ const maintenanceCalendarStatus: Record<
   COMPLETED: { statusLabel: 'Завершено', tone: 'success' },
   OVERDUE: { statusLabel: 'Просрочено', tone: 'danger' },
   CANCELLED: { statusLabel: 'Отменено', tone: 'neutral' },
+  DAMAGE_REPORTED: { statusLabel: 'Повреждение', tone: 'danger' },
+  WAITING_REPAIR: { statusLabel: 'Ожидает ремонта', tone: 'warning' },
 };
 
 export function maintenanceToCalendarEvent(
   record: MaintenanceRecordDto,
 ): OperationsCalendarEvent | null {
-  if (!record.scheduledAt) return null;
+  const startsAt = record.recordType === 'REPAIR' ? record.damageReportedAt : record.scheduledAt;
+  if (!startsAt) return null;
 
   const status = maintenanceCalendarStatus[record.status];
   const vehicleLabel = [
@@ -31,7 +34,7 @@ export function maintenanceToCalendarEvent(
 
   return {
     id: record.id,
-    startsAt: record.scheduledAt,
+    startsAt,
     title: record.title,
     vehicleLabel: vehicleLabel || 'Автомобиль не указан',
     statusLabel: status.statusLabel,

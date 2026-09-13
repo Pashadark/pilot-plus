@@ -32,6 +32,17 @@ vi.mock('./MaintenanceForm', async () => {
       ),
   };
 });
+vi.mock('./RepairForm', async () => {
+  const { createElement: createMockElement } = await import('react');
+  return {
+    RepairForm: ({ onSuccess }: { onSuccess: (message: string) => void }) =>
+      createMockElement(
+        'button',
+        { type: 'button', onClick: () => onSuccess('Ремонт добавлен.') },
+        'Завершить создание ремонта',
+      ),
+  };
+});
 
 import { MaintenanceWorkspace } from './MaintenanceWorkspace';
 
@@ -44,7 +55,7 @@ describe('жизненный цикл создания ТО в workspace', () =>
   });
 
   it('на каждый success один раз показывает toast, закрывает dialog и обновляет серверные данные', async () => {
-    render(createElement(MaintenanceWorkspace, { records: [], vehicles }));
+    render(createElement(MaintenanceWorkspace, { records: [], vehicles, rentals: [] }));
 
     const search = screen.getByLabelText('Поиск по обслуживанию') as HTMLInputElement;
     fireEvent.change(search, { target: { value: 'Сохранённый фильтр' } });
@@ -64,5 +75,14 @@ describe('жизненный цикл создания ТО в workspace', () =>
     expect(routerMocks.refresh).toHaveBeenCalledTimes(2);
     expect(routerMocks.replace).not.toHaveBeenCalled();
     expect(search.value).toBe('Сохранённый фильтр');
+  });
+
+  it('разделяет создание ТО и ремонта на две понятные кнопки', () => {
+    render(createElement(MaintenanceWorkspace, { records: [], vehicles, rentals: [] }));
+
+    expect(screen.getByRole('button', { name: 'Запланировать ТО' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить ремонт' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Добавить ремонт');
+    expect(screen.getByRole('button', { name: 'Завершить создание ремонта' })).toBeTruthy();
   });
 });

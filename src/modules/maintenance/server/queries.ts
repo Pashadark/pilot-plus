@@ -8,6 +8,12 @@ interface MaintenanceRepository {
   findMany(args: unknown): Promise<unknown[]>;
 }
 
+export type RepairRentalOptionDto = {
+  id: string;
+  vehicleId: string;
+  label: string;
+};
+
 export type MaintenanceRecordDto = {
   id: string;
   vehicleId: string;
@@ -255,3 +261,42 @@ const queries = createMaintenanceQueries({
 });
 
 export const listMaintenanceForUser = queries.listMaintenanceForUser;
+
+export function createRepairRentalOptionsQuery(repository: MaintenanceRepository) {
+  return async function listOptions(userId: string): Promise<RepairRentalOptionDto[]> {
+    const rentals = (await repository.findMany({
+      where: { company: { members: { some: { userId } } } },
+      select: {
+        id: true,
+        vehicleId: true,
+        contractNumber: true,
+        startsAt: true,
+        client: { select: { firstName: true, middleName: true, lastName: true } },
+      },
+      orderBy: { startsAt: 'desc' },
+      take: 300,
+    })) as Array<{
+      id: string;
+      vehicleId: string;
+      contractNumber: string | null;
+      startsAt: Date;
+      client: { firstName: string; middleName: string | null; lastName: string };
+    }>;
+
+    return rentals.map((rental) => ({
+      id: rental.id,
+      vehicleId: rental.vehicleId,
+      label: `${rental.contractNumber ?? 'Без номера'} · ${[
+        rental.client.lastName,
+        rental.client.firstName,
+        rental.client.middleName,
+      ]
+        .filter(Boolean)
+        .join(' ')}`,
+    }));
+  };
+}
+
+export const listRepairRentalOptionsForUser = createRepairRentalOptionsQuery({
+  findMany: (args) => prisma.rental.findMany(args as Prisma.RentalFindManyArgs),
+});

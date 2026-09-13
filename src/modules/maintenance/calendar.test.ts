@@ -7,9 +7,13 @@ const record: MaintenanceRecordDto = {
   id: 'maintenance-1',
   vehicleId: 'vehicle-1',
   title: 'Замена масла',
+  description: null,
+  recordType: 'MAINTENANCE',
   kind: 'OIL',
   status: 'OVERDUE',
   scheduledAt: '2026-07-22T06:30:00.000Z',
+  damageReportedAt: null,
+  startedAt: null,
   completedAt: null,
   odometerKm: 12_000,
   currentOdometerKm: 12_500,
@@ -18,6 +22,10 @@ const record: MaintenanceRecordDto = {
   costMinor: 420_000,
   notes: null,
   createdAt: '2026-07-20T09:00:00.000Z',
+  rental: null,
+  client: null,
+  workItems: [],
+  attachments: [],
   vehicle: {
     id: 'vehicle-1',
     internalNumber: 'PLT-001',
@@ -75,6 +83,8 @@ describe('maintenanceToCalendarEvent', () => {
     ['COMPLETED', 'Завершено', 'success'],
     ['OVERDUE', 'Просрочено', 'danger'],
     ['CANCELLED', 'Отменено', 'neutral'],
+    ['DAMAGE_REPORTED', 'Повреждение', 'danger'],
+    ['WAITING_REPAIR', 'Ожидает ремонта', 'warning'],
   ] as const)('преобразует статус %s в %s / %s', (status, statusLabel, tone) => {
     expect(maintenanceToCalendarEvent({ ...record, status })).toMatchObject({
       statusLabel,

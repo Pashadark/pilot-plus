@@ -1,0 +1,6 @@
+[Unit]
+Description=Remove old Pilot Plus application releases
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pilot-plus-prune-releases

@@ -16,10 +16,12 @@ const rawVehicle = {
   seats: 7,
   dailyPriceMinor: 880000,
   currency: 'RUB',
+  odometerKm: null,
   originalPrice: '8 800 ₽',
   features: ['Все виды страхования'],
   status: 'IDLE',
   createdAt: new Date('2026-07-19T12:00:00.000Z'),
+  rentalOperations: [],
   positions: [
     {
       odometerKm: { toString: () => '12000' },
@@ -84,6 +86,24 @@ function createRepository() {
 }
 
 describe('запросы автопарка', () => {
+  it('передаёт глобальное место популярности в подробную карточку автомобиля', async () => {
+    const repository = {
+      async findMany() {
+        return [
+          { id: 'vehicle-2', _count: { rentals: 4 }, rentals: [] },
+          { id: 'vehicle-1', _count: { rentals: 3 }, rentals: [] },
+        ];
+      },
+      async findFirst() {
+        return { ...rawVehicle, id: 'vehicle-1' };
+      },
+    };
+
+    const result = await createVehicleQueries(repository).getVehicleForUser('user-1', 'vehicle-1');
+
+    expect(result?.popularityRank).toBe(2);
+  });
+
   it('присваивает три места по подтверждённым заказам с устойчивым разрешением ничьей', async () => {
     const rankedFixtures = [
       {
@@ -140,9 +160,17 @@ describe('запросы автопарка', () => {
         },
         rentals: {
           where: { status: { in: ['CONFIRMED', 'ACTIVE', 'COMPLETED'] } },
-          select: { createdAt: true },
+          select: {
+            id: true,
+            status: true,
+            createdAt: true,
+            startsAt: true,
+            endsAt: true,
+            contractNumber: true,
+            client: { select: { firstName: true, middleName: true, lastName: true } },
+          },
           orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-          take: 1,
+          take: 100,
         },
       },
     });
@@ -216,6 +244,95 @@ describe('запросы автопарка', () => {
     expect(vehicles[0]?.primaryImage).not.toHaveProperty('sourceUrl');
   });
 
+  it('показывает сохранённый при операции пробег, когда GPS не передаёт одометр', async () => {
+    const repository = {
+      async findMany() {
+        return [
+          {
+            ...rawVehicle,
+            odometerKm: { toString: () => '83273' },
+            positions: [{ ...rawVehicle.positions[0], odometerKm: null }],
+          },
+        ];
+      },
+      async findFirst() {
+        return null;
+      },
+    };
+
+    const [vehicle] = await createVehicleQueries(repository).listVehiclesForUser('user-1');
+
+    expect(vehicle?.telemetry.odometerKm).toBe(83273);
+  });
+
+  it('подхватывает пробег и топливо из последнего возврата для старых машин', async () => {
+    const repository = {
+      async findMany() {
+        return [
+          {
+            ...rawVehicle,
+            odometerKm: null,
+            positions: [{ ...rawVehicle.positions[0], odometerKm: null, fuelLevelPercent: null }],
+            rentalOperations: [
+              {
+                mileageKm: { toString: () => '85699' },
+                fuelLevelPercent: { toString: () => '20' },
+                occurredAt: new Date('2026-09-06T09:21:00.000Z'),
+              },
+            ],
+          },
+        ];
+      },
+      async findFirst() {
+        return null;
+      },
+    };
+
+    const [vehicle] = await createVehicleQueries(repository).listVehiclesForUser('user-1');
+
+    expect(vehicle?.telemetry.odometerKm).toBe(85699);
+    expect(vehicle?.telemetry.fuelLevelPercent).toBe(20);
+  });
+
+  it('возвращает текущую активную аренду для карточки автомобиля, включая просроченную', async () => {
+    const repository = {
+      async findMany() {
+        return [
+          {
+            ...rawVehicle,
+            _count: { rentals: 1 },
+            rentals: [
+              {
+                id: 'rental-active',
+                status: 'ACTIVE',
+                createdAt: new Date('2026-08-20T10:00:00.000Z'),
+                startsAt: new Date('2026-08-20T10:00:00.000Z'),
+                endsAt: new Date('2026-09-01T10:00:00.000Z'),
+                contractNumber: 'ME-2026-0042-AA',
+                client: { firstName: 'Иван', middleName: null, lastName: 'Иванов' },
+              },
+            ],
+          },
+        ];
+      },
+      async findFirst() {
+        return null;
+      },
+    };
+
+    const [vehicle] = await createVehicleQueries(repository).listVehiclesForUser(
+      'user-1',
+      new Date('2026-09-09T10:00:00.000Z'),
+    );
+
+    expect(vehicle?.activeRental).toEqual({
+      id: 'rental-active',
+      contractNumber: 'ME-2026-0042-AA',
+      clientName: 'Иванов Иван',
+      endsAt: '2026-09-01T10:00:00.000Z',
+    });
+  });
+
   it('ищет подробности только внутри компании пользователя', async () => {
     const fake = createRepository();
     const queries = createVehicleQueries(fake.repository);
@@ -241,13 +358,21 @@ describe('запросы автопарка', () => {
       {
         id: 'maintenance-1',
         title: 'Замена масла',
+        recordType: 'MAINTENANCE',
+        description: null,
         kind: 'OIL',
         status: 'COMPLETED',
         scheduledAt: '2026-07-20T10:00:00.000Z',
+        damageReportedAt: null,
+        startedAt: null,
         completedAt: '2026-07-20T12:00:00.000Z',
         targetOdometerKm: 15000.5,
         provider: 'Сервис Pilot',
         costMinor: 420000,
+        rental: null,
+        client: null,
+        workItems: [],
+        attachments: [],
       },
     ]);
     expect(vehicle?.washRecords).toEqual([

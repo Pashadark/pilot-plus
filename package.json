@@ -16,7 +16,9 @@
     "db:migrate:fresh:verify": "tsx scripts/verify-fresh-migrations.ts",
     "client-documents:reconcile": "tsx scripts/reconcile-client-document-uploads.ts",
     "rental-operations:reconcile-media": "tsx scripts/reconcile-rental-operation-media.ts",
+    "rentals:readiness-report": "tsx --conditions=react-server scripts/report-rental-readiness.ts",
     "vehicles:sync-images": "tsx scripts/sync-vehicle-images.ts",
+    "maintenance:import-camry-damage": "tsx scripts/import-camry-damage-repair.ts",
     "telematics:sync-glonasssoft": "tsx --conditions=react-server scripts/sync-glonasssoft.ts",
     "telematics:live-glonasssoft": "tsx --conditions=react-server scripts/run-glonasssoft-live-worker.ts",
     "telematics:configure-glonasssoft": "tsx --conditions=react-server scripts/configure-glonasssoft.ts",
@@ -29,6 +31,7 @@
     "schema": "src/database/prisma/schema.prisma"
   },
   "dependencies": {
+    "@meteocons/svg": "^0.1.0",
     "@prisma/client": "6.16.2",
     "docx": "^9.7.1",
     "framer-motion": "^12.42.2",
