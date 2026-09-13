@@ -198,6 +198,13 @@ enum MaintenanceStatus {
   COMPLETED
   OVERDUE
   CANCELLED
+  DAMAGE_REPORTED
+  WAITING_REPAIR
+}
+
+enum MaintenanceRecordType {
+  MAINTENANCE
+  REPAIR
 }
 
 enum MaintenanceKind {
@@ -208,6 +215,13 @@ enum MaintenanceKind {
   TIMING
   INSPECTION
   OTHER
+}
+
+enum MaintenanceAttachmentKind {
+  DAMAGE_BEFORE
+  REPAIR_AFTER
+  DOCUMENT
+  RECEIPT
 }
 
 enum WashStatus {
@@ -622,8 +636,8 @@ model Client {
   lastName                     String
   birthDate                    DateTime?
   gender                       String?
-  phoneEncrypted               String
-  phoneIndex                   String
+  phoneEncrypted               String?
+  phoneIndex                   String?
   additionalPhoneEncrypted     String?
   email                        String?
   telegramUsername             String?
@@ -660,6 +674,7 @@ model Client {
   telegramIdentity             TelegramIdentity?
   botRentalRequests            BotRentalRequest[]
   rentalOperations             RentalOperation[]
+  maintenanceRecords           MaintenanceRecord[]
 
   @@unique([companyId, phoneIndex])
   @@unique([companyId, id])
@@ -1188,6 +1203,7 @@ model Rental {
   operations               RentalOperation[]
   payments                 RentalPayment[]
   signatures               RentalSignature[]
+  maintenanceRecords       MaintenanceRecord[]
 
   @@unique([companyId, id])
   @@unique([companyId, clientId, id])
@@ -1714,26 +1730,69 @@ model FuelRecord {
 }
 
 model MaintenanceRecord {
-  id               String            @id @default(cuid())
+  id               String                  @id @default(cuid())
   vehicleId        String
-  vehicle          Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicle          Vehicle                 @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  rentalId         String?
+  rental           Rental?                 @relation(fields: [rentalId], references: [id], onDelete: SetNull)
+  clientId         String?
+  client           Client?                 @relation(fields: [clientId], references: [id], onDelete: SetNull)
   title            String
   description      String?
+  recordType       MaintenanceRecordType   @default(MAINTENANCE)
   kind             MaintenanceKind
   status           MaintenanceStatus
-  odometerKm       Decimal?          @db.Decimal(12, 1)
-  targetOdometerKm Decimal?          @db.Decimal(12, 1)
+  odometerKm       Decimal?                @db.Decimal(12, 1)
+  targetOdometerKm Decimal?                @db.Decimal(12, 1)
+  damageReportedAt DateTime?               @db.Timestamptz(3)
   scheduledAt      DateTime?
-  scheduledEndsAt  DateTime?         @db.Timestamptz(3)
+  scheduledEndsAt  DateTime?               @db.Timestamptz(3)
+  startedAt        DateTime?               @db.Timestamptz(3)
   completedAt      DateTime?
   provider         String?
   costMinor        Int?
   notes            String?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  workItems        MaintenanceWorkItem[]
+  attachments      MaintenanceAttachment[]
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
 
   @@index([vehicleId, scheduledAt])
   @@index([vehicleId, scheduledAt, scheduledEndsAt])
+  @@index([vehicleId, recordType, status])
+  @@index([rentalId])
+  @@index([clientId])
+}
+
+model MaintenanceWorkItem {
+  id                  String            @id @default(cuid())
+  maintenanceRecordId String
+  maintenanceRecord   MaintenanceRecord @relation(fields: [maintenanceRecordId], references: [id], onDelete: Cascade)
+  title               String
+  description         String?
+  costMinor           Int?
+  position            Int               @default(0)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([maintenanceRecordId, position])
+}
+
+model MaintenanceAttachment {
+  id                  String                    @id @default(cuid())
+  maintenanceRecordId String
+  maintenanceRecord   MaintenanceRecord         @relation(fields: [maintenanceRecordId], references: [id], onDelete: Cascade)
+  kind                MaintenanceAttachmentKind
+  storageKey          String                    @unique
+  originalName        String
+  verifiedMime        String
+  sha256              String
+  bytes               Int
+  caption             String?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  @@index([maintenanceRecordId, kind, createdAt])
 }
 
 model WashRecord {

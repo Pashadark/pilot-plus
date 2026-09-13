@@ -46,6 +46,10 @@ const fineInvoiceWorkflowMigrationPath = new URL(
   './migrations/20260818100000_add_fine_invoice_workflow/migration.sql',
   import.meta.url,
 );
+const maintenanceRepairsMigrationPath = new URL(
+  './migrations/20260913193000_add_vehicle_repairs/migration.sql',
+  import.meta.url,
+);
 
 describe('доменная схема автопарка', () => {
   it('описывает роли, точечные разрешения и журнал аудита центра администрирования', () => {
@@ -137,6 +141,42 @@ describe('доменная схема автопарка', () => {
     expect(schema).toContain('@@index([status, scheduledAt])');
   });
 
+  it('хранит ремонты, выполненные работы и приватные вложения автомобиля', () => {
+    expect(existsSync(maintenanceRepairsMigrationPath)).toBe(true);
+    if (!existsSync(maintenanceRepairsMigrationPath)) return;
+
+    const migration = readFileSync(maintenanceRepairsMigrationPath, 'utf8');
+    const record = schema.match(/model MaintenanceRecord \{[\s\S]*?\n\}/u)?.[0] ?? '';
+    const workItem = schema.match(/model MaintenanceWorkItem \{[\s\S]*?\n\}/u)?.[0] ?? '';
+    const attachment = schema.match(/model MaintenanceAttachment \{[\s\S]*?\n\}/u)?.[0] ?? '';
+    const rental = schema.match(/model Rental \{[\s\S]*?\n\}/u)?.[0] ?? '';
+    const client = schema.match(/model Client \{[\s\S]*?\n\}/u)?.[0] ?? '';
+
+    expect(schema).toContain('enum MaintenanceRecordType {');
+    expect(schema).toContain('enum MaintenanceAttachmentKind {');
+    expect(schema).toMatch(/MaintenanceStatus \{[\s\S]*\bDAMAGE_REPORTED\b/u);
+    expect(schema).toMatch(/MaintenanceStatus \{[\s\S]*\bWAITING_REPAIR\b/u);
+    expect(record).toMatch(/recordType\s+MaintenanceRecordType\s+@default\(MAINTENANCE\)/u);
+    expect(record).toMatch(/damageReportedAt\s+DateTime\?/u);
+    expect(record).toMatch(/startedAt\s+DateTime\?/u);
+    expect(record).toMatch(/rentalId\s+String\?/u);
+    expect(record).toMatch(/clientId\s+String\?/u);
+    expect(record).toMatch(/workItems\s+MaintenanceWorkItem\[\]/u);
+    expect(record).toMatch(/attachments\s+MaintenanceAttachment\[\]/u);
+    expect(workItem).toMatch(/maintenanceRecordId\s+String/u);
+    expect(workItem).toMatch(/costMinor\s+Int\?/u);
+    expect(workItem).toMatch(/position\s+Int/u);
+    expect(attachment).toMatch(/kind\s+MaintenanceAttachmentKind/u);
+    expect(attachment).toMatch(/storageKey\s+String\s+@unique/u);
+    expect(attachment).toMatch(/verifiedMime\s+String/u);
+    expect(attachment).toMatch(/sha256\s+String/u);
+    expect(rental).toMatch(/maintenanceRecords\s+MaintenanceRecord\[\]/u);
+    expect(client).toMatch(/maintenanceRecords\s+MaintenanceRecord\[\]/u);
+    expect(migration).toContain('CREATE TABLE "public"."MaintenanceWorkItem"');
+    expect(migration).toContain('CREATE TABLE "public"."MaintenanceAttachment"');
+    expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/iu);
+  });
+
   it('сохраняет legacy-описания ТО и останавливает миграцию при неизвестных статусах', () => {
     expect(maintenanceBackfill).toMatch(/SET "notes" = COALESCE\("notes", "description"\)/);
     expect(maintenanceBackfill).toMatch(
@@ -160,8 +200,8 @@ describe('доменная схема автопарка', () => {
   it('хранит клиентские персональные данные зашифрованными и tenant-scoped', () => {
     expect(schema).toContain('enum ClientStatus {');
     expect(schema).toContain('model Client {');
-    expect(schema).toMatch(/phoneEncrypted\s+String/);
-    expect(schema).toMatch(/phoneIndex\s+String/);
+    expect(schema).toMatch(/phoneEncrypted\s+String\?/);
+    expect(schema).toMatch(/phoneIndex\s+String\?/);
     expect(schema).toMatch(/passportEncrypted\s+String\?/);
     expect(schema).toMatch(/passportIndex\s+String\?/);
     expect(schema).toMatch(/driverLicenseEncrypted\s+String\?/);
