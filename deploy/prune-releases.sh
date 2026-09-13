@@ -2,10 +2,12 @@
 set -euo pipefail
 
 release_root=/opt/pilot-plus/releases
-keep_count=${PILOT_PLUS_RELEASES_TO_KEEP:-5}
-current=$(readlink -f /opt/pilot-plus/current)
+current_link=/opt/pilot-plus/current
+keep_count=${PILOT_PLUS_KEEP_RELEASES:-5}
+resolved_root=$(readlink -f "$release_root")
+current=$(readlink -f "$current_link")
 
-[[ "$keep_count" =~ ^[1-9][0-9]*$ ]] || { echo 'PILOT_PLUS_RELEASES_TO_KEEP must be positive' >&2; exit 1; }
+[[ "$keep_count" =~ ^[1-9][0-9]*$ ]] || { echo 'PILOT_PLUS_KEEP_RELEASES must be positive' >&2; exit 1; }
 [[ -d "$release_root" ]] || exit 0
 
 mapfile -t releases < <(
@@ -16,12 +18,13 @@ mapfile -t releases < <(
 
 remaining=${#releases[@]}
 for target in "${releases[@]}"; do
-  case "$target" in
-    "$release_root"/*) ;;
-    *) echo "Unsafe release path: $target" >&2; exit 1 ;;
+  resolved=$(readlink -f "$target")
+  case "$resolved" in
+    "$resolved_root"/*) ;;
+    *) echo "Unsafe release path: $resolved" >&2; exit 1 ;;
   esac
   (( remaining <= keep_count )) && break
-  [[ "$target" == "$current" ]] && continue
-  rm -rf -- "$target"
+  [[ "$resolved" == "$current" ]] && continue
+  rm -rf -- "$resolved"
   remaining=$((remaining - 1))
 done

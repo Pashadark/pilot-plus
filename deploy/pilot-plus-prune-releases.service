@@ -1,6 +1,16 @@
 [Unit]
-Description=Remove old Pilot Plus application releases
+Description=Pilot+ old release cleanup
+After=local-fs.target
+ConditionPathIsDirectory=/opt/pilot-plus/releases
 
 [Service]
 Type=oneshot
+User=root
+Group=root
 ExecStart=/usr/local/sbin/pilot-plus-prune-releases
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/opt/pilot-plus/current
+ReadWritePaths=/opt/pilot-plus/releases

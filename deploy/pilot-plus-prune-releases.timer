@@ -1,10 +1,11 @@
 [Unit]
-Description=Daily cleanup of old Pilot Plus application releases
+Description=Run Pilot+ release cleanup every day
 
 [Timer]
-OnCalendar=daily
+OnCalendar=*-*-* 03:30:00 Europe/Moscow
 Persistent=true
-RandomizedDelaySec=20m
+RandomizedDelaySec=15m
+Unit=pilot-plus-prune-releases.service
 
 [Install]
 WantedBy=timers.target
