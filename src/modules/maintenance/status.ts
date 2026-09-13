@@ -6,6 +6,8 @@ const allowedTransitions: Record<MaintenanceStatus, readonly MaintenanceStatus[]
   OVERDUE: ['IN_PROGRESS', 'CANCELLED'],
   COMPLETED: [],
   CANCELLED: [],
+  DAMAGE_REPORTED: ['WAITING_REPAIR', 'IN_PROGRESS', 'CANCELLED'],
+  WAITING_REPAIR: ['IN_PROGRESS', 'CANCELLED'],
 };
 
 export function canTransitionMaintenance(from: MaintenanceStatus, to: MaintenanceStatus): boolean {

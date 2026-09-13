@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseMaintenanceInput } from './validation';
+import { parseMaintenanceInput, parseRepairInput } from './validation';
 
 function maintenanceData(values: Record<string, string> = {}) {
   const formData = new FormData();
@@ -112,6 +112,62 @@ describe('parseMaintenanceInput', () => {
           notes: expect.any(String),
         },
       },
+    });
+  });
+});
+
+describe('parseRepairInput', () => {
+  it('создаёт уже начатый ремонт без обязательной стоимости, сервиса и файлов', () => {
+    const formData = maintenanceData({
+      vehicleId: ' vehicle-1 ',
+      title: ' Повреждение задней части кузова ',
+      status: 'IN_PROGRESS',
+      damageReportedAt: '2026-09-12T12:00',
+      rentalId: ' rental-1 ',
+      odometerKm: '85746',
+      description: ' Повреждён подкрылок ',
+      notes: ' Автомобиль вернулся из аренды ',
+    });
+    formData.append('workItemTitle', ' Диагностика креплений ');
+    formData.append('workItemDescription', ' Проверить бампер ');
+    formData.append('workItemCostRubles', '');
+    formData.append('workItemTitle', ' Замена подкрылка ');
+    formData.append('workItemDescription', '');
+    formData.append('workItemCostRubles', '3500');
+
+    expect(parseRepairInput(formData)).toEqual({
+      ok: true,
+      data: {
+        vehicleId: 'vehicle-1',
+        title: 'Повреждение задней части кузова',
+        status: 'IN_PROGRESS',
+        damageReportedAt: new Date('2026-09-12T09:00:00.000Z'),
+        rentalId: 'rental-1',
+        odometerKm: 85746,
+        provider: null,
+        costMinor: null,
+        description: 'Повреждён подкрылок',
+        notes: 'Автомобиль вернулся из аренды',
+        workItems: [
+          { title: 'Диагностика креплений', description: 'Проверить бампер', costMinor: null },
+          { title: 'Замена подкрылка', description: null, costMinor: 350000 },
+        ],
+      },
+    });
+  });
+
+  it('требует только основные данные ремонта и отклоняет неверный статус', () => {
+    expect(parseRepairInput(maintenanceData({ status: 'PLANNED' }))).toEqual({
+      ok: false,
+      state: expect.objectContaining({
+        status: 'error',
+        fieldErrors: expect.objectContaining({
+          vehicleId: expect.any(String),
+          title: expect.any(String),
+          status: expect.any(String),
+          damageReportedAt: expect.any(String),
+        }),
+      }),
     });
   });
 });

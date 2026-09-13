@@ -3,6 +3,9 @@ import type {
   MaintenanceInputResult,
   MaintenanceKind,
   OperationActionState,
+  RepairInput,
+  RepairInputResult,
+  RepairStatus,
 } from './types';
 import { parsePilotDateTimeLocal } from '@/shared/business-time';
 
@@ -17,6 +20,11 @@ const MAINTENANCE_KINDS: readonly MaintenanceKind[] = [
 ];
 const MAX_TEXT_LENGTH = 500;
 const MAX_ODOMETER_KM = 99_999_999_999.9;
+const REPAIR_STATUSES: readonly RepairStatus[] = [
+  'DAMAGE_REPORTED',
+  'WAITING_REPAIR',
+  'IN_PROGRESS',
+];
 
 function stringValue(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -47,6 +55,16 @@ function parseTargetOdometerKm(value: string, fieldErrors: Record<string, string
     return null;
   }
 
+  return odometerKm;
+}
+
+function parseRepairOdometerKm(value: string, fieldErrors: Record<string, string>): number | null {
+  if (!value) return null;
+  const odometerKm = Number(value);
+  if (!Number.isFinite(odometerKm) || odometerKm < 0 || odometerKm > MAX_ODOMETER_KM) {
+    fieldErrors.odometerKm = 'Укажите корректный пробег автомобиля.';
+    return null;
+  }
   return odometerKm;
 }
 
@@ -110,4 +128,92 @@ export function parseMaintenanceInput(formData: FormData): MaintenanceInputResul
   };
 
   return { ok: true, data };
+}
+
+function formStrings(formData: FormData, name: string) {
+  return formData.getAll(name).map((value) => (typeof value === 'string' ? value.trim() : ''));
+}
+
+export function parseRepairInput(formData: FormData): RepairInputResult {
+  const vehicleId = stringValue(formData, 'vehicleId');
+  const title = stringValue(formData, 'title');
+  const statusValue = stringValue(formData, 'status');
+  const damageReportedAtValue = stringValue(formData, 'damageReportedAt');
+  const fieldErrors: NonNullable<OperationActionState['fieldErrors']> = {};
+
+  if (!vehicleId) fieldErrors.vehicleId = 'Выберите автомобиль.';
+  if (!title) fieldErrors.title = 'Укажите название ремонта.';
+  else if (title.length > MAX_TEXT_LENGTH)
+    fieldErrors.title = 'Текст не должен превышать 500 символов.';
+
+  const status = REPAIR_STATUSES.find((candidate) => candidate === statusValue);
+  if (!status) fieldErrors.status = 'Выберите корректный статус ремонта.';
+
+  const damageReportedAt = parsePilotDateTimeLocal(damageReportedAtValue);
+  if (!damageReportedAt)
+    fieldErrors.damageReportedAt = 'Укажите корректную дату обнаружения повреждения.';
+
+  const odometerKm = parseRepairOdometerKm(stringValue(formData, 'odometerKm'), fieldErrors);
+  const provider = parseOptionalText(stringValue(formData, 'provider'), 'provider', fieldErrors);
+  const description = parseOptionalText(
+    stringValue(formData, 'description'),
+    'description',
+    fieldErrors,
+  );
+  const notes = parseOptionalText(stringValue(formData, 'notes'), 'notes', fieldErrors);
+  const parsedCost = parseCostMinor(formData.get('costRubles'));
+  if (!parsedCost.ok) fieldErrors.costRubles = parsedCost.error;
+
+  const titles = formStrings(formData, 'workItemTitle');
+  const descriptions = formStrings(formData, 'workItemDescription');
+  const costs = formStrings(formData, 'workItemCostRubles');
+  const workItems: RepairInput['workItems'] = [];
+  const rowCount = Math.max(titles.length, descriptions.length, costs.length);
+  if (rowCount > 25) fieldErrors.workItems = 'Можно добавить не более 25 видов работ.';
+  for (let index = 0; index < Math.min(rowCount, 25); index += 1) {
+    const rowTitle = titles[index] ?? '';
+    const rowDescription = descriptions[index] ?? '';
+    const rowCost = costs[index] ?? '';
+    if (!rowTitle && !rowDescription && !rowCost) continue;
+    if (!rowTitle) {
+      fieldErrors.workItems = 'Укажите название для каждой заполненной работы.';
+      continue;
+    }
+    const parsedRowCost = parseCostMinor(rowCost);
+    if (!parsedRowCost.ok) {
+      fieldErrors.workItems = `Проверьте стоимость работы № ${index + 1}.`;
+      continue;
+    }
+    workItems.push({
+      title: rowTitle,
+      description: rowDescription || null,
+      costMinor: parsedRowCost.value,
+    });
+  }
+
+  if (
+    Object.keys(fieldErrors).length > 0 ||
+    !status ||
+    !damageReportedAt ||
+    !parsedCost.ok
+  ) {
+    return { ok: false, state: { status: 'error', fieldErrors } };
+  }
+
+  return {
+    ok: true,
+    data: {
+      vehicleId,
+      title,
+      status,
+      damageReportedAt,
+      rentalId: stringValue(formData, 'rentalId') || null,
+      odometerKm,
+      provider,
+      costMinor: parsedCost.value,
+      description,
+      notes,
+      workItems,
+    },
+  };
 }
