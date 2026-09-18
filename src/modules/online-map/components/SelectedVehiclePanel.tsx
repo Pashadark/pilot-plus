@@ -11,6 +11,7 @@ const statusClasses: Record<VehicleGpsStatusTone, string> = {
   primary: 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]',
   warning: 'bg-[var(--color-warning-soft)] text-[var(--color-warning)]',
   danger: 'bg-[var(--color-danger-soft)] text-[var(--color-danger)]',
+  muted: 'bg-[var(--color-elevated)] text-[var(--color-text-secondary)]',
 };
 
 export interface SelectedVehiclePanelProps {
@@ -20,7 +21,6 @@ export interface SelectedVehiclePanelProps {
   trackSummary: ReactNode;
   trackSegments: ReactNode;
   trackEvents: ReactNode;
-  trackPlayback: ReactNode;
   className?: string;
 }
 
@@ -31,7 +31,6 @@ export function SelectedVehiclePanel({
   trackSummary,
   trackSegments,
   trackEvents,
-  trackPlayback,
   className = '',
 }: SelectedVehiclePanelProps) {
   return (
@@ -69,7 +68,13 @@ export function SelectedVehiclePanel({
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-[var(--radius-md)] bg-[var(--color-elevated)] p-3">
               <dt className="text-[var(--color-text-secondary)]">Скорость</dt>
-              <dd className="mt-1 font-semibold">{vehicle.speedKph} км/ч</dd>
+              <dd className="mt-1 font-semibold">
+                {vehicle.gpsStatus.key === 'NO_DATA' || vehicle.gpsStatus.key === 'STALE'
+                  ? 'Нет актуальных данных'
+                  : vehicle.speedKph === 0
+                    ? 'Стоит'
+                    : `${vehicle.speedKph} км/ч`}
+              </dd>
             </div>
             <div className="rounded-[var(--radius-md)] bg-[var(--color-elevated)] p-3">
               <dt className="text-[var(--color-text-secondary)]">Топливо</dt>
@@ -103,9 +108,6 @@ export function SelectedVehiclePanel({
           {trackSegments}
           {trackEvents}
         </article>
-      </div>
-      <div className="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface)] pt-3 @min-[48rem]:fixed @min-[48rem]:right-[26rem] @min-[48rem]:bottom-4 @min-[48rem]:left-[var(--sidebar-width)] @min-[48rem]:z-30 @min-[48rem]:mx-auto @min-[48rem]:w-[min(32rem,calc(100vw-var(--sidebar-width)-29rem))] @min-[48rem]:rounded-[var(--radius-panel)] @min-[48rem]:border @min-[48rem]:p-3 @min-[48rem]:shadow-[var(--shadow-floating)]">
-        {trackPlayback}
       </div>
     </aside>
   );

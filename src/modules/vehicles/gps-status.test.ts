@@ -57,12 +57,12 @@ describe('deriveVehicleGpsStatus', () => {
     expect(status).toEqual({
       key: 'NO_DATA',
       label: 'Нет связи',
-      tone: 'danger',
+      tone: 'muted',
       isConnected: false,
     });
   });
 
-  it('reports no data when the signal time is missing', () => {
+  it('reports no data as a neutral unavailable state', () => {
     expect(
       deriveVehicleGpsStatus(
         { recordedAt: null, speedKph: 0, address: null, hasCoordinates: true },
@@ -71,12 +71,12 @@ describe('deriveVehicleGpsStatus', () => {
     ).toEqual({
       key: 'NO_DATA',
       label: 'Нет связи',
-      tone: 'danger',
+      tone: 'muted',
       isConnected: false,
     });
   });
 
-  it('reports a fresh moving vehicle with the blue semantic tone', () => {
+  it('reports a fresh moving vehicle with the green semantic tone', () => {
     expect(
       deriveVehicleGpsStatus(
         {
@@ -90,7 +90,7 @@ describe('deriveVehicleGpsStatus', () => {
     ).toEqual({
       key: 'MOVING',
       label: 'В движении',
-      tone: 'primary',
+      tone: 'success',
       isConnected: true,
     });
   });

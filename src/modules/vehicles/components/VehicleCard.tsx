@@ -10,13 +10,16 @@ import {
   FiMapPin,
   FiNavigation,
   FiTruck,
+  FiUser,
   FiUsers,
 } from 'react-icons/fi';
 
 import type { VehicleCardDto } from '../types';
 import { formatDailyPrice, formatOptionalMetric } from '../utils';
+import { FuelLevelBar } from './FuelLevelBar';
 import { VehiclePhoto } from './VehiclePhoto';
 import { VehiclePopularityMedal } from './VehiclePopularityMedal';
+import { PILOT_BUSINESS_TIME_ZONE } from '@/shared/business-time';
 import { useToast } from '@/shared/providers/ToastProvider';
 import { Badge, Button, Card } from '@/shared/ui';
 
@@ -30,15 +33,20 @@ const fuelLabels = {
 
 function dateOrEmpty(value: string | null) {
   if (!value) return 'Нет данных';
-  return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(
-    new Date(value),
-  );
+  return new Intl.DateTimeFormat('ru-RU', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+    timeZone: PILOT_BUSINESS_TIME_ZONE,
+  }).format(new Date(value));
 }
 
 export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
   const { showToast } = useToast();
-  const businessStatus =
-    vehicle.status === 'MAINTENANCE' ? { label: 'Обслуживание', tone: 'info' as const } : null;
+  const businessStatus = vehicle.activeRental
+    ? { label: 'В аренде', tone: 'warning' as const }
+    : vehicle.status === 'MAINTENANCE'
+      ? { label: 'В ремонте', tone: 'info' as const }
+      : { label: 'Свободна', tone: 'success' as const };
 
   const explainMissingPosition = () => {
     if (vehicle.telemetry.hasPosition) return;
@@ -50,7 +58,7 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
   };
 
   return (
-    <Card className="group min-w-0 overflow-hidden transition-[border-color,box-shadow,transform] duration-[var(--motion-fast)] hover:-translate-y-0.5 hover:border-[var(--color-primary)] hover:shadow-[var(--shadow-floating)]">
+    <Card className="min-w-0 overflow-hidden transition-[border-color,box-shadow] duration-[var(--motion-fast)] hover:border-[var(--color-primary)] hover:shadow-[var(--shadow-floating)]">
       <article
         className="grid h-full grid-rows-[auto_auto_auto_1fr_auto]"
         data-testid="vehicle-card"
@@ -84,12 +92,13 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
                 </p>
               </div>
               <div className="flex flex-wrap justify-end gap-1.5">
-                <Badge tone={vehicle.gpsStatus.tone} data-testid="vehicle-gps-status">
+                <Badge
+                  tone={vehicle.gpsStatus.tone === 'muted' ? 'neutral' : vehicle.gpsStatus.tone}
+                  data-testid="vehicle-gps-status"
+                >
                   {vehicle.gpsStatus.label}
                 </Badge>
-                {businessStatus ? (
-                  <Badge tone={businessStatus.tone}>{businessStatus.label}</Badge>
-                ) : null}
+                <Badge tone={businessStatus.tone}>{businessStatus.label}</Badge>
               </div>
             </div>
             <p className="mt-2 flex items-start gap-1.5 text-sm text-[var(--color-text-secondary)]">
@@ -122,6 +131,27 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
         </div>
 
         <div className="grid content-start gap-3 p-4">
+          {vehicle.activeRental ? (
+            <Link
+              href={`/rentals/${vehicle.activeRental.id}`}
+              className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--color-warning)]/35 bg-[var(--color-warning-soft)] p-3 transition-colors hover:border-[var(--color-warning)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+            >
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--color-surface)] text-[var(--color-warning)] shadow-sm">
+                <FiUser aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <strong className="block truncate text-sm text-[var(--color-text)]">
+                  {vehicle.activeRental.clientName}
+                </strong>
+                <span className="block truncate text-xs text-[var(--color-text-secondary)]">
+                  {vehicle.activeRental.contractNumber
+                    ? `Договор ${vehicle.activeRental.contractNumber} · `
+                    : ''}
+                  возврат {dateOrEmpty(vehicle.activeRental.endsAt)}
+                </span>
+              </span>
+            </Link>
+          ) : null}
           <div className="grid grid-cols-2 gap-2 rounded-[var(--radius-lg)] bg-[var(--color-elevated)] p-3 text-sm">
             <span className="flex gap-2">
               <FiActivity aria-hidden="true" className="mt-0.5 text-[var(--color-primary)]" />
@@ -130,11 +160,11 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
                 {formatOptionalMetric(vehicle.telemetry.odometerKm, 'км')}
               </span>
             </span>
-            <span className="flex gap-2">
+            <span className="flex min-w-0 gap-2">
               <FiDroplet aria-hidden="true" className="mt-0.5 text-[var(--color-primary)]" />
-              <span>
+              <span className="min-w-0 flex-1">
                 <strong className="block text-xs text-[var(--color-text-tertiary)]">Топливо</strong>
-                {formatOptionalMetric(vehicle.telemetry.fuelLevelPercent, '%')}
+                <FuelLevelBar value={vehicle.telemetry.fuelLevelPercent} />
               </span>
             </span>
             <span className="flex gap-2">
@@ -180,19 +210,25 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
             >
               Открыть
             </Link>
-            <Button
-              variant="secondary"
-              size="sm"
-              aria-label={
-                vehicle.telemetry.hasPosition
-                  ? 'Показать на карте'
-                  : 'Почему автомобиль не на карте'
-              }
-              leadingIcon={<FiMap aria-hidden="true" />}
-              onClick={explainMissingPosition}
-            >
-              На карте
-            </Button>
+            {vehicle.telemetry.hasPosition ? (
+              <Link
+                href={`/map?vehicleId=${encodeURIComponent(vehicle.id)}`}
+                aria-label="Показать на карте"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 text-sm font-semibold hover:bg-[var(--color-elevated)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+              >
+                <FiMap aria-hidden="true" /> На карте
+              </Link>
+            ) : (
+              <Button
+                variant="secondary"
+                size="sm"
+                aria-label="Почему автомобиль не на карте"
+                leadingIcon={<FiMap aria-hidden="true" />}
+                onClick={explainMissingPosition}
+              >
+                На карте
+              </Button>
+            )}
             <Link
               href={`/vehicles/${vehicle.id}?tab=trips`}
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 text-sm font-semibold hover:bg-[var(--color-elevated)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"

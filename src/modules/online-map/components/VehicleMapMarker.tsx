@@ -1,17 +1,17 @@
 'use client';
 
 import { motion, useReducedMotion } from 'framer-motion';
-import { FiTruck } from 'react-icons/fi';
 
 import type { VehicleGpsStatusTone } from '@/modules/vehicles/gps-status';
 
 import type { OnlineMapVehicle } from '../types';
 
 const statusColors: Record<VehicleGpsStatusTone, string> = {
-  success: 'bg-[var(--color-success)]',
-  primary: 'bg-[var(--color-primary)]',
-  warning: 'bg-[var(--color-warning)]',
-  danger: 'bg-[var(--color-danger)]',
+  success: 'text-[var(--color-success)]',
+  primary: 'text-[var(--color-primary)]',
+  warning: 'text-[var(--color-warning)]',
+  danger: 'text-[var(--color-danger)]',
+  muted: 'text-[var(--color-text-secondary)]',
 };
 
 interface VehicleMapMarkerProps {
@@ -22,7 +22,8 @@ interface VehicleMapMarkerProps {
 
 export function VehicleMapMarker({ vehicle, selected, onSelect }: VehicleMapMarkerProps) {
   const prefersReducedMotion = useReducedMotion();
-  const hoverAnimation = prefersReducedMotion ? {} : { scale: 1.05, y: -4 };
+  const hoverAnimation = prefersReducedMotion ? {} : { scale: 1.04, y: -2 };
+  const heading = normalizeHeading(vehicle.heading);
 
   return (
     <motion.button
@@ -30,18 +31,26 @@ export function VehicleMapMarker({ vehicle, selected, onSelect }: VehicleMapMark
       aria-label={`Выбрать автомобиль ${vehicle.plate}`}
       aria-pressed={selected}
       data-selected={selected}
-      className="group relative grid size-11 place-items-center rounded-[var(--radius-md)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] motion-reduce:transform-none"
+      className="group relative grid size-12 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] motion-reduce:transform-none"
       onClick={() => onSelect(vehicle)}
       whileHover={hoverAnimation}
       whileFocus={hoverAnimation}
       transition={{ duration: 0.2 }}
     >
-      <span className="grid size-10 place-items-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] shadow-[var(--shadow-floating)]">
-        <FiTruck aria-hidden="true" className="size-5" />
-        <span
-          aria-label={vehicle.gpsStatus.label}
-          className={`absolute right-0.5 bottom-0.5 size-2.5 rounded-full border-2 border-[var(--color-surface)] ${statusColors[vehicle.gpsStatus.tone]}`}
-        />
+      <span
+        data-testid="vehicle-map-arrow"
+        data-heading={String(heading)}
+        aria-label={vehicle.gpsStatus.label}
+        className={`grid size-10 place-items-center transition-[transform,filter] duration-200 ease-out motion-reduce:transition-none ${
+          selected ? 'text-[var(--color-primary)]' : statusColors[vehicle.gpsStatus.tone]
+        } ${
+          selected
+            ? 'drop-shadow-[0_0_7px_color-mix(in_srgb,var(--color-primary)_55%,transparent)]'
+            : 'drop-shadow-[0_2px_3px_rgba(15,23,42,0.28)]'
+        }`}
+        style={{ transform: `rotate(${heading}deg)` }}
+      >
+        <AngularDirectionArrow />
       </span>
 
       <span
@@ -51,10 +60,39 @@ export function VehicleMapMarker({ vehicle, selected, onSelect }: VehicleMapMark
         <span className="block text-[var(--color-text-secondary)]">
           {vehicle.name} · {vehicle.gpsStatus.label}
         </span>
-        <span className="mt-1.5 block">Скорость: {vehicle.speedKph} км/ч</span>
-        <span className="block">Топливо: {vehicle.fuelPercent}%</span>
+        <span className="mt-1.5 block">
+          Скорость:{' '}
+          {vehicle.gpsStatus.key === 'NO_DATA' || vehicle.gpsStatus.key === 'STALE'
+            ? 'Нет актуальных данных'
+            : vehicle.speedKph === 0
+              ? 'Стоит'
+              : `${vehicle.speedKph} км/ч`}
+        </span>
+        <span className="block">
+          Топливо:{' '}
+          {vehicle.fuelPercent == null ? 'Нет данных' : `${vehicle.fuelPercent}%`}
+        </span>
         <span className="block">Последний сигнал: {vehicle.lastSeenLabel}</span>
       </span>
     </motion.button>
+  );
+}
+
+function normalizeHeading(value: number | null | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return ((Math.round(value) % 360) + 360) % 360;
+}
+
+function AngularDirectionArrow() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 32 32" className="size-9 overflow-visible">
+      <path
+        d="M16 1 29 31 16 25 3 31Z"
+        fill="currentColor"
+        stroke="white"
+        strokeWidth="2.2"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
