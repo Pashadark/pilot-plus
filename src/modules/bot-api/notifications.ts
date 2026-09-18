@@ -1,6 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
+import type { Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
+import {
+  isCompleteWeeklyInspection,
+  moscowWeekRange,
+  weeklyInspectionRequiredMedia,
+} from '@/modules/rentals/lease-to-own/weekly-inspection';
+import { isLowFuelLevel, LOW_FUEL_THRESHOLD_PERCENT } from '@/modules/vehicles/fuel-level';
+import { OFFLINE_AFTER_MS } from '@/modules/vehicles/gps-status';
 import { decryptField } from '@/services/security/field-encryption';
 
 import { BotApiError } from './auth';
@@ -12,7 +20,8 @@ import {
   formatOperationalAlert,
 } from './operational-alerts';
 import { formatOperationsDigest } from './operations-digest';
-import { OFFLINE_AFTER_MS } from '@/modules/vehicles/gps-status';
+import { formatRentalLifecycleMessage } from './rental-lifecycle-notifications';
+import { formatUnpaidFinesReport } from './unpaid-fines-report';
 
 type ClaimDb = Pick<typeof prisma, '$transaction'>;
 type UpdateDb = Pick<typeof prisma, 'botNotificationJob'>;
@@ -34,6 +43,12 @@ function decryptedPhone(value: string | null | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+function numberOrNull(value: unknown | null | undefined) {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function leadPayloadId(payload: unknown, key: 'leadId' | 'auditId') {
@@ -97,30 +112,120 @@ export async function enqueueDailyOperationsDigests(now: Date, database = prisma
   const identityByBinding = new Map(
     identities.map((identity) => [`${identity.companyId}:${identity.userId}`, identity.id]),
   );
-  const rows = bindings.flatMap((binding) => {
-    const common = {
+  const rows: Prisma.BotNotificationJobCreateManyInput[] = bindings.flatMap((binding) => {
+    const operationsCommon = {
       companyId: binding.companyId,
       template: 'DAILY_OPERATIONS_DIGEST',
       payload: { date },
       availableAt: now,
     };
-    const group = {
-      ...common,
+    const finesCommon = {
+      companyId: binding.companyId,
+      template: 'DAILY_UNPAID_FINES',
+      payload: { date },
+      availableAt: now,
+    };
+    const operationsGroup = {
+      ...operationsCommon,
       chatId: binding.telegramChatId,
       eventKey: `daily-operations:${binding.companyId}:${date}:group`,
+    };
+    const finesGroup = {
+      ...finesCommon,
+      chatId: binding.telegramChatId,
+      eventKey: `daily-unpaid-fines:${binding.companyId}:${date}:group`,
     };
     const identityId = identityByBinding.get(`${binding.companyId}:${binding.boundByUserId}`);
     return identityId
       ? [
-          group,
+          operationsGroup,
           {
-            ...common,
+            ...operationsCommon,
             identityId,
             eventKey: `daily-operations:${binding.companyId}:${date}:staff:${identityId}`,
           },
+          finesGroup,
+          {
+            ...finesCommon,
+            identityId,
+            eventKey: `daily-unpaid-fines:${binding.companyId}:${date}:staff:${identityId}`,
+          },
         ]
-      : [group];
+      : [operationsGroup, finesGroup];
   });
+  if (moscow.getUTCDay() === 5) {
+    const week = moscowWeekRange(now);
+    const leaseRentals = await database.rental.findMany({
+      where: {
+        companyId: { in: bindings.map((binding) => binding.companyId) },
+        agreementType: 'LEASE_TO_OWN',
+        status: 'ACTIVE',
+      },
+      select: {
+        id: true,
+        companyId: true,
+        contractNumber: true,
+        client: { select: { firstName: true, middleName: true, lastName: true } },
+        vehicle: {
+          select: { make: true, modelName: true, model: true, registrationNumber: true },
+        },
+        operations: {
+          where: {
+            type: 'WEEKLY_INSPECTION',
+            status: 'COMMITTED',
+            occurredAt: { gte: week.start, lt: week.end },
+          },
+          select: {
+            media: { where: { status: 'CLEAN' }, select: { kind: true } },
+          },
+        },
+      },
+      take: 500,
+    });
+    const bindingByCompany = new Map(bindings.map((binding) => [binding.companyId, binding]));
+    for (const rental of leaseRentals) {
+      if (
+        rental.operations.some((operation) =>
+          isCompleteWeeklyInspection(operation.media.map((medium) => medium.kind)),
+        )
+      ) {
+        continue;
+      }
+      const binding = bindingByCompany.get(rental.companyId);
+      if (!binding) continue;
+      const vehicle = [
+        rental.vehicle.make,
+        rental.vehicle.modelName ?? rental.vehicle.model,
+        rental.vehicle.registrationNumber,
+      ]
+        .filter(Boolean)
+        .join(' ');
+      const client = [
+        rental.client.lastName,
+        rental.client.firstName,
+        rental.client.middleName,
+      ]
+        .filter(Boolean)
+        .join(' ');
+      rows.push({
+        companyId: rental.companyId,
+        chatId: binding.telegramChatId,
+        template: 'LEASE_TO_OWN_WEEKLY_INSPECTION',
+        eventKey: `lease-to-own-inspection:${rental.companyId}:${rental.id}:${week.weekKey}:group`,
+        availableAt: now,
+        payload: {
+          message: [
+            '📸 Аренда с правом выкупа — еженедельный контроль',
+            `${client} · ${vehicle}`,
+            `Договор: ${rental.contractNumber ?? 'без номера'}`,
+            `Нужно загрузить: фото приборки, кузов с 4 сторон и видео.`,
+            `https://supapro.ru/rentals/${rental.id}?action=weekly-inspection#rental-actions`,
+          ].join('\n'),
+          requiredMedia: [...weeklyInspectionRequiredMedia],
+        },
+      });
+    }
+  }
   const result = await database.botNotificationJob.createMany({
     data: rows,
     skipDuplicates: true,
@@ -162,8 +267,14 @@ export async function enqueueOperationalAlerts(now: Date, database = prisma) {
         companyId: true,
         positions: {
           where: { provider: 'GLONASSSOFT' },
-          select: { recordedAt: true },
+          select: { id: true, recordedAt: true, fuelLevelPercent: true },
           orderBy: [{ recordedAt: 'desc' as const }, { id: 'desc' as const }],
+          take: 1,
+        },
+        rentalOperations: {
+          where: { status: 'COMMITTED' as const, fuelLevelPercent: { not: null } },
+          select: { id: true, occurredAt: true, fuelLevelPercent: true },
+          orderBy: [{ occurredAt: 'desc' as const }, { id: 'desc' as const }],
           take: 1,
         },
         rentals: {
@@ -189,7 +300,12 @@ export async function enqueueOperationalAlerts(now: Date, database = prisma) {
         vehicle: { companyId: { in: companyIds }, archivedAt: null, isDemoImport: false },
         recordedAt: { gte: recentEventsSince, lte: now },
       },
-      select: { id: true, vehicleId: true, type: true, vehicle: { select: { companyId: true } } },
+      select: {
+        id: true,
+        vehicleId: true,
+        type: true,
+        vehicle: { select: { companyId: true } },
+      },
       take: 500,
     }),
     database.fine.findMany({
@@ -212,9 +328,66 @@ export async function enqueueOperationalAlerts(now: Date, database = prisma) {
       rentalId?: string;
       eventId?: string;
       fineId?: string;
+      fuelLevelPercent?: number;
     };
   };
   const alerts: Alert[] = [];
+
+  const lowFuelAlerts = await Promise.all(
+    vehicles.map(async (vehicle): Promise<Alert | null> => {
+      const currentPosition = vehicle.positions[0] ?? null;
+      const currentOperation = vehicle.rentalOperations?.[0] ?? null;
+      const positionFuel = numberOrNull(currentPosition?.fuelLevelPercent);
+      const operationFuel = numberOrNull(currentOperation?.fuelLevelPercent);
+      const fuelLevelPercent = positionFuel ?? operationFuel;
+      if (!isLowFuelLevel(fuelLevelPercent)) return null;
+
+      if (positionFuel !== null && currentPosition) {
+        const lastRecoveredPosition = await database.vehiclePosition.findFirst({
+          where: {
+            vehicleId: vehicle.id,
+            provider: 'GLONASSSOFT',
+            fuelLevelPercent: { gt: LOW_FUEL_THRESHOLD_PERCENT },
+            recordedAt: { lt: currentPosition.recordedAt },
+          },
+          select: { id: true },
+          orderBy: [{ recordedAt: 'desc' as const }, { id: 'desc' as const }],
+        });
+        return {
+          companyId: vehicle.companyId,
+          eventKey: `fuel:${vehicle.id}:position:${lastRecoveredPosition?.id ?? 'initial'}`,
+          payload: {
+            kind: 'LOW_FUEL',
+            vehicleId: vehicle.id,
+            fuelLevelPercent: Math.round(fuelLevelPercent as number),
+          },
+        };
+      }
+
+      const lastRecoveredOperation = await database.rentalOperation.findFirst({
+        where: {
+          companyId: vehicle.companyId,
+          vehicleId: vehicle.id,
+          status: 'COMMITTED',
+          fuelLevelPercent: { gt: LOW_FUEL_THRESHOLD_PERCENT },
+          occurredAt: { lt: currentOperation?.occurredAt ?? now },
+        },
+        select: { id: true },
+        orderBy: [{ occurredAt: 'desc' as const }, { id: 'desc' as const }],
+      });
+      return {
+        companyId: vehicle.companyId,
+        eventKey: `fuel:${vehicle.id}:operation:${lastRecoveredOperation?.id ?? 'initial'}`,
+        payload: {
+          kind: 'LOW_FUEL',
+          vehicleId: vehicle.id,
+          fuelLevelPercent: Math.round(fuelLevelPercent as number),
+        },
+      };
+    }),
+  );
+  alerts.push(...lowFuelAlerts.filter((alert): alert is Alert => alert !== null));
+
   for (const vehicle of vehicles) {
     const rentalId = vehicle.rentals[0]?.id;
     const lastSignalAt = vehicle.positions[0]?.recordedAt ?? null;
@@ -398,6 +571,83 @@ async function hydrateJob(
           });
     return { ...job, payload: { message, parseMode: 'HTML' } };
   }
+  if (job.template === 'RENTAL_LIFECYCLE') {
+    const payload =
+      typeof job.payload === 'object' && job.payload !== null
+        ? (job.payload as Record<string, unknown>)
+        : {};
+    const kind = String(payload.kind ?? '');
+    const rentalId = String(payload.rentalId ?? '');
+    const operationId = String(payload.operationId ?? '');
+    if (!rentalId || !operationId || (kind !== 'HANDOVER' && kind !== 'RETURN')) {
+      return { ...job, payload: { message: 'Операция аренды уже недоступна.' } };
+    }
+    const operation = await tx.rentalOperation.findFirst({
+      where: {
+        id: operationId,
+        companyId: job.companyId,
+        rentalId,
+        status: 'COMMITTED',
+        type: kind,
+      },
+      select: {
+        type: true,
+        occurredAt: true,
+        mileageKm: true,
+        fuelLevelPercent: true,
+        actor: { select: { name: true } },
+        rental: {
+          select: {
+            contractNumber: true,
+            client: { select: { firstName: true, middleName: true, lastName: true } },
+            vehicle: {
+              select: { make: true, modelName: true, model: true, registrationNumber: true },
+            },
+          },
+        },
+      },
+    });
+    if (
+      !operation ||
+      operation.mileageKm === null ||
+      operation.fuelLevelPercent === null ||
+      !operation.rental
+    ) {
+      return { ...job, payload: { message: 'Операция аренды уже недоступна.' } };
+    }
+    const handover =
+      kind === 'RETURN'
+        ? await tx.rentalOperation.findFirst({
+            where: {
+              companyId: job.companyId,
+              rentalId,
+              type: 'HANDOVER',
+              status: 'COMMITTED',
+            },
+            select: { mileageKm: true, fuelLevelPercent: true },
+            orderBy: { occurredAt: 'desc' },
+          })
+        : null;
+    return {
+      ...job,
+      payload: {
+        message: formatRentalLifecycleMessage({
+          kind,
+          occurredAt: operation.occurredAt,
+          contractNumber: operation.rental.contractNumber,
+          vehicle: vehicleTitle(operation.rental.vehicle),
+          registrationNumber: operation.rental.vehicle.registrationNumber,
+          clientName: personName(operation.rental.client),
+          actorName: operation.actor.name,
+          mileageKm: operation.mileageKm,
+          fuelLevelPercent: operation.fuelLevelPercent,
+          handoverMileageKm: handover?.mileageKm,
+          handoverFuelLevelPercent: handover?.fuelLevelPercent,
+        }),
+        parseMode: 'HTML',
+      },
+    };
+  }
   if (job.template === 'OPERATIONAL_ALERT') {
     const payload =
       typeof job.payload === 'object' && job.payload !== null
@@ -418,6 +668,9 @@ async function hydrateJob(
       'GEOFENCE_EXIT',
       'SPEEDING',
       'NEW_FINE',
+      'LOW_FUEL',
+      'BORDER_APPROACH',
+      'FUEL_STATION_VISIT',
     ]);
     if (!vehicleId || !allowedKinds.has(kind)) {
       return { ...job, payload: { message: 'Оперативное событие уже недоступно.' } };
@@ -453,11 +706,31 @@ async function hydrateJob(
               },
             },
           })
-        : Promise.resolve(null),
+        : tx.rental.findFirst({
+            where: {
+              companyId: job.companyId,
+              vehicleId,
+              status: { in: ['CONFIRMED', 'ACTIVE'] },
+              startsAt: { lte: now },
+              endsAt: { gte: now },
+            },
+            orderBy: [{ startsAt: 'desc' }, { id: 'desc' }],
+            select: {
+              endsAt: true,
+              client: {
+                select: {
+                  firstName: true,
+                  middleName: true,
+                  lastName: true,
+                  phoneEncrypted: true,
+                },
+              },
+            },
+          }),
       eventId
         ? tx.vehicleEvent.findFirst({
             where: { id: eventId, vehicleId },
-            select: { title: true, description: true },
+            select: { title: true, description: true, recordedAt: true },
           })
         : Promise.resolve(null),
       fineId
@@ -504,10 +777,74 @@ async function hydrateJob(
           rentalEndsAt: rental?.endsAt ?? null,
           eventTitle: event?.title ?? null,
           eventDescription: event?.description ?? null,
+          eventRecordedAt:
+            typeof payload.recordedAt === 'string'
+              ? new Date(payload.recordedAt)
+              : event?.recordedAt ?? null,
           fineAmountMinor: fine?.currentAmountMinor.toString() ?? null,
           fineArticle: fine?.articleCode ?? null,
           fineAttributedToClient: Boolean(fine?.clientId),
+          fuelLevelPercent: numberOrNull(payload.fuelLevelPercent),
+          borderCountry: typeof payload.borderCountry === 'string' ? payload.borderCountry : null,
+          borderDistanceKm: numberOrNull(payload.borderDistanceKm),
+          stationLabel: typeof payload.stationLabel === 'string' ? payload.stationLabel : null,
         }),
+        parseMode: 'HTML',
+      },
+    };
+  }
+  if (job.template === 'DAILY_UNPAID_FINES') {
+    const date =
+      typeof job.payload === 'object' && job.payload !== null && 'date' in job.payload
+        ? String(job.payload.date)
+        : undefined;
+    const range = moscowDayRange(date);
+    const fines = await tx.fine.findMany({
+      where: {
+        companyId: job.companyId,
+        status: { in: ['NEW', 'UNPAID', 'OVERDUE'] },
+      },
+      orderBy: [{ offenseAt: 'desc' }, { id: 'desc' }],
+      take: 500,
+      select: {
+        offenseAt: true,
+        discountExpiresAt: true,
+        originalAmountMinor: true,
+        currentAmountMinor: true,
+        articleCode: true,
+        description: true,
+        status: true,
+        client: { select: { lastName: true } },
+        vehicle: {
+          select: { make: true, modelName: true, model: true, registrationNumber: true },
+        },
+      },
+    });
+    const sortedFines = [...fines].sort((left, right) => {
+      const leftDeadline = left.discountExpiresAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      const rightDeadline = right.discountExpiresAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      if (leftDeadline !== rightDeadline) return leftDeadline - rightDeadline;
+      return right.offenseAt.getTime() - left.offenseAt.getTime();
+    });
+    return {
+      ...job,
+      payload: {
+        message: formatUnpaidFinesReport(
+          range.date,
+          sortedFines.map((fine) => ({
+            clientLastName: fine.client?.lastName ?? null,
+            vehicle: fine.vehicle ? vehicleTitle(fine.vehicle) : 'Автомобиль не определён',
+            registrationNumber: fine.vehicle?.registrationNumber ?? null,
+            violation:
+              fine.description?.trim() || fine.articleCode?.trim() || 'Нарушение не указано',
+            originalAmountMinor: fine.originalAmountMinor.toString(),
+            currentAmountMinor: fine.currentAmountMinor.toString(),
+            offenseAt: fine.offenseAt,
+            discountExpiresAt: fine.discountExpiresAt,
+            status:
+              fine.status === 'OVERDUE' ? 'OVERDUE' : fine.status === 'NEW' ? 'NEW' : 'UNPAID',
+          })),
+        ),
         parseMode: 'HTML',
       },
     };
@@ -537,8 +874,6 @@ async function hydrateJob(
       maintenance,
       washes,
       leads,
-      recentFines,
-      fineIntegration,
       yesterdayRentals,
       yesterdayIncidents,
       weeklyRentals,
@@ -698,28 +1033,6 @@ async function hydrateJob(
           nextContactAt: true,
         },
       }),
-      tx.fine.findMany({
-        where: {
-          companyId: job.companyId,
-          createdAt: { gte: new Date(now.getTime() - 24 * 60 * 60_000), lte: now },
-          status: { not: 'CANCELLED' },
-        },
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: 100,
-        select: {
-          currentAmountMinor: true,
-          articleCode: true,
-          offenseAt: true,
-          clientId: true,
-          vehicle: {
-            select: { make: true, modelName: true, model: true, registrationNumber: true },
-          },
-        },
-      }),
-      tx.fineIntegration.findUnique({
-        where: { companyId: job.companyId },
-        select: { enabled: true, lastAttemptAt: true, lastSuccessAt: true, lastErrorCode: true },
-      }),
       tx.rental.findMany({
         where: {
           companyId: job.companyId,
@@ -781,13 +1094,6 @@ async function hydrateJob(
     const fleetLoad = vehicles.length
       ? Math.round((rentedVehicles.length / vehicles.length) * 100)
       : 0;
-    const finesApiAvailable = Boolean(
-      fineIntegration?.enabled &&
-      fineIntegration.lastSuccessAt &&
-      (!fineIntegration.lastAttemptAt ||
-        fineIntegration.lastSuccessAt >= fineIntegration.lastAttemptAt) &&
-      !fineIntegration.lastErrorCode,
-    );
     const problemRows = vehicles.flatMap((vehicle) => {
       const lastSignalAt = vehicle.positions[0]?.recordedAt ?? null;
       const silentForMs = lastSignalAt
@@ -850,21 +1156,6 @@ async function hydrateJob(
           trackerProblems: problemRows.filter(
             (problem) =>
               problem.kind === 'RENTED_GPS_WARNING' || problem.kind === 'FREE_GPS_TRACKER_PROBLEM',
-          ),
-          finesApiAvailable,
-          newFines: recentFines.flatMap((fine) =>
-            fine.vehicle
-              ? [
-                  {
-                    vehicle: vehicleTitle(fine.vehicle),
-                    registrationNumber: fine.vehicle.registrationNumber,
-                    amountMinor: fine.currentAmountMinor.toString(),
-                    article: fine.articleCode,
-                    offenseAt: fine.offenseAt,
-                    attributedToClient: Boolean(fine.clientId),
-                  },
-                ]
-              : [],
           ),
           leads: leads.map((lead) => ({
             at: lead.nextContactAt,
@@ -990,7 +1281,10 @@ async function hydrateJob(
       },
     };
   const key = process.env.CLIENT_DATA_ENCRYPTION_KEY;
-  const phone = key ? decryptField(rental.client.phoneEncrypted, key) : 'телефон недоступен';
+  const phone =
+    key && rental.client.phoneEncrypted
+      ? decryptField(rental.client.phoneEncrypted, key)
+      : 'нет телефона';
   const name = `${rental.client.firstName} ${rental.client.middleName ?? ''}`.trim();
   return {
     ...job,

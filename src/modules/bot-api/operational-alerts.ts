@@ -31,7 +31,15 @@ export function classifyRentalDeadline(overdueForMs: number): RentalDeadlineAler
 }
 
 type OperationalAlertMessageInput = {
-  kind: GpsSilenceAlertKind | RentalDeadlineAlertKind | 'GEOFENCE_EXIT' | 'SPEEDING' | 'NEW_FINE';
+  kind:
+    | GpsSilenceAlertKind
+    | RentalDeadlineAlertKind
+    | 'GEOFENCE_EXIT'
+    | 'SPEEDING'
+    | 'NEW_FINE'
+    | 'LOW_FUEL'
+    | 'BORDER_APPROACH'
+    | 'FUEL_STATION_VISIT';
   vehicle: string;
   registrationNumber: string | null;
   silentForMs?: number | null;
@@ -40,9 +48,14 @@ type OperationalAlertMessageInput = {
   rentalEndsAt?: Date | null;
   eventTitle?: string | null;
   eventDescription?: string | null;
+  eventRecordedAt?: Date | null;
   fineAmountMinor?: string | null;
   fineArticle?: string | null;
   fineAttributedToClient?: boolean;
+  fuelLevelPercent?: number | null;
+  borderCountry?: string | null;
+  borderDistanceKm?: number | null;
+  stationLabel?: string | null;
 };
 
 function escapeHtml(value: string | number | null | undefined) {
@@ -92,7 +105,7 @@ export function formatOperationalAlert(input: OperationalAlertMessageInput) {
     case 'GEOFENCE_EXIT':
       return `🚨 <b>Автомобиль покинул геозону</b>\n${vehicle}${client}${input.eventDescription ? `\n${escapeHtml(input.eventDescription)}` : ''}\n<b>Действие:</b> немедленно проверить маршрут и связаться с клиентом.`;
     case 'SPEEDING':
-      return `⚡ <b>Превышение скорости</b>\n${vehicle}${client}${input.eventTitle ? `\n${escapeHtml(input.eventTitle)}` : ''}${input.eventDescription ? `\n${escapeHtml(input.eventDescription)}` : ''}\n<b>Действие:</b> связаться с водителем и потребовать снизить скорость.`;
+      return `⚡ <b>Превышение скорости</b>\n${vehicle}${input.clientName ? `\n👤 Водитель: <b>${escapeHtml(input.clientName)}</b>` : '\n👤 Водитель: <b>не определён</b>'}${input.clientPhone ? ` · ${escapeHtml(input.clientPhone)}` : ''}${input.eventTitle ? `\n${escapeHtml(input.eventTitle)}` : ''}${input.eventRecordedAt ? `\n🕒 Время: <b>${escapeHtml(atMoscow(input.eventRecordedAt))}</b>` : ''}${input.eventDescription ? `\n${escapeHtml(input.eventDescription)}` : ''}\n<b>Действие:</b> связаться с водителем и потребовать снизить скорость.`;
     case 'NEW_FINE': {
       const amount = input.fineAmountMinor
         ? new Intl.NumberFormat('ru-RU', {
@@ -103,5 +116,16 @@ export function formatOperationalAlert(input: OperationalAlertMessageInput) {
         : 'сумма не указана';
       return `🟡 <b>Новый штраф</b>\n${vehicle}${client}\n⚡ ${escapeHtml(amount)}${input.fineArticle ? ` · ${escapeHtml(input.fineArticle)}` : ''}\nНа клиента: <b>${input.fineAttributedToClient ? 'ДА' : 'НЕТ'}</b>\n<b>Действие:</b> проверить назначение штрафа и оплатить в разделе «Штрафы».`;
     }
+    case 'LOW_FUEL': {
+      const fuel = Math.round(Math.max(0, Math.min(100, input.fuelLevelPercent ?? 0)));
+      return `⛽ <b>Низкий уровень топлива</b>\n${vehicle}\nОсталось: <b>${escapeHtml(fuel)}%</b>\n<b>Действие:</b> заправить автомобиль перед следующей выдачей.`;
+    }
+    case 'BORDER_APPROACH': {
+      const distance =
+        input.borderDistanceKm == null ? 'расстояние неизвестно' : `${input.borderDistanceKm.toFixed(1)} км`;
+      return `⚠️ <b>Машина приближается к границе</b>\n${vehicle}${client}\nГраница: <b>${escapeHtml(input.borderCountry ?? 'сопредельное государство')}</b>\nРасстояние: <b>${escapeHtml(distance)}</b>${input.eventRecordedAt ? `\n🕒 Время: <b>${escapeHtml(atMoscow(input.eventRecordedAt))}</b>` : ''}\n<b>Действие:</b> проверьте маршрут и связь с водителем.`;
+    }
+    case 'FUEL_STATION_VISIT':
+      return `⛽ <b>Возможная заправка</b>\n${vehicle}${client}\nАЗС: <b>${escapeHtml(input.stationLabel ?? 'название неизвестно')}</b>${input.eventRecordedAt ? `\n🕒 Въезд: <b>${escapeHtml(atMoscow(input.eventRecordedAt))}</b>` : ''}\nСтоянка: <b>7 мин.</b>`;
   }
 }
