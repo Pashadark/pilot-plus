@@ -2,6 +2,8 @@ import 'server-only';
 
 import { prisma as defaultPrisma } from '@/database/prisma/client';
 import { decryptField } from '@/services/security/field-encryption';
+import { findRussiaBorderProximity } from '@/modules/geography/russia-border';
+import { processFuelStationPosition } from '@/modules/fuel-stations/server/visit-service';
 
 import { GlonassSoftClient } from './client.server';
 
@@ -38,8 +40,38 @@ interface SyncDatabase {
 }
 
 interface SyncTransaction {
-  vehiclePosition: { createMany(args: unknown): Promise<{ count: number }> };
-  vehicle: { updateMany(args: unknown): Promise<{ count: number }> };
+  vehiclePosition: {
+    createMany(args: unknown): Promise<{ count: number }>;
+    findFirst?: (args: unknown) => Promise<{
+      latitude: unknown;
+      longitude: unknown;
+      speedKph: number | null;
+      recordedAt: Date;
+    } | null>;
+  };
+  vehicleEvent?: { createMany(args: unknown): Promise<{ count: number }> };
+  vehicle: {
+    updateMany(args: unknown): Promise<{ count: number }>;
+    findFirst?: (args: unknown) => Promise<{
+      engineHours: unknown | null;
+      make?: string | null;
+      modelName?: string | null;
+      model?: string | null;
+      registrationNumber?: string | null;
+    } | null>;
+  };
+  rental?: {
+    findFirst(args: unknown): Promise<{
+      contractNumber: string | null;
+      client: { firstName: string; middleName: string | null; lastName: string };
+    } | null>;
+  };
+  telegramGroupBinding?: {
+    findUnique(args: unknown): Promise<{ telegramChatId: string } | null>;
+  };
+  botNotificationJob?: { createMany(args: unknown): Promise<{ count: number }> };
+  fuelStation?: { findMany(args: unknown): Promise<unknown[]> };
+  fuelStationVisit?: { findFirst(args: unknown): Promise<unknown>; create(args: unknown): Promise<unknown>; update(args: unknown): Promise<unknown> };
 }
 
 interface SyncClient {
@@ -150,6 +182,42 @@ async function savePoint(
   const recordedAt = new Date(point.recordedAt);
   const providerReceivedAt = new Date(point.receivedAt);
   const externalId = `${point.externalId}:${recordedAt.toISOString()}`;
+  const previous = database.vehiclePosition.findFirst
+    ? await database.vehiclePosition.findFirst({
+        where: { vehicleId, provider: 'GLONASSSOFT', recordedAt: { lt: recordedAt } },
+        select: { latitude: true, longitude: true, speedKph: true, recordedAt: true },
+        orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+      })
+    : null;
+  const currentVehicle = database.vehicle.findFirst
+    ? await database.vehicle.findFirst({
+        where: { id: vehicleId, companyId },
+        select: {
+          engineHours: true,
+          make: true,
+          modelName: true,
+          model: true,
+          registrationNumber: true,
+        },
+      })
+    : null;
+  const heading = previous
+    ? bearingDegrees(
+        Number(previous.longitude),
+        Number(previous.latitude),
+        point.longitude,
+        point.latitude,
+      )
+    : null;
+  const elapsedMs = previous ? recordedAt.getTime() - previous.recordedAt.getTime() : 0;
+  const engineHours =
+    currentVehicle &&
+    Number.isFinite(Number(currentVehicle.engineHours)) &&
+    elapsedMs > 0 &&
+    elapsedMs <= 15 * 60_000 &&
+    (point.speedKph > 0 || (previous?.speedKph ?? 0) > 0)
+      ? Math.round((Number(currentVehicle.engineHours) + elapsedMs / 3_600_000) * 10) / 10
+      : null;
   const inserted = await database.vehiclePosition.createMany({
     data: [
       {
@@ -157,6 +225,7 @@ async function savePoint(
         latitude: point.latitude,
         longitude: point.longitude,
         speedKph: Math.round(point.speedKph),
+        heading,
         odometerKm: point.odometerKm,
         fuelLevelPercent: point.fuelPercent,
         address: point.address,
@@ -174,10 +243,144 @@ async function savePoint(
     where: { id: vehicleId, companyId, archivedAt: null },
     data: {
       ...(point.odometerKm === null ? {} : { odometerKm: point.odometerKm }),
+      ...(engineHours === null ? {} : { engineHours }),
       status: stateToStatus(point.state),
     },
   });
+  if (point.speedKph >= 120) {
+    await database.vehicleEvent?.createMany({
+      data: [
+        {
+          vehicleId,
+          type: 'SPEEDING',
+          severity: 'DANGER',
+          title: `Скорость ${Math.round(point.speedKph)} км/ч`,
+          description: 'Зафиксирована скорость выше 120 км/ч.',
+          location: point.address,
+          recordedAt,
+          provider: 'GLONASSSOFT',
+          externalId: `${externalId}:speeding-120`,
+        },
+      ],
+      skipDuplicates: true,
+    });
+  }
+  await enqueueBorderAlert(database, companyId, vehicleId, recordedAt, point, currentVehicle);
+  if (database.fuelStation && database.fuelStationVisit) {
+    await processFuelStationPosition(
+      database as never,
+      {
+        companyId,
+        vehicleId,
+        latitude: point.latitude,
+        longitude: point.longitude,
+        recordedAt,
+      },
+    ).catch(() => undefined);
+  }
   return true;
+}
+
+async function enqueueBorderAlert(
+  database: SyncTransaction,
+  companyId: string,
+  vehicleId: string,
+  recordedAt: Date,
+  point: LastData,
+  vehicle: {
+    make?: string | null;
+    modelName?: string | null;
+    model?: string | null;
+    registrationNumber?: string | null;
+  } | null,
+) {
+  if (!database.telegramGroupBinding?.findUnique || !database.botNotificationJob?.createMany) {
+    return;
+  }
+  const proximity = findRussiaBorderProximity(point.latitude, point.longitude, 100);
+  if (!proximity) return;
+  const binding = await database.telegramGroupBinding.findUnique({
+    where: { companyId },
+    select: { telegramChatId: true },
+  });
+  if (!binding) return;
+  const rental = database.rental
+    ? await database.rental.findFirst({
+        where: {
+          companyId,
+          vehicleId,
+          status: { in: ['CONFIRMED', 'ACTIVE'] },
+          startsAt: { lte: recordedAt },
+          endsAt: { gte: recordedAt },
+        },
+        orderBy: [{ startsAt: 'desc' }, { id: 'desc' }],
+        select: {
+          contractNumber: true,
+          client: { select: { firstName: true, middleName: true, lastName: true } },
+        },
+      })
+    : null;
+  const vehicleName = [vehicle?.make, vehicle?.modelName ?? vehicle?.model, vehicle?.registrationNumber]
+    .filter(Boolean)
+    .join(' ');
+  const driverName = rental
+    ? [rental.client.lastName, rental.client.firstName, rental.client.middleName]
+        .filter(Boolean)
+        .join(' ')
+    : null;
+  const message = [
+    '⚠️ Машина приближается к границе России',
+    vehicleName || `Автомобиль ${vehicleId}`,
+    `Граница: ${proximity.country}`,
+    `Расстояние: ${proximity.distanceKm.toFixed(1)} км`,
+    driverName ? `Водитель: ${driverName}` : 'Водитель: не определён',
+    rental?.contractNumber ? `Договор: ${rental.contractNumber}` : null,
+    `Время: ${new Intl.DateTimeFormat('ru-RU', {
+      timeZone: 'Europe/Moscow',
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }).format(recordedAt)}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const dayKey = recordedAt.toISOString().slice(0, 10);
+  await database.botNotificationJob.createMany({
+    data: [
+      {
+        companyId,
+        chatId: binding.telegramChatId,
+        template: 'OPERATIONAL_ALERT',
+        eventKey: `border-approach:${companyId}:${vehicleId}:${proximity.countryCode}:${dayKey}:group`,
+        payload: {
+          kind: 'BORDER_APPROACH',
+          vehicleId,
+          borderCountry: proximity.country,
+          borderDistanceKm: proximity.distanceKm,
+          recordedAt: recordedAt.toISOString(),
+          message,
+        },
+        availableAt: recordedAt,
+      },
+    ],
+    skipDuplicates: true,
+  });
+}
+
+function bearingDegrees(
+  fromLongitude: number,
+  fromLatitude: number,
+  toLongitude: number,
+  toLatitude: number,
+) {
+  const fromLat = (fromLatitude * Math.PI) / 180;
+  const toLat = (toLatitude * Math.PI) / 180;
+  const deltaLongitude = ((toLongitude - fromLongitude) * Math.PI) / 180;
+  const bearing = Math.atan2(
+    Math.sin(deltaLongitude) * Math.cos(toLat),
+    Math.cos(fromLat) * Math.sin(toLat) -
+      Math.sin(fromLat) * Math.cos(toLat) * Math.cos(deltaLongitude),
+  );
+  return Math.round((((bearing * 180) / Math.PI + 360) % 360 + 360) % 360);
 }
 
 function stateToStatus(state: number) {
@@ -192,7 +395,9 @@ function safeErrorCode(error: unknown): string {
     error !== null &&
     'code' in error &&
     typeof error.code === 'string' &&
-    /^(AUTH_REJECTED|TIMEOUT|UNAVAILABLE|INVALID_RESPONSE)$/u.test(error.code)
+    /^(INVALID_REQUEST|AUTH_REJECTED|FORBIDDEN|RATE_LIMITED|TIMEOUT|UNAVAILABLE|INVALID_RESPONSE)$/u.test(
+      error.code,
+    )
   ) {
     return error.code;
   }

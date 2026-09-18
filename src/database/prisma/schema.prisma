@@ -286,6 +286,11 @@ enum RentalStatus {
   CANCELLED
 }
 
+enum RentalAgreementType {
+  STANDARD
+  LEASE_TO_OWN
+}
+
 enum RentalDocumentFormat {
   DOCX
   PDF
@@ -303,6 +308,8 @@ enum RentalOperationType {
   HANDOVER
   EXTENSION
   RETURN
+  DEPOSIT_RETURN
+  WEEKLY_INSPECTION
 }
 
 enum RentalOperationStatus {
@@ -905,6 +912,7 @@ model Vehicle {
   rangePriceMinor               BigInt?
   currency                      String                  @db.Char(3)
   odometerKm                    Decimal?                @db.Decimal(12, 1)
+  engineHours                   Decimal?                @db.Decimal(12, 1)
   valueMinor                    BigInt?
   depositMinor                  BigInt?
   includedMileageKm             Int?
@@ -942,6 +950,7 @@ model Vehicle {
   rentals                       Rental[]                @relation("VehicleRentals")
   rentalOperations              RentalOperation[]
   botRentalRequests             BotRentalRequest[]
+  fuelStationVisits             FuelStationVisit[]
   externalFineLinks             ExternalVehicleLink[]
   telematicsLinks               TelematicsVehicleLink[]
   fines                         Fine[]
@@ -1167,6 +1176,7 @@ model Rental {
   startsAt                 DateTime                   @db.Timestamptz(3)
   endsAt                   DateTime                   @db.Timestamptz(3)
   status                   RentalStatus               @default(DRAFT)
+  agreementType            RentalAgreementType        @default(STANDARD)
   currency                 String                     @db.Char(3)
   dailyRateMinor           BigInt
   billableDays             Int
@@ -1640,6 +1650,44 @@ model VehiclePosition {
 
   @@unique([vehicleId, provider, externalId])
   @@index([vehicleId, recordedAt])
+}
+
+model FuelStation {
+  id               String             @id @default(cuid())
+  osmType          String
+  osmId            String
+  name             String?
+  brand            String?
+  address          String?
+  latitude         Decimal            @db.Decimal(9, 6)
+  longitude        Decimal            @db.Decimal(9, 6)
+  source           String             @default("OPENSTREETMAP")
+  attribution      String             @default("© OpenStreetMap contributors")
+  sourceUpdatedAt  DateTime?
+  visits           FuelStationVisit[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@unique([osmType, osmId])
+  @@index([latitude, longitude])
+}
+
+model FuelStationVisit {
+  id          String      @id @default(cuid())
+  vehicleId   String
+  vehicle     Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  stationId   String
+  station     FuelStation @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  enteredAt   DateTime
+  lastSeenAt  DateTime
+  exitedAt    DateTime?
+  notifiedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([vehicleId, exitedAt, lastSeenAt])
+  @@index([stationId, enteredAt])
+  @@unique([vehicleId, stationId, enteredAt])
 }
 
 model Trip {
