@@ -8,6 +8,8 @@ import { getOperationalHealth } from './get-operational-health';
 import { resourceUsage, type MonitorCard, type MonitorSnapshot } from './monitor-model';
 import { getAvitoProfileControl } from '@/modules/profile/avito-actions';
 import { remoteMonitorCards } from './remote-monitor';
+import { readTimewebSnapshotFile } from './timeweb-monitor-storage';
+import { timewebSnapshotToCard } from './timeweb-monitor-card';
 
 const run = promisify(execFile);
 const gb = (bytes: number) =>
@@ -100,8 +102,12 @@ async function avitoCard(): Promise<MonitorCard> {
 }
 
 export async function getMonitorSnapshot(): Promise<MonitorSnapshot> {
-  const [host, avito, services, operations, remote] = await Promise.all([
+  const [host, timeweb, avito, services, operations, remote] = await Promise.all([
     serverCard(),
+    readTimewebSnapshotFile(
+      process.env.TIMEWEB_MONITOR_SNAPSHOT_PATH?.trim() ||
+        '/opt/pilot-plus/shared/timeweb-monitor.json',
+    ).then((snapshot) => timewebSnapshotToCard(snapshot)),
     avitoCard(),
     getSystemHealth(),
     getOperationalHealth(),
@@ -114,6 +120,7 @@ export async function getMonitorSnapshot(): Promise<MonitorSnapshot> {
     checkedAt,
     cards: [
       host,
+      timeweb,
       ...remoteMonitorCards(remote),
       ...operations
         .filter((item) => item.key === 'telegram')

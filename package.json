@@ -22,6 +22,7 @@
     "telematics:sync-glonasssoft": "tsx --conditions=react-server scripts/sync-glonasssoft.ts",
     "telematics:live-glonasssoft": "tsx --conditions=react-server scripts/run-glonasssoft-live-worker.ts",
     "telematics:configure-glonasssoft": "tsx --conditions=react-server scripts/configure-glonasssoft.ts",
+    "system:sync-timeweb": "tsx --conditions=react-server scripts/sync-timeweb-monitor.ts",
     "fuel-stations:import": "tsx --conditions=react-server scripts/import-osm-fuel-stations.ts",
     "vehicles:reconcile-real": "tsx --conditions=react-server scripts/reconcile-real-fleet.ts",
     "test:e2e": "playwright test",

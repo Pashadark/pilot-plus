@@ -1,0 +1,19 @@
+[Unit]
+Description=Refresh Pilot+ Timeweb Cloud billing monitor
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=pilot-plus
+Group=pilot-plus
+WorkingDirectory=/opt/pilot-plus/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/pilot-plus.env
+ExecStart=/usr/local/bin/npm run system:sync-timeweb
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/pilot-plus/shared

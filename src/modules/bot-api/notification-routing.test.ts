@@ -8,6 +8,26 @@ describe('notification recipient isolation', () => {
     expect(notificationDestination(job, '-456')).toBeNull();
     expect(notificationDestination(job, null)).toBeNull();
   });
+  it('routes Timeweb billing alerts only to the bound internal group', () => {
+    const billing = { ...job, template: 'SYSTEM_BILLING_ALERT' };
+    expect(notificationDestination(billing, '-123')).toBe('-123');
+    expect(notificationDestination(billing, '-456')).toBeNull();
+    expect(
+      notificationDestination(
+        {
+          ...billing,
+          identity: {
+            kind: 'CLIENT',
+            companyId: 'a',
+            clientId: 'client-a',
+            isActive: true,
+            telegramUserId: '123',
+          },
+        },
+        '-123',
+      ),
+    ).toBeNull();
+  });
   it('resolves legacy destinations only against their own company binding', () => {
     expect(notificationDestination({ ...job, chatId: 'staff:a' }, '-123')).toBe('-123');
     expect(notificationDestination({ ...job, chatId: 'staff:b' }, '-123')).toBeNull();

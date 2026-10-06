@@ -13,6 +13,7 @@ const internalTemplates = new Set([
   'AVITO_READY',
   'AVITO_WAITING',
   'DEPOSIT_RETURNED',
+  'SYSTEM_BILLING_ALERT',
 ]);
 
 export function notificationDestination(

@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh Pilot+ Timeweb Cloud billing data hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+AccuracySec=1min
+Unit=pilot-plus-timeweb-monitor.service
+
+[Install]
+WantedBy=timers.target
