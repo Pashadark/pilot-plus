@@ -50,7 +50,7 @@ it('возвращает только активные реальные маши
       gpsStatus: {
         key: 'MOVING',
         label: 'В движении',
-        tone: 'primary',
+        tone: 'success',
         isConnected: true,
       },
       latitude: 55.751244,
@@ -103,7 +103,7 @@ it('super-admin видит все компании, а устаревшая по
   );
 });
 
-it('оставляет реальную машину без координат в списке с общим красным GPS-статусом', async () => {
+it('оставляет реальную машину без координат в списке с нейтральным GPS-статусом', async () => {
   const findMany = vi.fn().mockResolvedValue([
     {
       id: 'vehicle-3',
@@ -135,7 +135,7 @@ it('оставляет реальную машину без координат �
       gpsStatus: {
         key: 'NO_DATA',
         label: 'Нет связи',
-        tone: 'danger',
+        tone: 'muted',
         isConnected: false,
       },
       latitude: null,
@@ -186,7 +186,7 @@ it('не превращает частичную позицию GLONASSSOFT в �
       gpsStatus: {
         key: 'NO_DATA',
         label: 'Нет связи',
-        tone: 'danger',
+        tone: 'muted',
         isConnected: false,
       },
       lastSeenLabel: '1 минуту назад',

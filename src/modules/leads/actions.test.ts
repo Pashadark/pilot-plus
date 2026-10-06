@@ -77,10 +77,10 @@ describe('lead actions', () => {
       boundByUserId: 'owner-1',
     });
     transaction.telegramIdentity.findFirst.mockResolvedValue({ id: 'identity-owner' });
-    transaction.botNotificationJob.createMany.mockResolvedValue({ count: 2 });
+    transaction.botNotificationJob.createMany.mockResolvedValue({ count: 1 });
   });
 
-  it('creates the lead, audit and both notification jobs in one transaction', async () => {
+  it('creates the lead, audit and work-group notification in one transaction', async () => {
     await expect(createLeadAction({ status: 'idle' }, leadForm())).resolves.toEqual({
       status: 'success',
       message: 'Заявка добавлена.',
@@ -111,7 +111,6 @@ describe('lead actions', () => {
     expect(transaction.botNotificationJob.createMany).toHaveBeenCalledWith({
       data: [
         expect.objectContaining({ template: 'LEAD_CREATED', chatId: '-100777' }),
-        expect.objectContaining({ template: 'LEAD_CREATED', identityId: 'identity-owner' }),
       ],
       skipDuplicates: true,
     });
@@ -157,10 +156,6 @@ describe('lead actions', () => {
     expect(transaction.botNotificationJob.createMany).toHaveBeenCalledWith({
       data: [
         expect.objectContaining({ template: 'LEAD_STATUS_CHANGED', chatId: '-100777' }),
-        expect.objectContaining({
-          template: 'LEAD_STATUS_CHANGED',
-          identityId: 'identity-owner',
-        }),
       ],
       skipDuplicates: true,
     });

@@ -39,7 +39,7 @@ function setup() {
         .mockResolvedValue({ telegramChatId: '-100123', boundByUserId: 'manager-1' }),
     },
     telegramIdentity: { findFirst: vi.fn().mockResolvedValue({ id: 'staff-1' }) },
-    botNotificationJob: { createMany: vi.fn().mockResolvedValue({ count: 2 }) },
+    botNotificationJob: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
   };
   return { tx, db: { $transaction: async (fn: (t: unknown) => unknown) => fn(tx) } };
 }
@@ -64,7 +64,6 @@ describe('website lead intake', () => {
     expect(tx.botNotificationJob.createMany).toHaveBeenCalledWith({
       data: expect.arrayContaining([
         expect.objectContaining({ template: 'LEAD_CREATED', chatId: '-100123' }),
-        expect.objectContaining({ template: 'LEAD_CREATED', identityId: 'staff-1' }),
       ]),
       skipDuplicates: true,
     });
