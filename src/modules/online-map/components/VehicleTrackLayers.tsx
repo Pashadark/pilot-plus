@@ -1,5 +1,6 @@
 import type { FeatureCollection, LineString, Point } from 'geojson';
 import type { ExpressionSpecification, Map, MapLayerMouseEvent } from 'maplibre-gl';
+import { buildTrackGradientRuns, trackSpeedColor } from '../track-gradient';
 
 import type {
   TrackCoordinates,
@@ -13,6 +14,7 @@ const TRACK_EVENTS_SOURCE_ID = 'vehicle-track-events';
 const TRACK_ENDPOINTS_SOURCE_ID = 'vehicle-track-endpoints';
 
 const TRACK_LAYER_IDS = [
+  'vehicle-track-speed-labels',
   'vehicle-track-event-hitbox',
   'vehicle-track-event-counts',
   'vehicle-track-event-icons',
@@ -34,13 +36,16 @@ const TRACK_SOURCE_IDS = [
 const TRACK_COLORS = {
   green: '#22c55e',
   yellow: '#f59e0b',
+  orange: '#f97316',
   red: '#ef4444',
+  critical: '#111827',
 } as const;
 
 const TRACK_EVENT_TYPES = [
   'stop',
   'refuel',
   'speeding',
+  'fine',
   'connection-loss',
   'geofence-enter',
   'geofence-exit',
@@ -50,6 +55,7 @@ const TRACK_EVENT_ICON_PATTERNS: Record<VehicleTrackEventView['type'], readonly 
   stop: ['11111', '10001', '10001', '10001', '11111'],
   refuel: ['11100', '10100', '11110', '10101', '11111'],
   speeding: ['00110', '01100', '11110', '00110', '01100'],
+  fine: ['11111', '10101', '11111', '10001', '11111'],
   'connection-loss': ['10001', '01010', '00100', '01010', '10001'],
   'geofence-enter': ['00100', '00110', '11111', '00110', '00100'],
   'geofence-exit': ['00100', '01100', '11111', '01100', '00100'],
@@ -68,6 +74,8 @@ interface TrackSegmentProperties {
 }
 
 interface TrackEventProperties {
+  speedColor: string;
+  speedLabel: string;
   id: string;
   type: VehicleTrackEventView['type'];
   title: string;
@@ -156,7 +164,7 @@ export function trackSegmentsToGeoJson(
       id: segment.id,
       geometry: {
         type: 'LineString',
-        coordinates: [[...segment.from.coordinates], [...segment.to.coordinates]],
+        coordinates: smoothSegmentCoordinates(segment, segments),
       },
       properties: {
         id: segment.id,
@@ -171,6 +179,51 @@ export function trackSegmentsToGeoJson(
       },
     })),
   };
+}
+
+/**
+ * Adds a few Catmull–Rom samples to each GPS interval. The original endpoints
+ * are preserved exactly, while the line follows a smooth tangent into/out of
+ * adjacent intervals instead of rendering a visible chain of sticks.
+ */
+function smoothSegmentCoordinates(
+  segment: VehicleTrackSegment,
+  segments: readonly VehicleTrackSegment[],
+): number[][] {
+  const tripSegments = segments
+    .filter((candidate) => candidate.tripId === segment.tripId)
+    .sort((left, right) => left.from.timestamp.localeCompare(right.from.timestamp));
+  const index = tripSegments.findIndex((candidate) => candidate.id === segment.id);
+  const previous = index > 0 ? tripSegments[index - 1].from.coordinates : segment.from.coordinates;
+  const next =
+    index >= 0 && index < tripSegments.length - 1
+      ? tripSegments[index + 1].to.coordinates
+      : segment.to.coordinates;
+  const from = segment.from.coordinates;
+  const to = segment.to.coordinates;
+  const samples = 6;
+  const coordinates: number[][] = [];
+
+  for (let sample = 0; sample <= samples; sample += 1) {
+    const t = sample / samples;
+    const t2 = t * t;
+    const t3 = t2 * t;
+    // Centripetal-style Catmull–Rom approximation with a conservative tension.
+    const blend = (p0: number, p1: number, p2: number, p3: number) =>
+      0.5 *
+      ((2 * p1) +
+        (-p0 + p2) * t * 0.7 +
+        (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 * 0.7 +
+        (-p0 + 3 * p1 - 3 * p2 + p3) * t3 * 0.7);
+    coordinates.push([
+      blend(previous[0], from[0], to[0], next[0]),
+      blend(previous[1], from[1], to[1], next[1]),
+    ]);
+  }
+
+  coordinates[0] = [...from];
+  coordinates[coordinates.length - 1] = [...to];
+  return coordinates;
 }
 
 export function trackEventsToGeoJson(
@@ -193,6 +246,8 @@ export function trackEventsToGeoJson(
         tripId: event.tripId,
         tripIndex: event.tripIndex,
         icon: getTrackEventIconId(event.type),
+        speedColor: trackSpeedColor(event.speedKph),
+        speedLabel: `${event.speedKph} км/ч`,
       },
     })),
   };
@@ -210,6 +265,8 @@ export function mountVehicleTrackLayers(
     trackViewModel.eventGroups.map((event) => [event.id, event]),
   );
   const addedImageIds: string[] = [];
+  const gradientLayerIds: string[] = [];
+  const gradientSourceIds: string[] = [];
   let hoveredSegmentId: string | null = null;
   let hoveredEventId: string | null = null;
 
@@ -268,6 +325,8 @@ export function mountVehicleTrackLayers(
   };
 
   const cleanup = () => {
+    for (const id of gradientLayerIds) if (map.getLayer(id)) map.removeLayer(id);
+    for (const id of gradientSourceIds) if (map.getSource(id)) map.removeSource(id);
     map.off('mousemove', 'vehicle-track-hitbox', handleSegmentMove);
     map.off('mouseleave', 'vehicle-track-hitbox', handleSegmentLeave);
     map.off('mousemove', 'vehicle-track-event-hitbox', handleEventMove);
@@ -294,9 +353,10 @@ export function mountVehicleTrackLayers(
   };
 
   try {
+    const segmentData = trackSegmentsToGeoJson(trackViewModel.segments);
     map.addSource(TRACK_SOURCE_ID, {
       type: 'geojson',
-      data: trackSegmentsToGeoJson(trackViewModel.segments),
+      data: segmentData,
     });
     map.addSource(TRACK_EVENTS_SOURCE_ID, {
       type: 'geojson',
@@ -325,13 +385,26 @@ export function mountVehicleTrackLayers(
       },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
     });
+    const gradientRuns = buildTrackGradientRuns(trackViewModel.segments,
+      segmentData.features.map(feature => feature.geometry.coordinates));
+    gradientRuns.forEach((run, index) => {
+      const id = `vehicle-track-gradient-${index}`;
+      map.addSource(id, { type: 'geojson', lineMetrics: true, tolerance: 0,
+        data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: run.coordinates } } });
+      gradientSourceIds.push(id);
+      map.addLayer({ id, type: 'line', source: id,
+        paint: { 'line-gradient': run.gradient, 'line-width': 5, 'line-opacity': 0.72,
+          'line-offset': run.tripIndex === 1 ? -5 : run.tripIndex === 2 ? 5 : 0 },
+        layout: { 'line-cap': 'round', 'line-join': 'round' } });
+      gradientLayerIds.push(id);
+    });
     map.addLayer({
       id: 'vehicle-track-lines',
       type: 'line',
       source: TRACK_SOURCE_ID,
       paint: {
-        'line-color': ['get', 'color'],
-        'line-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.95, 0.72],
+        'line-color': '#ffffff',
+        'line-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.2, 0],
         'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 7, 5],
         'line-offset': getTripLineOffsetExpression(),
       },
@@ -412,7 +485,9 @@ export function mountVehicleTrackLayers(
           'match',
           ['get', 'type'],
           'speeding',
-          '#ef4444',
+          ['get', 'speedColor'],
+          'fine',
+          '#7c3aed',
           'connection-loss',
           '#64748b',
           'refuel',
@@ -426,7 +501,14 @@ export function mountVehicleTrackLayers(
       },
     });
     map.addLayer({
+      id: 'vehicle-track-speed-labels', type: 'symbol', source: TRACK_EVENTS_SOURCE_ID,
+      filter: ['==', ['get', 'type'], 'speeding'],
+      layout: { 'text-field': ['get', 'speedLabel'], 'text-size': 13, 'text-offset': [1.1, 0], 'text-anchor': 'left', 'text-allow-overlap': true, 'text-ignore-placement': true },
+      paint: { 'text-color': ['get', 'speedColor'], 'text-halo-color': '#ffffff', 'text-halo-width': 3 },
+    });
+    map.addLayer({
       id: 'vehicle-track-event-icons',
+      filter: ['!=', ['get', 'type'], 'speeding'],
       type: 'symbol',
       source: TRACK_EVENTS_SOURCE_ID,
       layout: {
@@ -575,6 +657,7 @@ function getEventIconColor(
   type: VehicleTrackEventView['type'],
 ): readonly [number, number, number, number] {
   if (type === 'speeding') return [239, 68, 68, 255];
+  if (type === 'fine') return [124, 58, 237, 255];
   if (type === 'connection-loss') return [71, 85, 105, 255];
   if (type === 'refuel') return [37, 99, 235, 255];
   if (type === 'stop') return [245, 158, 11, 255];

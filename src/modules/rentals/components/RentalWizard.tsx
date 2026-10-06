@@ -13,6 +13,7 @@ import {
 
 import { calculateRental, moscowLocalToUtc } from '@/modules/rentals/domain/calculate-rental';
 import { intervalsOverlap } from '@/modules/rentals/domain/availability';
+import type { ReadinessResult } from '@/modules/rentals/readiness/types';
 import {
   confirmAndGenerateRentalAction,
   createRentalDraftAction,
@@ -30,6 +31,7 @@ export type RentalWizardVehicle = {
   available: boolean;
   reasons: readonly string[];
   legalReady?: boolean;
+  readiness?: ReadinessResult;
   rentalIntervals?: readonly { startsAt: string; endsAt: string; status: string }[];
 };
 
@@ -38,7 +40,7 @@ type Props = {
     id: string;
     companyId: string;
     fullName: string;
-    phone: string;
+    phone: string | null;
     passport: string | null;
     driverLicense: string | null;
     driverLicenseExpiresAt: string | null;
@@ -66,6 +68,7 @@ function legalReady(client: Props['client'], templateVersionId: string | null) {
 
 export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
   const [step, setStep] = useState(0);
+  const [agreementType, setAgreementType] = useState<'STANDARD' | 'LEASE_TO_OWN'>('STANDARD');
   const [vehicleId, setVehicleId] = useState('');
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
@@ -112,6 +115,55 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
       return null;
     }
   }, [discountMinor, endsAt, selectedVehicle, servicesMinor, startsAt]);
+  const preflightBlockers = useMemo(() => {
+    const blockers: { code: string; message: string; href?: string }[] = [];
+    if (!client.documentsReady) {
+      blockers.push({
+        code: 'CLIENT_DOCUMENTS',
+        message: 'Загрузите паспорт и водительское удостоверение.',
+        href: `/clients/${client.id}?tab=documents`,
+      });
+    }
+    if (!templateVersionId) {
+      blockers.push({
+        code: 'TEMPLATE',
+        message: 'Опубликуйте шаблон договора.',
+        href: '/admin',
+      });
+    }
+    if (selectedVehicle?.readiness) {
+      blockers.push(
+        ...selectedVehicle.readiness.blockers.map((blocker) => ({
+          code: blocker.code,
+          message: blocker.message,
+          href: blocker.href,
+        })),
+      );
+    }
+    if (selectedVehicle && !selectedAvailable) {
+      selectedReasons.forEach((message, index) =>
+        blockers.push({ code: `VEHICLE_AVAILABILITY_${index}`, message }),
+      );
+    }
+    if (!calculation) {
+      blockers.push({
+        code: 'CALCULATION',
+        message: 'Укажите корректный срок аренды и стоимость.',
+      });
+    }
+    return blockers.filter(
+      (blocker, index, all) =>
+        all.findIndex((candidate) => candidate.message === blocker.message) === index,
+    );
+  }, [
+    calculation,
+    client.documentsReady,
+    client.id,
+    selectedAvailable,
+    selectedReasons,
+    selectedVehicle,
+    templateVersionId,
+  ]);
   const ready = Boolean(
     selectedAvailable &&
     selectedVehicle?.legalReady !== false &&
@@ -229,6 +281,7 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
           <form action={draftFormAction} className="grid min-w-0 gap-5">
             <input type="hidden" name="companyId" value={client.companyId} />
             <input type="hidden" name="clientId" value={client.id} />
+            <input type="hidden" name="agreementType" value={agreementType} />
             <input type="hidden" name="vehicleId" value={vehicleId} />
             <input type="hidden" name="templateVersionId" value={templateVersionId ?? ''} />
             <input
@@ -274,7 +327,7 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                   </div>
                   <div>
                     <dt className="text-[var(--color-text-secondary)]">Телефон</dt>
-                    <dd>{client.phone}</dd>
+                    <dd>{client.phone ?? 'Нет телефона'}</dd>
                   </div>
                   <div>
                     <dt className="text-[var(--color-text-secondary)]">Реквизиты</dt>
@@ -283,6 +336,31 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                     </dd>
                   </div>
                 </dl>
+                <fieldset
+                  role="radiogroup"
+                  aria-label="Тип аренды"
+                  className="mt-4 grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] p-3 sm:grid-cols-2"
+                >
+                  <legend className="px-1 text-sm font-semibold">Тип аренды</legend>
+                  {[
+                    ['STANDARD', 'Обычная аренда'],
+                    ['LEASE_TO_OWN', 'Аренда с правом выкупа'],
+                  ].map(([value, label]) => (
+                    <label
+                      key={value}
+                      className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border px-3 text-sm font-semibold ${agreementType === value ? 'border-[#673AB7] bg-[#673AB7]/10 text-[#673AB7]' : 'border-[var(--color-border)]'}`}
+                    >
+                      <input
+                        type="radio"
+                        name="agreementTypeChoice"
+                        value={value}
+                        checked={agreementType === value}
+                        onChange={() => setAgreementType(value as 'STANDARD' | 'LEASE_TO_OWN')}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </fieldset>
               </section>
             ) : null}
             {step === 1 ? (
@@ -297,12 +375,22 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                   required
                 >
                   <option value="">Выберите автомобиль</option>
-                  {vehicles.map((vehicle) => (
-                    <option key={vehicle.id} value={vehicle.id} disabled={!vehicle.available}>
-                      {vehicle.label}
-                      {vehicle.available ? '' : ` — ${vehicle.reasons.join(', ')}`}
-                    </option>
-                  ))}
+                  {vehicles.map((vehicle) => {
+                    const disabled = !vehicle.available;
+                    const shortReason = vehicle.reasons.includes(
+                      'Автомобиль на техническом обслуживании',
+                    )
+                      ? 'на ТО'
+                      : vehicle.reasons.includes('Автомобиль на мойке')
+                        ? 'на мойке'
+                        : 'недоступен';
+                    return (
+                      <option key={vehicle.id} value={vehicle.id} disabled={disabled}>
+                        {vehicle.label}
+                        {disabled ? ` — ${shortReason}` : ''}
+                      </option>
+                    );
+                  })}
                 </Select>
                 {selectedVehicle && !selectedAvailable ? (
                   <p role="alert" className="text-sm text-[var(--color-danger)]">
@@ -485,17 +573,33 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                 <h2 id="step-documents" className="text-lg font-bold">
                   Документы и юридическая готовность
                 </h2>
-                <p
-                  className={
-                    legalReady(client, templateVersionId)
-                      ? 'text-[var(--color-success)]'
-                      : 'text-[var(--color-danger)]'
-                  }
-                >
-                  {legalReady(client, templateVersionId) && selectedVehicle?.legalReady !== false
-                    ? 'Паспорт, водительское удостоверение и версия договора готовы.'
-                    : 'Не хватает обязательных реквизитов клиента или опубликованной версии договора.'}
-                </p>
+                {preflightBlockers.length === 0 ? (
+                  <p className="text-[var(--color-success)]">
+                    Паспорт, водительское удостоверение и версия договора готовы.
+                  </p>
+                ) : (
+                  <div className="rounded-[var(--radius-md)] border border-[var(--color-danger)]/30 bg-[var(--color-danger-soft)] p-4">
+                    <p className="font-semibold text-[var(--color-danger)]">
+                      Что нужно исправить перед оформлением:
+                    </p>
+                    <ul className="mt-2 grid gap-2 text-sm">
+                      {preflightBlockers.map((blocker) => (
+                        <li key={blocker.code}>
+                          {blocker.href ? (
+                            <Link
+                              className="font-semibold text-[var(--color-primary)] underline"
+                              href={blocker.href}
+                            >
+                              {blocker.message}
+                            </Link>
+                          ) : (
+                            blocker.message
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </section>
             ) : null}
             {step === 5 ? (
@@ -509,10 +613,25 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                     Можно подтвердить и занять автомобиль.
                   </p>
                 ) : (
-                  <p className="flex items-center gap-2 text-[var(--color-danger)]">
-                    <FiAlertTriangle aria-hidden="true" />
-                    Подтверждение доступно после заполнения всех обязательных данных.
-                  </p>
+                  <div className="grid gap-2 text-[var(--color-danger)]">
+                    <p className="flex items-center gap-2 font-semibold">
+                      <FiAlertTriangle aria-hidden="true" />
+                      Подтверждение доступно после заполнения всех обязательных данных.
+                    </p>
+                    <ul className="grid gap-1 text-sm">
+                      {preflightBlockers.map((blocker) => (
+                        <li key={blocker.code}>
+                          {blocker.href ? (
+                            <Link className="underline" href={blocker.href}>
+                              {blocker.message}
+                            </Link>
+                          ) : (
+                            blocker.message
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
                 {calculation ? (
                   <p>

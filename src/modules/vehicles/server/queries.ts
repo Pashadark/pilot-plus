@@ -4,6 +4,8 @@ import { prisma } from '@/database/prisma/client';
 import type { VehicleCardDto, VehicleDetailDto, VehicleOptionDto } from '../types';
 import { deriveVehicleGpsStatus } from '../gps-status';
 import { getEffectiveMaintenanceStatus } from '@/modules/maintenance/effective-status';
+import { latestFuelLevelPercent } from '../current-fuel';
+import { driveTypeFromFeatures, fuelConsumptionFromFeatures } from '../technical-features';
 
 interface VehicleRepository {
   findMany(args: unknown): Promise<unknown[]>;
@@ -19,12 +21,14 @@ interface RawVehicle {
   registrationNumber: string | null;
   vin: string | null;
   transmission: string;
+  manufacturedYear: number | null;
   engineLiters: unknown | null;
   fuelType: VehicleCardDto['fuelType'];
   seats: number;
   dailyPriceMinor: number;
   currency: string;
   odometerKm: unknown | null;
+  engineHours?: unknown | null;
   originalPrice: string;
   features: string[];
   status: VehicleCardDto['status'];
@@ -52,6 +56,8 @@ interface RawVehicle {
     id?: string;
     recordedAt: Date;
     volumeLiters?: unknown | null;
+    levelPercent?: unknown | null;
+    consumption?: unknown | null;
   }[];
   events: {
     id: string;
@@ -143,18 +149,21 @@ type RawVehicleCard = Pick<
   | 'office'
   | 'registrationNumber'
   | 'transmission'
+  | 'manufacturedYear'
   | 'engineLiters'
   | 'fuelType'
   | 'seats'
   | 'dailyPriceMinor'
   | 'currency'
   | 'odometerKm'
+  | 'engineHours'
   | 'originalPrice'
   | 'features'
   | 'status'
   | 'positions'
   | 'rentalOperations'
   | 'trips'
+  | 'fuelRecords'
   | 'images'
 >;
 
@@ -185,12 +194,14 @@ const vehicleCardSelect = {
   office: true,
   registrationNumber: true,
   transmission: true,
+  manufacturedYear: true,
   engineLiters: true,
   fuelType: true,
   seats: true,
   dailyPriceMinor: true,
   currency: true,
   odometerKm: true,
+  engineHours: true,
   originalPrice: true,
   features: true,
   status: true,
@@ -223,6 +234,14 @@ const vehicleCardSelect = {
     select: { startedAt: true },
     orderBy: { startedAt: 'desc' as const },
     take: 1,
+  },
+  fuelRecords: {
+    where: {
+      OR: [{ levelPercent: { not: null } }, { consumption: { not: null } }],
+    },
+    select: { recordedAt: true, levelPercent: true, consumption: true },
+    orderBy: { recordedAt: 'desc' as const },
+    take: 20,
   },
   images: {
     where: { isPrimary: true },
@@ -258,12 +277,14 @@ const vehicleDetailSelect = {
   registrationNumber: true,
   vin: true,
   transmission: true,
+  manufacturedYear: true,
   engineLiters: true,
   fuelType: true,
   seats: true,
   dailyPriceMinor: true,
   currency: true,
   odometerKm: true,
+  engineHours: true,
   originalPrice: true,
   features: true,
   status: true,
@@ -305,7 +326,13 @@ const vehicleDetailSelect = {
     take: 50,
   },
   fuelRecords: {
-    select: { id: true, recordedAt: true, volumeLiters: true },
+    select: {
+      id: true,
+      recordedAt: true,
+      volumeLiters: true,
+      levelPercent: true,
+      consumption: true,
+    },
     orderBy: { recordedAt: 'desc' as const },
     take: 50,
   },
@@ -451,6 +478,8 @@ function mapCard(
 ): VehicleCardDto {
   const position = vehicle.positions[0];
   const operationalReading = vehicle.rentalOperations[0];
+  const manualFuelReading = vehicle.fuelRecords.find((record) => record.levelPercent != null);
+  const consumptionReading = vehicle.fuelRecords.find((record) => record.consumption != null);
   const trip = vehicle.trips[0];
   const activeRental = vehicle.rentals?.find((rental) => rental.status === 'ACTIVE');
   return {
@@ -461,7 +490,12 @@ function mapCard(
     office: vehicle.office,
     registrationNumber: vehicle.registrationNumber,
     transmission: vehicle.transmission,
+    manufacturedYear: vehicle.manufacturedYear,
     engineLiters: optionalNumber(vehicle.engineLiters),
+    driveType: driveTypeFromFeatures(vehicle.features),
+    fuelConsumptionLitersPer100Km:
+      fuelConsumptionFromFeatures(vehicle.features) ??
+      optionalNumber(consumptionReading?.consumption),
     fuelType: vehicle.fuelType,
     seats: vehicle.seats,
     dailyPriceMinor: vehicle.dailyPriceMinor,
@@ -500,9 +534,15 @@ function mapCard(
         position?.odometerKm,
         operationalReading?.mileageKm,
       ),
-      fuelLevelPercent:
-        optionalNumber(position?.fuelLevelPercent) ??
-        optionalNumber(operationalReading?.fuelLevelPercent),
+      engineHours: optionalNumber(vehicle.engineHours),
+      fuelLevelPercent: latestFuelLevelPercent(
+        { value: position?.fuelLevelPercent, recordedAt: position?.recordedAt },
+        {
+          value: operationalReading?.fuelLevelPercent,
+          recordedAt: operationalReading?.occurredAt,
+        },
+        { value: manualFuelReading?.levelPercent, recordedAt: manualFuelReading?.recordedAt },
+      ),
       speedKph: position?.speedKph ?? null,
       lastSeenAt: position?.recordedAt.toISOString() ?? null,
       lastTripAt: trip?.startedAt.toISOString() ?? null,

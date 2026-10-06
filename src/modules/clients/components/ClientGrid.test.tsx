@@ -20,6 +20,7 @@ describe('ClientGrid', () => {
             fullName: 'Анна Воронова',
             email: null,
             phone: '+7 999 123-45-67',
+            additionalPhone: '+7 916 765-43-21',
             phoneMasked: '+7 ••• •••-12-34',
             passportMasked: null,
             driverLicenseMasked: null,
@@ -66,19 +67,25 @@ describe('ClientGrid', () => {
     expect(markup).toContain('Машина');
     expect(markup).toContain('Стоимость аренды');
     expect(markup).toContain('Телефон');
+    expect(markup).toContain('Доп. телефон');
     expect(markup).toContain('+7 999 123-45-67');
+    expect(markup).toContain('+7 916 765-43-21');
     expect(markup).toContain('Депозит');
-    expect(markup).toContain('Статус депозита');
+    expect(markup).toContain('Сумма депозита');
     expect(markup).toContain('Дата возврата');
     expect(markup).toContain('Штрафы');
     expect(markup).toContain('3');
     expect(markup).toContain('12 500 ₽');
-    expect(markup).toContain('Kia · K5');
+    expect(markup).toContain('Kia K5');
+    expect(markup).not.toContain('Kia · K5');
     expect(markup).toContain('В342НР797');
     expect(markup).toContain('Постоянный');
     expect(markup).toContain('20 000 ₽');
     expect(markup).toContain('30 000 ₽');
     expect(markup).toContain('Не возвращён');
+    expect(markup).not.toContain('Статус депозита');
+    expect(markup).not.toContain('Последний ·');
+    expect(markup).not.toContain('В342НР797 · ME-2026-0015-VA');
     expect(markup).toContain('bg-[var(--color-success-soft)]');
     expect(markup).toContain('Открыть');
     expect(markup).toContain('aria-label="Открыть карточку клиента"');
@@ -86,6 +93,8 @@ describe('ClientGrid', () => {
     expect(markup).toContain('h-[72px]');
     expect(markup).toContain('size-9');
     expect(markup).toContain('text-right tabular-nums');
+    expect(markup).toContain('grid gap-3 xl:hidden');
+    expect(markup).toContain('xl:block');
     expect(markup).not.toContain('class="font-bold');
   });
 
@@ -132,5 +141,49 @@ describe('ClientGrid', () => {
 
     expect(markup).toContain('Возвращён');
     expect(markup).toContain('01.09.2026, 11:15');
+  });
+
+  it('renders rental dates in the Moscow business timezone', () => {
+    const markup = renderToStaticMarkup(
+      createElement(ClientGrid, {
+        clients: [
+          {
+            id: 'client-timezone',
+            companyId: 'company-1',
+            fullName: 'Иван Петров',
+            email: null,
+            phone: '+7 900 111-22-33',
+            phoneMasked: '+7 ••• •••-22-33',
+            passportMasked: null,
+            driverLicenseMasked: null,
+            driverLicenseExpiresAt: null,
+            status: 'VERIFIED',
+            updatedAt: '2026-08-26T22:30:00.000Z',
+            localPhotoUrl: null,
+            telegramUrl: null,
+            fineSummary: { total: 0, paidAmountMinor: '0' },
+            rentalSummary: {
+              total: 1,
+              active: 0,
+              current: null,
+              last: {
+                id: 'rental-timezone',
+                contractNumber: 'TZ-001',
+                status: 'COMPLETED',
+                startsAt: '2026-08-20T10:00:00.000Z',
+                endsAt: '2026-08-26T22:30:00.000Z',
+                vehicle: { label: 'Kia · K5', registrationNumber: 'В342НР797' },
+                totalPriceMinor: '3000000',
+                depositMinor: '0',
+                depositStatus: 'NOT_COLLECTED',
+                depositReturnedAt: null,
+              },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain('Последняя: 27.08.26');
   });
 });

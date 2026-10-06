@@ -15,6 +15,21 @@ describe('filterOnlineMapVehicles', () => {
     ]);
   });
 
+  it('находит автомобиль по текущему водителю', () => {
+    const vehicles = [
+      {
+        ...onlineMapVehicles[0],
+        currentRental: {
+          id: 'rental-1',
+          contractNumber: 'ME-2026-0044-AA',
+          clientName: 'Горбунов Артём Денисович',
+        },
+      },
+    ];
+
+    expect(filterOnlineMapVehicles(vehicles, 'горбунов', 'all')).toEqual(vehicles);
+  });
+
   it('оставляет только автомобили в движении', () => {
     expect(
       filterOnlineMapVehicles(onlineMapVehicles, '', 'moving').every(

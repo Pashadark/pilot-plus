@@ -5,6 +5,7 @@ import { useActionState, useEffect } from 'react';
 import { createVehicleAction, updateVehicleAction, type VehicleActionState } from '../actions';
 import { Button, Input, Select, Switch } from '@/shared/ui';
 import { useToast } from '@/shared/providers/ToastProvider';
+import type { VehicleDriveType } from '../../technical-features';
 
 const initialState: VehicleActionState = { ok: false, code: 'IDLE', message: '' };
 
@@ -29,7 +30,10 @@ export type EditableVehicle = {
   category?: string | null;
   bodyType?: string | null;
   engineLiters?: string | null;
+  driveType?: VehicleDriveType;
+  fuelConsumptionLitersPer100Km?: string | null;
   odometerKm?: string | null;
+  fuelLevelPercent?: number | null;
   valueRubles?: string;
   rangePriceRubles?: string;
   depositRubles?: string;
@@ -209,6 +213,27 @@ export function VehicleForm({
           defaultValue={vehicle?.engineLiters ?? ''}
           error={fieldError('engineLiters')}
         />
+        <Select
+          name="driveType"
+          label="Привод"
+          defaultValue={vehicle?.driveType ?? ''}
+          error={fieldError('driveType')}
+        >
+          <option value="">Не указан</option>
+          <option value="FRONT">Передний</option>
+          <option value="REAR">Задний</option>
+          <option value="ALL_WHEEL">Полный</option>
+        </Select>
+        <Input
+          name="fuelConsumptionLitersPer100Km"
+          type="number"
+          min="0"
+          max="99.9"
+          step="0.1"
+          label="Средний расход, л/100 км"
+          defaultValue={vehicle?.fuelConsumptionLitersPer100Km ?? ''}
+          error={fieldError('fuelConsumptionLitersPer100Km')}
+        />
         <Input
           name="odometerKm"
           type="number"
@@ -218,6 +243,19 @@ export function VehicleForm({
           defaultValue={vehicle?.odometerKm ?? ''}
           error={fieldError('odometerKm')}
         />
+        {vehicle && (
+          <Input
+            name="fuelLevelPercent"
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            inputMode="numeric"
+            label="Текущий уровень топлива, %"
+            defaultValue={vehicle.fuelLevelPercent ?? ''}
+            error={fieldError('fuelLevelPercent')}
+          />
+        )}
         <Input
           name="valueRubles"
           inputMode="decimal"

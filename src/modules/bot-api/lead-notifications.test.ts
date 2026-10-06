@@ -14,12 +14,16 @@ const common = {
 };
 
 describe('lead Telegram messages', () => {
+  it('renders a missing Avito phone explicitly', () => {
+    expect(formatLeadCreatedMessage({ ...common, phone: '' })).toContain('Телефон не указан');
+  });
   it('formats a new lead with an explicit unscheduled state', () => {
     const message = formatLeadCreatedMessage(common);
 
     expect(message).toContain('📥 <b>Новая заявка</b>');
     expect(message).toContain('<b>Анна</b>');
     expect(message).toContain('Время не назначено');
+    expect(message).not.toContain('\n\n');
     expect(message).toContain('<a href="https://supapro.ru/leads">Открыть заявки</a>');
   });
 

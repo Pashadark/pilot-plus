@@ -6,6 +6,16 @@ const response = (body: unknown, status = 200, contentType = 'application/json')
   new Response(JSON.stringify(body), { status, headers: { 'content-type': contentType } });
 
 describe('Driver Helper API client', () => {
+  it('loads paginated road debts from the provider endpoint', async () => {
+    const transport = vi
+      .fn()
+      .mockResolvedValue(response({ totalCount: 0, current: 1, last: 1, items: [] }));
+    const client = new DriverHelperClient({ token: 'secret', transport });
+    await expect(client.listTollDebts(1)).resolves.toMatchObject({ items: [] });
+    expect(transport.mock.calls[0][0].url).toBe(
+      'https://api.driver-helper.ru/v1.0/ckad-cars/debt-trips?page=1&perPage=50',
+    );
+  });
   it('checks invoices with the exact form-encoded fine IDs', async () => {
     const transport = vi
       .fn()

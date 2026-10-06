@@ -2,6 +2,7 @@ import 'server-only';
 
 import { prisma } from '@/database/prisma/client';
 import type { RentalWizardVehicle } from '@/modules/rentals/components/RentalWizard';
+import { evaluateVehicleReadiness } from '@/modules/rentals/readiness/evaluate-vehicle-readiness';
 
 export async function listRentalDraftVehicleOptions(
   companyId: string,
@@ -16,6 +17,7 @@ export async function listRentalDraftVehicleOptions(
       registrationNumber: true,
       vin: true,
       dailyPriceMinor: true,
+      depositMinor: true,
       isRentalReady: true,
       status: true,
       registrationCertificateNumber: true,
@@ -38,6 +40,11 @@ export async function listRentalDraftVehicleOptions(
   });
 
   return vehicles.map((vehicle) => {
+    const readiness = evaluateVehicleReadiness({
+      ...vehicle,
+      id: vehicle.id,
+      archivedAt: null,
+    });
     const reasons = [
       ...(vehicle.status === 'MAINTENANCE' ? ['Автомобиль на техническом обслуживании'] : []),
       ...(vehicle.washRecords.length ? ['Автомобиль на мойке'] : []),
@@ -50,21 +57,8 @@ export async function listRentalDraftVehicleOptions(
       dailyMinor: vehicle.dailyPriceMinor,
       available: reasons.length === 0,
       reasons,
-      legalReady: Boolean(
-        vehicle.isRentalReady &&
-        vehicle.registrationNumber &&
-        vehicle.vin &&
-        vehicle.registrationCertificateNumber &&
-        vehicle.vehiclePassportNumber &&
-        vehicle.osagoInsurer &&
-        vehicle.osagoPolicyNumber &&
-        vehicle.osagoStartsAt &&
-        vehicle.osagoEndsAt &&
-        vehicle.cascoInsurer &&
-        vehicle.cascoPolicyNumber &&
-        vehicle.cascoStartsAt &&
-        vehicle.cascoEndsAt,
-      ),
+      legalReady: readiness.ready,
+      readiness,
       rentalIntervals: vehicle.rentals.map((rental) => ({
         ...rental,
         startsAt: rental.startsAt.toISOString(),

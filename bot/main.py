@@ -5,6 +5,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 
 from bot.config import Settings
 from bot.handlers.start import router as start_router
+from bot.handlers.customer import router as customer_router
 from bot.handlers.rentals import router as rentals_router
 from bot.handlers.staff import router as staff_router
 from bot.handlers.staff_operations import router as staff_operations_router
@@ -18,6 +19,7 @@ async def main() -> None:
     storage = RedisStorage.from_url(str(settings.redis_url))
     dispatcher = Dispatcher(storage=storage)
     dispatcher.include_router(start_router)
+    dispatcher.include_router(customer_router)
     dispatcher.include_router(rentals_router)
     dispatcher.include_router(staff_operations_router)
     dispatcher.include_router(staff_router)

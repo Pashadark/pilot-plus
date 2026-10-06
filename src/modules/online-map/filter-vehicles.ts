@@ -23,6 +23,8 @@ export function filterOnlineMapVehicles(
     (vehicle) =>
       (filter === 'all' || vehicle.gpsStatus.key === gpsStatusByFilter[filter]) &&
       (!normalizedQuery ||
-        normalizeSearchValue(`${vehicle.name}${vehicle.plate}`).includes(normalizedQuery)),
+        normalizeSearchValue(
+          `${vehicle.name}${vehicle.plate}${vehicle.currentRental?.clientName ?? ''}${vehicle.currentRental?.contractNumber ?? ''}`,
+        ).includes(normalizedQuery)),
   );
 }

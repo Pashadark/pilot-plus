@@ -159,11 +159,17 @@ function PasswordForm() {
   );
 }
 
-export function ProfileForms({ user }: { user: SafeUser }) {
+export function ProfileForms({
+  user,
+  section = 'all',
+}: {
+  user: SafeUser;
+  section?: 'all' | 'profile' | 'security';
+}) {
   return (
     <div className="grid min-w-0 gap-5 xl:grid-cols-2">
-      <BasicProfileForm user={user} />
-      <PasswordForm />
+      {(section === 'all' || section === 'profile') && <BasicProfileForm user={user} />}
+      {(section === 'all' || section === 'security') && <PasswordForm />}
     </div>
   );
 }

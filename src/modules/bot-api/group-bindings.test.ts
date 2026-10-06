@@ -19,13 +19,11 @@ describe('bindTelegramWorkGroup', () => {
       companyMember: { findFirst: vi.fn().mockResolvedValue({ role: 'COMPANY_ADMIN' }) },
       telegramGroupBinding: {
         findUnique: vi.fn().mockResolvedValue(null),
-        upsert: vi
-          .fn()
-          .mockResolvedValue({
-            companyId: 'company-1',
-            telegramChatId: '-100123',
-            title: 'СУПА ПРО',
-          }),
+        upsert: vi.fn().mockResolvedValue({
+          companyId: 'company-1',
+          telegramChatId: '-100123',
+          title: 'СУПА ПРО',
+        }),
       },
       auditLog: { create: vi.fn().mockResolvedValue({}) },
     };

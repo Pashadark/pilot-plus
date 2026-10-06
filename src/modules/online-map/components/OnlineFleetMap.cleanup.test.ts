@@ -7,7 +7,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { createElement } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-import { buildTrackPeriodViewModel, getVehicleTrack } from '../track-model';
+import { getVehicleTrack } from '../track-fixture-model';
+import { buildTrackPeriodViewModel } from '../track-model';
 import type { VehicleTrackPeriodViewModel } from '../track-types';
 import type { OnlineMapVehicle } from '../types';
 import { OnlineFleetMap } from './OnlineFleetMap';
@@ -44,8 +45,10 @@ const mapMocks = vi.hoisted(() => {
     mapRemoveSource: vi.fn(),
     mapSetFeatureState: vi.fn(),
     mapFitBounds: vi.fn(),
+    mapConstruct: vi.fn(),
     resizeObserverCallbacks: [] as ResizeObserverCallback[],
     markerRemove: vi.fn(),
+    markerSetLngLat: vi.fn(),
     popupRemove: vi.fn(),
     popupOptions: [] as unknown[],
     reactRootContainers: [] as (Element | Document | DocumentFragment)[],
@@ -78,6 +81,10 @@ vi.mock('react-dom/client', async (importOriginal) => {
 
 vi.mock('maplibre-gl', () => {
   class Map {
+    constructor() {
+      mapMocks.mapConstruct();
+    }
+
     getCanvas = vi.fn(() => mapMocks.canvas);
     getContainer = vi.fn(() => mapMocks.mapContainer);
     addControl = vi.fn();
@@ -109,7 +116,8 @@ vi.mock('maplibre-gl', () => {
       this.element = options?.element ?? document.createElement('div');
     }
 
-    setLngLat() {
+    setLngLat(coordinates: [number, number]) {
+      mapMocks.markerSetLngLat(coordinates);
       return this;
     }
 
@@ -237,15 +245,35 @@ it('откладывает размонтирование вложенных Rea
   expect(source).not.toContain('root.unmount();');
 });
 
-it('не пересоздаёт карту из-за нового массива с теми же данными автомобилей', () => {
-  const source = readFileSync(
-    resolve('src/modules/online-map/components/OnlineFleetMap.tsx'),
-    'utf8',
+it('не пересоздаёт карту при GPS-обновлении активной машины', () => {
+  const props = {
+    vehicles,
+    selectedVehicleId: vehicles[0].id,
+    trackViewModel: null,
+    playbackPoint: null,
+    selectedEventId: null,
+    previewedEventId: null,
+    previewedSegmentId: null,
+    onVehicleSelect: vi.fn(),
+    onEventPreview: vi.fn(),
+    onEventActivate: vi.fn(),
+    onSegmentPreview: vi.fn(),
+  };
+  const { rerender } = render(createElement(OnlineFleetMap, props));
+
+  expect(mapMocks.mapConstruct).toHaveBeenCalledTimes(1);
+  mapMocks.markerSetLngLat.mockClear();
+
+  rerender(
+    createElement(OnlineFleetMap, {
+      ...props,
+      vehicles: [{ ...vehicles[0], latitude: 56.019, longitude: 92.861 }],
+    }),
   );
 
-  expect(source).toContain('const vehiclesSnapshotKey = JSON.stringify(vehicles);');
-  expect(source).toContain('[instanceKey, positionedVehicles]');
-  expect(source).not.toContain('[instanceKey, vehicles]');
+  expect(mapMocks.mapConstruct).toHaveBeenCalledTimes(1);
+  expect(mapMocks.mapRemove).not.toHaveBeenCalled();
+  expect(mapMocks.markerSetLngLat).toHaveBeenCalledWith([92.861, 56.019]);
 });
 
 it('поднимает мобильные контролы карты над панелью высотой 48dvh и safe area', () => {
@@ -326,6 +354,28 @@ it('оставляет data probe маршрута вне последовате
   expect(probe.querySelectorAll('[tabindex]')).toHaveLength(0);
 });
 
+it('сохраняет масштаб при обновлении точек того же маршрута', async () => {
+  const track = getTrackViewModel('lada-vesta-a123mr77');
+  const props = {
+    vehicles,
+    selectedVehicleId: vehicles[0].id,
+    playbackPoint: track.start,
+    selectedEventId: null,
+    previewedEventId: null,
+    previewedSegmentId: null,
+    onVehicleSelect: vi.fn(),
+    onEventPreview: vi.fn(),
+    onEventActivate: vi.fn(),
+    onSegmentPreview: vi.fn(),
+  };
+  const { rerender } = render(createElement(OnlineFleetMap, { ...props, trackViewModel: track }));
+  act(() => mapMocks.fireLoad());
+  await waitFor(() => expect(mapMocks.mapFitBounds).toHaveBeenCalled());
+  mapMocks.mapFitBounds.mockClear();
+  rerender(createElement(OnlineFleetMap, { ...props, trackViewModel: { ...track } }));
+  expect(mapMocks.mapFitBounds).not.toHaveBeenCalled();
+});
+
 it('удаляет обработчики, popup, источники и слои маршрута при смене автомобиля', async () => {
   const firstTrack = getTrackViewModel('lada-vesta-a123mr77');
   const secondTrack = getTrackViewModel('haval-jolion-v456kh178');
@@ -364,6 +414,8 @@ it('удаляет обработчики, popup, источники и слои
   );
   expect(mapMocks.mapRemoveLayer).toHaveBeenCalledWith('vehicle-track-lines');
   expect(mapMocks.mapRemoveSource).toHaveBeenCalledWith('vehicle-track');
+  expect(mapMocks.mapRemoveLayer).toHaveBeenCalledWith('vehicle-track-gradient-0');
+  expect(mapMocks.mapRemoveSource).toHaveBeenCalledWith('vehicle-track-gradient-0');
   expect(mapMocks.popupRemove).toHaveBeenCalled();
 });
 
@@ -388,7 +440,7 @@ it('монтирует новый маршрут сразу после перв�
   );
 
   act(() => mapMocks.fireLoad());
-  await waitFor(() => expect(mapMocks.mapAddSource).toHaveBeenCalledTimes(3));
+  await waitFor(() => expect(mapMocks.mapAddSource).toHaveBeenCalledTimes(4));
   mapMocks.mapAddSource.mockClear();
 
   rerender(
@@ -399,7 +451,7 @@ it('монтирует новый маршрут сразу после перв�
     }),
   );
 
-  await waitFor(() => expect(mapMocks.mapAddSource).toHaveBeenCalledTimes(3));
+  await waitFor(() => expect(mapMocks.mapAddSource).toHaveBeenCalledTimes(4));
 });
 
 it('сериализует сегменты и события в GeoJSON без потери координат маршрута', async () => {
@@ -413,7 +465,10 @@ it('сериализует сегменты и события в GeoJSON без 
     id: track.segments[0].id,
     geometry: {
       type: 'LineString',
-      coordinates: [track.segments[0].from.coordinates, track.segments[0].to.coordinates],
+      coordinates: expect.arrayContaining([
+        track.segments[0].from.coordinates,
+        track.segments[0].to.coordinates,
+      ]),
     },
     properties: {
       color: '#22c55e',
@@ -422,6 +477,8 @@ it('сериализует сегменты и события в GeoJSON без 
       tripIndex: 0,
     },
   });
+  expect(segments.features[0].geometry.coordinates).toHaveLength(7);
+  expect(segments.features.some((feature) => feature.properties.color === '#f97316')).toBe(true);
   expect(events.features[0]).toMatchObject({
     id: track.events[0].id,
     geometry: {
@@ -434,12 +491,13 @@ it('сериализует сегменты и события в GeoJSON без 
   });
 });
 
-it('создаёт шесть различных raster-иконок событий без зависимости от map font glyphs', async () => {
+it('создаёт семь различных raster-иконок событий, включая штраф', async () => {
   const { createTrackEventIconImage, getTrackEventIconId } = await import('./VehicleTrackLayers');
   const types = [
     'stop',
     'refuel',
     'speeding',
+    'fine',
     'connection-loss',
     'geofence-enter',
     'geofence-exit',
@@ -447,9 +505,9 @@ it('создаёт шесть различных raster-иконок событ�
   const ids = types.map(getTrackEventIconId);
   const images = types.map(createTrackEventIconImage);
 
-  expect(new Set(ids).size).toBe(6);
+  expect(new Set(ids).size).toBe(7);
   expect(images.every((image) => image.width === 24 && image.height === 24)).toBe(true);
-  expect(new Set(images.map((image) => Array.from(image.data).join(','))).size).toBe(6);
+  expect(new Set(images.map((image) => Array.from(image.data).join(','))).size).toBe(7);
 });
 
 it('вычисляет fit padding по ширине контейнера карты, а не окна', async () => {
@@ -465,7 +523,7 @@ it('вычисляет fit padding по ширине контейнера кар
     top: 72,
     right: 416,
     bottom: 88,
-    left: 32,
+    left: 392,
   });
 });
 
@@ -506,7 +564,7 @@ it('повторно вписывает маршрут при смене contain
   expect(mapMocks.mapFitBounds).toHaveBeenCalledWith(
     expect.anything(),
     expect.objectContaining({
-      padding: { top: 72, right: 416, bottom: 88, left: 32 },
+      padding: { top: 72, right: 416, bottom: 88, left: 392 },
     }),
   );
 
@@ -568,7 +626,7 @@ it('регистрирует видимую линию, hitbox, события, 
     expect.objectContaining({
       id: 'vehicle-track-lines',
       paint: expect.objectContaining({
-        'line-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.95, 0.72],
+        'line-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.2, 0],
         'line-offset': ['match', ['get', 'tripIndex'], 1, -5, 2, 5, 0],
       }),
     }),
@@ -579,6 +637,13 @@ it('регистрирует видимую линию, hitbox, события, 
       paint: expect.objectContaining({ 'line-width': 16 }),
     }),
   );
+  expect(mapMocks.mapAddSource).toHaveBeenCalledWith('vehicle-track-gradient-0',
+    expect.objectContaining({lineMetrics: true}));
+  expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(expect.objectContaining({
+    id: 'vehicle-track-gradient-0', paint: expect.objectContaining({
+      'line-gradient': expect.arrayContaining([['line-progress']]),
+    }),
+  }));
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
     expect.objectContaining({ id: 'vehicle-track-events', type: 'circle' }),
   );
@@ -621,7 +686,7 @@ it('регистрирует видимую линию, hitbox, события, 
   expect(eventClickHandler).toBeTypeOf('function');
   eventClickHandler?.({ features: [{ id: track.eventGroups[0].id }] });
   expect(onEventActivate).toHaveBeenCalledExactlyOnceWith(track.eventGroups[0]);
-  expect(mapMocks.mapAddImage).toHaveBeenCalledTimes(6);
+  expect(mapMocks.mapAddImage).toHaveBeenCalledTimes(7);
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
     expect.objectContaining({
       id: 'vehicle-track-event-icons',
@@ -649,7 +714,7 @@ it('регистрирует видимую линию, hitbox, события, 
     'vehicle-track-event-hitbox',
     expect.any(Function),
   );
-  expect(mapMocks.mapRemoveImage).toHaveBeenCalledTimes(6);
+  expect(mapMocks.mapRemoveImage).toHaveBeenCalledTimes(7);
   expect(mapMocks.mapContainer.dataset.trackCasingWidth).toBeUndefined();
   expect(mapMocks.mapContainer.dataset.trackLineOffset).toBeUndefined();
 });

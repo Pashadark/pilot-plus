@@ -9,6 +9,10 @@ import { ClientPhoto } from './ClientPhoto';
 import { ClientRatingStars } from '@/modules/client-rating/components/ClientRatingStars';
 import { formatMinorMoney, presentClientDeposit } from './client-deposit';
 
+function withoutMiddleDots(value: string) {
+  return value.replace(/\s*·\s*/g, ' ');
+}
+
 export const clientStatusView: Record<
   ClientStatus,
   { label: string; tone: 'neutral' | 'warning' | 'success' | 'danger' }
@@ -73,7 +77,14 @@ export function ClientCard({
                   {client.fullName}
                 </Link>
               </h2>
-              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{client.phone}</p>
+              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+                {client.phone ?? 'Нет телефона'}
+              </p>
+              {client.additionalPhone ? (
+                <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
+                  Доп.: {client.additionalPhone}
+                </p>
+              ) : null}
               {rating ? (
                 <div className="mt-2">
                   <ClientRatingStars rating={rating} compact />
@@ -90,16 +101,22 @@ export function ClientCard({
             <div>
               Штрафы:{' '}
               <strong className="text-[var(--color-text)]">{client.fineSummary.total}</strong>
-              {' · '}Оплачено:{' '}
+            </div>
+            <div>
+              Оплачено:{' '}
               <strong className="text-[var(--color-text)]">
                 {formatMinorMoney(client.fineSummary.paidAmountMinor)}
               </strong>
             </div>
-            <div>
-              {selectedRental
-                ? `${selectedRental.vehicle.label} · ${selectedRental.vehicle.registrationNumber ?? 'Без номера'}`
-                : 'Нет аренды'}
-            </div>
+            {selectedRental ? (
+              <div className="grid gap-0.5">
+                <span>{withoutMiddleDots(selectedRental.vehicle.label)}</span>
+                <span>{selectedRental.vehicle.registrationNumber ?? 'Без номера'}</span>
+                {selectedRental.contractNumber ? <span>{selectedRental.contractNumber}</span> : null}
+              </div>
+            ) : (
+              <div>Нет аренды</div>
+            )}
             <div>
               Стоимость:{' '}
               <strong className="text-[var(--color-text)]">
@@ -107,9 +124,10 @@ export function ClientCard({
               </strong>
             </div>
             <div>
-              Депозит: <strong className="text-[var(--color-text)]">{deposit.amount}</strong>
-              {deposit.label ? ` · ${deposit.label}` : ''}
+              Сумма депозита:{' '}
+              <strong className="text-[var(--color-text)]">{deposit.amount}</strong>
             </div>
+            {deposit.label ? <div>Депозит: <strong className="text-[var(--color-text)]">{deposit.label}</strong></div> : null}
             <div>
               Дата возврата:{' '}
               <strong className="text-[var(--color-text)]">{deposit.returnedAtLabel}</strong>

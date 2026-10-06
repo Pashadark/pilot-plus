@@ -3,7 +3,15 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { useActionState, useCallback, useEffect, useMemo, useState } from 'react';
-import { FiAlertTriangle, FiCheckCircle, FiClock, FiPlus, FiSearch, FiTool } from 'react-icons/fi';
+import {
+  FiAlertTriangle,
+  FiCheckCircle,
+  FiChevronDown,
+  FiClock,
+  FiPlus,
+  FiSearch,
+  FiTool,
+} from 'react-icons/fi';
 
 import { transitionMaintenanceAction } from '../actions';
 import { maintenanceToCalendarEvent } from '../calendar';
@@ -128,6 +136,7 @@ export function MaintenanceWorkspace({
     () => records.filter((record) => matchesFilters(record, filters)),
     [filters, records],
   );
+  const advancedFilterCount = [filters.recordType, filters.kind].filter(Boolean).length;
   const summary = useMemo(
     () => calculateMaintenanceSummary(records, new Date(referenceTime)),
     [records, referenceTime],
@@ -256,75 +265,92 @@ export function MaintenanceWorkspace({
       {view === 'list' ? (
         <section
           aria-label="Фильтры технического обслуживания"
-          className="grid min-w-0 gap-3 rounded-[var(--radius-panel)] border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)] lg:grid-cols-[minmax(15rem,1fr)_repeat(3,minmax(9rem,0.35fr))_auto] lg:items-end"
+          className="grid min-w-0 gap-3 rounded-[var(--radius-panel)] border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]"
         >
-          <label className="grid min-w-0 gap-1.5">
-            <span className="text-sm font-medium">Поиск</span>
-            <span className="relative block min-w-0">
-              <FiSearch
-                aria-hidden="true"
-                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--color-text-tertiary)]"
-              />
-              <SearchInput
-                value={filters.query}
-                onChange={(event) => setFilters({ ...filters, query: event.target.value })}
-                aria-label="Поиск по обслуживанию"
-                placeholder="Работа, автомобиль или сервис"
-                className="min-w-0 pl-9"
-              />
-            </span>
-          </label>
-          <Select
-            label="Статус"
-            value={filters.status}
-            onChange={(event) =>
-              setFilters({ ...filters, status: event.target.value as Filters['status'] })
-            }
+          <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(15rem,1fr)_minmax(12rem,0.4fr)] lg:items-end">
+            <label className="grid min-w-0 gap-1.5">
+              <span className="text-sm font-medium">Поиск</span>
+              <span className="relative block min-w-0">
+                <FiSearch
+                  aria-hidden="true"
+                  className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--color-text-tertiary)]"
+                />
+                <SearchInput
+                  value={filters.query}
+                  onChange={(event) => setFilters({ ...filters, query: event.target.value })}
+                  aria-label="Поиск по обслуживанию"
+                  placeholder="Работа, автомобиль или сервис"
+                  className="min-w-0 pl-9"
+                />
+              </span>
+            </label>
+            <Select
+              label="Статус"
+              value={filters.status}
+              onChange={(event) =>
+                setFilters({ ...filters, status: event.target.value as Filters['status'] })
+              }
+            >
+              <option value="">Все статусы</option>
+              {Object.entries(maintenanceStatusView).map(([value, statusView]) => (
+                <option key={value} value={value}>
+                  {statusView.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <details
+            data-testid="maintenance-advanced-filters"
+            open={advancedFilterCount > 0 || undefined}
+            className="group border-t border-[var(--color-border)] pt-3"
           >
-            <option value="">Все статусы</option>
-            {Object.entries(maintenanceStatusView).map(([value, statusView]) => (
-              <option key={value} value={value}>
-                {statusView.label}
-              </option>
-            ))}
-          </Select>
-          <Select
-            label="Раздел"
-            value={filters.recordType}
-            onChange={(event) =>
-              setFilters({ ...filters, recordType: event.target.value as Filters['recordType'] })
-            }
-          >
-            <option value="">ТО и ремонты</option>
-            <option value="MAINTENANCE">Только ТО</option>
-            <option value="REPAIR">Только ремонты</option>
-          </Select>
-          <Select
-            label="Вид ТО"
-            value={filters.kind}
-            onChange={(event) =>
-              setFilters({ ...filters, kind: event.target.value as Filters['kind'] })
-            }
-          >
-            <option value="">Все виды</option>
-            {Object.entries(maintenanceKindLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
-          <Button
-            variant="ghost"
-            onClick={() => setFilters(initialFilters)}
-            disabled={
-              filters.query === initialFilters.query &&
-              filters.status === initialFilters.status &&
-              filters.kind === initialFilters.kind &&
-              filters.recordType === initialFilters.recordType
-            }
-          >
-            Сбросить
-          </Button>
+            <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between rounded-[var(--radius-sm)] px-2 text-sm font-semibold text-[var(--color-primary)] hover:bg-[var(--color-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]">
+              <span>Все фильтры{advancedFilterCount ? ` · ${advancedFilterCount}` : ''}</span>
+              <FiChevronDown aria-hidden className="transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-3 md:items-end">
+              <Select
+                label="Раздел"
+                value={filters.recordType}
+                onChange={(event) =>
+                  setFilters({
+                    ...filters,
+                    recordType: event.target.value as Filters['recordType'],
+                  })
+                }
+              >
+                <option value="">ТО и ремонты</option>
+                <option value="MAINTENANCE">Только ТО</option>
+                <option value="REPAIR">Только ремонты</option>
+              </Select>
+              <Select
+                label="Вид ТО"
+                value={filters.kind}
+                onChange={(event) =>
+                  setFilters({ ...filters, kind: event.target.value as Filters['kind'] })
+                }
+              >
+                <option value="">Все виды</option>
+                {Object.entries(maintenanceKindLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+              <Button
+                variant="ghost"
+                onClick={() => setFilters(initialFilters)}
+                disabled={
+                  filters.query === initialFilters.query &&
+                  filters.status === initialFilters.status &&
+                  filters.kind === initialFilters.kind &&
+                  filters.recordType === initialFilters.recordType
+                }
+              >
+                Сбросить
+              </Button>
+            </div>
+          </details>
         </section>
       ) : null}
 
@@ -359,7 +385,7 @@ export function MaintenanceWorkspace({
         <>
           <div
             data-testid="maintenance-desktop-table"
-            className="hidden min-w-0 overflow-x-auto rounded-[var(--radius-panel)] border bg-[var(--color-surface)] shadow-[var(--shadow-card)] md:block"
+            className="hidden min-w-0 overflow-x-auto rounded-[var(--radius-panel)] border bg-[var(--color-surface)] shadow-[var(--shadow-card)] xl:block"
           >
             {visibleRecords.length ? (
               <table className="w-full min-w-[60rem] border-collapse text-left text-sm">
@@ -458,7 +484,7 @@ export function MaintenanceWorkspace({
             )}
           </div>
 
-          <div data-testid="maintenance-mobile-list" className="grid min-w-0 gap-3 md:hidden">
+          <div data-testid="maintenance-mobile-list" className="grid min-w-0 gap-3 xl:hidden">
             {visibleRecords.length ? (
               visibleRecords.map((record) => (
                 <MaintenanceRecordCard

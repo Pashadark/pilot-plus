@@ -20,6 +20,7 @@ interface OnlineMapRow {
     latitude: unknown;
     longitude: unknown;
     speedKph: number | null;
+    heading: number | null;
     fuelLevelPercent: unknown | null;
     address: string | null;
     recordedAt: Date;
@@ -70,6 +71,7 @@ export async function listOnlineMapVehicles(
           latitude: true,
           longitude: true,
           speedKph: true,
+          heading: true,
           fuelLevelPercent: true,
           address: true,
           recordedAt: true,
@@ -122,6 +124,7 @@ export async function listOnlineMapVehicles(
         longitude: null,
         latitude: null,
         speedKph: 0,
+        heading: null,
         fuelPercent: null,
         recordedAt: null,
         lastSeenLabel: 'сигнал ещё не получен',
@@ -149,6 +152,7 @@ export async function listOnlineMapVehicles(
       longitude: hasCoordinates ? longitude : null,
       latitude: hasCoordinates ? latitude : null,
       speedKph,
+      heading: position.heading,
       fuelPercent: position.fuelLevelPercent == null ? null : Number(position.fuelLevelPercent),
       recordedAt: position.recordedAt.toISOString(),
       lastSeenLabel: lastSeenLabel(position.recordedAt, now),

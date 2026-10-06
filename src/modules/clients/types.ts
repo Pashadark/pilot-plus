@@ -8,7 +8,8 @@ export type ClientInput = {
   middleName: string | null;
   lastName: string;
   birthDate: Date | null;
-  phone: string;
+  phone: string | null;
+  additionalPhone: string | null;
   email: string | null;
   passport: string | null;
   registrationAddress: string | null;
@@ -41,7 +42,8 @@ export type ClientCardDto = {
   companyId: string;
   fullName: string;
   email: string | null;
-  phone: string;
+  phone: string | null;
+  additionalPhone?: string | null;
   phoneMasked: string;
   passportMasked: string | null;
   driverLicenseMasked: string | null;
@@ -67,8 +69,13 @@ export type ClientDetailDto = ClientCardDto & {
   middleName: string | null;
   lastName: string;
   birthDate: string | null;
-  phone: string;
+  phone: string | null;
   passport: string | null;
+  passportSeries?: string;
+  passportNumber?: string;
+  passportIssuedBy?: string;
+  passportIssuedAt?: string;
+  passportDivisionCode?: string;
   registrationAddress?: string | null;
   actualAddress?: string | null;
   driverLicense: string | null;
@@ -121,5 +128,30 @@ export type ClientRentalWorkspaceDto = {
       evidenceMissingReason: string | null;
       actorName: string;
     }>;
+  }>;
+};
+
+export type ClientFineWorkspaceDto = {
+  summary: { total: number; unpaid: number; unpaidAmountMinor: string };
+  fines: Array<{
+    id: string;
+    decreeNumber: string;
+    decreeAt: string | null;
+    offenseAt: string;
+    currentAmountMinor: string;
+    originalAmountMinor: string;
+    status: 'NEW' | 'UNPAID' | 'PAID' | 'OVERDUE';
+    description: string | null;
+    articleCode: string | null;
+    address: string | null;
+    assignmentConfirmedAt: string;
+    assignmentSource: 'AUTOMATIC' | 'AUTO_EXACT' | 'MANUAL' | null;
+    vehicle: { id: string; label: string; registrationNumber: string | null } | null;
+    rental: {
+      id: string;
+      contractNumber: string | null;
+      startsAt: string;
+      endsAt: string;
+    } | null;
   }>;
 };

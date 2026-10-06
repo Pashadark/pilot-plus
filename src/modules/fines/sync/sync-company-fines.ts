@@ -55,6 +55,7 @@ export async function syncCompanyFinesWithDependencies<Car, NormalizedCar, Fine,
   let created = 0;
   let updated = 0;
   let unmatched = 0;
+  let skipped = 0;
   const providerFines = [
     ...(await allPages(dependencies.listFines)),
     ...(await allPages(dependencies.listPaidFines)),
@@ -65,6 +66,10 @@ export async function syncCompanyFinesWithDependencies<Car, NormalizedCar, Fine,
     normalizedFines.set(fine.externalId, fine);
   }
   for (const fine of normalizedFines.values()) {
+    if (!(fine.offenseAt instanceof Date) || !Number.isFinite(fine.offenseAt.getTime())) {
+      skipped += 1;
+      continue;
+    }
     const vehicleId = fine.providerVehicleId
       ? (vehicleByExternalId.get(fine.providerVehicleId) ?? null)
       : null;
@@ -74,5 +79,5 @@ export async function syncCompanyFinesWithDependencies<Car, NormalizedCar, Fine,
     else updated += 1;
   }
 
-  return { ok: true as const, received: normalizedFines.size, created, updated, unmatched };
+  return { ok: true as const, received: normalizedFines.size, created, updated, unmatched, ...(skipped ? { skipped } : {}) };
 }

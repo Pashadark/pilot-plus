@@ -49,7 +49,7 @@ function fullName(input: LeadMessageBase) {
 function leadDetails(input: LeadMessageBase) {
   return [
     `👤 <b>${escapeHtml(fullName(input))}</b>`,
-    `📞 <code>${escapeHtml(input.phone ?? 'Телефон недоступен')}</code>`,
+    `📞 <code>${escapeHtml(input.phone?.trim() || 'Телефон не указан')}</code>`,
     `📍 Источник: <b>${escapeHtml(input.source ?? 'Не указан')}</b>`,
     `🕒 Следующий контакт: <b>${input.nextContactAt ? escapeHtml(displayDate(input.nextContactAt)) : 'Время не назначено'}</b>`,
   ];
@@ -58,11 +58,9 @@ function leadDetails(input: LeadMessageBase) {
 export function formatLeadCreatedMessage(input: LeadMessageBase) {
   return [
     '📥 <b>Новая заявка</b>',
-    '',
     ...leadDetails(input),
     `👨‍💼 Ответственный: <b>${escapeHtml(input.assignedToName ?? 'Не назначен')}</b>`,
     `🗓 Создана: <b>${escapeHtml(displayDate(input.createdAt))}</b>`,
-    '',
     `🔗 <a href="${escapeHtml(input.leadsUrl)}">Открыть заявки</a>`,
   ].join('\n');
 }
@@ -70,11 +68,9 @@ export function formatLeadCreatedMessage(input: LeadMessageBase) {
 export function formatLeadStatusChangedMessage(input: LeadStatusMessage) {
   return [
     '🔄 <b>Статус заявки изменён</b>',
-    '',
     ...leadDetails(input),
     `📌 <b>${LEAD_STATUS_LABELS[input.previousStatus]} → ${LEAD_STATUS_LABELS[input.status]}</b>`,
     `👨‍💼 Изменил: <b>${escapeHtml(input.actorName ?? 'Сотрудник')}</b>`,
-    '',
     `🔗 <a href="${escapeHtml(input.leadsUrl)}">Открыть заявки</a>`,
   ].join('\n');
 }

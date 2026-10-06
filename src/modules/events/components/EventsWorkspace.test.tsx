@@ -41,6 +41,11 @@ const event = {
     fuelLevelPercent: 45.5,
     fuelVolumeLiters: 37.2,
   },
+  assignment: {
+    rentalId: 'rental-1',
+    contractNumber: 'Д-021',
+    people: ['Иванов Иван Иванович'],
+  },
   source: { type: 'vehicle-event', id: 'event-1', href: '/vehicles/vehicle-1?tab=events' },
 };
 
@@ -72,6 +77,11 @@ describe('workspace истории событий', () => {
     expect(screen.getByText(/Пробег: 12\s345 км/)).toBeTruthy();
     expect(screen.getByText('Уровень топлива: 45,5 %')).toBeTruthy();
     expect(screen.getByText('Объём топлива: 37,2 л')).toBeTruthy();
+    expect(screen.getByText(/27 июл\. 2026 г\., 12:00/)).toBeTruthy();
+    expect(screen.getByText('Кто управлял: Иванов Иван Иванович')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Договор Д-021' }).getAttribute('href')).toBe(
+      '/rentals/rental-1',
+    );
     expect(screen.getByTestId('events-desktop-filters')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Открыть фильтры' })).toBeTruthy();
   });

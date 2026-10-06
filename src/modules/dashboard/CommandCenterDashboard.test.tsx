@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CommandCenterDashboard } from './CommandCenterDashboard';
 import type { DashboardOverviewDto } from './overview-types';
@@ -22,6 +22,11 @@ function overviewFixture(overrides: Partial<DashboardOverviewDto> = {}): Dashboa
       freeVehicles: 4,
       occupiedVehicles: 5,
       serviceVehicles: 1,
+      maintenanceVehicles: 1,
+      repairVehicles: 2,
+      washVehicles: 3,
+      contracts: 42,
+      clients: 37,
       offlineVehicles: 2,
     },
     workItems: [
@@ -60,23 +65,45 @@ describe('CommandCenterDashboard', () => {
   it('renders the operational priority before analytics', () => {
     render(<CommandCenterDashboard overview={overviewFixture()} />);
     expect(screen.getByRole('heading', { name: 'Рабочий день' })).toBeTruthy();
-    expect(screen.getByText('Вернуть депозит')).toBeTruthy();
-    expect(screen.getByRole('link', { name: /^открыть$/i }).getAttribute('href')).toBe(
+    expect(screen.queryByRole('heading', { name: 'Требует внимания' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Вернуть депозит' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Вернуть депозит/i }).getAttribute('href')).toBe(
       '/rentals/rental-1',
     );
   });
 
+  it('shows an honest phone fallback on a deposit return', () => {
+    const fixture = overviewFixture();
+    const item = fixture.workItems[0];
+
+    render(
+      <CommandCenterDashboard
+        overview={{
+          ...fixture,
+          workItems: item ? [{ ...item, title: 'Вернуть депозит сегодня', phone: null }] : [],
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Вернуть депозит' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Вернуть депозит Kia Rio/ }));
+    expect(screen.getByText('Нет телефона')).toBeTruthy();
+    expect(screen.getAllByText(/15\s*000\s*₽/).length).toBeGreaterThan(0);
+    expect(screen.getByText('ME-2026-0015-II')).toBeTruthy();
+  });
+
   it('explains an empty day instead of rendering an empty list', () => {
     render(<CommandCenterDashboard overview={overviewFixture({ workItems: [] })} />);
-    expect(screen.getByText('На выбранный день обязательных действий нет')).toBeTruthy();
+    expect(screen.getByText('Срочных задач нет')).toBeTruthy();
   });
 
   it('shows lifetime contract money separately from deposits and exposes period navigation', () => {
     render(<CommandCenterDashboard overview={overviewFixture()} />);
     expect(screen.getByText('Заработано за всё время')).toBeTruthy();
     expect(screen.getByText(/186\s*802\s*₽/)).toBeTruthy();
-    expect(screen.getByText('Депозиты по договорам')).toBeTruthy();
-    expect(screen.getByText(/275\s*000\s*₽/)).toBeTruthy();
+    expect(screen.getByText('Залоги к возврату')).toBeTruthy();
+    expect(screen.queryByText(/275\s*000\s*₽/)).toBeNull();
+    expect(screen.getAllByText(/15\s*000\s*₽/).length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'Завтра' }).getAttribute('href')).toBe(
       '/?period=tomorrow',
     );
@@ -105,6 +132,26 @@ describe('CommandCenterDashboard', () => {
     const cards = screen.getByLabelText('Показатели автопарка');
     const periods = screen.getByRole('navigation', { name: 'Период командного центра' });
     expect(cards.compareDocumentPosition(periods) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('adds operational and registry KPI cards in the existing dashboard grid', () => {
+    render(<CommandCenterDashboard overview={overviewFixture()} weather={null} />);
+
+    expect(screen.getByRole('link', { name: /ТО.*На обслуживании/i }).getAttribute('href')).toBe(
+      '/maintenance?view=list',
+    );
+    expect(
+      screen.getByRole('link', { name: /Ремонт.*Сейчас в работе/i }).getAttribute('href'),
+    ).toBe('/maintenance?view=list');
+    expect(screen.getByRole('link', { name: /Мойка.*На мойке сейчас/i }).getAttribute('href')).toBe(
+      '/wash',
+    );
+    expect(
+      screen.getByRole('link', { name: /Договоры.*Всего в системе/i }).getAttribute('href'),
+    ).toBe('/rentals');
+    expect(screen.getByRole('link', { name: /Клиенты.*Всего в базе/i }).getAttribute('href')).toBe(
+      '/clients',
+    );
   });
 
   it('does not duplicate sidebar navigation below the dashboard', () => {
@@ -138,7 +185,7 @@ describe('CommandCenterDashboard', () => {
       />,
     );
 
-    expect(screen.getByText('Время не назначено')).toBeTruthy();
-    expect(screen.getByText(/Петрова Анна/)).toBeTruthy();
+    expect(screen.getAllByText('Без срока').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Петрова Анна/).length).toBeGreaterThan(0);
   });
 });

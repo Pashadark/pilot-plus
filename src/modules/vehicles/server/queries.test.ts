@@ -11,6 +11,7 @@ const rawVehicle = {
   registrationNumber: null,
   vin: null,
   transmission: 'АКПП',
+  manufacturedYear: 2020,
   engineLiters: { toString: () => '1.5' },
   fuelType: 'PETROL',
   seats: 7,
@@ -244,6 +245,38 @@ describe('запросы автопарка', () => {
     expect(vehicles[0]?.primaryImage).not.toHaveProperty('sourceUrl');
   });
 
+  it('готовит для карточки год, привод и последний расход топлива', async () => {
+    const repository = {
+      async findMany() {
+        return [
+          {
+            ...rawVehicle,
+            features: ['Привод: Передний', 'Расход: 8,4 л/100 км', 'Apple CarPlay'],
+            fuelRecords: [
+              {
+                id: 'fuel-consumption',
+                levelPercent: null,
+                consumption: { toString: () => '7.2' },
+                recordedAt: new Date('2026-09-30T10:00:00.000Z'),
+              },
+            ],
+          },
+        ];
+      },
+      async findFirst() {
+        return null;
+      },
+    };
+
+    const [vehicle] = await createVehicleQueries(repository).listVehiclesForUser('user-1');
+
+    expect(vehicle).toMatchObject({
+      manufacturedYear: 2020,
+      driveType: 'Передний',
+      fuelConsumptionLitersPer100Km: 8.4,
+    });
+  });
+
   it('показывает сохранённый при операции пробег, когда GPS не передаёт одометр', async () => {
     const repository = {
       async findMany() {
@@ -292,6 +325,67 @@ describe('запросы автопарка', () => {
 
     expect(vehicle?.telemetry.odometerKm).toBe(85699);
     expect(vehicle?.telemetry.fuelLevelPercent).toBe(20);
+  });
+
+  it('показывает ручной процент топлива, если он свежее GPS и возврата', async () => {
+    const repository = {
+      async findMany() {
+        return [
+          {
+            ...rawVehicle,
+            fuelRecords: [
+              {
+                id: 'fuel-manual',
+                levelPercent: { toString: () => '73' },
+                volumeLiters: null,
+                recordedAt: new Date('2026-09-14T10:00:00.000Z'),
+              },
+            ],
+            rentalOperations: [
+              {
+                mileageKm: null,
+                fuelLevelPercent: { toString: () => '20' },
+                occurredAt: new Date('2026-09-13T10:00:00.000Z'),
+              },
+            ],
+          },
+        ];
+      },
+      async findFirst() {
+        return null;
+      },
+    };
+
+    const [vehicle] = await createVehicleQueries(repository).listVehiclesForUser('user-1');
+
+    expect(vehicle?.telemetry.fuelLevelPercent).toBe(73);
+  });
+
+  it('не позволяет старой ручной записи перекрыть более свежий GPS', async () => {
+    const repository = {
+      async findMany() {
+        return [
+          {
+            ...rawVehicle,
+            fuelRecords: [
+              {
+                id: 'fuel-manual',
+                levelPercent: { toString: () => '15' },
+                volumeLiters: null,
+                recordedAt: new Date('2026-08-19T10:00:00.000Z'),
+              },
+            ],
+          },
+        ];
+      },
+      async findFirst() {
+        return null;
+      },
+    };
+
+    const [vehicle] = await createVehicleQueries(repository).listVehiclesForUser('user-1');
+
+    expect(vehicle?.telemetry.fuelLevelPercent).toBe(60);
   });
 
   it('возвращает текущую активную аренду для карточки автомобиля, включая просроченную', async () => {

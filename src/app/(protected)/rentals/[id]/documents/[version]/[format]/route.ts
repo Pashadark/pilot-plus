@@ -74,7 +74,6 @@ async function findReadyDocument(
       companyId: access.scope === 'SYSTEM' ? undefined : { in: [...access.companyIds] },
       clientDocument: { is: { status: 'CLEAN' } },
       clientDocumentVersion: { is: { scanVerdict: 'CLEAN' } },
-      rental: { documentGenerations: { some: { version: target.version, status: 'COMMITTED' } } },
     },
     select: {
       companyId: true,

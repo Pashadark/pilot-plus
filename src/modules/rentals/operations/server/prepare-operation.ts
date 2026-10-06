@@ -90,6 +90,7 @@ export function createOperationDraftPreparer(database: Database) {
           idempotencyKey: input.idempotencyKey,
           occurredAt: input.occurredAt,
           evidenceStatus: 'MISSING',
+          evidenceMissingReason: 'Материалы фиксации ещё не загружены.',
         },
         select: { id: true },
       });

@@ -2,20 +2,24 @@
 
 import { useState, type ReactNode } from 'react';
 
-type Tab = 'overview' | 'rentals' | 'documents' | 'comments';
+type Tab = 'overview' | 'rentals' | 'fines' | 'documents' | 'comments';
 
 export function ClientWorkspaceTabs({
   rentalCount,
+  fineCount,
   commentCount,
   overview,
   rentals,
+  fines,
   documents,
   comments,
 }: {
   rentalCount: number;
+  fineCount: number;
   commentCount: number;
   overview: ReactNode;
   rentals: ReactNode;
+  fines: ReactNode;
   documents: ReactNode;
   comments: ReactNode;
 }) {
@@ -23,6 +27,7 @@ export function ClientWorkspaceTabs({
   const tabs: Array<{ id: Tab; label: string; content: ReactNode }> = [
     { id: 'overview', label: 'Обзор', content: overview },
     { id: 'rentals', label: `Аренды ${rentalCount}`, content: rentals },
+    { id: 'fines', label: `Штрафы ${fineCount}`, content: fines },
     { id: 'documents', label: 'Документы', content: documents },
     { id: 'comments', label: `Комментарии ${commentCount}`, content: comments },
   ];

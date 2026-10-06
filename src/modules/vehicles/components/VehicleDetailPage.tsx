@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { useState } from 'react';
+import { meterColor } from '@/modules/maintenance/service-meter';
+import { ServicePlanMeter } from '@/modules/maintenance/components/ServicePlanMeter';
 import {
   FiArrowLeft,
   FiMapPin,
@@ -25,7 +26,6 @@ import {
 
 import type {
   VehicleDetailDto,
-  VehicleMaintenanceKind,
   VehicleMaintenanceStatus,
   VehicleStatus,
   VehicleWashKind,
@@ -33,6 +33,7 @@ import type {
 } from '../types';
 import { formatOptionalMetric } from '../utils';
 import { VehicleEmptySection } from './VehicleEmptySection';
+import { VehicleMaintenanceWorkspace } from './VehicleMaintenanceWorkspace';
 import { VehicleOverview } from './VehicleOverview';
 import { VehiclePhoto } from './VehiclePhoto';
 import { VehiclePopularityMedal } from './VehiclePopularityMedal';
@@ -42,7 +43,6 @@ import { PILOT_BUSINESS_TIME_ZONE } from '@/shared/business-time';
 import { Badge, Card, CardContent, CardHeader } from '@/shared/ui';
 import { VehicleDocumentsPanel } from '@/modules/vehicles/manage/components/VehicleDocumentsPanel';
 
-const MAINTENANCE_INTERVAL_KM = 7_000;
 
 // ============================================================================
 // СТАТУСЫ
@@ -70,16 +70,6 @@ const maintenanceStatuses: Record<
   CANCELLED: { label: 'Отменено', tone: 'neutral' },
   DAMAGE_REPORTED: { label: 'Повреждение', tone: 'danger' },
   WAITING_REPAIR: { label: 'Ожидает ремонта', tone: 'warning' },
-};
-
-const maintenanceKinds: Record<VehicleMaintenanceKind, string> = {
-  OIL: 'Масло',
-  FILTERS: 'Фильтры',
-  BRAKES: 'Тормоза',
-  TIRES: 'Шины',
-  TIMING: 'ГРМ',
-  INSPECTION: 'Диагностика',
-  OTHER: 'Другое',
 };
 
 const washStatuses: Record<
@@ -112,15 +102,6 @@ function formatDate(value: string | null) {
     timeStyle: 'short',
     timeZone: PILOT_BUSINESS_TIME_ZONE,
   }).format(new Date(value));
-}
-
-function formatCost(value: number | null) {
-  if (value === null) return 'Не указана';
-  return new Intl.NumberFormat('ru-RU', {
-    style: 'currency',
-    currency: 'RUB',
-    maximumFractionDigits: 2,
-  }).format(value / 100);
 }
 
 // ============================================================================
@@ -323,183 +304,9 @@ function TabContent({ vehicle, tab }: { vehicle: VehicleDetailDto; tab: VehicleT
     );
   }
 
-  // Обслуживание
+  // Обслуживание: отдельное рабочее пространство без истории моек.
   if (tab === 'maintenance') {
-    return (
-      <div className="grid gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold">Ремонты и техническое обслуживание</h2>
-            <p className="text-sm text-[var(--color-text-secondary)]">
-              Полная история работ, повреждений, фото и документов.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-md)] border px-4 text-sm font-semibold hover:bg-[var(--color-elevated)]"
-              href={`/maintenance?view=list&create=maintenance&vehicleId=${vehicle.id}`}
-            >
-              Запланировать ТО
-            </Link>
-            <Link
-              className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 text-sm font-semibold text-[var(--color-text-inverse)] hover:bg-[var(--color-primary-hover)]"
-              href={`/maintenance?view=list&create=repair&vehicleId=${vehicle.id}`}
-            >
-              Добавить ремонт
-            </Link>
-          </div>
-        </div>
-        {!vehicle.maintenanceRecords.length && !vehicle.washRecords.length ? (
-          <VehicleEmptySection tab={tab} />
-        ) : (
-          <div className="grid gap-4 xl:grid-cols-2">
-            <Card data-testid="vehicle-maintenance-history">
-              <CardHeader>
-                <h2 className="font-bold">История технического обслуживания</h2>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                {vehicle.maintenanceRecords.length ? (
-                  vehicle.maintenanceRecords.map((record) => {
-                    const status = maintenanceStatuses[record.status];
-                    return (
-                      <article
-                        key={record.id}
-                        className="grid gap-2 border-b border-[var(--color-border)] pb-3 last:border-0"
-                      >
-                        <header className="flex flex-wrap items-start justify-between gap-2">
-                          <div>
-                            <p className="text-xs font-semibold text-[var(--color-text-tertiary)]">
-                              {record.recordType === 'REPAIR'
-                                ? 'Ремонт и повреждение'
-                                : maintenanceKinds[record.kind]}
-                            </p>
-                            <strong>{record.title}</strong>
-                          </div>
-                          <Badge tone={status.tone}>{status.label}</Badge>
-                        </header>
-                        <p className="text-sm text-[var(--color-text-secondary)]">
-                          {record.recordType === 'REPAIR' ? 'Повреждение' : 'План'}:{' '}
-                          {formatDate(
-                            record.recordType === 'REPAIR'
-                              ? (record.damageReportedAt ?? null)
-                              : record.scheduledAt,
-                          )}{' '}
-                          · Пробег: {formatOptionalMetric(record.targetOdometerKm, 'км')} ·
-                          Стоимость: {formatCost(record.costMinor)}
-                          {record.provider ? ` · ${record.provider}` : ''}
-                        </p>
-                        {record.description ? (
-                          <p className="text-sm">{record.description}</p>
-                        ) : null}
-                        {record.recordType === 'REPAIR' && (record.client || record.rental) ? (
-                          <p className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
-                            {record.client ? (
-                              <Link
-                                className="font-semibold text-[var(--color-primary)] hover:underline"
-                                href={`/clients/${record.client.id}`}
-                              >
-                                {record.client.fullName}
-                              </Link>
-                            ) : null}
-                            {record.rental ? (
-                              <Link
-                                className="font-semibold text-[var(--color-primary)] hover:underline"
-                                href={`/rentals/${record.rental.id}`}
-                              >
-                                {record.rental.contractNumber ?? 'Договор без номера'}
-                              </Link>
-                            ) : null}
-                          </p>
-                        ) : null}
-                        {record.workItems?.length ? (
-                          <ul className="grid gap-1 text-sm text-[var(--color-text-secondary)]">
-                            {record.workItems.map((item) => (
-                              <li key={item.id}>
-                                • {item.title}
-                                {item.description ? ` — ${item.description}` : ''}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
-                        {record.attachments?.length ? (
-                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                            {record.attachments.map((attachment) =>
-                              attachment.isImage ? (
-                                <Link
-                                  key={attachment.id}
-                                  href={attachment.url}
-                                  target="_blank"
-                                  className="relative aspect-[4/3] overflow-hidden rounded-[var(--radius-md)] border"
-                                >
-                                  <Image
-                                    src={attachment.url}
-                                    alt={`${record.title} — фото`}
-                                    fill
-                                    unoptimized
-                                    sizes="180px"
-                                    className="object-cover"
-                                  />
-                                </Link>
-                              ) : (
-                                <Link
-                                  key={attachment.id}
-                                  href={attachment.url}
-                                  target="_blank"
-                                  className="rounded-[var(--radius-md)] border p-2 text-sm font-semibold text-[var(--color-primary)]"
-                                >
-                                  {attachment.originalName}
-                                </Link>
-                              ),
-                            )}
-                          </div>
-                        ) : null}
-                      </article>
-                    );
-                  })
-                ) : (
-                  <p className="text-sm text-[var(--color-text-secondary)]">
-                    Записей о ТО пока нет.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-            <Card data-testid="vehicle-wash-history">
-              <CardHeader>
-                <h2 className="font-bold">История моек</h2>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                {vehicle.washRecords.length ? (
-                  vehicle.washRecords.map((record) => {
-                    const status = washStatuses[record.status];
-                    return (
-                      <article
-                        key={record.id}
-                        className="grid gap-2 border-b border-[var(--color-border)] pb-3 last:border-0"
-                      >
-                        <header className="flex flex-wrap items-start justify-between gap-2">
-                          <strong>{washKinds[record.kind]}</strong>
-                          <Badge tone={status.tone}>{status.label}</Badge>
-                        </header>
-                        <p className="text-sm text-[var(--color-text-secondary)]">
-                          План: {formatDate(record.scheduledAt)} · Завершение:{' '}
-                          {formatDate(record.completedAt)} · Стоимость:{' '}
-                          {formatCost(record.costMinor)}
-                          {record.provider ? ` · ${record.provider}` : ''}
-                        </p>
-                      </article>
-                    );
-                  })
-                ) : (
-                  <p className="text-sm text-[var(--color-text-secondary)]">
-                    Записей о мойке пока нет.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
-      </div>
-    );
+    return <VehicleMaintenanceWorkspace vehicleId={vehicle.id} records={vehicle.maintenanceRecords} />;
   }
 
   if (tab === 'rentals') {
@@ -591,23 +398,15 @@ export function VehicleDetailPage({
   const isInPark =
     vehicle.telemetry.address?.toLocaleLowerCase('ru-RU').includes('зел') &&
     vehicle.telemetry.address.includes('22');
-  const visibleStatus = isInPark ? { label: 'В парке', tone: 'success' as const } : status;
   const activeRental =
     vehicle.currentRentalId === undefined
       ? vehicle.rentals?.find((rental) => rental.status === 'ACTIVE')
       : vehicle.rentals?.find((rental) => rental.id === vehicle.currentRentalId);
-  const nextMaintenance = vehicle.maintenanceRecords.find((record) =>
-    ['PLANNED', 'IN_PROGRESS', 'OVERDUE'].includes(record.status),
-  );
-  const maintenanceTargetKm =
-    nextMaintenance?.targetOdometerKm ??
-    (vehicle.telemetry.odometerKm === null
-      ? null
-      : vehicle.telemetry.odometerKm + MAINTENANCE_INTERVAL_KM);
-  const remainingKm =
-    maintenanceTargetKm !== null && vehicle.telemetry.odometerKm !== null
-      ? Math.round(maintenanceTargetKm - vehicle.telemetry.odometerKm)
-      : null;
+  const visibleStatus = activeRental
+    ? { label: 'В аренде', tone: 'primary' as const }
+    : isInPark
+      ? { label: 'В парке', tone: 'success' as const }
+      : status;
   const latestWash = vehicle.washRecords[0];
   const condition =
     latestWash?.status === 'COMPLETED'
@@ -763,7 +562,12 @@ export function VehicleDetailPage({
                 value={formatOptionalMetric(vehicle.telemetry.speedKph ?? null, 'км/ч')}
               />
               <HeroMetric icon={<FiActivity />} label="Чистота" value={condition} />
-              <MaintenanceMetric remainingKm={remainingKm} targetKm={maintenanceTargetKm} />
+              <HeroMetric
+                icon={<FiActivity />}
+                label="Моточасы"
+                value={formatOptionalMetric(vehicle.telemetry.engineHours ?? null, 'ч')}
+              />
+              <div className="py-3"><ServicePlanMeter vehicleId={vehicle.id} /></div>
               <HeroMetric icon={<FiCheck />} label="ОСАГО" value={getOsagoLabel(vehicle)} />
             </div>
           </section>
@@ -850,8 +654,8 @@ function HeroFuel({ value }: { value: number | null }) {
         </div>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--color-border)]">
           <div
-            className="h-full rounded-full bg-[var(--color-success)]"
-            style={{ width: `${safeValue}%` }}
+            className="h-full rounded-full transition-[width,background-color] duration-500 motion-reduce:transition-none"
+            style={{ width: `${safeValue}%`, backgroundColor: meterColor(safeValue) }}
           />
         </div>
       </div>
@@ -886,48 +690,6 @@ function DriverMetric({ drivers }: { drivers: { id: string; fullName: string }[]
   );
 }
 
-function MaintenanceMetric({
-  remainingKm,
-  targetKm,
-}: {
-  remainingKm: number | null;
-  targetKm: number | null;
-}) {
-  const progress =
-    remainingKm === null || targetKm === null || targetKm <= 0
-      ? 0
-      : Math.max(
-          0,
-          Math.min(100, ((MAINTENANCE_INTERVAL_KM - remainingKm) / MAINTENANCE_INTERVAL_KM) * 100),
-        );
-  const label =
-    remainingKm === null
-      ? 'Нет данных'
-      : remainingKm <= 0
-        ? 'Просрочено'
-        : `${remainingKm.toLocaleString('ru-RU')} км`;
-  return (
-    <div className="flex min-w-0 items-center gap-3 py-3">
-      <FiTool className="size-5 shrink-0 text-[var(--color-text-secondary)]" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-[var(--color-text-secondary)]">Следующее ТО</p>
-          <p
-            className={`text-sm font-medium ${remainingKm !== null && remainingKm <= 0 ? 'text-[var(--color-danger)]' : ''}`}
-          >
-            {label}
-          </p>
-        </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--color-border)]">
-          <div
-            className="h-full rounded-full bg-[var(--color-primary)]"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function getOsagoLabel(vehicle: VehicleDetailDto) {
   const osago = vehicle.documents.find((document) =>

@@ -51,20 +51,26 @@ export function LeadsPage({
       </div>
       <section className="grid gap-3 xl:grid-cols-2" aria-label="Заявки в работе">
         {active.map((lead) => (
-          <Card key={lead.id} className="overflow-hidden">
+          <Card key={lead.id} id={`lead-${lead.id}`} className="scroll-mt-24 overflow-hidden">
             <CardContent className="grid gap-4 sm:grid-cols-[1fr_auto]">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-bold">{leadName(lead)}</h3>
                   <Badge tone={tones[lead.status]}>{leadStatusLabels[lead.status]}</Badge>
                 </div>
-                <a
-                  href={`tel:${lead.phone}`}
-                  className="mt-2 inline-flex items-center gap-2 font-semibold text-[var(--color-primary)]"
-                >
-                  <FiPhoneCall aria-hidden="true" />
-                  {lead.phone}
-                </a>
+                {lead.phone ? (
+                  <a
+                    href={`tel:${lead.phone}`}
+                    className="mt-2 inline-flex items-center gap-2 font-semibold text-[var(--color-primary)]"
+                  >
+                    <FiPhoneCall aria-hidden="true" />
+                    {lead.phone}
+                  </a>
+                ) : (
+                  <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
+                    Телефон не указан
+                  </p>
+                )}
                 <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
                   {lead.companyName} · {lead.source ?? 'Источник не указан'}
                 </p>
@@ -133,6 +139,7 @@ export function LeadsPage({
               .map((lead) => (
                 <div
                   key={lead.id}
+                  id={`lead-${lead.id}`}
                   className="flex flex-wrap justify-between gap-2 border-t pt-2 text-sm"
                 >
                   <span>

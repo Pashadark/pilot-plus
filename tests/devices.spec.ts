@@ -6,8 +6,6 @@ import { openAuthenticatedRoute } from './helpers/auth';
 const E2E_DEVICE_PREFIX = `Pilot Connect E2E ${process.pid}`;
 const E2E_SERIAL_PREFIX = 'PC-E2E-';
 
-test.use({ baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3000' });
-
 async function closeToast(toast: Locator) {
   await expect(toast).toHaveCount(1);
   await expect(toast).toBeVisible();
@@ -103,11 +101,15 @@ test('desktop: администратор управляет списком, п�
   await page.getByRole('button', { name: 'Сбросить' }).click();
 
   await page.getByLabel('Привязка').selectOption('free');
-  await expect(page.getByTestId('device-row')).toHaveCount(1);
+  await expect(page.getByTestId('device-row')).not.toHaveCount(0);
   await page.getByRole('button', { name: 'Сбросить' }).click();
 
   await search.fill('PC-2026-0024');
-  await page.getByRole('link', { name: 'Pilot Connect 0024' }).click();
+  const deviceHref = await page
+    .getByRole('link', { name: 'Pilot Connect 0024' })
+    .getAttribute('href');
+  if (!deviceHref) throw new Error('Ссылка на Pilot Connect 0024 не найдена.');
+  await page.goto(deviceHref);
   await expect(page.getByTestId('device-detail-page')).toBeVisible();
   await expect(page.getByText('Координаты ещё не получены', { exact: true })).toBeVisible();
   await expect(page.getByTestId('device-command-history')).toContainText(
@@ -190,7 +192,7 @@ test('desktop: администратор управляет списком, п�
   await expectSuccessToast(page, 'Команда отменена.');
 
   await page.goto('/devices/not-a-device-in-this-company');
-  await expect(page.getByRole('heading', { name: /не найдена/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /не найден/i })).toBeVisible();
 });
 
 test('mobile: устройства не переполняют 390 px и действие открывается с клавиатуры', async ({

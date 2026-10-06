@@ -133,10 +133,6 @@ export async function executeStaffReturn(
     evidenceMissingReason: String(formData.get('evidenceMissingReason') ?? ''),
     vehicleCondition: String(formData.get('vehicleCondition')) as never,
     damageDescription: String(formData.get('damageDescription') ?? ''),
-    depositStatus: String(formData.get('depositStatus')) as never,
-    depositAmountMinor: optionalNumber(formData, 'depositAmountMinor'),
-    depositWithheldMinor: optionalNumber(formData, 'depositWithheldMinor'),
-    depositResolutionReason: String(formData.get('depositResolutionReason') ?? ''),
   });
   return executeReturnOperation({
     companyId: identity.companyId,

@@ -269,7 +269,9 @@ export async function syncCompanyFines(companyId: string) {
     });
     await prisma.fineIntegration.update({
       where: { companyId },
-      data: { lastSuccessAt: new Date(), lastErrorCode: null },
+      data: result.skipped
+        ? { lastErrorCode: 'PARTIAL_MISSING_OFFENSE_DATE' }
+        : { lastSuccessAt: new Date(), lastErrorCode: null },
       select: { id: true },
     });
     return result;

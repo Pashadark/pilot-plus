@@ -23,5 +23,6 @@ describe('VehiclePhoto', () => {
     expect(new URL(source ?? '', 'http://localhost').pathname).toBe(
       '/vehicles/vehicle-1/images/image-1',
     );
+    expect(screen.getByRole('img', { name: 'Kia Rio' }).className).not.toContain('group-hover');
   });
 });

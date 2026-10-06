@@ -6,8 +6,8 @@ export function TrackDaySummary({ model }: { model: VehicleTrackPeriodViewModel 
   if (!model) {
     return (
       <EmptyState
-        title="За эту дату поездок нет"
-        description="Выберите другой день, чтобы посмотреть маршрут."
+        title="Маршрут за выбранный день не записан"
+        description="Выберите другой день или проверьте поступление данных ГЛОНАСС."
       />
     );
   }

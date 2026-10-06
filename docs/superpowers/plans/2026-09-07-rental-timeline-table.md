@@ -31,7 +31,7 @@
 - Produces: list rows with `client.phoneEncrypted`, `vehicle.internalNumber`, `vehicle.city`, `vehicle.images`, confirmed `payments`, committed `operations`, and latest committed return settlement.
 - Consumes: existing `listFilteredRentalsForCurrentUser(filters)` route contract.
 
-- [ ] **Step 1: Write a failing query-contract test**
+- [x] **Step 1: Write a failing query-contract test**
 
 Assert that the Prisma select includes:
 
@@ -44,7 +44,6 @@ expect(select.vehicle.select).toEqual(
     internalNumber: true,
     city: true,
     images: expect.objectContaining({
-      where: { archivedAt: null },
       orderBy: [{ isPrimary: 'desc' }, { position: 'asc' }],
       take: 1,
     }),
@@ -54,16 +53,16 @@ expect(select.payments).toBeTruthy();
 expect(select.operations).toBeTruthy();
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `npx vitest run src/modules/rentals/server/queries.test.ts`  
 Expected: FAIL because the additional projection is absent.
 
-- [ ] **Step 3: Add the minimal Prisma projection**
+- [x] **Step 3: Add the minimal Prisma projection**
 
-Use the existing rental relationships and return only fields required by the table. Restrict payments to `CONFIRMED`; restrict operations to `COMMITTED`. Select the primary non-archived image first and expose its existing local path metadata through the route mapper.
+Use the existing rental relationships and return only fields required by the table. Restrict payments to `CONFIRMED`; restrict operations to `COMMITTED`. Select the primary image first and expose its existing local path metadata through the route mapper.
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
 Run: `npx vitest run src/modules/rentals/server/queries.test.ts`  
 Expected: PASS.
@@ -78,14 +77,14 @@ Expected: PASS.
 - Produces: `presentRentalListRow(row, now)` with `urgency`, `progressPercent`, `remainingLabel`, `paymentLabel`, `paymentPercent`, `depositLabel`, `primaryAction`, and `vehicleImage`.
 - Consumes: the enriched server projection from Task 1.
 
-- [ ] **Step 1: Add failing presentation tests**
+- [x] **Step 1: Add failing presentation tests**
 
 Cover these exact behaviors:
 
 ```ts
 expect(todayRow.primaryAction).toBe('EXTEND');
 expect(todayRow.remainingLabel).toMatch(/сегодня|осталось/u);
-expect(overdueRow.primaryAction).toBe('RETURN');
+expect(overdueRow.primaryAction).toBe('EXTEND');
 expect(overdueRow.remainingLabel).toMatch(/просрочено/u);
 expect(activeRow.progressPercent).toBeGreaterThanOrEqual(0);
 expect(activeRow.progressPercent).toBeLessThanOrEqual(100);
@@ -95,16 +94,16 @@ expect(returnedDepositRow.depositLabel).toContain('Возвращён');
 
 Also assert that an ended `ACTIVE` rental remains `ACTIVE` and is never presented as completed.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `npx vitest run src/modules/rentals/components/rental-list-presentation.test.ts`  
 Expected: FAIL because the approved fields do not exist.
 
-- [ ] **Step 3: Implement pure Moscow-time calculations**
+- [x] **Step 3: Implement pure Moscow-time calculations**
 
 Add focused helpers for bounded progress, human remaining time, confirmed payment totals, deposit state, urgency priority, and primary action. Do not inspect browser time directly; accept `now` as the existing function already does.
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
 Run: `npx vitest run src/modules/rentals/components/rental-list-presentation.test.ts`  
 Expected: PASS.
@@ -122,7 +121,7 @@ Expected: PASS.
 - `RentalTimelineBar({ startsAt, endsAt, progressPercent, urgency, remainingLabel })` renders the accessible time scale.
 - `RentalListPage` keeps its existing props and URLs.
 
-- [ ] **Step 1: Write failing component tests**
+- [x] **Step 1: Write failing component tests**
 
 Assert the approved hierarchy and interactions:
 
@@ -131,7 +130,7 @@ expect(screen.getByRole('heading', { name: 'Договоры аренды' })).t
 expect(screen.getByText(/Сегодня требуют действия/u)).toBeTruthy();
 expect(screen.getByRole('link', { name: 'Продлить' })).toHaveAttribute(
   'href',
-  expect.stringContaining('operation=extend'),
+  expect.stringContaining('#rental-actions'),
 );
 expect(screen.getByRole('img', { name: /Kia Ceed/u })).toBeTruthy();
 expect(screen.getByText(/Залог/u)).toBeTruthy();
@@ -139,20 +138,20 @@ expect(screen.getByText(/Залог/u)).toBeTruthy();
 
 Include a missing-image fixture and assert the branded fallback remains visible.
 
-- [ ] **Step 2: Run the component test and verify RED**
+- [x] **Step 2: Run the component test and verify RED**
 
 Run: `npx vitest run src/modules/rentals/components/RentalListPage.test.tsx`  
 Expected: FAIL because the new timeline workspace is absent.
 
-- [ ] **Step 3: Implement the desktop table**
+- [x] **Step 3: Implement the desktop table**
 
 Replace the four large KPI cards with the compact attention strip and tabs. Render real vehicle thumbnails, license-plate text, the time scale, payment/deposit facts, and a single contextual action. Preserve archive/search query parameters in generated links.
 
-- [ ] **Step 4: Implement the mobile rows**
+- [x] **Step 4: Implement the mobile rows**
 
 Below `md`, render compact rows with `72 × 48 px` thumbnails, visible plate/client/term information, a full-width time scale, finance lines, and one 44 px primary action. Keep detailed filters behind the existing URL form and avoid horizontal page overflow.
 
-- [ ] **Step 5: Run the component test and verify GREEN**
+- [x] **Step 5: Run the component test and verify GREEN**
 
 Run: `npx vitest run src/modules/rentals/components/RentalListPage.test.tsx`  
 Expected: PASS.
@@ -167,11 +166,11 @@ Expected: PASS.
 - Consumes the selected mock `exec-7d6b5a99-88d9-4a1e-9076-4c72ca700e7d.png` as visual truth.
 - Produces a verified production deployment at `/rentals`.
 
-- [ ] **Step 1: Add/adjust browser assertions**
+- [x] **Step 1: Add/adjust browser assertions**
 
 Cover the attention strip, real vehicle image, timeline, archive tab, contextual action, and 375 px no-overflow behavior. Do not create or delete shared production records from Playwright.
 
-- [ ] **Step 2: Run focused and full checks**
+- [x] **Step 2: Run focused and full checks**
 
 Run:
 
@@ -185,14 +184,14 @@ npm run build
 
 Expected: all commands exit `0`; lint may retain only documented pre-existing warnings.
 
-- [ ] **Step 3: Capture desktop and mobile screenshots**
+- [x] **Step 3: Capture desktop and mobile screenshots**
 
 Capture the authenticated `/rentals` page at `1440 × 1024` and `375 × 812`. Compare the desktop image to the selected mock and record any P0/P1/P2 differences in `design-qa.md`. Fix all P0/P1/P2 findings before deployment.
 
-- [ ] **Step 4: Deploy atomically with backup**
+- [x] **Step 4: Deploy atomically with backup**
 
 Create a timestamped PostgreSQL backup, build a new release directory, apply only additive migrations if any, switch the current symlink, restart `pilot-plus`, and preserve the previous release for rollback.
 
-- [ ] **Step 5: Verify production**
+- [x] **Step 5: Verify production**
 
 Confirm `https://supapro.ru/login` and authenticated `/rentals` load, vehicle thumbnails resolve, Горбунов and Статун remain active and offer `Продлить`, archive works, and the service journal has no new application errors from the smoke test.

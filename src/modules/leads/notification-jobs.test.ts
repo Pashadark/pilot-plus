@@ -25,14 +25,6 @@ describe('lead notification jobs', () => {
         payload: { leadId: 'lead-1', auditId: 'audit-1' },
         availableAt: now,
       }),
-      expect.objectContaining({
-        companyId: 'company-1',
-        template: 'LEAD_CREATED',
-        identityId: 'identity-owner',
-        eventKey: 'lead-created:lead-1:staff:identity-owner',
-        payload: { leadId: 'lead-1', auditId: 'audit-1' },
-        availableAt: now,
-      }),
     ]);
     expect(JSON.stringify(rows)).not.toMatch(/phone|comment|firstName|lastName/iu);
   });

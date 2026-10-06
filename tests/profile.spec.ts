@@ -5,7 +5,11 @@ import { openAuthenticatedRoute } from './helpers/auth';
 test('профиль показывает реальные данные текущего администратора', async ({ page }) => {
   await openAuthenticatedRoute(page, '/profile');
 
-  await expect(page.getByRole('heading', { name: 'Профиль администратора' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Профиль' })).toBeVisible();
+  const profile = page.getByRole('region', { name: 'Профиль сотрудника' });
+  await expect(profile.getByText('Аккаунт активен')).toBeVisible();
+  await expect(profile.getByText('Суперадминистратор')).toBeVisible();
+  await page.getByRole('tab', { name: 'Данные' }).click();
   const name = page.getByLabel('Имя');
   const email = page.getByLabel('Email');
   await expect(name).not.toHaveValue('');
@@ -18,11 +22,8 @@ test('профиль показывает реальные данные теку
     .join('')
     .slice(0, 2)
     .toUpperCase();
-  const profile = page.getByRole('region', { name: 'Профиль администратора' });
-
   await expect(profile.getByRole('img', { name: currentName })).toContainText(expectedInitials);
   await expect(profile.getByText(currentEmail, { exact: true }).first()).toBeVisible();
-  await expect(profile.getByText('Администратор', { exact: true })).toBeVisible();
 
   if (await page.getByTestId('desktop-sidebar').isVisible()) {
     await expect(page.getByTestId('desktop-sidebar').getByText(currentName)).toBeVisible();
@@ -43,6 +44,7 @@ test('администратор успешно сохраняет текуще�
   if (!currentPassword) throw new Error('Для profile e2e нужен PILOT_ADMIN_PASSWORD.');
 
   await openAuthenticatedRoute(page, '/profile');
+  await page.getByRole('tab', { name: 'Данные' }).click();
   const name = page.getByLabel('Имя');
   const currentName = await name.inputValue();
 
@@ -59,6 +61,7 @@ test('администратор успешно сохраняет текуще�
 
 test('неверный текущий пароль не изменяет профиль', async ({ page }) => {
   await openAuthenticatedRoute(page, '/profile');
+  await page.getByRole('tab', { name: 'Данные' }).click();
 
   await page
     .getByLabel(/^Текущий пароль/)

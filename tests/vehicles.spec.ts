@@ -60,32 +60,39 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByTestId('vehicle-list-page')).toBeVisible();
 });
 
-test('автопарк показывает 130 записей и фильтрует карточки', async ({ page }) => {
+test('автопарк показывает 10 реальных машин и фильтрует их по госномеру', async ({ page }) => {
   await expect(page.getByTestId('app-header')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Автомобили', level: 1 })).toBeVisible();
-  await expect(page.getByTestId('vehicle-count')).toContainText('Показано 130 из 130');
+  await expect(page.getByTestId('vehicle-count')).toContainText('Показано 10 из 10');
 
-  await page.getByRole('searchbox', { name: 'Поиск автомобилей' }).fill('GWM WEY');
-  await page.getByLabel('Город').selectOption({ label: 'Красноярск' });
+  await page.getByRole('searchbox', { name: 'Поиск автомобилей' }).fill('А429АУ997');
 
-  await expect(page.getByTestId('vehicle-count')).toContainText('Показано 1 из 130');
+  await expect(page.getByTestId('vehicle-count')).toContainText('Показано 1 из 10');
   await expect(page.getByTestId('vehicle-card')).toHaveCount(1);
-  await expect(page.getByTestId('vehicle-card')).toContainText('Нет данных');
+  await expect(page.getByTestId('vehicle-card')).toContainText('Kia Ceed');
+  await expect(page.getByTestId('vehicle-card')).toContainText('А429АУ997');
   await expect(page.getByTestId('vehicle-photo')).toBeVisible();
-  await expect(page.getByRole('img', { name: 'GWM WEY — Красноярск' })).toBeVisible();
 });
 
 test('карточка открывает обзор и вкладку поездок', async ({ page }) => {
-  await page.getByRole('searchbox', { name: 'Поиск автомобилей' }).fill('GWM WEY');
-  await page.getByLabel('Город').selectOption({ label: 'Красноярск' });
+  await page.getByRole('searchbox', { name: 'Поиск автомобилей' }).fill('А429АУ997');
   await page.getByRole('link', { name: 'Открыть', exact: true }).click();
 
   await expect(page.getByTestId('vehicle-detail-page')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'GWM WEY', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Kia Ceed/, level: 1 })).toBeVisible();
   await expect(page.getByTestId('vehicle-detail-photo')).toBeVisible();
   await page.getByRole('link', { name: 'Поездки' }).click();
   await expect(page).toHaveURL(/tab=trips/);
-  await expect(page.getByText('Поездки ещё не поступали')).toBeVisible();
+});
+
+test('кнопка карты открывает карту с выбранным автомобилем', async ({ page }) => {
+  const card = page.getByTestId('vehicle-card').filter({ hasText: 'А156АХ997' });
+  await card.getByRole('link', { name: 'Показать на карте' }).click();
+
+  await expect(page).toHaveURL(/\/map\?vehicleId=/);
+  await expect(page.getByRole('complementary', { name: 'Выбранный автомобиль' })).toContainText(
+    'А156АХ997',
+  );
 });
 
 test('подробности автомобиля показывают реальные истории ТО и мойки', async ({ page }) => {
@@ -121,16 +128,6 @@ test('ошибка изображения заменяется фирменно�
   await expect(page.getByTestId('vehicle-photo-placeholder').first()).toBeVisible();
 });
 
-test('отсутствующая позиция объясняется информационным тостом', async ({ page }) => {
-  await page
-    .getByTestId('vehicle-card')
-    .first()
-    .getByRole('button', { name: 'Почему автомобиль не на карте' })
-    .click();
-  await expect(page.getByText('Координаты пока не получены')).toBeVisible();
-  await expect(page.locator('[data-toast-tone="info"]')).toBeVisible();
-});
-
 test('мобильный автопарк не переполняет экран и сохраняет области касания', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/vehicles');
@@ -142,6 +139,6 @@ test('мобильный автопарк не переполняет экран
     const box = await action.boundingBox();
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
   }
-  const mapButton = card.getByRole('button', { name: 'Почему автомобиль не на карте' });
-  expect((await mapButton.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  const mapAction = card.getByRole('link', { name: 'Показать на карте' });
+  expect((await mapAction.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 });

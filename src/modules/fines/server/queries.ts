@@ -1,3 +1,4 @@
+import { vehicleName } from '@/shared/lib/vehicle-name';
 import 'server-only';
 
 import type { FineStatus, Prisma } from '@/database/generated/prisma';
@@ -5,6 +6,8 @@ import { prisma } from '@/database/prisma/client';
 
 import { FineAccessDeniedError, getFineAccess } from '../access';
 import { selectFineAttribution } from '../sync/attribute-fine';
+import { loadTollDebts } from './toll-queries';
+import type { FineItem } from '../components/FinesPage';
 
 const statuses = new Set<FineStatus>(['NEW', 'UNPAID', 'PAID', 'CANCELLED', 'OVERDUE']);
 const candidateWindowMs = 72 * 60 * 60 * 1000;
@@ -115,10 +118,67 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
       : {}),
   };
   const now = new Date();
+  const tollResult = await loadTollDebts(scopedCompanyIds);
+  const tolls = tollResult.items.filter(
+    (item) =>
+      (!status || status === 'UNPAID') &&
+      (!vehicleId || item.vehicleId === vehicleId) &&
+      (!clientId || item.clientId === clientId) &&
+      (!offenseFrom || new Date(item.offenseAt) >= offenseFrom) &&
+      (!offenseTo || new Date(item.offenseAt) <= offenseTo) &&
+      (!query ||
+        [item.vehicleLabel, item.clientLabel, item.rentalLabel, item.roadLabel, item.description]
+          .filter(Boolean)
+          .join(' ')
+          .toLocaleLowerCase('ru')
+          .includes(query.toLocaleLowerCase('ru'))),
+  );
   const discountSoon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const withinFilteredScope = (constraint: Prisma.FineWhereInput): Prisma.FineWhereInput => ({
     AND: [where, constraint],
   });
+  // Select the page after prioritising active discounts, not after pagination.
+  const priorities = await prisma.fine.findMany({
+    where,
+    select: {
+      id: true,
+      status: true,
+      discountExpiresAt: true,
+      currentAmountMinor: true,
+      originalAmountMinor: true,
+      offenseAt: true,
+    },
+    orderBy: [{ offenseAt: 'desc' }, { id: 'desc' }],
+  });
+  const deadline = (fine: (typeof priorities)[number]) =>
+    fine.status !== 'PAID' &&
+    fine.status !== 'CANCELLED' &&
+    fine.discountExpiresAt &&
+    fine.discountExpiresAt >= now &&
+    fine.currentAmountMinor < fine.originalAmountMinor
+      ? fine.discountExpiresAt.getTime()
+      : Infinity;
+  const allPriorities = [
+    ...priorities,
+    ...tolls.map((t) => ({
+      id: t.id,
+      status: t.status,
+      discountExpiresAt: null,
+      currentAmountMinor: BigInt(t.currentAmountMinor),
+      originalAmountMinor: BigInt(t.originalAmountMinor),
+      offenseAt: new Date(t.offenseAt),
+    })),
+  ];
+  allPriorities.sort(
+    (a, b) =>
+      deadline(a) - deadline(b) ||
+      b.offenseAt.getTime() - a.offenseAt.getTime() ||
+      b.id.localeCompare(a.id),
+  );
+  const allPageIds = allPriorities
+    .slice((page - 1) * pageSize, page * pageSize)
+    .map((fine) => fine.id);
+  const pageIds = allPageIds.filter((id) => !id.startsWith('toll:'));
 
   const [
     records,
@@ -130,11 +190,13 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
     bailiffRiskCount,
   ] = await Promise.all([
     prisma.fine.findMany({
-      where,
+      where: { AND: [where, { id: { in: pageIds } }] },
       select: {
         id: true,
         companyId: true,
         decreeNumber: true,
+        decreeAt: true,
+        assignmentConfirmedAt: true,
         offenseAt: true,
         currentAmountMinor: true,
         originalAmountMinor: true,
@@ -156,7 +218,6 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
         client: { select: { firstName: true, middleName: true, lastName: true } },
       },
       orderBy: [{ offenseAt: 'desc' }, { id: 'desc' }],
-      skip: (page - 1) * pageSize,
       take: pageSize,
     }),
     prisma.fine.count({ where }),
@@ -208,7 +269,7 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
     rentalsByVehicle.set(key, [...(rentalsByVehicle.get(key) ?? []), rental]);
   }
 
-  const fines = records.map((fine) => {
+  const fines: FineItem[] = records.map((fine) => {
     const rentals = fine.vehicleId
       ? (rentalsByVehicle.get(`${fine.companyId}:${fine.vehicleId}`) ?? [])
       : [];
@@ -237,6 +298,9 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
       id: fine.id,
       companyId: fine.companyId,
       decreeNumber: fine.decreeNumber,
+      decreeAt: fine.decreeAt?.toISOString() ?? null,
+      assignmentConfirmedAt: fine.assignmentConfirmedAt?.toISOString() ?? null,
+      rentalId: fine.rentalId,
       offenseAt: fine.offenseAt.toISOString(),
       currentAmountMinor: fine.currentAmountMinor.toString(),
       originalAmountMinor: fine.originalAmountMinor.toString(),
@@ -248,8 +312,7 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
       toBailiff: fine.toBailiff,
       vehicleLabel: fine.vehicle
         ? [
-            fine.vehicle.make,
-            fine.vehicle.modelName ?? fine.vehicle.model,
+            vehicleName(fine.vehicle.make, fine.vehicle.modelName ?? fine.vehicle.model),
             fine.vehicle.registrationNumber,
           ]
             .filter(Boolean)
@@ -264,6 +327,8 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
       assignmentCandidates,
     };
   });
+  fines.push(...tolls.filter((t) => allPageIds.includes(t.id)));
+  fines.sort((a, b) => allPageIds.indexOf(a.id) - allPageIds.indexOf(b.id));
   const selectedRole = selectedCompanyId ? access.rolesByCompany[selectedCompanyId] : undefined;
   const canManage = Boolean(
     selectedCompanyId &&
@@ -277,7 +342,7 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
     vehicles: vehicles.map((vehicle) => ({
       id: vehicle.id,
       label:
-        [vehicle.make, vehicle.modelName ?? vehicle.model, vehicle.registrationNumber]
+        [vehicleName(vehicle.make, vehicle.modelName ?? vehicle.model), vehicle.registrationNumber]
           .filter(Boolean)
           .join(' · ') || vehicle.id,
     })),
@@ -291,7 +356,13 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
       vehicleId,
       clientId,
     },
-    pagination: { page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
+    pagination: {
+      page,
+      pageSize,
+      total: total + tolls.length,
+      totalPages: Math.max(1, Math.ceil((total + tolls.length) / pageSize)),
+    },
+    tollsUnavailable: tollResult.unavailable,
     canSync: canManage,
     canManage,
     canPay: Boolean(
@@ -301,9 +372,12 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
     fines,
     summary: {
       newCount,
-      unpaidCount: unpaidMetrics._count._all,
-      unpaidAmountMinor: unpaidMetrics._sum.currentAmountMinor?.toString() ?? '0',
-      unassignedCount,
+      unpaidCount: unpaidMetrics._count._all + tolls.length,
+      unpaidAmountMinor: (
+        BigInt(unpaidMetrics._sum.currentAmountMinor ?? 0) +
+        tolls.reduce((sum, t) => sum + BigInt(t.currentAmountMinor), BigInt(0))
+      ).toString(),
+      unassignedCount: unassignedCount + tolls.filter((t) => !t.assigned).length,
       discountEndingSoonCount,
       bailiffRiskCount,
     },

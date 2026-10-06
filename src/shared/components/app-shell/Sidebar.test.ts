@@ -66,6 +66,19 @@ describe('Sidebar health summary', () => {
     expect(markup).toContain('Администрирование');
   });
 
+  it('группирует навигацию и отмечает текущий раздел спокойным индикатором', () => {
+    route.pathname = '/vehicles';
+
+    const markup = renderToStaticMarkup(
+      createElement(Sidebar, { expanded: true, user, systemHealthSummary: summary }),
+    );
+
+    expect(markup).toContain('Работа');
+    expect(markup).toContain('Операции');
+    expect(markup).toContain('Система');
+    expect(markup).not.toContain('data-active-indicator="true"');
+  });
+
   it('скрывает административную ссылку без административного разрешения', () => {
     route.pathname = '/';
 

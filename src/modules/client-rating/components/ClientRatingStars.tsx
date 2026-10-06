@@ -23,7 +23,7 @@ export function ClientRatingStars({
           />
         ))}
       </span>
-      <span className="tabular-nums text-[var(--color-text-secondary)]">{rating.display}</span>
+      <span className="text-[var(--color-text-secondary)] tabular-nums">{rating.display}</span>
       {compact ? null : <span className="text-[var(--color-text-secondary)]">{rating.label}</span>}
     </div>
   );

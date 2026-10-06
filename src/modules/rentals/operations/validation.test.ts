@@ -41,7 +41,7 @@ describe('rental operation validation', () => {
     expect(result.occurredAt.toISOString()).toBe('2026-08-21T09:00:00.000Z');
   });
 
-  it('requires reasons for damage and withheld deposit', () => {
+  it('requires a description for recorded damage', () => {
     expect(() =>
       validateReturnCommand({
         rentalId: 'rental-1',
@@ -51,11 +51,23 @@ describe('rental operation validation', () => {
         fuelLevelPercent: 50,
         evidenceStatus: 'COMPLETE',
         vehicleCondition: 'DAMAGE_RECORDED',
-        depositStatus: 'WITHHELD',
-        depositAmountMinor: 50_000,
-        depositWithheldMinor: 50_000,
       }),
     ).toThrow('Опишите повреждения');
+  });
+
+  it('rejects deposit decisions during vehicle return', () => {
+    expect(() =>
+      validateReturnCommand({
+        rentalId: 'rental-1',
+        idempotencyKey: 'operation-2',
+        occurredAt: '2026-08-21T12:00',
+        mileageKm: 200,
+        fuelLevelPercent: 50,
+        evidenceStatus: 'COMPLETE',
+        vehicleCondition: 'GOOD',
+        depositStatus: 'RETURNED',
+      } as never),
+    ).toThrow('Неизвестное поле: depositStatus');
   });
 
   it('validates an extension command and rejects browser-controlled extra fields', () => {

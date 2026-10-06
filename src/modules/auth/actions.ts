@@ -28,22 +28,23 @@ export async function loginAction(
 ): Promise<LoginState> {
   const input = parseLoginInput(formData);
   if (!input.ok) return input.state;
+  const identity = 'login' in input ? `login:${input.login}` : input.email;
 
   try {
-    if (await isLoginLocked(input.email)) return failedLoginState;
+    if (await isLoginLocked(identity)) return failedLoginState;
 
-    const user = await prisma.user.findUnique({ where: { email: input.email } });
+    const user = await prisma.user.findUnique({ where: 'login' in input ? {login: input.login} : { email: input.email } });
     const passwordMatches = await verifyPassword(
       input.password,
       user?.passwordHash ?? DUMMY_PASSWORD_HASH,
     );
 
     if (!user || !user.isActive || !passwordMatches) {
-      await recordLoginFailure(input.email);
+      await recordLoginFailure(identity);
       return failedLoginState;
     }
 
-    await clearLoginFailures(input.email);
+    await clearLoginFailures(identity);
     await createSession(user.id);
   } catch {
     return failedLoginState;

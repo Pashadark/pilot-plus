@@ -79,11 +79,24 @@ class PilotApiClient:
     async def profile(self, telegram_user_id: str) -> dict[str, Any]:
         return await self._json("GET", "/api/bot/v1/me", telegram_user_id=telegram_user_id)
 
-    async def link_identity(self, invite_token: str, telegram_user_id: str) -> dict[str, Any]:
-        return await self._json("POST", "/api/bot/v1/link", telegram_user_id=telegram_user_id, json={"inviteToken": invite_token, "telegramUserId": telegram_user_id})
+    async def link_identity(self, invite_token: str | None, telegram_user_id: str, *, phone_number: str | None = None, contact_user_id: str | None = None) -> dict[str, Any]:
+        payload = {"telegramUserId": telegram_user_id}
+        if invite_token:
+            payload["inviteToken"] = invite_token
+        if phone_number is not None and contact_user_id is not None:
+            payload.update(phoneNumber=phone_number, contactUserId=contact_user_id)
+        return await self._json("POST", "/api/bot/v1/link", telegram_user_id=telegram_user_id, json=payload)
 
     async def rentals(self, telegram_user_id: str) -> dict[str, Any]:
         return await self._json("GET", "/api/bot/v1/rentals", telegram_user_id=telegram_user_id)
+
+    async def fines(self, telegram_user_id: str, page: int = 0) -> dict[str, Any]:
+        return await self._json("GET", f"/api/bot/v1/fines?page={page}", telegram_user_id=telegram_user_id)
+
+    async def support(self, telegram_user_id: str, text: str, key: str, fine_id: str | None = None) -> dict[str, Any]:
+        payload = {"text": text, "key": key}
+        if fine_id: payload["fineId"] = fine_id
+        return await self._json("POST", "/api/bot/v1/support", telegram_user_id=telegram_user_id, json=payload)
 
     async def availability(self, telegram_user_id: str, starts_at: str, ends_at: str) -> dict[str, Any]:
         params = httpx.QueryParams({"startsAt": starts_at, "endsAt": ends_at})

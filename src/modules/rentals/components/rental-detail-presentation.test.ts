@@ -72,7 +72,7 @@ describe('rentalDetailPresentation', () => {
 
     expect(view.source.label).toBe('Снимок подтверждённого договора');
     expect(view.client.label).toBe('Снимок Клиента');
-    expect(view.vehicle.label).toContain('Снимок · Polo');
+    expect(view.vehicle.label).toContain('Снимок Polo');
     expect(view.term.startsAt).toContain('01.08.2026');
     expect(view.finance.total).toBe('4 500 ₽');
     expect(view.operations.pickupAddress).toBe('Снимок выдача');

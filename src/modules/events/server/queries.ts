@@ -63,6 +63,9 @@ export interface EventTimelineRepository {
   vehicle: {
     findMany(args: unknown): Promise<unknown[]>;
   };
+  rental: {
+    findMany(args: unknown): Promise<unknown[]>;
+  };
 }
 
 type TimelineResult = {
@@ -730,6 +733,80 @@ async function loadPage(
   return events;
 }
 
+function displayPerson(value: unknown): string | null {
+  const person = asRecord(value);
+  const name = [person.lastName, person.firstName, person.middleName]
+    .filter((part) => typeof part === 'string' && part.trim())
+    .join(' ');
+  return name || null;
+}
+
+async function attachRentalAssignments(
+  repository: EventTimelineRepository,
+  context: AuthenticatedTimelineContext,
+  events: TimelineEventDto[],
+): Promise<TimelineEventDto[]> {
+  if (events.length === 0) return events;
+  const timestamps = events.map((event) => Date.parse(event.recordedAt));
+  const minAt = new Date(Math.min(...timestamps));
+  const maxAt = new Date(Math.max(...timestamps));
+  const vehicleIds = [...new Set(events.map((event) => event.vehicle.id))];
+  const rentals = await repository.rental.findMany({
+    where: {
+      companyId: context.companyId,
+      vehicleId: { in: vehicleIds },
+      startsAt: { lte: maxAt },
+      endsAt: { gte: minAt },
+      status: { not: 'CANCELLED' },
+    },
+    select: {
+      id: true,
+      vehicleId: true,
+      contractNumber: true,
+      startsAt: true,
+      endsAt: true,
+      client: { select: { firstName: true, middleName: true, lastName: true } },
+      drivers: {
+        orderBy: { sortOrder: 'asc' },
+        select: {
+          client: { select: { firstName: true, middleName: true, lastName: true } },
+        },
+      },
+    },
+  });
+
+  return events.map((event) => {
+    const occurredAt = Date.parse(event.recordedAt);
+    const rental = rentals
+      .map(asRecord)
+      .find(
+        (candidate) =>
+          String(candidate.vehicleId) === event.vehicle.id &&
+          new Date(candidate.startsAt as string | Date).getTime() <= occurredAt &&
+          new Date(candidate.endsAt as string | Date).getTime() >= occurredAt,
+      );
+    if (!rental) return { ...event, assignment: null };
+
+    const drivers = Array.isArray(rental.drivers)
+      ? rental.drivers
+          .map(asRecord)
+          .map((driver) => (driver.client ? displayPerson(driver.client) : null))
+          .filter((name): name is string => Boolean(name))
+      : [];
+    const renter = rental.client ? displayPerson(rental.client) : null;
+    const people = [...new Set(drivers.length ? drivers : renter ? [renter] : [])];
+    return {
+      ...event,
+      assignment: {
+        rentalId: String(rental.id),
+        contractNumber:
+          typeof rental.contractNumber === 'string' ? rental.contractNumber : null,
+        people,
+      },
+    };
+  });
+}
+
 async function loadStats(
   repository: EventTimelineRepository,
   context: AuthenticatedTimelineContext,
@@ -836,7 +913,8 @@ export function createEventTimelineQueries(
       if (!context) return emptyResult();
 
       const specs = createSourceSpecs(repository, context, normalizedFilters, true);
-      const events = await loadPage(repository, context, normalizedFilters, specs);
+      const pageEvents = await loadPage(repository, context, normalizedFilters, specs);
+      const events = await attachRentalAssignments(repository, context, pageEvents);
       const stats = await loadStats(repository, context, normalizedFilters);
       const vehicles = await listVehicles(repository, context);
       const lastEvent = events.at(-1);
@@ -913,6 +991,9 @@ const queries = createEventTimelineQueries(
     },
     vehicle: {
       findMany: (args) => prisma.vehicle.findMany(args as Prisma.VehicleFindManyArgs),
+    },
+    rental: {
+      findMany: (args) => prisma.rental.findMany(args as Prisma.RentalFindManyArgs),
     },
   },
   getAuthenticatedTimelineContext,

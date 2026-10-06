@@ -4,6 +4,41 @@ import { buildDashboardOverview } from './normalizers';
 
 const DEFAULT_NOW = new Date('2026-08-24T12:00:00.000Z');
 
+it('enriches work items with real rental details and a separately expanded queue window', () => {
+  const period = { key: 'today' as const, ...moscowDay('2026-08-24') };
+  const result = buildDashboardOverview({
+    period,
+    workPeriod: { ...period, toExclusive: new Date('2026-08-27T21:00:00Z') },
+    now: DEFAULT_NOW,
+    vehicles: [vehicle()],
+    clientCount: 1,
+    maintenanceRecords: [],
+    washRecords: [],
+    rentals: [
+      rental({
+        clientId: 'client-1',
+        startsAt: new Date('2026-08-25T10:00:00Z'),
+        endsAt: new Date('2026-08-26T10:00:00Z'),
+        depositMinor: BigInt(20000),
+        payments: [{ kind: 'DEPOSIT', status: 'CONFIRMED', amountMinor: BigInt(20000) }],
+      }),
+    ],
+  });
+  expect(result.workItems).toContainEqual(
+    expect.objectContaining({
+      kind: 'HANDOVER',
+      details: expect.objectContaining({
+        vehicleHref: '/vehicles/vehicle-1',
+        clientHref: '/clients/client-1',
+        collectedMinor: '20000',
+        startsAt: '2026-08-25T10:00:00.000Z',
+      }),
+    }),
+  );
+  expect(result.period.toExclusive).toBe(period.toExclusive.toISOString());
+  expect(result.generatedAt).toBe(DEFAULT_NOW.toISOString());
+});
+
 function moscowDay(day: string) {
   const from = new Date(`${day}T00:00:00.000+03:00`);
   return { from, toExclusive: new Date(from.getTime() + 86_400_000), label: day };
@@ -14,6 +49,7 @@ function vehicle(overrides = {}) {
     id: 'vehicle-1',
     label: 'Kia Rio · А001АА777',
     position: { recordedAt: new Date('2026-08-24T11:50:00.000Z') },
+    fuelLevelPercent: null,
     ...overrides,
   };
 }
@@ -45,6 +81,7 @@ function rental(overrides = {}) {
     contractNumber: 'R-1',
     client: { lastName: 'Иванов', firstName: 'Иван', middleName: null, phone: '+79990000000' },
     vehicleLabel: 'Kia Rio · А001АА777',
+    payments: [],
     operations: [],
     ...overrides,
   };
@@ -55,7 +92,9 @@ function maintenance(overrides = {}) {
     id: 'maintenance-1',
     vehicleId: 'vehicle-1',
     title: 'Замена масла',
+    recordType: 'MAINTENANCE' as const,
     status: 'PLANNED' as const,
+    damageReportedAt: null,
     scheduledAt: new Date('2026-08-24T13:00:00.000Z'),
     scheduledEndsAt: null,
     vehicleLabel: 'Kia Rio · А001АА777',
@@ -89,6 +128,22 @@ function lead(overrides = {}) {
   };
 }
 
+function fine(overrides = {}) {
+  return {
+    id: 'fine-1',
+    decreeNumber: '18810577260909000001',
+    createdAt: new Date('2026-08-24T10:30:00.000Z'),
+    offenseAt: new Date('2026-08-24T09:45:00.000Z'),
+    currentAmountMinor: BigInt(250_000),
+    description: 'Превышение скорости',
+    address: 'Москва, Ленинградское шоссе',
+    vehicleLabel: 'Mercedes-Benz E 220 d 4MATIC · М283АМ997',
+    clientLabel: 'Иванов Иван',
+    contractNumber: 'ME-2026-0019-SA',
+    ...overrides,
+  };
+}
+
 function source(overrides = {}) {
   return {
     period: { key: 'today' as const, ...moscowDay('2026-08-24') },
@@ -96,14 +151,90 @@ function source(overrides = {}) {
     vehicles: [vehicle()],
     rentals: [],
     financeRentals: [],
+    clientCount: 0,
     maintenanceRecords: [],
     washRecords: [],
     leads: [],
+    fines: [],
     ...overrides,
   };
 }
 
 describe('buildDashboardOverview', () => {
+  it('counts actual outstanding deposits across all dates, excluding settled and uncollected amounts', () => {
+    const paid = [{ kind: 'DEPOSIT', status: 'CONFIRMED', amountMinor: BigInt(2000000) }];
+    const result = buildDashboardOverview(
+      source({
+        financeRentals: [
+          rental({ id: 'held', depositMinor: BigInt(2000000), payments: paid }),
+          rental({
+            id: 'partial-payment',
+            depositMinor: BigInt(2000000),
+            payments: [{ ...paid[0], amountMinor: BigInt(500000) }],
+          }),
+          rental({ id: 'unpaid', depositMinor: BigInt(2000000) }),
+          ...(['RETURNED', 'PARTIALLY_WITHHELD', 'WITHHELD'] as const).map((status) =>
+            rental({
+              id: status,
+              status: 'COMPLETED',
+              depositMinor: BigInt(2000000),
+              payments: paid,
+              operations: [operation(status, '2026-08-23')],
+            }),
+          ),
+          rental({
+            id: 'legacy-held',
+            depositMinor: BigInt(1000000),
+            operations: [operation('COLLECTED', '2026-08-23')],
+          }),
+        ],
+      }),
+    );
+    expect(result.kpis.heldDepositsMinor).toBe('3500000');
+  });
+  it('counts maintenance, repairs, washes, contracts and clients independently', () => {
+    const result = buildDashboardOverview(
+      source({
+        vehicles: [
+          vehicle({ id: 'vehicle-maintenance' }),
+          vehicle({ id: 'vehicle-repair' }),
+          vehicle({ id: 'vehicle-wash' }),
+          vehicle({ id: 'vehicle-free' }),
+        ],
+        maintenanceRecords: [
+          maintenance({ id: 'maintenance-1', vehicleId: 'vehicle-maintenance' }),
+          maintenance({ id: 'maintenance-2', vehicleId: 'vehicle-maintenance' }),
+          maintenance({
+            id: 'repair-1',
+            vehicleId: 'vehicle-repair',
+            recordType: 'REPAIR',
+            status: 'DAMAGE_REPORTED',
+            scheduledAt: null,
+            damageReportedAt: new Date('2026-08-24T09:00:00.000Z'),
+          }),
+        ],
+        washRecords: [wash({ vehicleId: 'vehicle-wash' })],
+        financeRentals: [
+          rental({ id: 'confirmed', status: 'CONFIRMED' }),
+          rental({ id: 'active', status: 'ACTIVE' }),
+          rental({ id: 'completed', status: 'COMPLETED' }),
+          rental({ id: 'draft', status: 'DRAFT' }),
+          rental({ id: 'cancelled', status: 'CANCELLED' }),
+        ],
+        clientCount: 37,
+      }),
+    );
+
+    expect(result.kpis).toMatchObject({
+      maintenanceVehicles: 1,
+      repairVehicles: 1,
+      washVehicles: 1,
+      serviceVehicles: 3,
+      contracts: 3,
+      clients: 37,
+    });
+  });
+
   it('calculates lifetime earnings and deposits independently from the selected work period', () => {
     const historical = rental({
       status: 'COMPLETED',
@@ -321,14 +452,17 @@ describe('buildDashboardOverview', () => {
     expect(result.workItems).toEqual([]);
   });
 
-  it('schedules a pending deposit return on the completed rental obligation, not collection time', () => {
+  it('shows a pending deposit return three days before its 21-working-day deadline', () => {
     const result = buildDashboardOverview(
       source({
+        period: { key: 'today' as const, ...moscowDay('2026-09-19') },
+        now: new Date('2026-09-19T12:00:00.000Z'),
         rentals: [
           rental({
             status: 'COMPLETED',
             depositMinor: BigInt(15_000),
             endsAt: new Date('2026-08-24T17:00:00.000Z'),
+            completedAt: new Date('2026-08-24T17:00:00.000Z'),
             operations: [{ ...operation('COLLECTED', '2026-08-20'), type: 'HANDOVER' }],
           }),
         ],
@@ -339,7 +473,131 @@ describe('buildDashboardOverview', () => {
       expect.objectContaining({
         id: 'deposit-return:rental-1',
         kind: 'DEPOSIT_RETURN',
-        scheduledAt: '2026-08-24T17:00:00.000Z',
+        scheduledAt: '2026-09-22T17:00:00.000Z',
+        overdue: false,
+      }),
+    );
+  });
+
+  it('shows a completed payment-backed deposit even without a collected operation', () => {
+    const result = buildDashboardOverview(
+      source({
+        period: { key: 'today' as const, ...moscowDay('2026-09-19') },
+        now: new Date('2026-09-19T12:00:00.000Z'),
+        rentals: [
+          rental({
+            status: 'COMPLETED',
+            depositMinor: BigInt(15_000),
+            completedAt: new Date('2026-08-24T17:00:00.000Z'),
+            payments: [{ kind: 'DEPOSIT', status: 'CONFIRMED', amountMinor: BigInt(15_000) }],
+            operations: [],
+          }),
+        ],
+      }),
+    );
+
+    expect(result.workItems).toContainEqual(
+      expect.objectContaining({
+        id: 'deposit-return:rental-1',
+        kind: 'DEPOSIT_RETURN',
+        scheduledAt: '2026-09-22T17:00:00.000Z',
+        overdue: false,
+      }),
+    );
+  });
+
+  it('keeps a midnight deposit deadline as due today for the whole Moscow day', () => {
+    const result = buildDashboardOverview(
+      source({
+        period: { key: 'today' as const, ...moscowDay('2026-09-23') },
+        now: new Date('2026-09-23T12:00:00.000Z'),
+        rentals: [
+          rental({
+            status: 'COMPLETED',
+            depositMinor: BigInt(15_000),
+            completedAt: new Date('2026-08-24T21:00:00.000Z'),
+            operations: [{ ...operation('COLLECTED', '2026-08-20'), type: 'HANDOVER' }],
+          }),
+        ],
+      }),
+    );
+
+    expect(result.workItems).toContainEqual(
+      expect.objectContaining({
+        id: 'deposit-return:rental-1',
+        title: 'Вернуть депозит сегодня',
+        scheduledAt: '2026-09-22T21:00:00.000Z',
+        tone: 'warning',
+        overdue: false,
+      }),
+    );
+  });
+
+  it('does not show a payment-backed deposit after a terminal return operation', () => {
+    const result = buildDashboardOverview(
+      source({
+        period: { key: 'today' as const, ...moscowDay('2026-09-23') },
+        now: new Date('2026-09-23T12:00:00.000Z'),
+        rentals: [
+          rental({
+            status: 'COMPLETED',
+            depositMinor: BigInt(15_000),
+            completedAt: new Date('2026-08-24T17:00:00.000Z'),
+            payments: [{ kind: 'DEPOSIT', status: 'CONFIRMED', amountMinor: BigInt(15_000) }],
+            operations: [operation('RETURNED', '2026-09-22')],
+          }),
+        ],
+      }),
+    );
+
+    expect(result.workItems).not.toContainEqual(
+      expect.objectContaining({ id: 'deposit-return:rental-1' }),
+    );
+  });
+
+  it('does not show a deposit return before the three-day reminder window', () => {
+    const result = buildDashboardOverview(
+      source({
+        period: { key: 'today' as const, ...moscowDay('2026-09-18') },
+        now: new Date('2026-09-18T12:00:00.000Z'),
+        rentals: [
+          rental({
+            status: 'COMPLETED',
+            depositMinor: BigInt(15_000),
+            completedAt: new Date('2026-08-24T17:00:00.000Z'),
+            operations: [{ ...operation('COLLECTED', '2026-08-20'), type: 'HANDOVER' }],
+          }),
+        ],
+      }),
+    );
+
+    expect(result.workItems).not.toContainEqual(
+      expect.objectContaining({ id: 'deposit-return:rental-1' }),
+    );
+  });
+
+  it('keeps an overdue unreturned deposit at the top of the workday', () => {
+    const result = buildDashboardOverview(
+      source({
+        period: { key: 'today' as const, ...moscowDay('2026-09-23') },
+        now: new Date('2026-09-23T12:00:00.000Z'),
+        rentals: [
+          rental({
+            status: 'COMPLETED',
+            depositMinor: BigInt(15_000),
+            completedAt: new Date('2026-08-24T17:00:00.000Z'),
+            operations: [{ ...operation('COLLECTED', '2026-08-20'), type: 'HANDOVER' }],
+          }),
+        ],
+      }),
+    );
+
+    expect(result.workItems[0]).toEqual(
+      expect.objectContaining({
+        id: 'deposit-return:rental-1',
+        scheduledAt: '2026-09-22T17:00:00.000Z',
+        tone: 'danger',
+        overdue: true,
       }),
     );
   });
@@ -439,5 +697,84 @@ describe('buildDashboardOverview', () => {
       clientLabel: 'Источник: Авито',
       unscheduled: true,
     });
+  });
+
+  it('adds new fines to the workday with vehicle, client, contract and amount', () => {
+    const result = buildDashboardOverview(source({ fines: [fine()] }));
+
+    expect(result.workItems).toContainEqual(
+      expect.objectContaining({
+        id: 'fine:fine-1',
+        kind: 'FINE',
+        scheduledAt: '2026-08-24T10:30:00.000Z',
+        title: 'Новый штраф',
+        tone: 'warning',
+        href: '/fines?query=18810577260909000001',
+        vehicleLabel: 'Mercedes-Benz E 220 d 4MATIC · М283АМ997',
+        clientLabel: 'Иванов Иван',
+        contractNumber: 'ME-2026-0019-SA',
+        address: 'Москва, Ленинградское шоссе',
+        amountMinor: '250000',
+        overdue: false,
+      }),
+    );
+  });
+
+  it('uses discount deadline rather than ingestion date and keeps unknown payment deadlines unscheduled', () => {
+    const result = buildDashboardOverview(
+      source({
+        fines: [
+          fine({
+            id: 'discount',
+            status: 'UNPAID',
+            createdAt: new Date('2026-08-01T10:00:00Z'),
+            discountExpiresAt: new Date('2026-08-24T20:59:59Z'),
+          }),
+          fine({ id: 'unknown', status: 'UNPAID' }),
+          fine({ id: 'paid', status: 'PAID' }),
+        ],
+      }),
+    );
+    expect(result.workItems.find((item) => item.id === 'fine:discount')).toMatchObject({
+      scheduledAt: '2026-08-24T20:59:59.000Z',
+      deadlineLabel: 'Скидка заканчивается сегодня',
+      unscheduled: false,
+      dateOnly: true,
+    });
+    expect(result.workItems.find((item) => item.id === 'fine:unknown')).toMatchObject({
+      unscheduled: true,
+      overdue: false,
+    });
+    expect(result.workItems.some((item) => item.id === 'fine:paid')).toBe(false);
+  });
+
+  it('adds a refuel action for a vehicle at or below 20 percent', () => {
+    const result = buildDashboardOverview(
+      source({ vehicles: [vehicle({ fuelLevelPercent: 20 })] }),
+    );
+
+    expect(result.workItems).toContainEqual(
+      expect.objectContaining({
+        id: 'low-fuel:vehicle-1',
+        kind: 'LOW_FUEL',
+        title: 'Мало топлива',
+        tone: 'danger',
+        href: '/vehicles/vehicle-1',
+        vehicleLabel: 'Kia Rio · А001АА777',
+        clientLabel: 'Остаток топлива: 20%',
+        overdue: false,
+      }),
+    );
+  });
+
+  it('does not put current low fuel into a future-only workday', () => {
+    const result = buildDashboardOverview(
+      source({
+        period: { key: 'tomorrow' as const, ...moscowDay('2026-08-25') },
+        vehicles: [vehicle({ fuelLevelPercent: 10 })],
+      }),
+    );
+
+    expect(result.workItems).not.toContainEqual(expect.objectContaining({ kind: 'LOW_FUEL' }));
   });
 });

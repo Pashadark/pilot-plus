@@ -106,6 +106,7 @@ const registrationNumberSchema = z
 
 const statusSchema = z.enum(['MOVING', 'IDLE', 'OFFLINE', 'MAINTENANCE', 'UNKNOWN']);
 const fuelTypeSchema = z.enum(['PETROL', 'DIESEL', 'ELECTRIC', 'HYBRID', 'OTHER']);
+const driveTypeSchema = z.enum(['FRONT', 'REAR', 'ALL_WHEEL']);
 
 export const vehicleInputSchema = z
   .object({
@@ -127,7 +128,10 @@ export const vehicleInputSchema = z
     fuelType: fuelTypeSchema,
     seats: z.coerce.number().int().min(1).max(99),
     engineLiters: optionalDecimal(0, 99.9),
+    driveType: z.preprocess(emptyToUndefined, driveTypeSchema.optional()),
+    fuelConsumptionLitersPer100Km: optionalDecimal(0, 99.9),
     odometerKm: optionalDecimal(0, 999_999_999.9),
+    fuelLevelPercent: optionalInteger(0, 100),
     valueRubles: optionalMoneyMinorSchema(),
     dailyPriceRubles: moneyMinorSchema(),
     rangePriceRubles: optionalMoneyMinorSchema(),

@@ -1,21 +1,29 @@
 'use client';
 
 import Link from 'next/link';
-import { FiLogOut, FiMenu, FiMoon, FiSearch, FiSun } from 'react-icons/fi';
+import { useSyncExternalStore } from 'react';
+import { FiLogOut, FiMenu } from 'react-icons/fi';
+import { HeaderSearch } from '@/modules/search/HeaderSearch';
 
 import { logoutAction } from '@/modules/auth/actions';
 import type { SafeUser } from '@/modules/auth/types';
 import { NotificationCenter } from '@/modules/notifications/NotificationCenter';
 import type { PilotNotification } from '@/modules/notifications/types';
 import type { SystemHealthSummary } from '@/modules/system-health/types';
-import { useTheme } from '@/shared/providers/ThemeProvider';
-import { Avatar, Breadcrumbs, DropdownMenu, IconButton, SearchInput } from '@/shared/ui';
+import { Avatar, DropdownMenu, IconButton } from '@/shared/ui';
 import type { Breadcrumb } from './AppShell';
 
+import { InterfaceModeMenuItems, ThemeSwitch } from './AppearanceControls';
 import { MobileNavigation } from './MobileNavigation';
 
+function subscribeScroll(listener: () => void) {
+  window.addEventListener('scroll', listener, { passive: true });
+  return () => window.removeEventListener('scroll', listener);
+}
+const getScrolled = () => window.scrollY > 8;
+const getServerScrolled = () => false;
+
 export function Header({
-  breadcrumbs,
   user,
   mobileNavigationOpen,
   onOpenMobileNavigation,
@@ -31,58 +39,43 @@ export function Header({
   systemHealthSummary: SystemHealthSummary;
   notifications: readonly PilotNotification[];
 }) {
-  const { theme, toggleTheme } = useTheme();
-
+  const scrolled = useSyncExternalStore(subscribeScroll, getScrolled, getServerScrolled);
   return (
     <>
       <header
         data-testid="app-header"
-        className="fixed inset-x-0 top-0 z-40 flex h-[var(--header-height)] items-center border-b bg-[var(--color-surface)] px-4 transition-[left] duration-200 md:left-[var(--sidebar-width)] md:px-5"
+        data-scrolled={scrolled}
+        data-interface-shell="header"
+        style={{
+          backgroundColor: scrolled ? 'var(--color-surface)' : 'transparent',
+          borderColor: scrolled ? 'var(--color-border)' : 'transparent',
+          boxShadow: scrolled ? 'var(--shadow-card)' : 'none',
+        }}
+        className="fixed inset-x-0 top-0 z-40 flex h-[var(--header-height)] items-center border-b px-4 transition-[left,background-color,border-color,box-shadow] duration-200 motion-reduce:transition-none md:left-[var(--sidebar-width)] md:px-5"
       >
-        <div className="flex w-full items-center justify-between md:px-6">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex w-full items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2 md:hidden">
             <div className="shrink-0 md:hidden">
               <IconButton label="Открыть меню" variant="ghost" onClick={onOpenMobileNavigation}>
                 <FiMenu aria-hidden="true" className="size-5" />
               </IconButton>
             </div>
-            <div
-              data-testid="mobile-breadcrumbs"
-              className="scrollbar-hidden min-w-0 flex-1 overflow-x-auto overscroll-x-contain [&_li]:shrink-0 [&_ol]:w-max [&_ol]:flex-nowrap"
-            >
-              <Breadcrumbs items={breadcrumbs} />
-            </div>
           </div>
-          <div className="flex items-center gap-1 md:gap-2">
-            <div className="relative hidden h-11 w-64 items-center lg:flex">
-              <FiSearch
-                aria-hidden="true"
-                className="pointer-events-none absolute left-3 z-10 text-[var(--color-text-muted)]"
-              />
-              <SearchInput
-                aria-label="Глобальный поиск"
-                placeholder="Поиск в СУПА ПРО"
-                className="h-10 pl-10"
-              />
-            </div>
-            <NotificationCenter notifications={notifications} />
-            <IconButton
-              label={theme === 'light' ? 'Включить тёмную тему' : 'Включить светлую тему'}
-              variant="ghost"
-              onClick={toggleTheme}
-            >
-              {theme === 'light' ? (
-                <FiMoon aria-hidden="true" className="size-5" />
-              ) : (
-                <FiSun aria-hidden="true" className="size-5" />
-              )}
-            </IconButton>
+          <div className="mr-auto min-w-0 flex-1 max-w-[720px]">
+            <HeaderSearch />
+          </div>
+          <div className="flex items-center justify-end gap-1 md:gap-2">
+            <NotificationCenter
+              notifications={notifications}
+              globalScope={user.role === 'SUPER_ADMIN'}
+            />
+            <ThemeSwitch />
             <div className="ml-1 border-l pl-2">
               <DropdownMenu
                 ariaLabel="Профиль и компания"
                 label={
                   <span className="flex size-11 items-center justify-center rounded-[var(--radius-md)] transition-colors hover:bg-[var(--color-primary-soft)]">
-                    <Avatar name={user.name} size="sm" />
+                    <Avatar name={user.name} src={user.avatarUrl} size="sm" />
                   </span>
                 }
               >
@@ -97,6 +90,7 @@ export function Header({
                 >
                   Открыть профиль
                 </Link>
+                <InterfaceModeMenuItems />
                 <form action={logoutAction}>
                   <button
                     type="submit"

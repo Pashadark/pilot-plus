@@ -51,7 +51,7 @@ export function FineAssignmentReview({
             <FiCheck aria-hidden="true" /> Подтверждённый клиент
           </Badge>
           <span className="font-medium">{confirmedClientLabel}</span>
-          {confirmedContractLabel ? <span>· {confirmedContractLabel}</span> : null}
+          {confirmedContractLabel ? <span>{confirmedContractLabel}</span> : null}
         </p>
       ) : null}
 
@@ -67,7 +67,8 @@ export function FineAssignmentReview({
               </Badge>
               <p className="font-semibold">{candidate.clientDisplayName}</p>
               <p className="text-[var(--color-text-secondary)]">
-                Договор {candidate.contractNumber ?? 'без номера'} · {candidate.distanceLabel}
+                Договор {candidate.contractNumber ?? 'без номера'}
+                <span className="block">{candidate.distanceLabel}</span>
               </p>
               <p className="text-[var(--color-text-secondary)]">
                 {formatDate(candidate.startsAt)} — {formatDate(candidate.endsAt)}

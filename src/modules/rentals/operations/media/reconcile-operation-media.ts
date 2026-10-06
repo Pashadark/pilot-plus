@@ -16,6 +16,10 @@ type CleanupStorage = {
   removePrivate(storageKey: string): Promise<void>;
 };
 
+function isMissingFile(error: unknown) {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
+}
+
 export async function reconcileOperationMedia(input: {
   repository: Repository;
   storage: CleanupStorage;
@@ -47,7 +51,9 @@ export async function reconcileOperationMedia(input: {
       continue;
     }
     await input.storage.removeUploadArtifacts(candidate.uploadId);
-    await input.storage.removePrivate(candidate.storageKey);
+    await input.storage.removePrivate(candidate.storageKey).catch((error: unknown) => {
+      if (!isMissingFile(error)) throw error;
+    });
     const removed = await input.repository.deleteMany({
       where: { id: candidate.id, status: 'CLEANING', claimToken },
     });

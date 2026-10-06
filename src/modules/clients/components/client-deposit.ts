@@ -6,12 +6,24 @@ const statusView: Record<
   NonNullable<ClientListRentalSummary['depositStatus']>,
   { label: string; tone: DepositTone }
 > = {
-  NOT_COLLECTED: { label: 'Не внесён', tone: 'neutral' },
-  COLLECTED: { label: 'Нужно вернуть', tone: 'warning' },
+  NOT_COLLECTED: { label: 'Не возвращён', tone: 'neutral' },
+  COLLECTED: { label: 'Не возвращён', tone: 'warning' },
   RETURNED: { label: 'Возвращён', tone: 'success' },
-  PARTIALLY_WITHHELD: { label: 'Удержан частично', tone: 'warning' },
-  WITHHELD: { label: 'Удержан', tone: 'danger' },
+  PARTIALLY_WITHHELD: { label: 'Не возвращён', tone: 'warning' },
+  WITHHELD: { label: 'Не возвращён', tone: 'danger' },
 };
+
+export function formatDepositReturnDate(value: string | null): string {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Europe/Moscow',
+  }).format(new Date(value));
+}
 
 export function formatMinorMoney(value: string) {
   return new Intl.NumberFormat('ru-RU', {
@@ -23,23 +35,24 @@ export function formatMinorMoney(value: string) {
 
 export function presentClientDeposit(
   rental: ClientListRentalSummary | null,
-  isCurrent: boolean,
-): { amount: string; label: string; tone: DepositTone } {
+  _isCurrent: boolean,
+): { amount: string; label: string; tone: DepositTone; returnedAtLabel: string } {
   if (!rental?.depositMinor || BigInt(rental.depositMinor) === BigInt(0)) {
-    return { amount: 'Нет депозита', label: '', tone: 'neutral' };
+    return { amount: 'Нет депозита', label: '', tone: 'neutral', returnedAtLabel: '—' };
   }
 
   const status = rental.depositStatus
     ? statusView[rental.depositStatus]
     : {
-        label: isCurrent ? 'Статус не отмечен' : 'Возврат не отмечен',
+        label: 'Статус не отмечен',
         tone: 'warning' as const,
       };
 
   return {
     amount: formatMinorMoney(rental.depositMinor),
-    label: isCurrent ? status.label : `Последний · ${status.label}`,
+    label: status.label,
     tone: status.tone,
+    returnedAtLabel: formatDepositReturnDate(rental.depositReturnedAt),
   };
 }
 

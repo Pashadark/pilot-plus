@@ -13,6 +13,8 @@ const validInput = {
   city: 'Москва',
   transmission: 'АКПП',
   fuelType: 'PETROL',
+  driveType: 'FRONT',
+  fuelConsumptionLitersPer100Km: '7.2',
   seats: '5',
   dailyPriceRubles: '3 500,50',
   depositRubles: '10000.00',
@@ -74,6 +76,8 @@ describe('валидация управления автопарком', () => {
     expect(result.vinNormalized).toBe('XW8ZZZNZ8VG000001');
     expect(result.dailyPriceMinor).toBe(350050);
     expect(result.depositMinor).toBe(BigInt(1_000_000));
+    expect(result.driveType).toBe('FRONT');
+    expect(result.fuelConsumptionLitersPer100Km).toBe(7.2);
   });
 
   it('не округляет небезопасные денежные значения через JavaScript number', () => {

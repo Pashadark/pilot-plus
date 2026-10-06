@@ -10,14 +10,23 @@ vi.mock('./access', () => ({
   requireRentalAccess,
   RentalAccessDeniedError: class RentalAccessDeniedError extends Error {},
 }));
-const { prisma } = vi.hoisted(() => ({ prisma: { $transaction: vi.fn() } }));
+const { prisma } = vi.hoisted(() => ({
+  prisma: { $transaction: vi.fn(), rentalOperation: { findFirst: vi.fn() } },
+}));
 vi.mock('@/database/prisma/client', () => ({ prisma }));
+const { executeReturnOperation } = vi.hoisted(() => ({ executeReturnOperation: vi.fn() }));
+vi.mock('@/modules/rentals/operations/server/execute-operation', () => ({
+  executeHandoverOperation: vi.fn(),
+  executeReturnOperation,
+}));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
 import {
   confirmAndGenerateRentalAction,
   confirmRentalAction,
   createRentalDraftAction,
   generateRentalDocumentsAction,
+  returnRentalAction,
 } from './actions';
 
 describe('rental actions', () => {
@@ -26,6 +35,59 @@ describe('rental actions', () => {
     generateRentalDocumentPair.mockReset();
     requireRentalAccess.mockReset();
     prisma.$transaction.mockReset();
+    prisma.rentalOperation.findFirst.mockReset();
+    executeReturnOperation.mockReset();
+  });
+
+  it('passes optional return evidence through without making it mandatory', async () => {
+    requireRentalAccess.mockResolvedValue({
+      user: { id: 'user-1', email: 'staff@example.test' },
+      scope: 'COMPANY',
+    });
+    executeReturnOperation.mockResolvedValue({ operationId: 'return-1', rentalId: 'rental-1' });
+    prisma.rentalOperation.findFirst.mockResolvedValue({
+      mileageKm: 10_500,
+      vehicle: { id: 'vehicle-1', odometerKm: 10_500 },
+      media: [{ id: 'panel' }, { id: 'front' }],
+    });
+    const form = new FormData();
+    form.set('companyId', 'company-1');
+    form.set('rentalId', 'rental-1');
+    form.set('idempotencyKey', 'return-rental-1-1');
+    form.set('occurredAt', '2026-09-06T13:00');
+    form.set('mileageKm', '10500');
+    form.set('fuelLevelPercent', '50');
+    form.set('vehicleCondition', 'GOOD');
+    form.set('depositStatus', 'RETURNED');
+    form.set('dashboardPhoto', new File(['photo'], 'panel.jpg', { type: 'image/jpeg' }));
+    form.set('bodyPhotoFront', new File(['front'], 'front.jpg', { type: 'image/jpeg' }));
+
+    await expect(returnRentalAction(null, form)).resolves.toMatchObject({
+      ok: true,
+      rentalId: 'rental-1',
+      mileageKm: 10_500,
+      savedMediaCount: 2,
+    });
+    expect(executeReturnOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: 'company-1',
+        command: expect.objectContaining({
+          evidenceStatus: 'VIDEO_MISSING',
+          evidenceMissingReason: 'Файловая фиксация возврата приложена частично или пропущена.',
+        }),
+      }),
+    );
+    expect(executeReturnOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dashboardPhoto: expect.objectContaining({ name: 'panel.jpg' }),
+        additionalFiles: [
+          expect.objectContaining({
+            kind: 'BODY_PHOTO_FRONT',
+            file: expect.objectContaining({ name: 'front.jpg' }),
+          }),
+        ],
+      }),
+    );
   });
 
   it('retains the canonical hidden depositMinor in a saved draft issuance snapshot', async () => {

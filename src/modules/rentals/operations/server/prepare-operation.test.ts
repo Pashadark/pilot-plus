@@ -54,6 +54,8 @@ describe('createOperationDraftPreparer', () => {
           actorUserId: 'user-1',
           type: 'HANDOVER',
           status: 'DRAFT',
+          evidenceStatus: 'MISSING',
+          evidenceMissingReason: 'Материалы фиксации ещё не загружены.',
         }),
       }),
     );

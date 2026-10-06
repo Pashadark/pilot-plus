@@ -79,4 +79,24 @@ describe('createCachedSystemHealthSummary', () => {
     });
     expect(check).toHaveBeenCalledOnce();
   });
+
+  it('включает фоновые процессы в общий индикатор', async () => {
+    const checkServices = vi.fn().mockResolvedValue([service('api', 'healthy')]);
+    const checkOperations = vi.fn().mockResolvedValue([
+      { status: 'healthy', checkedAt },
+      { status: 'unavailable', checkedAt: '2026-08-31T12:00:00.000Z' },
+    ]);
+    const cache = vi.fn((loader: () => Promise<SystemHealthSummary>) => loader);
+
+    const getSummary = createCachedSystemHealthSummary(cache, checkServices, checkOperations);
+
+    await expect(getSummary()).resolves.toEqual({
+      state: 'degraded',
+      count: 2,
+      total: 3,
+      checkedAt: '2026-08-31T12:00:00.000Z',
+    });
+    expect(checkServices).toHaveBeenCalledOnce();
+    expect(checkOperations).toHaveBeenCalledOnce();
+  });
 });

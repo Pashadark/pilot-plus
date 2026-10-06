@@ -1,7 +1,8 @@
 'use client';
 
 import { useActionState } from 'react';
-import { FiCreditCard, FiExternalLink, FiRefreshCw } from 'react-icons/fi';
+import { FiCreditCard, FiRefreshCw } from 'react-icons/fi';
+import { FinePaymentQr } from './FinePaymentQr';
 
 import { checkFinePaymentAction, createSandboxFineInvoiceAction } from '../server/payment-actions';
 import { Alert, Badge, Button, Card, CardContent, CardHeader } from '@/shared/ui';
@@ -146,16 +147,7 @@ export function FinePaymentPanel({
               Статус и история платежа обновятся после ответа платёжного сервиса. Если счёт
               завершится ошибкой, повторите проверку и создание счёта.
             </p>
-            {invoiceState.paymentUrl ? (
-              <a
-                href={invoiceState.paymentUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-h-11 w-fit items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 font-semibold text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
-              >
-                Открыть проверенную ссылку оплаты <FiExternalLink aria-hidden="true" />
-              </a>
-            ) : null}
+            {invoiceState.paymentUrl ? <FinePaymentQr url={invoiceState.paymentUrl} /> : null}
           </div>
         ) : null}
       </CardContent>

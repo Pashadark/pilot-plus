@@ -12,6 +12,7 @@ import {
   driverHelperMoneyToMinor,
 } from './schemas';
 import { validateDriverHelperPaymentUrl } from './payment-url';
+import { tollPageSchema } from '../../tolls';
 
 const BASE_URL = 'https://api.driver-helper.ru';
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -145,6 +146,11 @@ export class DriverHelperClient {
   listCars(page: number) {
     if (!Number.isInteger(page) || page < 1) throw new DriverHelperError('INVALID_RESPONSE');
     return this.get(`/v1.0/cars?page=${page}&perPage=50`, driverHelperCarsPageSchema);
+  }
+
+  listTollDebts(page: number) {
+    if (!Number.isInteger(page) || page < 1) throw new DriverHelperError('INVALID_RESPONSE');
+    return this.get(`/v1.0/ckad-cars/debt-trips?page=${page}&perPage=50`, tollPageSchema);
   }
 
   listUnpaidFines(page: number) {

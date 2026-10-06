@@ -72,6 +72,7 @@ function transactionFixture(overrides: Record<string, unknown> = {}) {
     client: {
       findFirst: vi.fn(async () => ({
         id: 'client-1',
+        status: 'VERIFIED',
         firstName: 'Иван',
         middleName: 'Иванович',
         lastName: 'Иванов',
@@ -88,6 +89,7 @@ function transactionFixture(overrides: Record<string, unknown> = {}) {
     vehicle: {
       findFirst: vi.fn(async () => ({
         id: 'vehicle-1',
+        isRentalReady: true,
         make: 'Volkswagen',
         modelName: 'Polo',
         registrationNumber: 'А156АХ997',

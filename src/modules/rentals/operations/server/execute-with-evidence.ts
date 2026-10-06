@@ -17,6 +17,8 @@ export async function executeOperationWithEvidence<
   command: Command;
   video?: FileInput;
   dashboardPhoto?: FileInput;
+  additionalFiles?: { kind: RentalOperationMediaKind; file: FileInput }[];
+  deriveStatus?: (input: { hasVideo: boolean; hasDashboardPhoto: boolean }) => RentalEvidenceStatus;
   prepare(command: Command): Promise<{ operationId: string }>;
   admit(input: {
     operationId: string;
@@ -25,14 +27,14 @@ export async function executeOperationWithEvidence<
   }): Promise<{ status: string }>;
   commit(command: Command): Promise<Result>;
 }) {
-  const evidenceStatus = deriveEvidenceStatus({
+  const evidenceStatus = (input.deriveStatus ?? deriveEvidenceStatus)({
     hasVideo: Boolean(input.video),
     hasDashboardPhoto: Boolean(input.dashboardPhoto),
   });
   const command = { ...input.command, evidenceStatus };
   if (evidenceStatus !== 'COMPLETE' && !command.evidenceMissingReason?.trim())
     throw new Error('Причина отсутствия фиксации обязательна.');
-  if (input.video || input.dashboardPhoto) {
+  if (input.video || input.dashboardPhoto || input.additionalFiles?.length) {
     const prepared = await input.prepare(command);
     if (input.video)
       await input.admit({
@@ -46,6 +48,9 @@ export async function executeOperationWithEvidence<
         kind: 'DASHBOARD_PHOTO',
         file: input.dashboardPhoto,
       });
+    for (const additional of input.additionalFiles ?? []) {
+      await input.admit({ operationId: prepared.operationId, ...additional });
+    }
   }
   return input.commit(command);
 }

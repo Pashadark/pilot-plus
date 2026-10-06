@@ -5,7 +5,7 @@ import { openAuthenticatedRoute } from './helpers/auth';
 test('гость перенаправляется на публичный экран входа', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole('heading', { name: 'Вход в Pilot+' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Вход в СУПА ПРО' })).toBeVisible();
   await expect(page.getByLabel('Email')).toBeVisible();
   await expect(page.getByLabel('Пароль')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Войти' })).toBeVisible();
@@ -36,7 +36,7 @@ test('экран входа использует сохранённую тёмн
   await page.goto('/login');
 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expect(page.getByRole('heading', { name: 'Вход в Pilot+' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Вход в СУПА ПРО' })).toBeVisible();
   await expect(page.getByLabel('Email')).toBeVisible();
 });
 
@@ -63,7 +63,7 @@ test('вход показывает одноразовое уведомлени�
 
   await openAuthenticatedRoute(page, '/?welcome=1');
 
-  await expect(page.getByRole('status')).toContainText('Вы вошли в Pilot+');
+  await expect(page.getByRole('status')).toContainText('Вы вошли в СУПА ПРО');
   await expect(page).toHaveURL(/\/$/);
   await page.reload();
   await expect(page.getByRole('status')).toHaveCount(0);

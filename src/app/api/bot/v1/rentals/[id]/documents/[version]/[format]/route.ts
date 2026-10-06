@@ -2,7 +2,7 @@ import { Readable } from 'node:stream';
 
 import { prisma } from '@/database/prisma/client';
 import { BotApiError, botErrorResponse } from '@/modules/bot-api/auth';
-import { verifyRentalDocumentGrant } from '@/modules/bot-api/document-grants';
+import { authorizeRentalDocumentGrant } from '@/modules/bot-api/document-grants';
 import { LocalPrivateStorage } from '@/services/storage/local-private-storage';
 
 type Context = { params: Promise<{ id: string; version: string; format: string }> };
@@ -18,8 +18,10 @@ export async function GET(request: Request, context: Context): Promise<Response>
     const url = new URL(request.url);
     const expiresAt = Number(url.searchParams.get('expires'));
     const grant = url.searchParams.get('grant') ?? '';
+    const identityId = url.searchParams.get('identity') ?? '';
     if (
       !/^[A-Za-z0-9_-]{1,128}$/u.test(id) ||
+      !/^[A-Za-z0-9_-]{1,128}$/u.test(identityId) ||
       !Number.isSafeInteger(version) ||
       version < 1 ||
       !['DOCX', 'PDF'].includes(format)
@@ -50,8 +52,9 @@ export async function GET(request: Request, context: Context): Promise<Response>
     });
     if (!record || record.clientDocument.currentVersion !== record.clientDocumentVersion.version)
       throw new BotApiError('NOT_FOUND', 404);
-    verifyRentalDocumentGrant(
+    await authorizeRentalDocumentGrant(
       {
+        identityId,
         companyId: record.companyId,
         clientId: record.clientId,
         rentalId: record.rentalId,
@@ -72,6 +75,7 @@ export async function GET(request: Request, context: Context): Promise<Response>
     return new Response(Readable.toWeb(stream) as ReadableStream<Uint8Array>, {
       headers: {
         'Cache-Control': 'private, no-store',
+        'Referrer-Policy': 'no-referrer',
         'Content-Disposition': `attachment; filename*=UTF-8''${filename}`,
         'Content-Type': record.clientDocumentVersion.verifiedMime,
         'X-Content-Type-Options': 'nosniff',

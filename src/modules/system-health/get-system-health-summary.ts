@@ -2,6 +2,7 @@ import 'server-only';
 
 import { unstable_cache } from 'next/cache';
 
+import { getOperationalHealth } from './get-operational-health';
 import { getSystemHealth } from './get-system-health';
 import type { ServiceHealth, SystemHealthSummary } from './types';
 
@@ -13,7 +14,14 @@ type CacheSummary = (
   options: { revalidate: number },
 ) => () => Promise<SystemHealthSummary>;
 
-export function summarizeSystemHealth(services: readonly ServiceHealth[]): SystemHealthSummary {
+interface SummarizableHealth {
+  status: ServiceHealth['status'] | 'degraded';
+  checkedAt: string;
+}
+
+export function summarizeSystemHealth(
+  services: readonly SummarizableHealth[],
+): SystemHealthSummary {
   const count = services.filter((service) => service.status === 'healthy').length;
   const state =
     count === services.length && services.length > 0
@@ -32,9 +40,13 @@ export function summarizeSystemHealth(services: readonly ServiceHealth[]): Syste
 export function createCachedSystemHealthSummary(
   cacheSummary: CacheSummary,
   checkHealth: () => Promise<ServiceHealth[]>,
+  checkOperations: () => Promise<SummarizableHealth[]> = async () => [],
 ) {
   return cacheSummary(
-    async () => summarizeSystemHealth(await checkHealth()),
+    async () => {
+      const [services, operations] = await Promise.all([checkHealth(), checkOperations()]);
+      return summarizeSystemHealth([...services, ...operations]);
+    },
     ['pilot-system-health-summary'],
     // Короткий TTL ограничивает повторные DB/TCP probes между серверными рендерами shell.
     { revalidate: SUMMARY_REVALIDATE_SECONDS },
@@ -44,4 +56,5 @@ export function createCachedSystemHealthSummary(
 export const getCachedSystemHealthSummary = createCachedSystemHealthSummary(
   unstable_cache,
   getSystemHealth,
+  getOperationalHealth,
 );

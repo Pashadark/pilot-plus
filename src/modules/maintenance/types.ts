@@ -55,5 +55,4 @@ export type RepairInput = {
 };
 
 export type RepairInputResult =
-  | { ok: true; data: RepairInput }
-  | { ok: false; state: OperationActionState };
+  { ok: true; data: RepairInput } | { ok: false; state: OperationActionState };

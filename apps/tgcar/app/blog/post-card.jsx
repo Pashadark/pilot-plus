@@ -1,0 +1,2 @@
+import {formatDate,readingMinutes} from './posts.mjs';
+export default function PostCard({post}){return <a className="blog-card" href={`/blog/${post.slug}`}><img src={post.image} alt={post.imageAlt} loading="lazy"/><div><span className="blog-category">{post.category}</span><h2>{post.title}</h2><p>{post.description}</p><div className="blog-meta"><time dateTime={post.date}>{formatDate(post.date)}</time><span>{readingMinutes(post)} мин чтения</span></div><span className="blog-read">Читать статью →</span></div></a>}

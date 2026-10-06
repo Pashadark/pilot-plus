@@ -1,4 +1,6 @@
 import { createCipheriv, randomBytes, randomUUID } from 'node:crypto';
+import { rm } from 'node:fs/promises';
+import { isAbsolute, relative, resolve } from 'node:path';
 
 import { expect, test, type Page } from '@playwright/test';
 
@@ -18,6 +20,10 @@ const created = {
   templateIds: [] as string[],
 };
 const password = `E2E-${randomUUID()}-safe`;
+const safePng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAE/wJ/lx2lWQAAAABJRU5ErkJggg==',
+  'base64',
+);
 function canonicalFourWorkbook(): Buffer {
   const xml = `<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Марка</t></is></c><c r="B1" t="inlineStr"><is><t>Модель</t></is></c><c r="C1" t="inlineStr"><is><t>Госномер</t></is></c><c r="D1" t="inlineStr"><is><t>Год</t></is></c></row>${[
     ['Kia', "Cee'd", 'А429АУ97', 2020],
@@ -153,38 +159,12 @@ async function createTenant(role: 'COMPANY_ADMIN' | 'DISPATCHER' | 'DRIVER', com
       passportEncrypted: encryptedFixture('4500 000000'),
       registrationAddressEncrypted: encryptedFixture('Москва'),
       driverLicenseEncrypted: encryptedFixture('E2E-DRIVER'),
+      driverLicenseExpiresAt: new Date('2030-01-01'),
       birthDate: new Date('1990-01-01'),
       driverCategories: [],
       createdByUserId: userId,
     },
   });
-  for (const category of ['PASSPORT', 'DRIVER_LICENSE'] as const) {
-    const documentId = randomUUID();
-    await prisma.clientDocument.create({
-      data: {
-        id: documentId,
-        companyId: tenantId,
-        clientId,
-        category,
-        title: `E2E ${category}`,
-        status: 'CLEAN',
-        createdByUserId: userId,
-        versions: {
-          create: {
-            id: randomUUID(),
-            version: 1,
-            storageKey: `e2e/${marker}/${documentId}`,
-            originalName: `${category}.txt`,
-            verifiedMime: 'text/plain',
-            bytes: 1,
-            sha256: '0'.repeat(64),
-            scanVerdict: 'CLEAN',
-            scannedAt: new Date(),
-          },
-        },
-      },
-    });
-  }
   await prisma.vehicle.create({
     data: {
       id: vehicleId,
@@ -298,6 +278,17 @@ test.afterAll(async () => {
   await prisma.client.deleteMany({ where: { id: { in: created.clientIds } } });
   await prisma.company.deleteMany({ where: { id: { in: created.companyIds } } });
   await prisma.user.deleteMany({ where: { id: { in: created.userIds } } });
+  const storageRoot = process.env.PRIVATE_STORAGE_ROOT?.trim();
+  if (storageRoot) {
+    const root = resolve(storageRoot);
+    for (const companyId of created.companyIds) {
+      const companyStorage = resolve(root, 'companies', companyId);
+      const withinRoot = relative(root, companyStorage);
+      if (!withinRoot.startsWith('..') && !isAbsolute(withinRoot)) {
+        await rm(companyStorage, { recursive: true, force: true });
+      }
+    }
+  }
   await prisma.$disconnect();
 });
 async function signInAs(page: Page, email: string) {
@@ -314,12 +305,33 @@ async function saveDraftWithInterval(page: Page, clientId: string) {
   await page.getByRole('button', { name: 'Далее' }).click();
   await page.getByLabel('Автомобиль').selectOption(fixture.admin.vehicleId);
   await page.getByRole('button', { name: 'Далее' }).click();
-  await page.getByLabel('Выдача (Москва)').fill('2026-08-20T10:00');
-  await page.getByLabel('Возврат (Москва)').fill('2026-08-22T10:00');
+  await page.getByLabel('Выдача (Москва)').fill('2026-09-10T10:00');
+  await page.getByLabel('Возврат (Москва)').fill('2026-09-12T10:00');
   await page.getByLabel('Адрес выдачи').fill('Москва, DEMO ONLY, выдача');
   await page.getByLabel('Адрес возврата').fill('Москва, DEMO ONLY, возврат');
   await page.getByRole('button', { name: 'Сохранить черновик' }).click();
   await expect(page.getByText('Черновик договора сохранён.')).toBeVisible();
+}
+
+async function uploadRequiredClientDocuments(page: Page, clientId: string) {
+  await page.goto(`/clients/${clientId}?tab=documents`);
+  await expect(page.getByTestId('client-documents-panel')).toBeVisible();
+  for (const [category, title] of [
+    ['PASSPORT', 'E2E паспорт'],
+    ['DRIVER_LICENSE', 'E2E водительское удостоверение'],
+  ] as const) {
+    await page.getByLabel(/Категория документа/u).selectOption(category);
+    await page.getByLabel(/Название документа/u).fill(title);
+    await page.getByLabel('Файл документа').setInputFiles({
+      name: `${category.toLowerCase()}.png`,
+      mimeType: 'image/png',
+      buffer: safePng,
+    });
+    await page.getByRole('button', { name: 'Загрузить документ' }).click();
+    await expect(
+      page.locator('article[data-document-status]').filter({ hasText: title }),
+    ).toContainText('Проверен');
+  }
 }
 
 async function advanceDraftToConfirmation(page: Page) {
@@ -361,10 +373,12 @@ test.describe('rental workflow', () => {
     await expect(page.getByRole('status')).toContainText(/Импорт завершён/u);
   });
 
-  test('dispatcher saves a draft, rejects overlap, confirms and downloads both formats', async ({
+  test('dispatcher проходит полный путь от документов клиента до выдачи', async ({
     page,
-  }) => {
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'Полный mutation-flow выполняется один раз.');
     await signInAs(page, fixture.dispatcher.email);
+    await uploadRequiredClientDocuments(page, fixture.admin.clientId);
 
     await saveDraftWithInterval(page, fixture.admin.clientId);
     const overlappingPage = await page.context().newPage();
@@ -379,6 +393,59 @@ test.describe('rental workflow', () => {
     await expect(pdf).toBeVisible();
     await Promise.all([page.waitForEvent('download'), docx.click()]);
     await Promise.all([page.waitForEvent('download'), pdf.click()]);
+
+    const pdfHref = await pdf.getAttribute('href');
+    const rentalId = pdfHref?.match(/\/rentals\/([^/]+)\/documents/u)?.[1];
+    expect(rentalId).toBeTruthy();
+    const rental = await prisma.rental.findUniqueOrThrow({
+      where: { id: rentalId },
+      select: { totalPriceMinor: true, depositMinor: true },
+    });
+    await page.goto(`/rentals/${rentalId}`);
+
+    const paymentForm = page.locator('form').filter({
+      has: page.getByRole('heading', { name: 'Записать оплату' }),
+    });
+    await paymentForm.locator('select[name="kind"]').selectOption('RENT');
+    await paymentForm
+      .locator('input[name="amountRubles"]')
+      .fill(String(Number(rental.totalPriceMinor) / 100));
+    await paymentForm.getByRole('button', { name: 'Записать оплату' }).click();
+    await expect(paymentForm.getByRole('status')).toHaveText('Оплата записана.');
+    await paymentForm.locator('select[name="kind"]').selectOption('DEPOSIT');
+    await paymentForm
+      .locator('input[name="amountRubles"]')
+      .fill(String(Number(rental.depositMinor ?? BigInt(0)) / 100));
+    await paymentForm.getByRole('button', { name: 'Записать оплату' }).click();
+    await expect(paymentForm.getByRole('status')).toHaveText('Оплата записана.');
+
+    const signatureForm = page.locator('form').filter({
+      has: page.getByRole('heading', { name: 'Отметить подпись' }),
+    });
+    for (const party of ['CLIENT', 'COMPANY'] as const) {
+      await signatureForm.locator('select[name="party"]').selectOption(party);
+      await signatureForm.locator('input[name="signedByName"]').fill(`E2E ${party}`);
+      await signatureForm.getByRole('button', { name: 'Отметить подпись' }).click();
+      await expect(signatureForm.getByRole('status')).toHaveText('Статус подписи сохранён.');
+    }
+
+    const handoverButton = page
+      .getByTestId('rental-action-rail')
+      .getByRole('button', { name: 'Выдать / Подать' });
+    await expect(handoverButton).toBeEnabled();
+    await handoverButton.click();
+    await page.getByLabel('Пробег, км').fill('10000');
+    await page.getByLabel('Топливо, %').fill('80');
+    await page.getByLabel('Причина отсутствия фиксации').fill('E2E без медиа');
+    await page.getByLabel('Сумма залога, коп.').fill(String(rental.depositMinor ?? BigInt(0)));
+    await page
+      .getByRole('dialog', { name: 'Выдать / Подать автомобиль' })
+      .getByRole('button', { name: 'Сохранить' })
+      .click();
+    await expect(page.getByRole('dialog', { name: 'Выдать / Подать автомобиль' })).toHaveCount(0);
+    await expect
+      .poll(async () => prisma.rental.count({ where: { id: rentalId, status: 'ACTIVE' } }))
+      .toBe(1);
 
     await overlappingPage.getByRole('button', { name: 'Подтвердить и занять автомобиль' }).click();
     await expect(overlappingPage.getByRole('alert')).toContainText('Автомобиль уже занят');
@@ -400,6 +467,14 @@ test.describe('rental workflow', () => {
   test('calendar is mobile-safe and rentals loading geometry is labelled', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await signInAs(page, fixture.admin.email);
+    await page.goto('/rentals');
+    await expect(page.getByTestId('rental-list-page')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Договоры аренды' })).toBeVisible();
+    await expect(page.getByLabel('Договоры, требующие внимания')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+
     await page.goto('/rentals?view=calendar&month=2026-08');
     await expect(page.getByTestId('rental-calendar-agenda')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(

@@ -1,4 +1,4 @@
-import { FiRotateCcw, FiSearch } from 'react-icons/fi';
+import { FiChevronDown, FiRotateCcw, FiSearch } from 'react-icons/fi';
 
 import type { VehicleFilters as VehicleFiltersValue } from '../filter';
 import type { VehicleCardDto } from '../types';
@@ -19,99 +19,119 @@ export function VehicleFilters({
     a.localeCompare(b, 'ru-RU'),
   );
   const seats = [...new Set(vehicles.map((vehicle) => vehicle.seats))].sort((a, b) => a - b);
+  const advancedFilterCount = [
+    filters.city,
+    filters.fuelType,
+    filters.gpsStatus,
+    filters.seats,
+  ].filter(Boolean).length;
 
   return (
-    <div className="grid gap-3 rounded-[var(--radius-panel)] border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)] xl:grid-cols-[minmax(16rem,1fr)_repeat(5,minmax(8rem,0.45fr))_auto] xl:items-end">
-      <label className="grid gap-1.5">
-        <span className="text-sm font-medium">Поиск</span>
-        <span className="relative block">
-          <FiSearch
-            aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--color-text-tertiary)]"
-          />
-          <SearchInput
-            value={filters.query}
-            onChange={(event) => onChange({ ...filters, query: event.target.value })}
-            aria-label="Поиск автомобилей"
-            placeholder="Модель, город, офис или номер"
-            className="pl-9"
-          />
-        </span>
-      </label>
-      <Select
-        label="Город"
-        value={filters.city}
-        onChange={(event) => onChange({ ...filters, city: event.target.value })}
+    <div className="grid gap-3 rounded-[var(--radius-panel)] border bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
+      <div className="grid gap-3 lg:grid-cols-[minmax(16rem,1fr)_minmax(13rem,0.45fr)] lg:items-end">
+        <label className="grid gap-1.5">
+          <span className="text-sm font-medium">Поиск</span>
+          <span className="relative block">
+            <FiSearch
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--color-text-tertiary)]"
+            />
+            <SearchInput
+              value={filters.query}
+              onChange={(event) => onChange({ ...filters, query: event.target.value })}
+              aria-label="Поиск автомобилей"
+              placeholder="Модель, город, офис или номер"
+              className="pl-9"
+            />
+          </span>
+        </label>
+        <Select
+          label="Бизнес-состояние"
+          value={filters.status}
+          onChange={(event) =>
+            onChange({ ...filters, status: event.target.value as VehicleFiltersValue['status'] })
+          }
+        >
+          <option value="">Любое</option>
+          <option value="MAINTENANCE">Обслуживание</option>
+        </Select>
+      </div>
+      <details
+        data-testid="vehicle-advanced-filters"
+        open={advancedFilterCount > 0 || undefined}
+        className="group border-t border-[var(--color-border)] pt-3"
       >
-        <option value="">Все города</option>
-        {cities.map((city) => (
-          <option key={city}>{city}</option>
-        ))}
-      </Select>
-      <Select
-        label="Топливо"
-        value={filters.fuelType}
-        onChange={(event) =>
-          onChange({
-            ...filters,
-            fuelType: event.target.value as VehicleFiltersValue['fuelType'],
-          })
-        }
-      >
-        <option value="">Любое</option>
-        <option value="PETROL">Бензин</option>
-        <option value="DIESEL">Дизель</option>
-        <option value="ELECTRIC">Электричество</option>
-        <option value="HYBRID">Гибрид</option>
-        <option value="OTHER">Другое</option>
-      </Select>
-      <Select
-        label="Бизнес-состояние"
-        value={filters.status}
-        onChange={(event) =>
-          onChange({ ...filters, status: event.target.value as VehicleFiltersValue['status'] })
-        }
-      >
-        <option value="">Любое</option>
-        <option value="MAINTENANCE">Обслуживание</option>
-      </Select>
-      <Select
-        label="Где машина"
-        value={filters.gpsStatus}
-        onChange={(event) =>
-          onChange({
-            ...filters,
-            gpsStatus: event.target.value as VehicleFiltersValue['gpsStatus'],
-          })
-        }
-      >
-        <option value="">Любое состояние</option>
-        <option value="IN_PARK">В парке</option>
-        <option value="MOVING">В движении</option>
-        <option value="IDLE">Стоит</option>
-        <option value="STALE">Давно не обновлялся</option>
-        <option value="NO_DATA">Нет связи</option>
-      </Select>
-      <Select
-        label="Мест"
-        value={filters.seats}
-        onChange={(event) => onChange({ ...filters, seats: event.target.value })}
-      >
-        <option value="">Любое</option>
-        {seats.map((count) => (
-          <option key={count} value={count}>
-            {count}
-          </option>
-        ))}
-      </Select>
-      <Button
-        variant="ghost"
-        size="sm"
-        leadingIcon={<FiRotateCcw aria-hidden="true" />}
-        onClick={onReset}
-      >
-        Сбросить
-      </Button>
+        <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between rounded-[var(--radius-sm)] px-2 text-sm font-semibold text-[var(--color-primary)] hover:bg-[var(--color-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]">
+          <span>Все фильтры{advancedFilterCount ? ` · ${advancedFilterCount}` : ''}</span>
+          <FiChevronDown aria-hidden className="transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5 xl:items-end">
+          <Select
+            label="Город"
+            value={filters.city}
+            onChange={(event) => onChange({ ...filters, city: event.target.value })}
+          >
+            <option value="">Все города</option>
+            {cities.map((city) => (
+              <option key={city}>{city}</option>
+            ))}
+          </Select>
+          <Select
+            label="Топливо"
+            value={filters.fuelType}
+            onChange={(event) =>
+              onChange({
+                ...filters,
+                fuelType: event.target.value as VehicleFiltersValue['fuelType'],
+              })
+            }
+          >
+            <option value="">Любое</option>
+            <option value="PETROL">Бензин</option>
+            <option value="DIESEL">Дизель</option>
+            <option value="ELECTRIC">Электричество</option>
+            <option value="HYBRID">Гибрид</option>
+            <option value="OTHER">Другое</option>
+          </Select>
+          <Select
+            label="Где машина"
+            value={filters.gpsStatus}
+            onChange={(event) =>
+              onChange({
+                ...filters,
+                gpsStatus: event.target.value as VehicleFiltersValue['gpsStatus'],
+              })
+            }
+          >
+            <option value="">Любое состояние</option>
+            <option value="IN_PARK">В парке</option>
+            <option value="MOVING">В движении</option>
+            <option value="IDLE">Стоит</option>
+            <option value="STALE">Давно не обновлялся</option>
+            <option value="NO_DATA">Нет связи</option>
+          </Select>
+          <Select
+            label="Мест"
+            value={filters.seats}
+            onChange={(event) => onChange({ ...filters, seats: event.target.value })}
+          >
+            <option value="">Любое</option>
+            {seats.map((count) => (
+              <option key={count} value={count}>
+                {count}
+              </option>
+            ))}
+          </Select>
+          <Button
+            variant="ghost"
+            size="sm"
+            leadingIcon={<FiRotateCcw aria-hidden="true" />}
+            onClick={onReset}
+          >
+            Сбросить
+          </Button>
+        </div>
+      </details>
     </div>
   );
 }

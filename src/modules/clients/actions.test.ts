@@ -6,6 +6,7 @@ const writeAuditLogMock = vi.hoisted(() => vi.fn());
 const repository = vi.hoisted(() => ({
   $transaction: vi.fn(),
   client: { create: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() },
+  clientDocument: { findMany: vi.fn() },
   companyMember: { findMany: vi.fn() },
 }));
 
@@ -42,6 +43,7 @@ function clientForm(companyId = 'c1') {
   formData.set('lastName', 'Воронова');
   formData.set('birthDate', '1990-04-12');
   formData.set('phone', '+7 (999) 123-45-67');
+  formData.set('additionalPhone', '+7 (916) 765-43-21');
   formData.set('email', 'anna@example.com');
   formData.set('passport', '4510 123456');
   formData.set('driverLicense', '9910 654321');
@@ -73,6 +75,7 @@ describe('client mutations', () => {
     repository.client.updateMany.mockResolvedValue({ count: 1 });
     repository.companyMember.findMany.mockResolvedValue([]);
     repository.client.findFirst.mockResolvedValue({ companyId: 'c1' });
+    repository.clientDocument.findMany.mockResolvedValue([]);
     writeAuditLogMock.mockResolvedValue(undefined);
     repository.$transaction.mockImplementation(
       async (operation: (transaction: typeof repository) => unknown) => operation(repository),
@@ -91,15 +94,20 @@ describe('client mutations', () => {
         companyId: 'c1',
         createdByUserId: 'dispatcher-1',
         phoneEncrypted: expect.any(String),
+        additionalPhoneEncrypted: expect.any(String),
         phoneIndex: expect.any(String),
         passportEncrypted: expect.any(String),
         driverLicenseEncrypted: expect.any(String),
         driverCategories: [],
+        status: 'VERIFYING',
       }),
       select: { id: true },
     });
     expect(JSON.stringify(repository.client.create.mock.calls[0]?.[0])).not.toContain(
       '4510 123456',
+    );
+    expect(JSON.stringify(repository.client.create.mock.calls[0]?.[0])).not.toContain(
+      '79167654321',
     );
     expect(writeAuditLogMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -115,6 +123,46 @@ describe('client mutations', () => {
     expect(revalidatePathMock).toHaveBeenCalledWith('/clients');
     expect(revalidatePathMock).toHaveBeenCalledWith('/clients/client-1');
     expect(repository.$transaction).toHaveBeenCalledOnce();
+  });
+
+  it('stores a genuinely missing phone as null instead of a fabricated placeholder', async () => {
+    const form = clientForm();
+    form.set('phone', '');
+
+    await expect(createClientAction(initialState, form)).resolves.toMatchObject({
+      status: 'success',
+    });
+    expect(repository.client.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ phoneEncrypted: null, phoneIndex: null }),
+      }),
+    );
+  });
+
+  it('allows contact edits without requiring passport and licence scans', async () => {
+    await expect(updateClientAction(initialState, updateForm())).resolves.toMatchObject({
+      status: 'success',
+      clientId: 'client-1',
+    });
+    expect(repository.clientDocument.findMany).not.toHaveBeenCalled();
+    expect(repository.client.updateMany).toHaveBeenCalledOnce();
+  });
+
+  it('allows verified status when both current document versions are clean', async () => {
+    repository.clientDocument.findMany.mockResolvedValue([
+      { category: 'PASSPORT', currentVersion: 1, versions: [{ version: 1, scanVerdict: 'CLEAN' }] },
+      {
+        category: 'DRIVER_LICENSE',
+        currentVersion: 2,
+        versions: [{ version: 2, scanVerdict: 'CLEAN' }],
+      },
+    ]);
+
+    await expect(updateClientAction(initialState, updateForm())).resolves.toMatchObject({
+      status: 'success',
+      clientId: 'client-1',
+    });
+    expect(repository.client.updateMany).toHaveBeenCalledOnce();
   });
 
   it('rejects a submitted company outside the dispatcher tenant scope before writing', async () => {
@@ -150,6 +198,14 @@ describe('client mutations', () => {
   });
 
   it('uses company and updatedAt guards for an edit before auditing and revalidating', async () => {
+    repository.clientDocument.findMany.mockResolvedValue([
+      { category: 'PASSPORT', currentVersion: 1, versions: [{ version: 1, scanVerdict: 'CLEAN' }] },
+      {
+        category: 'DRIVER_LICENSE',
+        currentVersion: 1,
+        versions: [{ version: 1, scanVerdict: 'CLEAN' }],
+      },
+    ]);
     await expect(updateClientAction(initialState, updateForm())).resolves.toMatchObject({
       status: 'success',
       clientId: 'client-1',
@@ -162,7 +218,10 @@ describe('client mutations', () => {
         updatedAt: new Date('2026-08-04T12:00:00.000Z'),
         archivedAt: null,
       },
-      data: expect.objectContaining({ phoneEncrypted: expect.any(String) }),
+      data: expect.objectContaining({
+        phoneEncrypted: expect.any(String),
+        additionalPhoneEncrypted: expect.any(String),
+      }),
     });
     expect(writeAuditLogMock).toHaveBeenCalledWith(
       expect.objectContaining({ entityType: 'CLIENT', action: 'UPDATE', entityId: 'client-1' }),

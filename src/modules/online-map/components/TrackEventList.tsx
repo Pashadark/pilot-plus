@@ -4,6 +4,7 @@ const eventTypeLabels: Record<VehicleTrackEventView['type'], string> = {
   stop: 'Остановка',
   refuel: 'Заправка',
   speeding: 'Превышение скорости',
+  fine: 'Штраф',
   'connection-loss': 'Потеря связи',
   'geofence-enter': 'Въезд в геозону',
   'geofence-exit': 'Выезд из геозоны',

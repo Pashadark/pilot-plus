@@ -122,8 +122,8 @@ function createFakeRepository(
 ) {
   const rows = { ...emptyRows(), ...sourceRows };
   const calls = Object.fromEntries(
-    [...Object.keys(rows), 'eventReadReceipt', 'vehicle'].map((name) => [name, [] as unknown[]]),
-  ) as Record<keyof SourceRows | 'eventReadReceipt' | 'vehicle', unknown[]>;
+    [...Object.keys(rows), 'eventReadReceipt', 'vehicle', 'rental'].map((name) => [name, [] as unknown[]]),
+  ) as Record<keyof SourceRows | 'eventReadReceipt' | 'vehicle' | 'rental', unknown[]>;
 
   function source(model: keyof SourceRows) {
     return {
@@ -170,6 +170,12 @@ function createFakeRepository(
         const cursor = (args as { cursor?: { id?: string } }).cursor?.id;
         const start = cursor ? vehicles.findIndex((item) => item.id === cursor) + 1 : 0;
         return vehicles.slice(start, start + 50);
+      },
+    },
+    rental: {
+      async findMany(args: unknown) {
+        calls.rental.push(args);
+        return [];
       },
     },
   } satisfies EventTimelineRepository;

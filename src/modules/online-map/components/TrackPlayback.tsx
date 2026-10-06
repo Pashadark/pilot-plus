@@ -9,6 +9,8 @@ export interface TrackPlaybackProps {
   reducedMotion: boolean;
   onProgressChange: (progress: number) => void;
   onPlayingChange: (playing: boolean) => void;
+  playbackSpeed?: 1 | 2 | 3;
+  onPlaybackSpeedChange?: (speed: 1 | 2 | 3) => void;
 }
 
 export function TrackPlayback({
@@ -17,6 +19,8 @@ export function TrackPlayback({
   reducedMotion,
   onProgressChange,
   onPlayingChange,
+  playbackSpeed = 1,
+  onPlaybackSpeedChange = () => undefined,
 }: TrackPlaybackProps) {
   const motionHintId = useId();
   const motionHint = reducedMotion
@@ -48,6 +52,20 @@ export function TrackPlayback({
           <FiPlay aria-hidden="true" className="size-5" />
         )}
       </Button>
+      <div className="flex shrink-0 items-center gap-1" aria-label="Скорость воспроизведения">
+        {([1, 2, 3] as const).map((speed) => (
+          <button
+            key={speed}
+            type="button"
+            aria-label={`Скорость ${speed}x`}
+            aria-pressed={playbackSpeed === speed}
+            onClick={() => onPlaybackSpeedChange(speed)}
+            className={`min-h-9 min-w-9 rounded-[var(--radius-sm)] px-2 text-xs font-semibold transition-colors ${playbackSpeed === speed ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-elevated)]'}`}
+          >
+            ×{speed}
+          </button>
+        ))}
+      </div>
       <input
         type="range"
         min="0"

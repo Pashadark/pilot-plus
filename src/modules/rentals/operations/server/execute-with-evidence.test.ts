@@ -56,4 +56,40 @@ describe('executeOperationWithEvidence', () => {
     expect(admit).not.toHaveBeenCalled();
     expect(commit).toHaveBeenCalledWith(expect.objectContaining({ evidenceStatus: 'MISSING' }));
   });
+
+  it('accepts optional body photos without making them mandatory', async () => {
+    const prepare = vi.fn().mockResolvedValue({ operationId: 'operation-3' });
+    const admit = vi.fn().mockResolvedValue({ status: 'CLEAN' });
+    const commit = vi.fn().mockResolvedValue({ operationId: 'operation-3', rentalId: 'rental-1' });
+
+    await executeOperationWithEvidence({
+      command: {
+        rentalId: 'rental-1',
+        idempotencyKey: 'key-3',
+        occurredAt: new Date('2026-09-06T10:00:00Z'),
+        evidenceStatus: 'MISSING',
+        evidenceMissingReason: 'Дополнительная фиксация необязательна.',
+      },
+      additionalFiles: [
+        {
+          kind: 'BODY_PHOTO_FRONT',
+          file: { name: 'front.jpg', bytes: new Uint8Array([3]) },
+        },
+        {
+          kind: 'BODY_PHOTO_REAR',
+          file: { name: 'rear.jpg', bytes: new Uint8Array([4]) },
+        },
+      ],
+      prepare,
+      admit,
+      commit,
+    });
+
+    expect(admit).toHaveBeenCalledTimes(2);
+    expect(admit).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ kind: 'BODY_PHOTO_FRONT' }),
+    );
+    expect(commit).toHaveBeenCalledWith(expect.objectContaining({ evidenceStatus: 'MISSING' }));
+  });
 });

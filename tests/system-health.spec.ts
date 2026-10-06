@@ -11,7 +11,7 @@ test('показывает безопасное состояние четырё�
 
   const cards = page.getByTestId('service-health-card');
   await expect(cards).toHaveCount(4);
-  for (const label of ['API Pilot+', 'PostgreSQL', 'Redis', 'MQTT']) {
+  for (const label of ['API СУПА ПРО', 'PostgreSQL', 'Redis', 'MQTT']) {
     const card = cards.filter({ has: page.getByRole('heading', { name: label }) });
     await expect(card).toBeVisible();
     await expect(card.getByTestId('service-health-status')).toHaveText(

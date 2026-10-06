@@ -27,6 +27,7 @@ const rawClient = {
   lastName: 'Воронова',
   birthDate: new Date('1990-04-12T00:00:00.000Z'),
   phoneEncrypted: encryptField('79991234567', encryptionKey),
+  additionalPhoneEncrypted: encryptField('79167654321', encryptionKey),
   email: 'anna@example.com',
   passportEncrypted: encryptField('4510 123456', encryptionKey),
   driverLicenseEncrypted: encryptField('9910 654321', encryptionKey),
@@ -116,6 +117,7 @@ describe('tenant-scoped client queries', () => {
         id: 'client-1',
         fullName: 'Воронова Анна Сергеевна',
         phone: '+7 999 123-45-67',
+        additionalPhone: '+7 916 765-43-21',
         phoneMasked: '+7 ••• •••-45-67',
         passportMasked: '45•• •••456',
         driverLicenseMasked: '99•• •••321',
@@ -126,7 +128,7 @@ describe('tenant-scoped client queries', () => {
           current: {
             id: 'rental-current',
             contractNumber: 'ME-2026-0015-VA',
-            vehicle: { label: 'Kia · K5', registrationNumber: 'В342НР797' },
+            vehicle: { label: 'Kia K5', registrationNumber: 'В342НР797' },
             totalPriceMinor: '3000000',
             depositMinor: '2000000',
             depositStatus: 'COLLECTED',
@@ -156,7 +158,16 @@ describe('tenant-scoped client queries', () => {
 
   it('decrypts plaintext contact and document fields only for the authorized detail DTO', async () => {
     const fake = createRepository();
-    const queries = createClientQueries(fake.repository, { encryptionKey });
+    const passport =
+      '45 18 621431; Выдан: ГУ МВД России по г. Москве; Дата выдачи: 2018-05-14; Код подразделения: 770-001';
+    const repository = {
+      ...fake.repository,
+      async findFirst(args: unknown) {
+        fake.calls.findFirst = args;
+        return { ...rawClient, passportEncrypted: encryptField(passport, encryptionKey) };
+      },
+    };
+    const queries = createClientQueries(repository, { encryptionKey });
     const photoRevision = rawClient.updatedAt.getTime().toString(36);
 
     const result = await queries.getClientById(access, 'client-1');
@@ -167,7 +178,13 @@ describe('tenant-scoped client queries', () => {
     expect(result).toMatchObject({
       id: 'client-1',
       phone: '79991234567',
-      passport: '4510 123456',
+      additionalPhone: '79167654321',
+      passport,
+      passportSeries: '45 18',
+      passportNumber: '621431',
+      passportIssuedBy: 'ГУ МВД России по г. Москве',
+      passportIssuedAt: '2018-05-14',
+      passportDivisionCode: '770-001',
       driverLicense: '9910 654321',
       birthDate: '1990-04-12T00:00:00.000Z',
       localPhotoUrl: `/clients/client-1/photo?v=${photoRevision}`,
@@ -197,6 +214,38 @@ describe('tenant-scoped client queries', () => {
     expect(result.items[0]?.rentalSummary.last).toMatchObject({
       depositStatus: 'RETURNED',
       depositReturnedAt: '2026-08-03T12:30:00.000Z',
+    });
+  });
+
+  it('shows a deposit as collected when the confirmed deposit payment covers it', async () => {
+    const paidClient = {
+      ...rawClient,
+      rentals: [
+        {
+          ...rawClient.rentals[0],
+          operations: [],
+          payments: [{ amountMinor: BigInt(2_000_000) }],
+        },
+      ],
+    };
+    const repository = {
+      async findMany() {
+        return [paidClient];
+      },
+      async findFirst() {
+        return paidClient;
+      },
+      async fineFindMany() {
+        return [];
+      },
+    };
+    const queries = createClientQueries(repository, { encryptionKey });
+
+    const result = await queries.getClients(access);
+
+    expect(result.items[0]?.rentalSummary.last).toMatchObject({
+      depositStatus: 'COLLECTED',
+      depositReturnedAt: null,
     });
   });
 

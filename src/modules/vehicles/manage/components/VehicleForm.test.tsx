@@ -51,9 +51,12 @@ describe('VehicleForm', () => {
           dailyPriceRubles: '3350',
           transmission: 'Автомат',
           fuelType: 'PETROL',
+          driveType: 'FRONT',
+          fuelConsumptionLitersPer100Km: '7.2',
           seats: 5,
           status: 'IDLE',
           isRentalReady: false,
+          fuelLevelPercent: 55,
         }}
       />,
     );
@@ -65,6 +68,23 @@ describe('VehicleForm', () => {
     expect(document.querySelector('input[name="registrationCertificateNumber"]')).toBeTruthy();
     expect(document.querySelector('input[name="osagoPolicyNumber"]')).toBeTruthy();
     expect(document.querySelector('input[name="depositRubles"]')).toBeTruthy();
+    expect((document.querySelector('select[name="driveType"]') as HTMLSelectElement).value).toBe(
+      'FRONT',
+    );
+    expect(
+      (document.querySelector('input[name="fuelConsumptionLitersPer100Km"]') as HTMLInputElement)
+        .value,
+    ).toBe('7.2');
+    expect(
+      (document.querySelector('input[name="fuelLevelPercent"]') as HTMLInputElement).value,
+    ).toBe('55');
+    expect(screen.getByText('Текущий уровень топлива, %')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Сохранить изменения' })).toBeTruthy();
+  });
+
+  it('does not show the current fuel field while creating a vehicle', () => {
+    render(<VehicleForm companies={[{ id: 'company-1', label: 'Компания', canArchive: true }]} />);
+
+    expect(document.querySelector('input[name="fuelLevelPercent"]')).toBeNull();
   });
 });

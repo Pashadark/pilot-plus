@@ -14,6 +14,8 @@ interface HealthEnvironment {
   REDIS_PORT?: string;
   MQTT_HOST?: string;
   MQTT_PORT?: string;
+  CLAMAV_HOST?: string;
+  CLAMAV_PORT?: string;
 }
 
 interface SystemHealthDependencies {
@@ -29,18 +31,23 @@ function parsePort(value: string | undefined) {
   return Number.isInteger(port) && port > 0 && port <= 65_535 ? port : undefined;
 }
 
+const tcpServiceConfig = {
+  redis: { hostKey: 'REDIS_HOST', portKey: 'REDIS_PORT', defaultPort: 6379 },
+  mqtt: { hostKey: 'MQTT_HOST', portKey: 'MQTT_PORT', defaultPort: 1883 },
+  clamav: { hostKey: 'CLAMAV_HOST', portKey: 'CLAMAV_PORT', defaultPort: 3310 },
+} as const;
+
 function serviceConfig(
   environment: HealthEnvironment,
-  service: 'redis' | 'mqtt',
+  service: 'redis' | 'mqtt' | 'clamav',
 ): { host?: string; port?: number; timeoutMs: number } {
   const isDevelopment = environment.NODE_ENV === 'development';
-  const hostKey = service === 'redis' ? 'REDIS_HOST' : 'MQTT_HOST';
-  const portKey = service === 'redis' ? 'REDIS_PORT' : 'MQTT_PORT';
-  const defaultPort = service === 'redis' ? 6379 : 1883;
+  const config = tcpServiceConfig[service];
 
   return {
-    host: environment[hostKey] || (isDevelopment ? '127.0.0.1' : undefined),
-    port: parsePort(environment[portKey]) ?? (isDevelopment ? defaultPort : undefined),
+    host: environment[config.hostKey] || (isDevelopment ? '127.0.0.1' : undefined),
+    port:
+      parsePort(environment[config.portKey]) ?? (isDevelopment ? config.defaultPort : undefined),
     timeoutMs: SERVICE_TIMEOUT_MS,
   };
 }
@@ -137,6 +144,7 @@ export function createSystemHealthChecker({
     });
     const redisConfig = serviceConfig(environment, 'redis');
     const mqttConfig = serviceConfig(environment, 'mqtt');
+    const clamavConfig = serviceConfig(environment, 'clamav');
 
     const settleProbe = (
       probe: () => Promise<ServiceHealthStatus>,
@@ -156,7 +164,7 @@ export function createSystemHealthChecker({
     };
 
     try {
-      const [api, postgresql, redis, mqtt] = await Promise.all([
+      const [api, postgresql, redis, mqtt, clamav] = await Promise.all([
         settleProbe(checkApplication, 'unavailable'),
         settleProbe(checkDatabase, environment.DATABASE_URL ? 'unavailable' : 'unconfigured'),
         settleProbe(
@@ -167,6 +175,10 @@ export function createSystemHealthChecker({
           () => checkTcp(mqttConfig),
           mqttConfig.host && mqttConfig.port ? 'unavailable' : 'unconfigured',
         ),
+        settleProbe(
+          () => checkTcp(clamavConfig),
+          clamavConfig.host && clamavConfig.port ? 'unavailable' : 'unconfigured',
+        ),
       ]);
 
       return [
@@ -174,6 +186,7 @@ export function createSystemHealthChecker({
         present('postgresql', 'PostgreSQL', postgresql),
         present('redis', 'Redis', redis),
         present('mqtt', 'MQTT', mqtt),
+        present('clamav', 'ClamAV', clamav),
       ];
     } finally {
       clearTimeout(deadlineTimer);

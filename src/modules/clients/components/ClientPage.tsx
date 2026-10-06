@@ -44,6 +44,7 @@ export function ClientPage({
             <Button
               onClick={() => router.push('/clients?form=new')}
               leadingIcon={<FiPlus aria-hidden="true" />}
+              className="whitespace-nowrap"
             >
               Добавить клиента
             </Button>

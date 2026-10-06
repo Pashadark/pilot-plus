@@ -4,6 +4,8 @@ import { Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 import { buildRentalSnapshot } from '@/modules/rentals/domain/build-snapshot';
 import { isLegalTemplateVersion } from '@/modules/rentals/documents/legal-content-v1';
+import { evaluateClientReadiness } from '@/modules/rentals/readiness/evaluate-client-readiness';
+import { evaluateVehicleReadiness } from '@/modules/rentals/readiness/evaluate-vehicle-readiness';
 import { decryptField } from '@/services/security/field-encryption';
 
 import { requireRentalAccess } from './access';
@@ -65,49 +67,6 @@ function fullName(client: Record<string, unknown>): string {
   return [text(client.lastName), text(client.firstName), text(client.middleName)]
     .filter(Boolean)
     .join(' ');
-}
-function requireLegalVehicle(vehicle: Record<string, unknown>, startsAt: Date, endsAt: Date): void {
-  const required = [
-    vehicle.registrationNumber,
-    vehicle.vin,
-    vehicle.registrationCertificateNumber,
-    vehicle.vehiclePassportNumber,
-    vehicle.osagoInsurer,
-    vehicle.osagoPolicyNumber,
-    vehicle.cascoInsurer,
-    vehicle.cascoPolicyNumber,
-  ];
-  if (required.some((value) => !text(value)))
-    throw new Error('Не заполнены обязательные юридические данные автомобиля.');
-  for (const [starts, ends] of [
-    [vehicle.osagoStartsAt, vehicle.osagoEndsAt],
-    [vehicle.cascoStartsAt, vehicle.cascoEndsAt],
-  ]) {
-    const policyStartsAt = date(starts);
-    const policyEndsAt = date(ends);
-    if (policyStartsAt > startsAt || policyEndsAt < endsAt)
-      throw new Error('Страховой полис не покрывает выбранный период аренды.');
-  }
-}
-function requireCurrentClientDocuments(documents: Array<Record<string, unknown>>): void {
-  const categories = new Set(
-    documents
-      .filter(
-        (document) =>
-          document.archivedAt === null &&
-          Array.isArray(document.versions) &&
-          document.versions.some(
-            (version) =>
-              typeof version === 'object' &&
-              version !== null &&
-              (version as Record<string, unknown>).version === document.currentVersion &&
-              (version as Record<string, unknown>).scanVerdict === 'CLEAN',
-          ),
-      )
-      .map((document) => document.category),
-  );
-  if (!categories.has('PASSPORT') || !categories.has('DRIVER_LICENSE'))
-    throw new Error('Отсутствуют актуальные чистые документы клиента.');
 }
 function draftIssuance(snapshot: unknown) {
   const raw =
@@ -214,6 +173,7 @@ export function createRentalConfirmation(
           startsAt: true,
           endsAt: true,
           status: true,
+          agreementType: true,
           currency: true,
           dailyRateMinor: true,
           billableDays: true,
@@ -241,6 +201,7 @@ export function createRentalConfirmation(
           where: { id: input.companyId },
           select: {
             id: true,
+            status: true,
             legalName: true,
             inn: true,
             legalAddress: true,
@@ -268,6 +229,7 @@ export function createRentalConfirmation(
           where: { id: rental.clientId, companyId: input.companyId, archivedAt: null },
           select: {
             id: true,
+            isRentalReady: true,
             firstName: true,
             middleName: true,
             lastName: true,
@@ -351,8 +313,52 @@ export function createRentalConfirmation(
       const legalContentVersion = text(template.legalContentVersion) || 'legal-content-v1';
       if (!isLegalTemplateVersion(legalContentVersion))
         throw new Error('Версия юридического текста не поддерживается.');
-      requireCurrentClientDocuments(documents);
-      requireLegalVehicle(vehicle, startsAt, endsAt);
+      const clientReadiness = evaluateClientReadiness(
+        {
+          id: text(client.id),
+          status: text(client.status),
+          phone: decrypted(client.phoneEncrypted, decrypt),
+          passport: decrypted(client.passportEncrypted, decrypt),
+          driverLicense: decrypted(client.driverLicenseEncrypted, decrypt),
+          driverLicenseExpiresAt:
+            client.driverLicenseExpiresAt instanceof Date ? client.driverLicenseExpiresAt : null,
+          documents: documents as unknown as Parameters<
+            typeof evaluateClientReadiness
+          >[0]['documents'],
+        },
+        now(),
+      );
+      if (!clientReadiness.ready)
+        throw new Error(`Не готовы документы клиента: ${clientReadiness.blockers[0]?.message}`);
+
+      const vehicleReadiness = evaluateVehicleReadiness(
+        {
+          id: text(vehicle.id),
+          archivedAt: null,
+          isRentalReady: vehicle.isRentalReady === true,
+          registrationNumber: text(vehicle.registrationNumber),
+          vin: text(vehicle.vin),
+          registrationCertificateNumber: text(vehicle.registrationCertificateNumber),
+          vehiclePassportNumber: text(vehicle.vehiclePassportNumber),
+          osagoInsurer: text(vehicle.osagoInsurer),
+          osagoPolicyNumber: text(vehicle.osagoPolicyNumber),
+          osagoStartsAt: vehicle.osagoStartsAt instanceof Date ? vehicle.osagoStartsAt : null,
+          osagoEndsAt: vehicle.osagoEndsAt instanceof Date ? vehicle.osagoEndsAt : null,
+          dailyPriceMinor:
+            typeof vehicle.dailyPriceMinor === 'bigint' ||
+            typeof vehicle.dailyPriceMinor === 'number'
+              ? vehicle.dailyPriceMinor
+              : null,
+          depositMinor:
+            typeof vehicle.depositMinor === 'bigint' || typeof vehicle.depositMinor === 'number'
+              ? vehicle.depositMinor
+              : null,
+          cascoPolicyNumber: text(vehicle.cascoPolicyNumber),
+        },
+        { startsAt, endsAt },
+      );
+      if (!vehicleReadiness.ready)
+        throw new Error(`Автомобиль не готов к аренде: ${vehicleReadiness.blockers[0]?.message}`);
 
       const overlap = await transaction.rental.findFirst({
         where: {
@@ -475,6 +481,7 @@ export function createRentalConfirmation(
           snapshotVersion: 1,
           snapshot: {
             ...snapshot,
+            agreementType: rental.agreementType,
             issuance,
             template: {
               id: text(template.id),

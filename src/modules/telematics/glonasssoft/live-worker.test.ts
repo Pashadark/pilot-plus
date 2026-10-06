@@ -1,8 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { runLiveWorker } from './live-worker';
+import { providerCooldownMs, runLiveWorker } from './live-worker';
 
 describe('непрерывный worker GLONASSSoft', () => {
+  it.each([
+    ['RATE_LIMITED', 60_000],
+    ['INVALID_REQUEST', 1_800_000],
+    ['AUTH_REJECTED', 1_800_000],
+    ['FORBIDDEN', 1_800_000],
+    ['TIMEOUT', 30_000],
+  ])('ставит защитную паузу после %s', (code, expected) => {
+    expect(providerCooldownMs(Object.assign(new Error('safe'), { code }))).toBe(expected);
+  });
+
   it('не перекрывает циклы и публикует только новые позиции', async () => {
     const abort = new AbortController();
     const order: string[] = [];

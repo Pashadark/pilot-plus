@@ -1,0 +1,4 @@
+import {workflow,currentUser,json} from '../../../../../../server/local-workflow.mjs';
+import {readDocument} from '../../../../../../server/document-storage.mjs';
+export const runtime='nodejs';
+export async function GET(request,{params}){try{const {id,documentId}=await params;const application=workflow().application(currentUser(request),id);const document=application.documents.find(d=>d.id===documentId && d.active && !d.synthetic && d.status==='CLEAN');if(!document)return json({error:'Документ недоступен до проверки'},404);return new Response(await readDocument(documentId),{headers:{'Content-Type':document.mime,'Content-Disposition':'attachment; filename="document"','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});}catch{return json({error:'Документ недоступен'},404);}}

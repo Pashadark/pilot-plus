@@ -11,13 +11,26 @@ import {
 } from './schemas';
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
-const MIN_REQUEST_INTERVAL_MS = 500;
+const MIN_REQUEST_INTERVAL_MS = 1_000;
 const MAX_RANGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 type Transport = (request: Request) => Promise<Response>;
 
+function isInvalidCredentialsEnvelope(value: unknown) {
+  return (
+    typeof value === 'object' && value !== null && 'ErrorStatus' in value && value.ErrorStatus === 9
+  );
+}
+
 export type GlonassSoftErrorCode =
-  'INVALID_CONFIGURATION' | 'AUTH_REJECTED' | 'TIMEOUT' | 'UNAVAILABLE' | 'INVALID_RESPONSE';
+  | 'INVALID_CONFIGURATION'
+  | 'INVALID_REQUEST'
+  | 'AUTH_REJECTED'
+  | 'FORBIDDEN'
+  | 'RATE_LIMITED'
+  | 'TIMEOUT'
+  | 'UNAVAILABLE'
+  | 'INVALID_RESPONSE';
 
 export class GlonassSoftError extends Error {
   constructor(public readonly code: GlonassSoftErrorCode) {
@@ -112,7 +125,9 @@ export class GlonassSoftClient {
   private readonly now: () => number;
   private readonly delay: (milliseconds: number) => Promise<void>;
   private session: string | null = null;
+  private loginPromise: Promise<string> | null = null;
   private lastApiRequestAt: number | null = null;
+  private requestQueue: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: GlonassSoftClientOptions) {
     this.baseUrl = validateBaseUrl(options.baseUrl);
@@ -154,14 +169,14 @@ export class GlonassSoftClient {
   }
 
   private async authenticated<T>(path: string, body: unknown, schema: z.ZodType<T>): Promise<T> {
-    if (!this.session) this.session = await this.login();
-    let response = await this.post(path, body, this.session, true);
+    const originalSession = await this.getSession();
+    let response = await this.post(path, body, originalSession);
     if (response.status === 401) {
-      this.session = await this.login();
-      response = await this.post(path, body, this.session, true);
+      const refreshedSession = await this.refreshSession(originalSession);
+      response = await this.post(path, body, refreshedSession);
     }
     if (response.status === 401) throw new GlonassSoftError('AUTH_REJECTED');
-    if (!response.ok) throw new GlonassSoftError('UNAVAILABLE');
+    throwForHttpStatus(response);
     const parsed = schema.safeParse(await boundedJson(response));
     if (!parsed.success) throw new GlonassSoftError('INVALID_RESPONSE');
     return parsed.data;
@@ -172,24 +187,45 @@ export class GlonassSoftClient {
       '/auth/login',
       { login: this.options.username, password: this.options.password },
       null,
-      false,
     );
-    if (response.status === 401 || response.status === 403) {
-      throw new GlonassSoftError('AUTH_REJECTED');
-    }
-    if (!response.ok) throw new GlonassSoftError('UNAVAILABLE');
-    const parsed = authResponseSchema.safeParse(await boundedJson(response));
+    if (response.status === 401) throw new GlonassSoftError('AUTH_REJECTED');
+    throwForHttpStatus(response);
+    const payload = await boundedJson(response);
+    if (isInvalidCredentialsEnvelope(payload)) throw new GlonassSoftError('AUTH_REJECTED');
+    const parsed = authResponseSchema.safeParse(payload);
     if (!parsed.success) throw new GlonassSoftError('INVALID_RESPONSE');
     return parsed.data;
+  }
+
+  private async getSession(): Promise<string> {
+    if (this.session) return this.session;
+    if (!this.loginPromise) {
+      this.loginPromise = this.login().finally(() => {
+        this.loginPromise = null;
+      });
+    }
+    this.session = await this.loginPromise;
+    return this.session;
+  }
+
+  private async refreshSession(rejectedSession: string): Promise<string> {
+    if (this.session && this.session !== rejectedSession) return this.session;
+    this.session = null;
+    return this.getSession();
   }
 
   private async post(
     path: string,
     body: unknown,
     session: string | null,
-    rateLimited: boolean,
   ): Promise<Response> {
-    if (rateLimited) await this.waitForRateLimit();
+    const previous = this.requestQueue;
+    let release!: () => void;
+    this.requestQueue = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    await this.waitForRateLimit();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
@@ -209,6 +245,7 @@ export class GlonassSoftClient {
       throw new GlonassSoftError('UNAVAILABLE');
     } finally {
       clearTimeout(timer);
+      release();
     }
   }
 
@@ -218,8 +255,15 @@ export class GlonassSoftClient {
       const wait = MIN_REQUEST_INTERVAL_MS - (current - this.lastApiRequestAt);
       if (wait > 0) await this.delay(wait);
     }
-    this.lastApiRequestAt = current;
+    this.lastApiRequestAt = this.now();
   }
+}
+
+function throwForHttpStatus(response: Response): void {
+  if (response.status === 400) throw new GlonassSoftError('INVALID_REQUEST');
+  if (response.status === 403) throw new GlonassSoftError('FORBIDDEN');
+  if (response.status === 429) throw new GlonassSoftError('RATE_LIMITED');
+  if (!response.ok) throw new GlonassSoftError('UNAVAILABLE');
 }
 
 function parseExternalId(value: string): number {

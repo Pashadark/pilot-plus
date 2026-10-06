@@ -1,0 +1,1 @@
+ALTER TYPE "BotNotificationStatus" ADD VALUE IF NOT EXISTS 'CANCELLED';

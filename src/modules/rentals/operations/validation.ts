@@ -29,10 +29,6 @@ type HandoverCommand = CommonCommand & {
 type ReturnCommand = CommonCommand & {
   vehicleCondition: RentalVehicleCondition;
   damageDescription?: string;
-  depositStatus: RentalDepositStatus;
-  depositAmountMinor?: number;
-  depositWithheldMinor?: number;
-  depositResolutionReason?: string;
 };
 
 type ExtensionCommand = {
@@ -122,35 +118,15 @@ export function validateReturnCommand(command: ReturnCommand) {
     'evidenceMissingReason',
     'vehicleCondition',
     'damageDescription',
-    'depositStatus',
-    'depositAmountMinor',
-    'depositWithheldMinor',
-    'depositResolutionReason',
   ]);
   const common = validateCommon(command);
   const damageDescription = command.damageDescription?.trim() || undefined;
   if (command.vehicleCondition === 'DAMAGE_RECORDED' && !damageDescription)
     throw new Error('Опишите повреждения.');
-  const depositResolutionReason = command.depositResolutionReason?.trim() || undefined;
-  if (
-    (command.depositStatus === 'WITHHELD' || command.depositStatus === 'PARTIALLY_WITHHELD') &&
-    !depositResolutionReason
-  )
-    throw new Error('Укажите причину удержания залога.');
   return {
     ...common,
     vehicleCondition: command.vehicleCondition,
     damageDescription,
-    depositStatus: command.depositStatus,
-    depositAmountMinor:
-      command.depositAmountMinor === undefined
-        ? undefined
-        : safeInteger(command.depositAmountMinor, 'Сумма залога'),
-    depositWithheldMinor:
-      command.depositWithheldMinor === undefined
-        ? undefined
-        : safeInteger(command.depositWithheldMinor, 'Удержанная сумма'),
-    depositResolutionReason,
   };
 }
 

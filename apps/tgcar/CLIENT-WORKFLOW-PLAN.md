@@ -1,0 +1,21 @@
+# TG CAR local client workflow implementation plan
+
+Goal: implement the approved application/document-review/account workflow locally, without production database writes, real customer messages or payment claims.
+
+Architecture: standalone local SQLite workflow store (node:sqlite) behind Next route handlers. Live SUPA PRO remains a read-only availability source. No customer records imported from production. Local preview identity is explicitly synthetic, never a phone-ownership verification. Real SMS/Telegram/Alfa credentials are absent: adapters fail closed and UI reports not connected. Production activation prohibited until proper identity provider, private storage/antivirus, tenant writes and payment provider are provisioned.
+
+Global constraints: preserve TG CAR visual identity; no deployment; no production mutations; no real messages; no plaintext private documents in public/Git/browser storage; no automatic account access from typed phone; no approval without clean documents; all transitions have audit events; authenticated account scope for every operation; local manager role distinct; no self-service fines or fake payments.
+
+## Task 1: notification domain and Telegram adapter
+Create notifications.mjs and notifications.test.mjs. Pure `buildReminderEvents(rental, now)` where rental has id,clientId,status,endsAt,revision; status ACTIVE only; 24h and 3h milestones return events only when due and before endsAt, dedupe key incorporates id/revision/endsAt/milestone. Changed end dates create new keys and obsolete reminder events must be detectable by `isReminderCurrent(event,rental)`.
+Create `telegramDelivery(event, config, fetchImpl=fetch)` returning disabled if config.enabled!==true or missing token/chatId; sendMessage only on explicit enable; bounded timeout; classify 429 retry with retry_after, 5xx/network retry, 403 permanent, successful API ok=true sent. Escape HTML or send plain text; no tokens in errors. No automatic live sends. Test mocked provider responses and pure reminder behavior before implementation. Only this module and its tests owned by subagent.
+
+## Task 2: local application store and routes
+Root implements SQLite transactions, hashed opaque session tokens, synthetic local client/manager sessions, same-origin mutation guard, production disabled. Users must explicitly click test access and see test label. Real phone registration endpoint unavailable until verification provider configured, no static OTP backdoor.
+Applications persist: DRAFT -> UNDER_REVIEW -> NEEDS_CHANGES / REJECTED / AWAITING_PAYMENT; manager approval rechecks live source then obtains 30-minute atomic local hold; conflicting local holds reject. Hold expiry releases availability. There is no payment confirmation endpoint. Client can resubmit corrected documents and request extension; no automatic production extension.
+Private upload bytes encrypted AES-GCM, bounded JPG/PNG/PDF magic validation, quarantine state, ClamAV required clean before human approval; missing scanner yields pending state rather than success. Demo documents are explicit metadata-only synthetic fixtures, accepted only for synthetic accounts in local mode. No real docs needed for QA. Reviewer download requires manager or owner session and clean status.
+Account dashboard exposes only own applications, history, empty rental/fine/payment collections until genuine source identity integration exists. Local manager panel reviews local applications; notices are written to local outbox, never described as delivered Telegram messages.
+
+## Task 3: UI wiring and verification
+Root replaces preview client form with account/start-application flow, adds /account and /review local views. Status persists after reload. Pending documents have clear copy. Missing integrations listed. Keep 24h/3h notification settings visible as planned default; do not invent active rentals/fines.
+Test domain transitions, local hold conflicts and expiry, client isolation, production guards, document validation/quarantine, outbox dedupe, Telegram disabled/retries, and reminder revision behavior. Verify real API scenario with two synthetic sessions and synthetic document fixtures, build, desktop/mobile UI. Report actual blockers, never claim SMS/payment/production bot connected.

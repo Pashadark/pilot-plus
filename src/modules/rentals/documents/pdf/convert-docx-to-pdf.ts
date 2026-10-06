@@ -1,5 +1,6 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { access, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import type { Readable } from 'node:stream';
@@ -49,6 +50,16 @@ function configuredExecutable() {
   const executable = process.env.RENTAL_DOCUMENT_CONVERTER_EXECUTABLE?.trim() || defaultExecutable;
   if (!isAbsolute(executable) || executable.includes('\u0000')) throw new PdfConversionError();
   return executable;
+}
+
+/** Reports converter readiness without exposing executable paths or process output. */
+export async function isLibreOfficeAvailable() {
+  try {
+    await access(configuredExecutable(), constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function hasDocxCentralDirectory(bytes: Uint8Array) {

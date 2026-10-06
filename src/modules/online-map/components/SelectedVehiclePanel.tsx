@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { FiClock, FiMapPin, FiTruck, FiX } from 'react-icons/fi';
+import { FuelLevelBar } from '@/modules/vehicles/components/FuelLevelBar';
+import { FiChevronDown, FiChevronUp, FiClock, FiMapPin, FiTruck, FiX } from 'react-icons/fi';
 
 import { IconButton } from '@/shared/ui/IconButton';
 import type { VehicleGpsStatusTone } from '@/modules/vehicles/gps-status';
@@ -21,6 +22,8 @@ export interface SelectedVehiclePanelProps {
   trackSummary: ReactNode;
   trackSegments: ReactNode;
   trackEvents: ReactNode;
+  mobileCollapsed?: boolean;
+  onMobileCollapsedChange?: (collapsed: boolean) => void;
   className?: string;
 }
 
@@ -31,17 +34,18 @@ export function SelectedVehiclePanel({
   trackSummary,
   trackSegments,
   trackEvents,
+  mobileCollapsed = false,
+  onMobileCollapsedChange = () => undefined,
   className = '',
 }: SelectedVehiclePanelProps) {
   return (
     <aside
       data-testid="selected-vehicle-panel"
+      data-mobile-collapsed={mobileCollapsed}
       aria-label="Выбранный автомобиль"
       className={`flex flex-col gap-3 overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text)] shadow-[var(--shadow-floating)] ${className}`}
     >
-      <div className="min-h-0 overflow-y-auto">
-        <article className="grid gap-4">
-          <header className="flex items-start gap-3">
+      <header className="flex items-start gap-3">
             <span className="grid size-11 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]">
               <FiTruck aria-hidden="true" className="size-5" />
             </span>
@@ -55,6 +59,17 @@ export function SelectedVehiclePanel({
               {vehicle.gpsStatus.label}
             </span>
             <IconButton
+              label={mobileCollapsed ? 'Развернуть карточку автомобиля' : 'Свернуть карточку автомобиля'}
+              variant="ghost"
+              size="sm"
+              onClick={() => onMobileCollapsedChange(!mobileCollapsed)}
+              className="-mt-1 shrink-0 @min-[48rem]:hidden"
+            >
+              {mobileCollapsed
+                ? <FiChevronUp aria-hidden="true" className="size-5" />
+                : <FiChevronDown aria-hidden="true" className="size-5" />}
+            </IconButton>
+            <IconButton
               label="Закрыть карточку автомобиля"
               variant="ghost"
               size="sm"
@@ -63,7 +78,10 @@ export function SelectedVehiclePanel({
             >
               <FiX aria-hidden="true" className="size-5" />
             </IconButton>
-          </header>
+      </header>
+
+      <div className={`min-h-0 overflow-y-auto ${mobileCollapsed ? 'hidden @min-[48rem]:block' : ''}`}>
+        <article className="grid gap-4">
 
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-[var(--radius-md)] bg-[var(--color-elevated)] p-3">
@@ -79,7 +97,7 @@ export function SelectedVehiclePanel({
             <div className="rounded-[var(--radius-md)] bg-[var(--color-elevated)] p-3">
               <dt className="text-[var(--color-text-secondary)]">Топливо</dt>
               <dd className="mt-1 font-semibold">
-                {vehicle.fuelPercent == null ? 'Нет данных' : `${vehicle.fuelPercent}%`}
+                <FuelLevelBar value={vehicle.fuelPercent} />
               </dd>
             </div>
           </dl>
@@ -89,7 +107,7 @@ export function SelectedVehiclePanel({
               <p className="rounded-[var(--radius-md)] bg-[var(--color-primary-soft)] p-3 text-[var(--color-text)]">
                 Сейчас в аренде: <strong>{vehicle.currentRental.clientName}</strong>
                 {vehicle.currentRental.contractNumber
-                  ? ` · ${vehicle.currentRental.contractNumber}`
+                  ? <span className="mt-1 block">Договор {vehicle.currentRental.contractNumber}</span>
                   : ''}
               </p>
             ) : null}

@@ -3,7 +3,29 @@ import { FiAlertCircle, FiArrowRight } from 'react-icons/fi';
 import { Badge, Card, CardContent, CardHeader } from '@/shared/ui';
 import type { DashboardAttentionItemDto } from './overview-types';
 
+function vehicleWord(count: number) {
+  const lastTwo = count % 100;
+  if (lastTwo >= 11 && lastTwo <= 14) return 'автомобилей';
+  const last = count % 10;
+  if (last === 1) return 'автомобиль';
+  if (last >= 2 && last <= 4) return 'автомобиля';
+  return 'автомобилей';
+}
+
 export function AttentionPanel({ items }: { items: DashboardAttentionItemDto[] }) {
+  const gpsItems = items.filter((item) => item.id.startsWith('offline:'));
+  const visibleItems = items.filter((item) => !item.id.startsWith('offline:'));
+
+  if (gpsItems.length > 0) {
+    visibleItems.push({
+      id: 'offline:group',
+      tone: gpsItems.some((item) => item.tone === 'danger') ? 'danger' : 'warning',
+      title: 'Нет актуального GPS-сигнала',
+      description: `${gpsItems.length} ${vehicleWord(gpsItems.length)}`,
+      href: '/vehicles?gps=offline',
+    });
+  }
+
   return (
     <section aria-labelledby="attention-heading">
       <Card className="min-w-0 overflow-hidden">
@@ -12,16 +34,16 @@ export function AttentionPanel({ items }: { items: DashboardAttentionItemDto[] }
             <h2 id="attention-heading" className="text-lg font-semibold">
               Требует внимания
             </h2>
-            <Badge tone={items.length ? 'danger' : 'success'}>{items.length}</Badge>
+            <Badge tone={visibleItems.length ? 'danger' : 'success'}>{visibleItems.length}</Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          {items.length === 0 ? (
+          {visibleItems.length === 0 ? (
             <p className="py-8 text-center text-sm text-[var(--color-text-secondary)]">
               Критичных ситуаций нет
             </p>
           ) : (
-            items.map((item) => (
+            visibleItems.map((item) => (
               <Link
                 key={item.id}
                 href={item.href}

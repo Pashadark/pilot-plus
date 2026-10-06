@@ -30,7 +30,7 @@ export function MobileNavigation({
         open={open}
         onOpenChange={onOpenChange}
         title="Мобильная навигация"
-        className="mr-auto ml-0 max-w-[20rem] rounded-l-none rounded-r-[var(--radius-panel)] bg-[var(--color-navigation)] text-[var(--color-text-inverse)]"
+        className="mr-auto ml-0 max-w-[20rem] rounded-l-none rounded-r-[var(--radius-panel)] bg-[var(--color-navigation)] text-[var(--color-text)]"
       >
         <div className="mb-5 flex justify-end">
           <IconButton label="Закрыть меню" variant="ghost" onClick={close}>

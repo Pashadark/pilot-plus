@@ -10,11 +10,6 @@ import { openAuthenticatedRoute } from './helpers/auth';
 
 type CompanyRole = 'COMPANY_ADMIN' | 'DISPATCHER' | 'DRIVER' | 'VIEWER';
 
-const demoClientNames = Array.from(
-  { length: 6 },
-  (_, index) => `Клиент-${String(index + 1).padStart(2, '0')} Демо`,
-);
-
 function e2ePhone(): string {
   return `7${randomUUID().replace(/\D/g, '').padEnd(10, '0').slice(0, 10)}`;
 }
@@ -155,6 +150,7 @@ async function cleanupE2eFixtures({
 
 async function createClientThroughForm(page: Page, lastName: string, companyName?: string) {
   const phone = e2ePhone();
+  const additionalPhone = e2ePhone();
   await page.getByRole('button', { name: 'Добавить клиента' }).click();
   await expect(page.getByRole('heading', { name: 'Новый клиент', level: 2 })).toBeVisible();
   if (companyName)
@@ -162,9 +158,11 @@ async function createClientThroughForm(page: Page, lastName: string, companyName
   await page.getByLabel('Имя').fill('E2E');
   await page.getByLabel('Фамилия').fill(lastName);
   await page.getByLabel('Телефон').fill(phone);
+  await page.getByLabel('Дополнительный телефон').fill(additionalPhone);
   await page.getByLabel('Email').fill(`${lastName.toLowerCase()}@example.test`);
   await page.getByRole('button', { name: 'Далее', exact: true }).first().click();
-  await page.locator('input[name="passport"]').fill('E2E-PASSPORT');
+  await page.getByLabel('Серия паспорта').fill('4518');
+  await page.getByLabel('Номер паспорта').fill('621431');
   await page.locator('input[name="driverLicense"]').fill('E2E-LICENSE');
   await page.getByLabel('Дата выдачи ВУ').fill('2020-01-01');
   await page.getByLabel('Срок действия ВУ').fill('2030-01-01');
@@ -172,6 +170,7 @@ async function createClientThroughForm(page: Page, lastName: string, companyName
   await page.getByRole('button', { name: 'Далее', exact: true }).first().click();
   await page.getByRole('button', { name: 'Создать клиента' }).click({ force: true });
   await expect(page).toHaveURL(/\/clients\/[a-z0-9]+$/);
+  await expect(page.getByLabel('Дополнительный телефон')).toHaveValue(additionalPhone);
   return page.url().split('/').at(-1) as string;
 }
 
@@ -180,10 +179,7 @@ async function editClientThroughForm(page: Page, clientId: string, editedLastNam
     .getByRole('heading', { name: 'Редактировать клиента', level: 2 })
     .scrollIntoViewIfNeeded();
   await page.getByLabel('Фамилия').fill(editedLastName);
-  await page.getByRole('button', { name: 'Далее', exact: true }).first().click();
-  await page.getByRole('button', { name: 'Далее', exact: true }).first().click();
-  await page.getByRole('button', { name: 'Далее', exact: true }).first().click();
-  await page.getByRole('button', { name: 'Сохранить' }).click({ force: true });
+  await page.getByRole('button', { name: 'Сохранить изменения' }).click({ force: true });
   await expect(page).toHaveURL(new RegExp(`/clients/${clientId}$`));
   await expect(page.getByRole('heading', { name: new RegExp(editedLastName) })).toBeVisible();
 }
@@ -210,10 +206,10 @@ test('SYSTEM проходит list/detail/create/edit в изолированн�
 
     await openAuthenticatedRoute(page, '/clients');
     await expect(page.getByTestId('client-page')).toBeVisible();
-    const fixtureCard = page.getByTestId('client-card').filter({ hasText: fixtureLabel });
-    await expect(fixtureCard).toHaveCount(1);
-    await expect(page.getByTestId('client-card').filter({ hasText: foreignLabel })).toHaveCount(1);
-    await fixtureCard.getByRole('link', { name: 'Открыть', exact: true }).click();
+    const fixtureLink = page.getByRole('link', { name: new RegExp(`^${fixtureLabel}`) });
+    await expect(fixtureLink).toHaveCount(1);
+    await expect(page.getByRole('link', { name: new RegExp(`^${foreignLabel}`) })).toHaveCount(1);
+    await fixtureLink.click();
     await expect(page.getByTestId('client-detail-page')).toBeVisible();
     await page.getByRole('link', { name: 'К клиентам' }).click();
 
@@ -249,9 +245,9 @@ test('COMPANY dispatcher проходит list/detail/create/edit только �
     sessionIds.push(await openSession(page, dispatcher.id));
     await page.goto('/clients');
     await expect(page.getByTestId('client-page')).toBeVisible();
-    const fixtureCard = page.getByTestId('client-card').filter({ hasText: fixtureLabel });
-    await expect(fixtureCard).toHaveCount(1);
-    await fixtureCard.getByRole('link', { name: 'Открыть', exact: true }).click();
+    const fixtureLink = page.getByRole('link', { name: new RegExp(`^${fixtureLabel}`) });
+    await expect(fixtureLink).toHaveCount(1);
+    await fixtureLink.click();
     await expect(page.getByTestId('client-detail-page')).toBeVisible();
     await page.getByRole('link', { name: 'К клиентам' }).click();
 
@@ -296,10 +292,10 @@ test('viewer read-only, driver forbidden, а чужая карточка воз�
     sessionIds.push(await openSession(page, viewer.id));
     await page.goto('/clients');
     await expect(page.getByTestId('client-page')).toBeVisible();
-    const ownCard = page.getByTestId('client-card').filter({ hasText: ownLabel });
-    await expect(ownCard).toHaveCount(1);
+    const ownLink = page.getByRole('link', { name: new RegExp(`^${ownLabel}`) });
+    await expect(ownLink).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Добавить клиента' })).toHaveCount(0);
-    await ownCard.getByRole('link', { name: 'Открыть', exact: true }).click();
+    await ownLink.click();
     await expect(page.getByTestId('client-detail-page')).toBeVisible();
     await expect(
       page.getByRole('heading', { name: 'Редактировать клиента', level: 2 }),
@@ -321,17 +317,31 @@ test('viewer read-only, driver forbidden, а чужая карточка воз�
   }
 });
 
-test('SVG заглушка и demo-карточки не переполняют экран 390×844', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await openAuthenticatedRoute(page, '/clients');
+test('SVG заглушка и карточка клиента не переполняют экран 390×844', async ({ page }) => {
+  const marker = `MOBILE-${randomUUID()}`;
+  const clientIds: string[] = [];
+  const companyIds: string[] = [];
 
-  for (const name of demoClientNames) {
-    const card = page.getByTestId('client-card').filter({ hasText: name });
+  try {
+    const adminId = await adminUserId();
+    const company = await createTemporaryCompany('E2E mobile client card');
+    companyIds.push(company.id);
+    const fixture = await createFixtureClient(company.id, adminId, marker);
+    clientIds.push(fixture.id);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openAuthenticatedRoute(page, '/clients');
+
+    const card = page.getByTestId('client-card').filter({ hasText: marker });
     await expect(card).toHaveCount(1);
     await expect(card.getByTestId('client-photo').locator('svg')).toBeVisible();
     expect(
       (await card.getByRole('link', { name: 'Открыть', exact: true }).boundingBox())?.height ?? 0,
     ).toBeGreaterThanOrEqual(44);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
+      false,
+    );
+  } finally {
+    await cleanupE2eFixtures({ clientIds, companyIds });
   }
-  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });

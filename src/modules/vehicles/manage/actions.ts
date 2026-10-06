@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache';
 
 import { requireVehicleManagementAccess, VehicleManagementAccessDeniedError } from './access';
 import { vehicleIdSchema, vehicleInputSchema, type VehicleInput } from './validation';
+import { mergeTechnicalFeatures } from '../technical-features';
 
 export type VehicleActionState =
   | { ok: true; vehicleId: string }
@@ -143,7 +144,10 @@ function duplicateFromVehicle(
   return duplicateError('internalNumber');
 }
 
-function vehicleData(input: VehicleInput): Prisma.VehicleUncheckedCreateInput {
+function vehicleData(
+  input: VehicleInput,
+  existingFeatures: readonly string[] = [],
+): Prisma.VehicleUncheckedCreateInput {
   return {
     companyId: input.companyId,
     sourceKey: `manual:${randomUUID()}`,
@@ -188,13 +192,24 @@ function vehicleData(input: VehicleInput): Prisma.VehicleUncheckedCreateInput {
     rentalReadyAt: input.isRentalReady ? new Date() : null,
     status: input.status,
     originalPrice: `${(input.dailyPriceMinor / 100).toLocaleString('ru-RU')} ₽`,
-    features: [],
+    features: mergeTechnicalFeatures(
+      existingFeatures,
+      input.driveType,
+      input.fuelConsumptionLitersPer100Km,
+    ),
     isDemoImport: false,
   };
 }
 
-function vehicleUpdateData(input: VehicleInput): Prisma.VehicleUncheckedUpdateInput {
-  const { companyId: _companyId, sourceKey: _sourceKey, ...data } = vehicleData(input);
+function vehicleUpdateData(
+  input: VehicleInput,
+  existingFeatures: readonly string[],
+): Prisma.VehicleUncheckedUpdateInput {
+  const {
+    companyId: _companyId,
+    sourceKey: _sourceKey,
+    ...data
+  } = vehicleData(input, existingFeatures);
   return data;
 }
 
@@ -208,6 +223,9 @@ function auditChanges(input: VehicleInput, operation: 'created' | 'updated' | 'a
     city: input.city,
     status: input.status,
     isRentalReady: input.isRentalReady,
+    driveType: input.driveType ?? null,
+    fuelConsumptionLitersPer100Km: input.fuelConsumptionLitersPer100Km ?? null,
+    ...(input.fuelLevelPercent === undefined ? {} : { fuelLevelPercent: input.fuelLevelPercent }),
   };
 }
 
@@ -266,12 +284,14 @@ async function createOrUpdate(
         });
         if (!company) return NOT_FOUND_ERROR;
 
+        let existingFeatures: string[] = [];
         if (operation === 'update') {
           const existing = await transaction.vehicle.findFirst({
             where: { id: vehicleId, companyId: parsed.data.companyId, archivedAt: null },
-            select: { id: true, internalNumber: true },
+            select: { id: true, internalNumber: true, features: true },
           });
           if (!existing) return NOT_FOUND_ERROR;
+          existingFeatures = existing.features ?? [];
         }
 
         const duplicate = await findDuplicate(
@@ -288,9 +308,21 @@ async function createOrUpdate(
             ? await transaction.vehicle.create({ data, select: { id: true, internalNumber: true } })
             : await transaction.vehicle.update({
                 where: { id: vehicleId },
-                data: vehicleUpdateData(parsed.data),
+                data: vehicleUpdateData(parsed.data, existingFeatures),
                 select: { id: true, internalNumber: true },
               });
+
+        if (operation === 'update' && parsed.data.fuelLevelPercent !== undefined) {
+          await transaction.fuelRecord.create({
+            data: {
+              vehicleId: vehicle.id,
+              type: 'MANUAL_LEVEL',
+              levelPercent: parsed.data.fuelLevelPercent,
+              recordedAt: new Date(),
+            },
+            select: { id: true },
+          });
+        }
 
         await writeVehicleAudit(
           transaction,
@@ -308,7 +340,10 @@ async function createOrUpdate(
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
-    if (result.ok) revalidatePath('/vehicles');
+    if (result.ok) {
+      revalidatePath('/vehicles');
+      revalidatePath(`/vehicles/${result.vehicleId}`);
+    }
     return result;
   } catch (error) {
     return knownDatabaseError(error) ?? SAVE_ERROR;

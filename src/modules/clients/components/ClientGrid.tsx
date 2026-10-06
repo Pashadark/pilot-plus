@@ -3,6 +3,7 @@ import { FiEye } from 'react-icons/fi';
 
 import type { ClientCardDto } from '../types';
 import type { ClientRatingSummary } from '@/modules/client-rating/types';
+import { PILOT_BUSINESS_TIME_ZONE } from '@/shared/business-time';
 import { Badge, EmptyState } from '@/shared/ui';
 import { ClientRatingStars } from '@/modules/client-rating/components/ClientRatingStars';
 
@@ -22,7 +23,12 @@ function formatRentalDate(value: string) {
     day: '2-digit',
     month: '2-digit',
     year: '2-digit',
+    timeZone: PILOT_BUSINESS_TIME_ZONE,
   }).format(new Date(value));
+}
+
+function withoutMiddleDots(value: string) {
+  return value.replace(/\s*·\s*/g, ' ');
 }
 
 export function ClientGrid({
@@ -43,25 +49,26 @@ export function ClientGrid({
 
   return (
     <section aria-label="Список клиентов" className="min-w-0">
-      <div className="grid gap-3 md:hidden">
+      <div className="grid gap-3 xl:hidden">
         {clients.map((client) => (
           <ClientCard key={client.id} client={client} rating={ratings[client.id]} />
         ))}
       </div>
 
-      <div className="hidden overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)] md:block">
-        <table className="w-full min-w-[1420px] border-collapse text-left text-sm font-normal">
+      <div className="hidden overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)] xl:block">
+        <table className="w-full min-w-[1540px] border-collapse text-left text-sm font-normal">
           <thead className="bg-[var(--color-elevated)] text-xs font-medium tracking-wide text-[var(--color-text-secondary)] uppercase">
             <tr>
               <th className="px-3 py-2.5">Клиент</th>
               <th className="px-3 py-2.5">Телефон</th>
+              <th className="px-3 py-2.5">Доп. телефон</th>
               <th className="px-3 py-2.5">Рейтинг</th>
               <th className="px-3 py-2.5">Аренды</th>
               <th className="px-3 py-2.5 text-right">Штрафы</th>
               <th className="px-3 py-2.5">Машина</th>
               <th className="px-3 py-2.5 text-right">Стоимость аренды</th>
-              <th className="px-3 py-2.5 text-right">Депозит</th>
-              <th className="px-3 py-2.5">Статус депозита</th>
+              <th className="px-3 py-2.5 text-right">Сумма депозита</th>
+              <th className="px-3 py-2.5">Депозит</th>
               <th className="px-3 py-2.5">Дата возврата</th>
               <th className="px-3 py-2.5">Статус</th>
               <th className="px-3 py-2.5 text-right">Действия</th>
@@ -97,7 +104,12 @@ export function ClientGrid({
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">{client.phone}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    {client.phone ?? 'Нет телефона'}
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap text-[var(--color-text-secondary)]">
+                    {client.additionalPhone ?? '—'}
+                  </td>
                   <td className="px-3 py-2.5">
                     {ratings[client.id] ? (
                       <ClientRatingStars rating={ratings[client.id]} compact />
@@ -120,11 +132,13 @@ export function ClientGrid({
                   <td className="px-3 py-2.5">
                     {depositRental ? (
                       <div className="min-w-[190px]">
-                        <p>{depositRental.vehicle.label}</p>
-                        <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                          {depositRental.vehicle.registrationNumber ?? 'Без номера'}
-                          {depositRental.contractNumber ? ` · ${depositRental.contractNumber}` : ''}
-                        </p>
+                        <p>{withoutMiddleDots(depositRental.vehicle.label)}</p>
+                        <div className="mt-1 grid gap-0.5 text-xs text-[var(--color-text-secondary)]">
+                          <span>{depositRental.vehicle.registrationNumber ?? 'Без номера'}</span>
+                          {depositRental.contractNumber ? (
+                            <span>{depositRental.contractNumber}</span>
+                          ) : null}
+                        </div>
                       </div>
                     ) : (
                       <span className="text-sm text-[var(--color-text-secondary)]">Нет аренды</span>

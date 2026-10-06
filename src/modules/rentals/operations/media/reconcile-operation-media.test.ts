@@ -65,4 +65,39 @@ describe('reconcileOperationMedia', () => {
     ).resolves.toEqual({ cleaned: 0, skipped: 1 });
     expect(storage.removeUploadArtifacts).not.toHaveBeenCalled();
   });
+
+  it('removes an expired database row when its private file is already absent', async () => {
+    const repository = {
+      findExpired: vi.fn().mockResolvedValue([
+        {
+          id: 'media-1',
+          uploadId: 'upload-1',
+          storageKey: 'companies/company-1/rental-operations/operation-1/photo.jpg',
+          status: 'ERROR',
+          claimToken: null,
+          leaseExpiresAt: null,
+        },
+      ]),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+    };
+    const missingFile = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    const storage = {
+      removeUploadArtifacts: vi.fn().mockResolvedValue(0),
+      removePrivate: vi.fn().mockRejectedValue(missingFile),
+    };
+
+    await expect(
+      reconcileOperationMedia({
+        repository,
+        storage,
+        now: new Date('2026-08-21T10:00:00Z'),
+        claimToken: () => 'reconciler-1',
+        limit: 10,
+      }),
+    ).resolves.toEqual({ cleaned: 1, skipped: 0 });
+    expect(repository.deleteMany).toHaveBeenCalledWith({
+      where: { id: 'media-1', status: 'CLEANING', claimToken: 'reconciler-1' },
+    });
+  });
 });

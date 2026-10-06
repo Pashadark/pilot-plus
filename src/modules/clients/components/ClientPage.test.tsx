@@ -28,4 +28,19 @@ describe('ClientPage', () => {
     expect(screen.getByRole('navigation', { name: 'Быстрые фильтры клиентов' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Добавить клиента' })).toBeNull();
   });
+
+  it('keeps the add-client action readable at narrow widths', () => {
+    render(
+      <ClientPage
+        result={{ items: [], page: 1, pageSize: 24 }}
+        filters={{ page: 1 }}
+        canManage
+        companies={[]}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Добавить клиента' }).className).toContain(
+      'whitespace-nowrap',
+    );
+  });
 });

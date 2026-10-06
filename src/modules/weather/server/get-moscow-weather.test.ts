@@ -3,12 +3,30 @@ import { parseOpenMeteoWeather } from './get-moscow-weather';
 
 describe('parseOpenMeteoWeather', () => {
   it('normalizes current Moscow weather', () => {
-    expect(parseOpenMeteoWeather({ current: {
-      time: '2026-08-26T01:30', temperature_2m: 17.4, apparent_temperature: 16.1,
-      weather_code: 61, wind_speed_10m: 5.2, precipitation: 0.4,
-    } })).toEqual({
-      observedAt: '2026-08-26T01:30', temperatureC: 17.4, apparentTemperatureC: 16.1,
-      weatherCode: 61, windSpeedMs: 5.2, precipitationMm: 0.4,
+    expect(
+      parseOpenMeteoWeather({
+        current: {
+          time: '2026-08-26T01:30',
+          temperature_2m: 17.4,
+          apparent_temperature: 16.1,
+          weather_code: 61,
+          wind_speed_10m: 5.2,
+          precipitation: 0.4,
+        },
+        daily: {
+          sunrise: ['2026-08-26T05:08'],
+          sunset: ['2026-08-26T19:48'],
+        },
+      }),
+    ).toEqual({
+      observedAt: '2026-08-26T01:30',
+      temperatureC: 17.4,
+      apparentTemperatureC: 16.1,
+      weatherCode: 61,
+      windSpeedMs: 5.2,
+      precipitationMm: 0.4,
+      sunrise: '2026-08-26T05:08',
+      sunset: '2026-08-26T19:48',
     });
   });
 

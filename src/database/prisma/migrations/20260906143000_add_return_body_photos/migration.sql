@@ -1,0 +1,4 @@
+ALTER TYPE "public"."RentalOperationMediaKind" ADD VALUE IF NOT EXISTS 'BODY_PHOTO_FRONT';
+ALTER TYPE "public"."RentalOperationMediaKind" ADD VALUE IF NOT EXISTS 'BODY_PHOTO_REAR';
+ALTER TYPE "public"."RentalOperationMediaKind" ADD VALUE IF NOT EXISTS 'BODY_PHOTO_LEFT';
+ALTER TYPE "public"."RentalOperationMediaKind" ADD VALUE IF NOT EXISTS 'BODY_PHOTO_RIGHT';

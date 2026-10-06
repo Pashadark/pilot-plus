@@ -1,4 +1,13 @@
-import { FiAlertTriangle, FiCheckCircle, FiClock, FiTool } from 'react-icons/fi';
+import {
+  FiAlertTriangle,
+  FiCheckCircle,
+  FiClock,
+  FiDroplet,
+  FiFileText,
+  FiSettings,
+  FiTool,
+  FiUsers,
+} from 'react-icons/fi';
 import Link from 'next/link';
 import { Card } from '@/shared/ui';
 import type { DashboardKpiDto } from './overview-types';
@@ -43,9 +52,9 @@ export function CommandCenterKpis({
       href: '/rentals?finance=income',
     },
     {
-      label: 'Депозиты по договорам',
-      value: formatMinor(kpis.lifetimeDepositsMinor),
-      hint: 'За всё время',
+      label: 'Залоги к возврату',
+      value: formatMinor(kpis.heldDepositsMinor),
+      hint: 'Без возвратов и удержаний',
       icon: FiClock,
       tone: 'text-[var(--color-warning)]',
       href: '/rentals?finance=deposits',
@@ -65,11 +74,28 @@ export function CommandCenterKpis({
       tone: 'text-[var(--color-primary)]',
     },
     {
-      label: 'ТО и мойка',
-      value: String(kpis.serviceVehicles),
-      hint: 'Недоступны',
+      label: 'ТО',
+      value: String(kpis.maintenanceVehicles),
+      hint: 'На обслуживании',
       icon: FiTool,
       tone: 'text-[var(--color-warning)]',
+      href: '/maintenance?view=list',
+    },
+    {
+      label: 'Ремонт',
+      value: String(kpis.repairVehicles),
+      hint: 'Сейчас в работе',
+      icon: FiSettings,
+      tone: 'text-[var(--color-danger)]',
+      href: '/maintenance?view=list',
+    },
+    {
+      label: 'Мойка',
+      value: String(kpis.washVehicles),
+      hint: 'На мойке сейчас',
+      icon: FiDroplet,
+      tone: 'text-[var(--color-primary)]',
+      href: '/wash',
     },
     {
       label: 'Нет GPS-связи',
@@ -78,6 +104,22 @@ export function CommandCenterKpis({
       icon: FiAlertTriangle,
       tone: 'text-[var(--color-danger)]',
       href: '/vehicles?gps=offline',
+    },
+    {
+      label: 'Договоры',
+      value: String(kpis.contracts),
+      hint: 'Всего в системе',
+      icon: FiFileText,
+      tone: 'text-[var(--color-primary)]',
+      href: '/rentals',
+    },
+    {
+      label: 'Клиенты',
+      value: String(kpis.clients),
+      hint: 'Всего в базе',
+      icon: FiUsers,
+      tone: 'text-[var(--color-primary)]',
+      href: '/clients',
     },
   ];
 

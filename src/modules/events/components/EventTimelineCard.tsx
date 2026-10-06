@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FiAlertTriangle, FiCheck, FiClock, FiMapPin } from 'react-icons/fi';
 
 import type { TimelineEventDto } from '../types';
+import { PILOT_BUSINESS_TIME_ZONE } from '@/shared/business-time';
 import { Badge, Button, Card } from '@/shared/ui';
 
 const severityLabel = { INFO: 'Информация', WARNING: 'Предупреждение', DANGER: 'Критическое' };
@@ -51,9 +52,11 @@ export function EventTimelineCard({
   onMarkRead?: (key: string) => void;
   pending?: boolean;
 }) {
-  const time = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(event.recordedAt),
-  );
+  const time = new Intl.DateTimeFormat('ru-RU', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: PILOT_BUSINESS_TIME_ZONE,
+  }).format(new Date(event.recordedAt));
   return (
     <Card
       data-testid="timeline-event"
@@ -110,6 +113,19 @@ export function EventTimelineCard({
             <p className="mt-1 text-sm">
               Объём топлива: {formatNumber(event.telemetry.fuelVolumeLiters)} л
             </p>
+          ) : null}
+          {event.assignment?.people.length ? (
+            <div className="mt-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-elevated)] p-3 text-sm">
+              <p className="font-semibold text-[var(--color-text)]">
+                Кто управлял: {event.assignment.people.join(', ')}
+              </p>
+              <Link
+                href={`/rentals/${event.assignment.rentalId}`}
+                className="mt-1 inline-flex min-h-8 items-center font-semibold text-[var(--color-primary)]"
+              >
+                Договор {event.assignment.contractNumber ?? 'без номера'}
+              </Link>
+            </div>
           ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
             {event.source.href ? (

@@ -16,6 +16,8 @@ export class TelematicsSyncError extends Error {
 
 type LastData = Awaited<ReturnType<GlonassSoftClient['getLastData']>>[number];
 
+const SPEEDING_ALERT_THRESHOLD_KPH = 145;
+
 interface SyncDatabase {
   telematicsIntegration: {
     findUnique(args: unknown): Promise<{
@@ -247,7 +249,11 @@ async function savePoint(
       status: stateToStatus(point.state),
     },
   });
-  if (point.speedKph >= 120) {
+  const previousSpeedKph = previous?.speedKph ?? null;
+  const crossedSpeedingThreshold =
+    point.speedKph >= SPEEDING_ALERT_THRESHOLD_KPH &&
+    (previousSpeedKph === null || previousSpeedKph < SPEEDING_ALERT_THRESHOLD_KPH);
+  if (crossedSpeedingThreshold) {
     await database.vehicleEvent?.createMany({
       data: [
         {
@@ -255,11 +261,11 @@ async function savePoint(
           type: 'SPEEDING',
           severity: 'DANGER',
           title: `Скорость ${Math.round(point.speedKph)} км/ч`,
-          description: 'Зафиксирована скорость выше 120 км/ч.',
+          description: `Зафиксирована скорость ${SPEEDING_ALERT_THRESHOLD_KPH} км/ч или выше.`,
           location: point.address,
           recordedAt,
           provider: 'GLONASSSOFT',
-          externalId: `${externalId}:speeding-120`,
+          externalId: `${externalId}:speeding-${SPEEDING_ALERT_THRESHOLD_KPH}`,
         },
       ],
       skipDuplicates: true,

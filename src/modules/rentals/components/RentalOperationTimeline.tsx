@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader } from '@/shared/ui/Card';
 
 export type RentalOperationTimelineItem = {
   id: string;
-  type: 'HANDOVER' | 'EXTENSION' | 'RETURN';
+  type: 'HANDOVER' | 'EXTENSION' | 'RETURN' | 'DEPOSIT_RETURN' | 'WEEKLY_INSPECTION';
   occurredAt: string;
   actorName: string;
   evidenceStatus: string;
@@ -15,6 +15,10 @@ export type RentalOperationTimelineItem = {
   fulfillmentAddress: string | null;
   nextEndsAt: string | null;
   totalChargeMinor: string | null;
+  depositAmountMinor?: string | null;
+  depositWithheldMinor?: string | null;
+  depositStatus?: string | null;
+  depositResolutionReason?: string | null;
   media: Array<{
     kind:
       | 'INSPECTION_VIDEO'
@@ -31,6 +35,8 @@ const operationLabels = {
   HANDOVER: 'Выдача автомобиля',
   EXTENSION: 'Продление аренды',
   RETURN: 'Возврат автомобиля',
+  DEPOSIT_RETURN: 'Возврат залога',
+  WEEKLY_INSPECTION: 'Еженедельный осмотр',
 };
 const evidenceLabels: Record<string, string> = {
   VIDEO_MISSING: 'Нет видео осмотра',
@@ -80,7 +86,7 @@ export function RentalOperationTimeline({
                       {date(operation.occurredAt)} · {operation.actorName}
                     </p>
                   </div>
-                  {operation.evidenceStatus === 'COMPLETE' ? (
+                  {operation.type === 'DEPOSIT_RETURN' ? null : operation.evidenceStatus === 'COMPLETE' ? (
                     <span className="rounded-full bg-[var(--color-success-soft)] px-3 py-1 text-xs font-semibold text-[var(--color-success)]">
                       Фиксация полная
                     </span>
@@ -109,7 +115,22 @@ export function RentalOperationTimeline({
                 {operation.nextEndsAt ? (
                   <p className="text-sm">Новый возврат: {date(operation.nextEndsAt)}</p>
                 ) : null}
-                {operation.evidenceMissingReason ? (
+                {operation.type === 'DEPOSIT_RETURN' && operation.depositAmountMinor ? (
+                  <p className="text-sm">
+                    Возвращено{' '}
+                    <strong>
+                      {new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(
+                        (Number(operation.depositAmountMinor) - Number(operation.depositWithheldMinor ?? '0')) / 100,
+                      )}
+                    </strong>
+                    {' · '}удержано{' '}
+                    {new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(
+                      Number(operation.depositWithheldMinor ?? '0') / 100,
+                    )}
+                    {operation.depositResolutionReason ? ` · ${operation.depositResolutionReason}` : ''}
+                  </p>
+                ) : null}
+                {operation.type !== 'DEPOSIT_RETURN' && operation.evidenceMissingReason ? (
                   <p className="text-sm text-[var(--color-text-secondary)]">
                     {operation.evidenceMissingReason}
                   </p>

@@ -31,6 +31,8 @@ describe('getSystemHealth', () => {
         DATABASE_URL: 'postgresql://secret-host:5432/pilot',
         REDIS_HOST: 'redis.secret.internal',
         REDIS_PORT: '6379',
+        CLAMAV_HOST: 'clamav.secret.internal',
+        CLAMAV_PORT: '3310',
       },
     });
 
@@ -51,6 +53,7 @@ describe('getSystemHealth', () => {
       { key: 'postgresql', status: 'unavailable' },
       { key: 'redis', status: 'unavailable' },
       { key: 'mqtt', status: 'unconfigured' },
+      { key: 'clamav', status: 'unavailable' },
     ]);
     expect(services.every((service) => service.latencyMs <= 1_000)).toBe(true);
     expect(JSON.stringify(services)).not.toMatch(/secret|host|port|error/i);
@@ -62,12 +65,14 @@ describe('getSystemHealth', () => {
     const database = deferred<typeof healthy>();
     const redis = deferred<typeof healthy>();
     const mqtt = deferred<typeof healthy>();
+    const clamav = deferred<typeof healthy>();
     const checkDatabase = vi.fn(() => database.promise);
     const checkApplication = vi.fn(() => application.promise);
     const checkTcp = vi
       .fn()
       .mockImplementationOnce(() => redis.promise)
-      .mockImplementationOnce(() => mqtt.promise);
+      .mockImplementationOnce(() => mqtt.promise)
+      .mockImplementationOnce(() => clamav.promise);
     const getSystemHealth = createSystemHealthChecker({
       checkApplication,
       checkDatabase,
@@ -78,6 +83,8 @@ describe('getSystemHealth', () => {
         REDIS_PORT: '6379',
         MQTT_HOST: 'mqtt.internal',
         MQTT_PORT: '1883',
+        CLAMAV_HOST: 'clamav.internal',
+        CLAMAV_PORT: '3310',
       },
     });
 
@@ -85,13 +92,14 @@ describe('getSystemHealth', () => {
 
     expect(checkApplication).toHaveBeenCalledOnce();
     expect(checkDatabase).toHaveBeenCalledOnce();
-    expect(checkTcp).toHaveBeenCalledTimes(2);
+    expect(checkTcp).toHaveBeenCalledTimes(3);
     application.resolve(healthy);
     database.resolve(healthy);
     redis.resolve(healthy);
     mqtt.resolve(healthy);
+    clamav.resolve(healthy);
 
-    await expect(resultPromise).resolves.toHaveLength(4);
+    await expect(resultPromise).resolves.toHaveLength(5);
   });
 
   it('сохраняет безопасный результат при частичной недоступности', async () => {
@@ -99,7 +107,8 @@ describe('getSystemHealth', () => {
     const checkTcp = vi
       .fn()
       .mockResolvedValueOnce(unavailable)
-      .mockResolvedValueOnce({ ...healthy, status: 'unconfigured' as const });
+      .mockResolvedValueOnce({ ...healthy, status: 'unconfigured' as const })
+      .mockResolvedValueOnce(healthy);
     const getSystemHealth = createSystemHealthChecker({
       checkApplication: vi.fn().mockResolvedValue(healthy),
       checkDatabase: vi.fn().mockResolvedValue(healthy),
@@ -108,6 +117,8 @@ describe('getSystemHealth', () => {
         NODE_ENV: 'production',
         REDIS_HOST: 'redis.internal',
         REDIS_PORT: '6379',
+        CLAMAV_HOST: 'clamav.internal',
+        CLAMAV_PORT: '3310',
       },
     });
 
@@ -118,6 +129,7 @@ describe('getSystemHealth', () => {
       expect.objectContaining({ key: 'postgresql', label: 'PostgreSQL', status: 'healthy' }),
       expect.objectContaining({ key: 'redis', label: 'Redis', status: 'unavailable' }),
       expect.objectContaining({ key: 'mqtt', label: 'MQTT', status: 'unconfigured' }),
+      expect.objectContaining({ key: 'clamav', label: 'ClamAV', status: 'healthy' }),
     ]);
     expect(services[2]?.message).toBe('Сервис временно недоступен.');
     expect(JSON.stringify(services)).not.toContain('internal');
@@ -140,6 +152,8 @@ describe('getSystemHealth', () => {
         REDIS_PORT: '6379',
         MQTT_HOST: 'mqtt.internal',
         MQTT_PORT: '1883',
+        CLAMAV_HOST: 'clamav.internal',
+        CLAMAV_PORT: '3310',
       },
     });
 
@@ -150,6 +164,7 @@ describe('getSystemHealth', () => {
       { key: 'postgresql', status: 'healthy' },
       { key: 'redis', status: 'healthy' },
       { key: 'mqtt', status: 'healthy' },
+      { key: 'clamav', status: 'healthy' },
     ]);
     expect(JSON.stringify(services)).not.toContain('sensitive application failure');
   });
@@ -175,6 +190,11 @@ describe('getSystemHealth', () => {
       port: 1883,
       timeoutMs: 1_000,
     });
+    expect(checkTcp).toHaveBeenNthCalledWith(3, {
+      host: '127.0.0.1',
+      port: 3310,
+      timeoutMs: 1_000,
+    });
   });
 
   it('в production без Redis/MQTT env передаёт пустую конфигурацию в реальную TCP-проверку', async () => {
@@ -198,11 +218,17 @@ describe('getSystemHealth', () => {
       port: undefined,
       timeoutMs: 1_000,
     });
+    expect(checkTcp).toHaveBeenNthCalledWith(3, {
+      host: undefined,
+      port: undefined,
+      timeoutMs: 1_000,
+    });
     expect(services.map(({ key, status, latencyMs }) => ({ key, status, latencyMs }))).toEqual([
       { key: 'api', status: 'healthy', latencyMs: 4 },
       { key: 'postgresql', status: 'healthy', latencyMs: 4 },
       { key: 'redis', status: 'unconfigured', latencyMs: 0 },
       { key: 'mqtt', status: 'unconfigured', latencyMs: 0 },
+      { key: 'clamav', status: 'unconfigured', latencyMs: 0 },
     ]);
   });
 });

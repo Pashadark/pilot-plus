@@ -136,6 +136,72 @@ describe('синхронизация последних позиций GLONASSSo
     expect(prisma.vehiclePosition.createMany).not.toHaveBeenCalled();
   });
 
+  async function syncSpeed(currentSpeedKph: number, previousSpeedKph: number | null) {
+    const prisma = database();
+    const vehicleEvent = { createMany: vi.fn().mockResolvedValue({ count: 1 }) };
+    const transaction = {
+      vehiclePosition: {
+        findFirst: vi.fn().mockResolvedValue(
+          previousSpeedKph === null
+            ? null
+            : {
+                latitude: 55.74,
+                longitude: 37.6,
+                speedKph: previousSpeedKph,
+                recordedAt: new Date('2026-08-20T08:59:00Z'),
+              },
+        ),
+        createMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      vehicle: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      vehicleEvent,
+    };
+    prisma.$transaction.mockImplementation((callback) => callback(transaction));
+    await syncCompanyLatestPositions('company-a', {
+      prisma,
+      createClient: vi.fn(() => ({
+        getLastData: vi.fn().mockResolvedValue([
+          {
+            externalId: '42', receivedAt: '2026-08-20T09:00:30Z', recordedAt: '2026-08-20T09:00:00Z',
+            state: 4, latitude: 55.75, longitude: 37.61, speedKph: currentSpeedKph, odometerKm: 1, fuelPercent: 50,
+          },
+        ]),
+      })),
+      decrypt: vi.fn((value: string) => value),
+    });
+    return vehicleEvent;
+  }
+
+  it('не создаёт предупреждение ниже 145 км/ч', async () => {
+    expect((await syncSpeed(144, 120)).createMany).not.toHaveBeenCalled();
+  });
+
+  it('создаёт предупреждение при достижении 145 км/ч', async () => {
+    const vehicleEvent = await syncSpeed(145, 144);
+    expect(vehicleEvent.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        type: 'SPEEDING',
+        severity: 'DANGER',
+        title: 'Скорость 145 км/ч',
+        description: 'Зафиксирована скорость 145 км/ч или выше.',
+        externalId: expect.stringContaining('speeding-145'),
+      })],
+      skipDuplicates: true,
+    });
+  });
+
+  it('не пропускает первую позицию со скоростью 145 км/ч или выше', async () => {
+    expect((await syncSpeed(151, null)).createMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('не повторяет предупреждение при непрерывном превышении', async () => {
+    expect((await syncSpeed(150, 145)).createMany).not.toHaveBeenCalled();
+  });
+
+  it('снова предупреждает после снижения скорости ниже порога', async () => {
+    expect((await syncSpeed(146, 120)).createMany).toHaveBeenCalledTimes(1);
+  });
+
   it('не объявляет повторную provider-точку новым изменением', async () => {
     const prisma = database();
     const transaction = {

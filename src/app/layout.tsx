@@ -3,9 +3,10 @@ import type { Metadata } from 'next';
 import { ThemeProvider } from '@/shared/providers/ThemeProvider';
 
 import './globals.css';
+import './material.css';
 
 const themeInitializer =
-  '(function(){try{var saved=localStorage.getItem("pilot-theme");var theme=saved==="dark"?"dark":"light";document.documentElement.dataset.theme=theme}catch(_){document.documentElement.dataset.theme="light"}})()';
+  '(function(){try{var savedTheme=localStorage.getItem("pilot-theme");var savedInterface=localStorage.getItem("pilot-interface");document.documentElement.dataset.theme=savedTheme==="dark"?"dark":"light";document.documentElement.dataset.interface=savedInterface==="classic"||savedInterface==="material"?savedInterface:"obsidian"}catch(_){document.documentElement.dataset.theme="light";document.documentElement.dataset.interface="obsidian"}})()';
 
 export const metadata: Metadata = {
   title: 'СУПА ПРО',

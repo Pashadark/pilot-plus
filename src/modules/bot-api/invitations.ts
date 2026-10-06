@@ -1,9 +1,12 @@
 import { createHash } from 'node:crypto';
 
 import { prisma } from '@/database/prisma/client';
+import { blindIndex } from '@/services/security/field-encryption';
+import { normalizeRussianPhone } from '@/shared/utils/phone';
 
 import { BotApiError } from './auth';
 import type { BotProfile, LinkIdentityInput } from './contracts';
+import { linkClientContact } from './contact-authorization';
 
 const REDACTED_ACTOR = 'redacted@audit.invalid';
 
@@ -11,6 +14,7 @@ export async function linkTelegramIdentity(
   input: LinkIdentityInput,
   database: Pick<typeof prisma, '$transaction'> = prisma,
 ): Promise<BotProfile> {
+  if (!input.inviteToken) return linkClientContact(input, database);
   const tokenHash = createHash('sha256').update(input.inviteToken, 'utf8').digest('hex');
   const now = new Date();
 
@@ -28,10 +32,26 @@ export async function linkTelegramIdentity(
       if (invite.kind === 'CLIENT') {
         const client = await tx.client.findFirst({
           where: { id: invite.targetId, companyId: invite.companyId, archivedAt: null },
-          select: { id: true, firstName: true, lastName: true, status: true },
+          select: { id: true, firstName: true, lastName: true, status: true, phoneIndex: true },
         });
         if (!client || client.status === 'BLOCKED' || client.status === 'ARCHIVED') {
           throw new BotApiError('INVITE_INVALID', 400);
+        }
+        if (!input.phoneNumber || !input.contactUserId) {
+          throw new BotApiError('CONTACT_REQUIRED', 400);
+        }
+        if (input.contactUserId !== input.telegramUserId) {
+          throw new BotApiError('CONTACT_MISMATCH', 403);
+        }
+        const searchKey = process.env.CLIENT_SEARCH_KEY;
+        if (!searchKey) throw new BotApiError('SERVICE_UNAVAILABLE', 503);
+        const phone = normalizeRussianPhone(input.phoneNumber);
+        if (
+          !/^\d{7,15}$/u.test(phone) ||
+          !client.phoneIndex ||
+          blindIndex(phone, searchKey, normalizeRussianPhone) !== client.phoneIndex
+        ) {
+          throw new BotApiError('CONTACT_MISMATCH', 403);
         }
         clientId = client.id;
         displayName = `${client.firstName} ${client.lastName}`.trim();
@@ -49,20 +69,30 @@ export async function linkTelegramIdentity(
         displayName = member.user.name;
       }
 
-      const existing = await tx.telegramIdentity.findFirst({
+      const identities = await tx.telegramIdentity.findMany({
+        take: 2,
         where: {
-          companyId: invite.companyId,
           OR: [
             { telegramUserId: input.telegramUserId },
-            ...(clientId ? [{ clientId }] : []),
-            ...(userId ? [{ userId }] : []),
+            ...(clientId ? [{ companyId: invite.companyId, clientId }] : []),
+            ...(userId ? [{ companyId: invite.companyId, userId }] : []),
           ],
         },
-        select: { telegramUserId: true, clientId: true, userId: true, kind: true, isActive: true },
+        select: {
+          companyId: true,
+          telegramUserId: true,
+          clientId: true,
+          userId: true,
+          kind: true,
+          isActive: true,
+        },
       });
+      if (identities.length > 1) throw new BotApiError('IDENTITY_CONFLICT', 409);
+      const existing = identities[0];
       if (
         existing &&
-        (existing.telegramUserId !== input.telegramUserId ||
+        (existing.companyId !== invite.companyId ||
+          existing.telegramUserId !== input.telegramUserId ||
           existing.clientId !== clientId ||
           existing.userId !== userId ||
           existing.kind !== invite.kind)

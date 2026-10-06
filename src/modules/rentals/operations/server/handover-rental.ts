@@ -5,6 +5,11 @@ import type {
   RentalPaymentMethod,
 } from '../types';
 import { deriveEvidenceStatus } from '../evidence-status';
+import {
+  evaluateHandoverReadiness,
+  HANDOVER_READINESS_ACTIVATED_AT,
+} from '../../readiness/evaluate-handover-readiness';
+import { enqueueRentalLifecycleNotifications } from './enqueue-lifecycle-notifications';
 
 type Count = { count: number };
 type Transaction = {
@@ -31,9 +36,22 @@ type Transaction = {
       clientId: string;
       vehicleId: string;
       status: string;
+      totalPriceMinor: bigint;
+      depositMinor: bigint | null;
+      documentVersions: { id: string }[];
+      signatures: { party: string; status: string }[];
+      payments: { kind: string; status: string; amountMinor: bigint }[];
     } | null>;
     updateMany(args: unknown): Promise<Count>;
   };
+  vehicle: { updateMany(args: unknown): Promise<Count> };
+  telegramGroupBinding?: Parameters<
+    typeof enqueueRentalLifecycleNotifications
+  >[0]['telegramGroupBinding'];
+  telegramIdentity?: Parameters<typeof enqueueRentalLifecycleNotifications>[0]['telegramIdentity'];
+  botNotificationJob?: Parameters<
+    typeof enqueueRentalLifecycleNotifications
+  >[0]['botNotificationJob'];
   auditLog: { create(args: unknown): Promise<unknown> };
 };
 type Database = {
@@ -129,9 +147,44 @@ export function createRentalHandover(database: Database) {
                 clientId: true,
                 vehicleId: true,
                 status: true,
+                totalPriceMinor: true,
+                depositMinor: true,
+                documentVersions: {
+                  where: { format: 'PDF' },
+                  select: { id: true },
+                  take: 1,
+                },
+                signatures: { select: { party: true, status: true } },
+                payments: {
+                  where: { status: 'CONFIRMED' },
+                  select: { kind: true, status: true, amountMinor: true },
+                },
               },
             });
             if (!rental) throw new Error('Подтверждённый договор не найден.');
+            if (input.command.occurredAt >= HANDOVER_READINESS_ACTIVATED_AT) {
+              const readiness = evaluateHandoverReadiness({
+                rentalStatus: rental.status,
+                occurredAt: input.command.occurredAt,
+                hasCommittedPdf: rental.documentVersions.length > 0,
+                clientSigned: rental.signatures.some(
+                  (signature) => signature.party === 'CLIENT' && signature.status === 'SIGNED',
+                ),
+                companySigned: rental.signatures.some(
+                  (signature) => signature.party === 'COMPANY' && signature.status === 'SIGNED',
+                ),
+                totalPriceMinor: rental.totalPriceMinor,
+                confirmedRentMinor: rental.payments
+                  .filter((payment) => payment.kind === 'RENT')
+                  .reduce((total, payment) => total + payment.amountMinor, BigInt(0)),
+                requiredDepositMinor: rental.depositMinor ?? BigInt(0),
+                confirmedDepositMinor: rental.payments
+                  .filter((payment) => payment.kind === 'DEPOSIT')
+                  .reduce((total, payment) => total + payment.amountMinor, BigInt(0)),
+                selectedDepositStatus: input.command.depositStatus,
+              });
+              if (!readiness.ready) throw new Error(readiness.blockers[0]?.message);
+            }
             const activated = await transaction.rental.updateMany({
               where: { id: rental.id, companyId: input.companyId, status: 'CONFIRMED' },
               data: { status: 'ACTIVE', activatedAt: input.command.occurredAt },
@@ -163,7 +216,8 @@ export function createRentalHandover(database: Database) {
               occurredAt: input.command.occurredAt,
               committedAt: input.command.occurredAt,
               evidenceStatus,
-              evidenceMissingReason: input.command.evidenceMissingReason,
+              evidenceMissingReason:
+                evidenceStatus === 'COMPLETE' ? null : input.command.evidenceMissingReason,
               fulfillmentMethod: input.command.fulfillmentMethod,
               fulfillmentAddress: input.command.fulfillmentAddress,
               mileageKm: input.command.mileageKm,
@@ -195,6 +249,12 @@ export function createRentalHandover(database: Database) {
                 select: { id: true },
               });
             }
+            const vehicleUpdated = await transaction.vehicle.updateMany({
+              where: { id: rental.vehicleId, companyId: input.companyId },
+              data: { odometerKm: input.command.mileageKm },
+            });
+            if (vehicleUpdated.count !== 1)
+              throw Object.assign(new Error('Stale vehicle'), { code: 'P2034' });
             await transaction.auditLog.create({
               data: {
                 companyId: input.companyId,
@@ -210,6 +270,13 @@ export function createRentalHandover(database: Database) {
                   evidenceStatus,
                 },
               },
+            });
+            await enqueueRentalLifecycleNotifications(transaction, {
+              companyId: input.companyId,
+              rentalId: rental.id,
+              operationId: operation.id,
+              kind: 'HANDOVER',
+              occurredAt: input.command.occurredAt,
             });
             return { operationId: operation.id, rentalId: rental.id };
           },

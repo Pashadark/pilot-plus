@@ -26,7 +26,10 @@ describe('Supa Pro favicon', () => {
 
     const largest = entries.toSorted((left, right) => right.width - left.width)[0];
     const frame = buffer.subarray(largest.offset, largest.offset + largest.length);
-    const { data, info } = await sharp(frame).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const { data, info } = await sharp(frame)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
     const pixel = (x: number, y: number) => {
       const offset = (y * info.width + x) * 4;
       return [...data.subarray(offset, offset + 4)];
@@ -36,12 +39,10 @@ describe('Supa Pro favicon', () => {
     const brandPixel = pixel(Math.floor(info.width * 0.2), Math.floor(info.height / 2));
     expect(brandPixel[2]).toBeGreaterThan(180);
     expect(brandPixel[0]).toBeLessThan(80);
-    const centralWhitePixels = Array.from(
-      { length: Math.floor(info.width * 0.5) },
-      (_, x) =>
-        Array.from({ length: Math.floor(info.height * 0.5) }, (_, y) =>
-          pixel(x + Math.floor(info.width * 0.25), y + Math.floor(info.height * 0.25)),
-        ),
+    const centralWhitePixels = Array.from({ length: Math.floor(info.width * 0.5) }, (_, x) =>
+      Array.from({ length: Math.floor(info.height * 0.5) }, (_, y) =>
+        pixel(x + Math.floor(info.width * 0.25), y + Math.floor(info.height * 0.25)),
+      ),
     )
       .flat()
       .filter((rgba) => rgba.slice(0, 3).every((channel) => channel > 220) && rgba[3] > 220);

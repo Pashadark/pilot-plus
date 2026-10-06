@@ -10,6 +10,7 @@ import {
 import { ClientDetailPage } from '@/modules/clients/components/ClientDetailPage';
 import { getClientById, getClientCompanyOptions } from '@/modules/clients/server/queries';
 import { getClientRentalWorkspace } from '@/modules/clients/server/client-rentals';
+import { getClientFineWorkspace } from '@/modules/clients/server/client-fines';
 import { listClientComments } from '@/modules/client-comments/queries';
 import { getClientRating } from '@/modules/client-rating/queries';
 import { AppShell } from '@/shared/components/app-shell/AppShell';
@@ -25,7 +26,7 @@ export default async function ClientRoute({ params }: { params: Promise<{ id: st
   const client = await getClientById(access, id);
   if (!client) notFound();
   const canManage = canManageClient(manageAccess, client.companyId);
-  const [companies, documents, canArchiveDocuments, rentalWorkspace, comments, rating] =
+  const [companies, documents, canArchiveDocuments, rentalWorkspace, fineWorkspace, comments, rating] =
     await Promise.all([
       canManage && manageAccess ? getClientCompanyOptions(manageAccess) : [],
       getClientDocuments(access, client.id),
@@ -36,6 +37,7 @@ export default async function ClientRoute({ params }: { params: Promise<{ id: st
             summary: { total: 0, active: 0, completed: 0, totalMinor: '0' },
             rentals: [],
           }),
+      getClientFineWorkspace(access, client.companyId, client.id),
       manageAccess && canManage ? listClientComments(manageAccess, client.id) : Promise.resolve([]),
       manageAccess && canManage ? getClientRating(manageAccess, client.id) : Promise.resolve(null),
     ]);
@@ -55,6 +57,7 @@ export default async function ClientRoute({ params }: { params: Promise<{ id: st
         companies={companies}
         canCreateRental={canAccessRentalCompany(rentalAccess, client.companyId)}
         rentalWorkspace={rentalWorkspace}
+        fineWorkspace={fineWorkspace}
         comments={comments}
         currentUserId={access.user.id}
         canHideAnyComment={canArchiveDocuments}

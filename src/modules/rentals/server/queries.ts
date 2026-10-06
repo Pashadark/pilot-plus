@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 
 import { requireRentalAccess } from './access';
@@ -20,8 +21,8 @@ export async function listRentalsForCompany(companyId: string) {
       depositMinor: true,
       currency: true,
       createdAt: true,
-      client: { select: { firstName: true, middleName: true, lastName: true } },
-      vehicle: { select: { make: true, modelName: true, registrationNumber: true } },
+      client: { select: { id: true, firstName: true, middleName: true, lastName: true } },
+      vehicle: { select: { id: true, make: true, modelName: true, registrationNumber: true } },
       operations: {
         where: { type: 'EXTENSION', status: 'COMMITTED' },
         select: { id: true },
@@ -55,8 +56,8 @@ export async function listRentalsForCurrentUser() {
       depositMinor: true,
       currency: true,
       createdAt: true,
-      client: { select: { firstName: true, middleName: true, lastName: true } },
-      vehicle: { select: { make: true, modelName: true, registrationNumber: true } },
+      client: { select: { id: true, firstName: true, middleName: true, lastName: true } },
+      vehicle: { select: { id: true, make: true, modelName: true, registrationNumber: true } },
       operations: {
         where: { type: 'EXTENSION', status: 'COMMITTED' },
         select: { id: true },
@@ -73,7 +74,98 @@ export async function listRentalsForCurrentUser() {
   });
 }
 
-export type RentalListFilters = { status?: string; query?: string; from?: string; to?: string };
+export type RentalListFilters = {
+  status?: string;
+  query?: string;
+  vehicleId?: string;
+  from?: string;
+  to?: string;
+  archive?: string;
+  important?: string;
+};
+
+export function buildRentalVehicleFilter(filters: RentalListFilters) {
+  const vehicleId = filters.vehicleId?.trim();
+  return vehicleId || undefined;
+}
+
+export const rentalListSelect = {
+  id: true,
+  companyId: true,
+  status: true,
+  agreementType: true,
+  startsAt: true,
+  endsAt: true,
+  completedAt: true,
+  contractNumber: true,
+  dailyRateMinor: true,
+  totalPriceMinor: true,
+  depositMinor: true,
+  currency: true,
+  createdAt: true,
+  client: {
+    select: {
+      id: true,
+      firstName: true,
+      middleName: true,
+      lastName: true,
+      phoneEncrypted: true,
+    },
+  },
+  vehicle: {
+    select: {
+      id: true,
+      internalNumber: true,
+      make: true,
+      modelName: true,
+      model: true,
+      city: true,
+      registrationNumber: true,
+      images: {
+        select: { localPath: true, alt: true },
+        orderBy: [{ isPrimary: 'desc' as const }, { position: 'asc' as const }],
+        take: 1,
+      },
+    },
+  },
+  payments: {
+    where: { status: 'CONFIRMED' as const },
+    select: { kind: true, amountMinor: true },
+    orderBy: [{ recordedAt: 'asc' as const }, { id: 'asc' as const }],
+  },
+  operations: {
+    where: { status: 'COMMITTED' as const },
+    select: {
+      id: true,
+      type: true,
+      occurredAt: true,
+      nextEndsAt: true,
+      depositStatus: true,
+      depositWithheldMinor: true,
+    },
+    orderBy: [{ occurredAt: 'desc' as const }, { id: 'desc' as const }],
+    take: 25,
+  },
+  documentVersions: {
+    select: { format: true, version: true },
+    orderBy: [{ version: 'desc' as const }, { format: 'asc' as const }],
+    take: 2,
+  },
+} satisfies Prisma.RentalSelect;
+
+const RENTAL_STATUSES = ['DRAFT', 'CONFIRMED', 'ACTIVE', 'COMPLETED', 'CANCELLED'] as const;
+
+export function buildRentalArchiveStatusFilter(filters: RentalListFilters) {
+  if (
+    filters.status &&
+    RENTAL_STATUSES.includes(filters.status as (typeof RENTAL_STATUSES)[number])
+  ) {
+    return filters.status as (typeof RENTAL_STATUSES)[number];
+  }
+  return filters.archive === '1'
+    ? { in: ['COMPLETED', 'CANCELLED'] as const }
+    : { notIn: ['COMPLETED', 'CANCELLED'] as const };
+}
 export function parseRentalListMoscowBoundary(
   value: string | undefined,
   nextDay = false,
@@ -95,15 +187,14 @@ export async function listFilteredRentalsForCurrentUser(filters: RentalListFilte
   const access = await (await import('./access')).getRentalAccess();
   if (!access) throw new (await import('./access')).RentalAccessDeniedError();
   const query = filters.query?.trim();
+  const vehicleId = buildRentalVehicleFilter(filters);
   const from = parseRentalListMoscowBoundary(filters.from);
   const toExclusive = parseRentalListMoscowBoundary(filters.to, true);
-  const statuses = ['DRAFT', 'CONFIRMED', 'ACTIVE', 'COMPLETED', 'CANCELLED'];
   return prisma.rental.findMany({
     where: {
       ...(access.scope === 'SYSTEM' ? {} : { companyId: { in: [...access.companyIds] } }),
-      ...(filters.status && statuses.includes(filters.status)
-        ? { status: filters.status as never }
-        : {}),
+      status: buildRentalArchiveStatusFilter(filters) as never,
+      ...(vehicleId ? { vehicleId } : {}),
       ...(from ? { endsAt: { gt: from } } : {}),
       ...(toExclusive ? { startsAt: { lt: toExclusive } } : {}),
       ...(query
@@ -135,39 +226,16 @@ export async function listFilteredRentalsForCurrentUser(filters: RentalListFilte
           }
         : {}),
     },
-    select: {
-      id: true,
-      companyId: true,
-      status: true,
-      startsAt: true,
-      endsAt: true,
-      contractNumber: true,
-      totalPriceMinor: true,
-      depositMinor: true,
-      currency: true,
-      createdAt: true,
-      client: { select: { firstName: true, middleName: true, lastName: true } },
-      vehicle: { select: { make: true, modelName: true, registrationNumber: true } },
-      operations: {
-        where: { type: 'EXTENSION', status: 'COMMITTED' },
-        select: { id: true },
-        orderBy: { occurredAt: 'desc' },
-        take: 1,
-      },
-      documentVersions: {
-        select: { format: true, version: true },
-        orderBy: [{ version: 'desc' }, { format: 'asc' }],
-        take: 2,
-      },
-    },
+    select: rentalListSelect,
     orderBy: [{ startsAt: 'desc' }, { createdAt: 'desc' }],
   });
 }
 
 export async function getRentalDetailForCurrentUser(id: string) {
-  const access = await (await import('./access')).getRentalAccess();
-  if (!access) throw new (await import('./access')).RentalAccessDeniedError();
-  return prisma.rental.findFirst({
+  const accessModule = await import('./access');
+  const access = await accessModule.getRentalAccess();
+  if (!access) throw new accessModule.RentalAccessDeniedError();
+  const rental = await prisma.rental.findFirst({
     where: {
       id,
       ...(access.scope === 'SYSTEM' ? {} : { companyId: { in: [...access.companyIds] } }),
@@ -179,6 +247,7 @@ export async function getRentalDetailForCurrentUser(id: string) {
       vehicleId: true,
       contractNumber: true,
       status: true,
+      agreementType: true,
       startsAt: true,
       endsAt: true,
       currency: true,
@@ -215,9 +284,37 @@ export async function getRentalDetailForCurrentUser(id: string) {
         orderBy: [{ version: 'desc' }, { format: 'asc' }],
       },
       documentGenerations: {
-        select: { version: true, status: true, updatedAt: true },
+        select: {
+          version: true,
+          status: true,
+          docxSha256: true,
+          pdfSha256: true,
+          updatedAt: true,
+        },
         orderBy: { version: 'desc' },
         take: 5,
+      },
+      payments: {
+        select: {
+          id: true,
+          kind: true,
+          status: true,
+          amountMinor: true,
+          method: true,
+          recordedAt: true,
+          recordedBy: { select: { name: true } },
+        },
+        orderBy: { recordedAt: 'asc' },
+      },
+      signatures: {
+        select: {
+          party: true,
+          status: true,
+          signedByName: true,
+          signedAt: true,
+          recordedBy: { select: { name: true } },
+        },
+        orderBy: { party: 'asc' },
       },
       operations: {
         where: { status: 'COMMITTED' },
@@ -233,6 +330,10 @@ export async function getRentalDetailForCurrentUser(id: string) {
           fulfillmentAddress: true,
           nextEndsAt: true,
           totalChargeMinor: true,
+          depositAmountMinor: true,
+          depositWithheldMinor: true,
+          depositStatus: true,
+          depositResolutionReason: true,
           actor: { select: { name: true } },
           media: {
             where: { status: 'CLEAN' },
@@ -245,6 +346,9 @@ export async function getRentalDetailForCurrentUser(id: string) {
       },
     },
   });
+  return rental
+    ? { ...rental, canEdit: accessModule.canEditRental(access, rental.companyId, rental.status) }
+    : null;
 }
 
 export async function listRentalAuditForCurrentUser(companyId: string, rentalId: string) {

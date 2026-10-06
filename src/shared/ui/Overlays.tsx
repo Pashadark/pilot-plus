@@ -7,11 +7,12 @@ import {
   useEffectEvent,
   useId,
   useRef,
-  useState,
   type HTMLAttributes,
   type ReactElement,
   type ReactNode,
 } from 'react';
+
+import { AnchoredPopover } from './AnchoredPopover';
 
 export interface ModalProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
@@ -23,6 +24,8 @@ export interface ModalProps extends Omit<
   description?: string;
   children: ReactNode;
   footer?: ReactNode;
+  backdropClassName?: string;
+  hideTitle?: boolean;
 }
 
 const focusable =
@@ -57,6 +60,8 @@ function DialogBoundary({
   children,
   footer,
   className = '',
+  backdropClassName = '',
+  hideTitle = false,
   ...props
 }: ModalProps) {
   const titleId = useId();
@@ -124,7 +129,7 @@ function DialogBoundary({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 grid bg-[color-mix(in_srgb,var(--color-navigation)_55%,transparent)] p-4"
+      className={`fixed inset-0 z-50 grid bg-[color-mix(in_srgb,var(--color-navigation)_55%,transparent)] p-4 ${backdropClassName}`}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onOpenChange(false);
       }}
@@ -139,7 +144,7 @@ function DialogBoundary({
         tabIndex={-1}
         className={`m-auto w-full max-w-lg rounded-[var(--radius-panel)] border bg-[var(--color-surface)] p-5 shadow-[var(--shadow-floating)] outline-none ${className}`}
       >
-        <header className="mb-4">
+        <header className={hideTitle ? 'sr-only' : 'mb-4'}>
           <h2 id={titleId} className="text-lg font-semibold">
             {title}
           </h2>
@@ -230,47 +235,16 @@ export function DropdownMenu({
   ariaLabel?: string;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const escape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', escape);
-    return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('keydown', escape);
-    };
-  }, [open]);
   return (
-    <div ref={rootRef} className="relative inline-block">
-      <button
-        type="button"
-        aria-label={ariaLabel}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-        className="min-h-11 min-w-11"
-      >
-        {label}
-      </button>
-      {open && (
-        <div
-          role="menu"
-          onClick={(event) => {
-            if ((event.target as HTMLElement).closest('[role="menuitem"]')) setOpen(false);
-          }}
-          className="absolute right-0 z-40 min-w-48 rounded-[var(--radius-panel)] border bg-[var(--color-surface)] p-1 shadow-[var(--shadow-floating)]"
-        >
-          {children}
-        </div>
-      )}
-    </div>
+    <AnchoredPopover
+      ariaLabel={ariaLabel ?? (typeof label === 'string' ? label : 'Открыть меню')}
+      panelRole="menu"
+      mobileTitle={ariaLabel ?? (typeof label === 'string' ? label : 'Меню')}
+      trigger={label}
+      panelClassName="min-w-48 p-1 sm:w-auto"
+    >
+      {children}
+    </AnchoredPopover>
   );
 }
 export function Popover({ label, children }: { label: string; children: ReactNode }) {

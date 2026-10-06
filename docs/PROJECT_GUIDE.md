@@ -601,5 +601,4 @@ reset. Live ClamAV integration test включается только явным
 ## Аренда: deployment и проверка
 
 Модуль аренды включает tenant-scoped договоры, снимки условий, генерацию приватной пары DOCX/PDF и маршруты списка/календаря/деталей. Перед первым production deployment требуется отдельная резервная копия PostgreSQL, затем `npx prisma migrate deploy`, `npx prisma generate`, `npm run client-documents:reconcile` и только после проверки — `npm run db:seed`. Не выполнять эти команды против общей БД из E2E или локального review. Генерация DOCX/PDF требует LibreOffice и ClamAV; визуальное совпадение реквизитов, таблиц, подписей и кириллицы проверяется рендером каждой страницы, а не только unit-тестами. `tests/rentals.spec.ts` выключен по умолчанию и запускается только с `PILOT_RENTALS_E2E=1` на disposable БД с отдельными fixture-admin/dispatcher/driver и tenant boundary; Playwright-тест не создаёт, не мигрирует и не очищает БД.
-
 Главная идея Pilot+: **не просто нарисовать административную панель, а построить надёжный модульный продукт для живой транспортной телематики**.

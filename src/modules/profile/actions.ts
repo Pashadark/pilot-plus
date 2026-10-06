@@ -194,3 +194,60 @@ export async function changePasswordAction(
     return { status: 'error', message: 'Не удалось изменить пароль. Попробуйте снова.' };
   }
 }
+
+export async function terminateProfileSessionAction(
+  _previousState: ProfileActionState,
+  formData: FormData,
+): Promise<ProfileActionState> {
+  const session = await getAuthenticatedSession();
+  if (!session) return SESSION_ERROR;
+
+  const sessionId = String(formData.get('sessionId') ?? '').trim();
+  if (!/^[A-Za-z0-9_-]{8,128}$/.test(sessionId)) {
+    return { status: 'error', message: 'Некорректная сессия.' };
+  }
+  if (sessionId === session.currentSessionId) {
+    return {
+      status: 'error',
+      message: 'Текущую сессию можно завершить только выходом из аккаунта.',
+    };
+  }
+
+  try {
+    const result = await prisma.session.deleteMany({
+      where: {
+        id: sessionId,
+        userId: session.user.id,
+        expiresAt: { gt: new Date() },
+      },
+    });
+    if (result.count !== 1) {
+      return { status: 'error', message: 'Сессия уже завершена или не найдена.' };
+    }
+    revalidatePath('/profile');
+    return { status: 'success', message: 'Сессия завершена.' };
+  } catch {
+    return { status: 'error', message: 'Не удалось завершить сессию.' };
+  }
+}
+
+export async function terminateOtherProfileSessionsAction(
+  _previousState: ProfileActionState,
+  _formData: FormData,
+): Promise<ProfileActionState> {
+  const session = await getAuthenticatedSession();
+  if (!session) return SESSION_ERROR;
+
+  try {
+    await prisma.session.deleteMany({
+      where: {
+        userId: session.user.id,
+        id: { not: session.currentSessionId },
+      },
+    });
+    revalidatePath('/profile');
+    return { status: 'success', message: 'Остальные сессии завершены.' };
+  } catch {
+    return { status: 'error', message: 'Не удалось завершить остальные сессии.' };
+  }
+}

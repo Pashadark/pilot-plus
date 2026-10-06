@@ -6,6 +6,7 @@ describe('вкладки карточки автомобиля', () => {
   it('содержит раздел аренды и истории клиентов', () => {
     expect(vehicleTabs).toEqual([
       { value: 'overview', label: 'Обзор' },
+      { value: 'history', label: 'История' },
       { value: 'trips', label: 'Поездки' },
       { value: 'routes', label: 'Маршруты' },
       { value: 'events', label: 'События' },

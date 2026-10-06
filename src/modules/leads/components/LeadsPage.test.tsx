@@ -5,6 +5,30 @@ import { describe, expect, it } from 'vitest';
 import { LeadsPage } from './LeadsPage';
 
 describe('LeadsPage', () => {
+  it('does not render an empty telephone link', () => {
+    const markup = renderToStaticMarkup(
+      createElement(LeadsPage, {
+        companies: [],
+        leads: [
+          {
+            id: 'a',
+            companyName: 'Test',
+            name: 'Клиент Авито',
+            lastName: null,
+            phone: '',
+            source: 'Авито',
+            comment: null,
+            status: 'NEW',
+            assignedToName: null,
+            nextContactAt: null,
+            createdAt: '2026-09-23T10:00:00Z',
+          },
+        ],
+      }),
+    );
+    expect(markup).toContain('Телефон не указан');
+    expect(markup).not.toContain('href="tel:"');
+  });
   it('offers optional surname and follow-up fields plus the new sources', () => {
     const markup = renderToStaticMarkup(
       createElement(LeadsPage, {

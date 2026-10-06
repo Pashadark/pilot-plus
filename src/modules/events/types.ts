@@ -36,5 +36,10 @@ export interface TimelineEventDto {
     fuelLevelPercent: number | null;
     fuelVolumeLiters: number | null;
   };
+  assignment?: {
+    rentalId: string;
+    contractNumber: string | null;
+    people: string[];
+  } | null;
   source: { type: string; id: string; href: string | null };
 }

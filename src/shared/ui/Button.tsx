@@ -50,6 +50,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   return (
     <button
       ref={ref}
+      data-ui-button={variant}
       type={type}
       aria-busy={loading}
       disabled={disabled || loading}

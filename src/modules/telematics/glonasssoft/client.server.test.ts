@@ -39,8 +39,11 @@ describe('GLONASSSoft API client', () => {
     expect(await vehicles.json()).toEqual({});
   });
 
-  it('waits at least 500ms between provider requests', async () => {
-    const delay = vi.fn().mockResolvedValue(undefined);
+  it('waits at least one second between every provider request including login', async () => {
+    let currentTime = 0;
+    const delay = vi.fn(async (milliseconds: number) => {
+      currentTime += milliseconds;
+    });
     const transport = vi
       .fn()
       .mockResolvedValueOnce(json('session-token'))
@@ -49,13 +52,59 @@ describe('GLONASSSoft API client', () => {
     const client = new GlonassSoftClient({
       ...options(transport),
       delay,
-      now: vi.fn().mockReturnValueOnce(0).mockReturnValueOnce(100).mockReturnValueOnce(200),
+      now: () => currentTime,
     });
 
     await client.findVehicles();
     await client.findVehicles();
 
-    expect(delay).toHaveBeenCalledWith(400);
+    expect(delay).toHaveBeenNthCalledWith(1, 1_000);
+    expect(delay).toHaveBeenNthCalledWith(2, 1_000);
+  });
+
+  it('shares one login between concurrent requests', async () => {
+    let resolveLogin!: (response: Response) => void;
+    const loginResponse = new Promise<Response>((resolve) => {
+      resolveLogin = resolve;
+    });
+    const transport = vi
+      .fn()
+      .mockImplementationOnce(() => loginResponse)
+      .mockImplementation(() => Promise.resolve(json([])));
+    const client = new GlonassSoftClient(options(transport));
+
+    const first = client.findVehicles();
+    const second = client.findVehicles();
+    resolveLogin(json({ token: 'shared-session' }));
+
+    await expect(Promise.all([first, second])).resolves.toEqual([[], []]);
+    const loginCalls = transport.mock.calls.filter(([request]) =>
+      (request as Request).url.endsWith('/auth/login'),
+    );
+    expect(loginCalls).toHaveLength(1);
+  });
+
+  it.each([
+    [400, 'INVALID_REQUEST'],
+    [403, 'FORBIDDEN'],
+    [429, 'RATE_LIMITED'],
+  ] as const)('maps HTTP %s without reauthorization to %s', async (status, code) => {
+    const transport = vi
+      .fn()
+      .mockResolvedValueOnce(json({ token: 'session' }))
+      .mockResolvedValueOnce(json({}, status));
+    const client = new GlonassSoftClient(options(transport));
+
+    await expect(client.findVehicles()).rejects.toMatchObject({ code });
+    expect(transport).toHaveBeenCalledTimes(2);
+  });
+
+  it('treats a login 403 as forbidden instead of retrying credentials', async () => {
+    const transport = vi.fn().mockResolvedValue(json({}, 403));
+    const client = new GlonassSoftClient(options(transport));
+
+    await expect(client.findVehicles()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(transport).toHaveBeenCalledTimes(1);
   });
 
   it('reauthenticates once after 401 and retries with the new session', async () => {
@@ -155,5 +204,21 @@ describe('GLONASSSoft API client', () => {
     const client = new GlonassSoftClient({ ...options(transport), timeoutMs: 5 });
 
     await expect(client.findVehicles()).rejects.toMatchObject({ code: 'TIMEOUT' });
+  });
+
+  it('maps the provider HTTP 200 invalid-credentials envelope to AUTH_REJECTED', async () => {
+    const transport = vi.fn().mockResolvedValue(
+      json({
+        Error: 'Неверное имя/пароль',
+        ErrorStatus: 9,
+        Notifications: [],
+        User: '00000000',
+      }),
+    );
+    const client = new GlonassSoftClient(options(transport));
+
+    const error = await client.findVehicles().catch((caught: unknown) => caught);
+    expect(error).toMatchObject<Partial<GlonassSoftError>>({ code: 'AUTH_REJECTED' });
+    expect(JSON.stringify(error)).not.toMatch(/provider-user|provider-password/u);
   });
 });

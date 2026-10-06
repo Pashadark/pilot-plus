@@ -8,7 +8,6 @@ try {
 }
 
 const playwrightPort = process.env.PLAYWRIGHT_PORT ?? '3000';
-const isolatedServer = process.env.PLAYWRIGHT_PORT !== undefined;
 const baseURL = `http://127.0.0.1:${playwrightPort}`;
 
 export default defineConfig({
@@ -26,7 +25,7 @@ export default defineConfig({
   ],
   webServer: {
     command: `npm run dev -- --hostname 127.0.0.1 --port ${playwrightPort}`,
-    url: baseURL,
-    reuseExistingServer: !process.env.CI && !isolatedServer,
+    url: `${baseURL}/login`,
+    reuseExistingServer: !process.env.CI,
   },
 });

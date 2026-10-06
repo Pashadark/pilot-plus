@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useActionState, useEffect, useState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { FiDownload, FiFileText } from 'react-icons/fi';
 
@@ -16,15 +17,32 @@ import { Card, CardContent, CardHeader } from '@/shared/ui/Card';
 
 type DocumentItem = { version: number; format: 'DOCX' | 'PDF' };
 type HistoryItem = { id: string; action: string; label: string | null; createdAt: string };
-type GenerationItem = { version: number; status: string; updatedAt: string };
-
-const generationLabels: Record<string, string> = {
-  PENDING: 'Ожидает подготовки',
-  PROMOTED: 'Проверяется',
-  COMMITTED: 'Готово',
-  ERROR: 'Не удалось подготовить',
-  CLEANING: 'Удаляется',
+type GenerationItem = {
+  version: number;
+  status: string;
+  docxReady: boolean;
+  pdfReady: boolean;
+  updatedAt: string;
 };
+
+function generationLabel(item: GenerationItem) {
+  if (item.status === 'ERROR') return 'Ошибка';
+  if (item.status === 'COMMITTED') return 'Готово';
+  if (item.pdfReady) return 'PDF готов';
+  if (item.docxReady) return 'DOCX готов';
+  if (item.status === 'CLEANING') return 'Очистка';
+  return 'Подготовка';
+}
+
+function GenerateDocumentsSubmit({ generationActive }: { generationActive: boolean }) {
+  const { pending } = useFormStatus();
+  const busy = pending || generationActive;
+  return (
+    <Button type="submit" disabled={busy} aria-busy={busy}>
+      {busy ? 'Документы формируются…' : 'Повторить создание документов'}
+    </Button>
+  );
+}
 
 const auditLabels: Record<string, string> = {
   CREATE: 'Черновик создан',
@@ -63,6 +81,9 @@ export function RentalDetailPanel({
     null,
   );
   const retryAvailable = rental.status === 'CONFIRMED' && documents.length < 2;
+  const generationActive = generations.some((item) =>
+    ['PENDING', 'PROMOTED', 'CLEANING'].includes(item.status),
+  );
   const canCancel = rental.status === 'DRAFT' || rental.status === 'CONFIRMED';
 
   useEffect(() => {
@@ -86,7 +107,7 @@ export function RentalDetailPanel({
             <form action={retry}>
               <input type="hidden" name="companyId" value={rental.companyId} />
               <input type="hidden" name="rentalId" value={rental.id} />
-              <Button type="submit">Повторить создание документов</Button>
+              <GenerateDocumentsSubmit generationActive={generationActive} />
             </form>
           ) : null}
         </CardHeader>
@@ -120,10 +141,14 @@ export function RentalDetailPanel({
             </div>
           )}
           {generations.length ? (
-            <ul className="grid gap-1 text-sm text-[var(--color-text-secondary)]">
+            <ul
+              className="grid gap-1 text-sm text-[var(--color-text-secondary)]"
+              role="status"
+              aria-live="polite"
+            >
               {generations.map((item) => (
                 <li key={`${item.version}-${item.status}`}>
-                  Версия {item.version}: {generationLabels[item.status] ?? 'Состояние обновляется'}
+                  Версия {item.version}: {generationLabel(item)}
                 </li>
               ))}
             </ul>

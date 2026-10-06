@@ -1,8 +1,10 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { BotApiError } from './auth';
+import { prisma } from '@/database/prisma/client';
 
 export interface RentalDocumentGrantClaims {
+  identityId: string;
   companyId: string;
   clientId: string;
   rentalId: string;
@@ -18,7 +20,33 @@ function secret(): string {
 }
 
 function payload(claims: RentalDocumentGrantClaims): string {
-  return `${claims.companyId}:${claims.clientId}:${claims.rentalId}:${claims.version}:${claims.format}:${claims.expiresAt}`;
+  return `${claims.identityId}:${claims.companyId}:${claims.clientId}:${claims.rentalId}:${claims.version}:${claims.format}:${claims.expiresAt}`;
+}
+
+export async function authorizeRentalDocumentGrant(
+  claims: RentalDocumentGrantClaims,
+  provided: string,
+  database: Pick<typeof prisma, 'telegramIdentity'> = prisma,
+) {
+  verifyRentalDocumentGrant(claims, provided);
+  const identity = await database.telegramIdentity.findFirst({
+    where: {
+      id: claims.identityId,
+      companyId: claims.companyId,
+      clientId: claims.clientId,
+      kind: 'CLIENT',
+      isActive: true,
+      client: {
+        is: {
+          archivedAt: null,
+          status: { notIn: ['BLOCKED', 'ARCHIVED'] },
+          rentals: { some: { id: claims.rentalId, companyId: claims.companyId } },
+        },
+      },
+    },
+    select: { id: true },
+  });
+  if (!identity) throw new BotApiError('NOT_FOUND', 404);
 }
 
 export function signRentalDocumentGrant(claims: RentalDocumentGrantClaims): string {

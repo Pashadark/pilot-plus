@@ -12,7 +12,10 @@ function unavailable() {
 }
 
 function encodedFilename(value: string) {
-  const safe = value.replace(/[\u0000-\u001f\u007f]/gu, '').slice(0, 180).toWellFormed();
+  const safe = value
+    .replace(/[\u0000-\u001f\u007f]/gu, '')
+    .slice(0, 180)
+    .toWellFormed();
   return encodeURIComponent(safe || 'attachment').replace(
     /[!'()*]/gu,
     (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
@@ -20,7 +23,7 @@ function encodedFilename(value: string) {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ recordId: string; attachmentId: string }> },
 ) {
   const session = await getAuthenticatedSession();
@@ -43,7 +46,9 @@ export async function GET(
   try {
     const storage = await LocalPrivateStorage.create(root);
     const stream = await storage.openPrivate(attachment.storageKey);
-    const disposition = attachment.verifiedMime.startsWith('image/') ? 'inline' : 'attachment';
+    const download = new URL(request.url).searchParams.get('download') === '1';
+    const disposition =
+      !download && attachment.verifiedMime.startsWith('image/') ? 'inline' : 'attachment';
     return new Response(Readable.toWeb(stream) as ReadableStream<Uint8Array>, {
       headers: {
         'Cache-Control': 'private, no-store',

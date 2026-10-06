@@ -1,0 +1,1 @@
+{"name":"tgcar-preview","private":true,"scripts":{"dev":"next dev -p 3105 --hostname 127.0.0.1","build":"next build","test":"node --test *.test.mjs"},"dependencies":{"next":"16.2.10","react":"19.2.4","react-dom":"19.2.4","react-icons":"^5.7.0"}}

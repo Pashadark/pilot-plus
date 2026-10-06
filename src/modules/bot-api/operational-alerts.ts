@@ -50,7 +50,10 @@ type OperationalAlertMessageInput = {
   eventDescription?: string | null;
   eventRecordedAt?: Date | null;
   fineAmountMinor?: string | null;
+  fineDecreeNumber?: string | null;
   fineArticle?: string | null;
+  fineDescription?: string | null;
+  fineOffenseAt?: Date | null;
   fineAttributedToClient?: boolean;
   fuelLevelPercent?: number | null;
   borderCountry?: string | null;
@@ -114,7 +117,8 @@ export function formatOperationalAlert(input: OperationalAlertMessageInput) {
             maximumFractionDigits: 0,
           }).format(Number(BigInt(input.fineAmountMinor) / BigInt(100)))
         : 'сумма не указана';
-      return `🟡 <b>Новый штраф</b>\n${vehicle}${client}\n⚡ ${escapeHtml(amount)}${input.fineArticle ? ` · ${escapeHtml(input.fineArticle)}` : ''}\nНа клиента: <b>${input.fineAttributedToClient ? 'ДА' : 'НЕТ'}</b>\n<b>Действие:</b> проверить назначение штрафа и оплатить в разделе «Штрафы».`;
+      const offenseAt = atMoscow(input.fineOffenseAt);
+      return `🟡 <b>Новый штраф</b>\n${vehicle}${client}\n📄 Постановление № <code>${escapeHtml(input.fineDecreeNumber?.trim() || 'не предоставлен')}</code>\n📅 ${offenseAt ? `Дата нарушения: ${escapeHtml(offenseAt)} (МСК)` : 'Дата нарушения не предоставлена'}\n📋 ${escapeHtml(input.fineDescription?.trim() || 'Описание не предоставлено')}${input.fineArticle ? `\n⚖️ Статья: ${escapeHtml(input.fineArticle)}` : ''}\n💰 <b>${escapeHtml(amount)}</b>\nНа клиента: <b>${input.fineAttributedToClient ? 'ДА' : 'НЕТ'}</b>\n<b>Действие:</b> проверить назначение штрафа и оплатить в разделе «Штрафы».`;
     }
     case 'LOW_FUEL': {
       const fuel = Math.round(Math.max(0, Math.min(100, input.fuelLevelPercent ?? 0)));
@@ -122,7 +126,9 @@ export function formatOperationalAlert(input: OperationalAlertMessageInput) {
     }
     case 'BORDER_APPROACH': {
       const distance =
-        input.borderDistanceKm == null ? 'расстояние неизвестно' : `${input.borderDistanceKm.toFixed(1)} км`;
+        input.borderDistanceKm == null
+          ? 'расстояние неизвестно'
+          : `${input.borderDistanceKm.toFixed(1)} км`;
       return `⚠️ <b>Машина приближается к границе</b>\n${vehicle}${client}\nГраница: <b>${escapeHtml(input.borderCountry ?? 'сопредельное государство')}</b>\nРасстояние: <b>${escapeHtml(distance)}</b>${input.eventRecordedAt ? `\n🕒 Время: <b>${escapeHtml(atMoscow(input.eventRecordedAt))}</b>` : ''}\n<b>Действие:</b> проверьте маршрут и связь с водителем.`;
     }
     case 'FUEL_STATION_VISIT':

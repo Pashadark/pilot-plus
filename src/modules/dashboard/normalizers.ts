@@ -1,4 +1,7 @@
 import { OFFLINE_AFTER_MS } from '@/modules/vehicles/gps-status';
+import { isLowFuelLevel } from '@/modules/vehicles/fuel-level';
+import { resolveRentalDepositState } from '@/modules/rentals/deposit-state';
+import { addPilotBusinessDays, comparePilotBusinessDate } from '@/shared/business-time';
 
 import type { DashboardPeriod } from './date-window';
 import type {
@@ -9,6 +12,8 @@ import type {
 
 const DAY_MS = 86_400_000;
 const MOSCOW_TIME_ZONE = 'Europe/Moscow';
+const DEPOSIT_RETURN_BUSINESS_DAYS = 21;
+const DEPOSIT_REMINDER_DAYS = 3;
 
 type DashboardDateWindow = {
   from: Date;
@@ -27,10 +32,12 @@ type RentalOperationSource = {
   fulfillmentAddress: string | null;
   nextEndsAt?: Date | null;
   extensionChargeMinor?: bigint | null;
+  notes?: string | null;
 };
 
 type RentalSource = {
   id: string;
+  clientId?: string;
   vehicleId: string;
   status: 'DRAFT' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
   startsAt: Date;
@@ -41,6 +48,7 @@ type RentalSource = {
   contractNumber: string | null;
   client: { lastName: string; firstName: string; middleName: string | null; phone: string | null };
   vehicleLabel: string;
+  payments?: readonly { kind: string; status: string; amountMinor: bigint }[];
   operations: readonly RentalOperationSource[];
 };
 
@@ -48,6 +56,7 @@ type VehicleSource = {
   id: string;
   label: string;
   position: { recordedAt: Date } | null;
+  fuelLevelPercent: number | null;
   archivedAt?: Date | null;
   isDemoImport?: boolean;
 };
@@ -56,7 +65,16 @@ type MaintenanceSource = {
   id: string;
   vehicleId: string;
   title: string;
-  status: 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE' | 'CANCELLED';
+  recordType: 'MAINTENANCE' | 'REPAIR';
+  status:
+    | 'PLANNED'
+    | 'IN_PROGRESS'
+    | 'COMPLETED'
+    | 'OVERDUE'
+    | 'CANCELLED'
+    | 'DAMAGE_REPORTED'
+    | 'WAITING_REPAIR';
+  damageReportedAt: Date | null;
   scheduledAt: Date | null;
   scheduledEndsAt: Date | null;
   vehicleLabel: string;
@@ -94,17 +112,35 @@ type LeadSource = {
   assignedToName: string | null;
 };
 
+type FineSource = {
+  status?: string;
+  discountExpiresAt?: Date | null;
+  id: string;
+  decreeNumber: string;
+  createdAt: Date;
+  offenseAt: Date;
+  currentAmountMinor: bigint;
+  description: string | null;
+  address: string | null;
+  vehicleLabel: string | null;
+  clientLabel: string | null;
+  contractNumber: string | null;
+};
+
 export type DashboardOverviewSource = {
   period: DashboardDateWindow & { key: DashboardPeriod | 'custom' };
+  workPeriod?: DashboardDateWindow & { key: DashboardPeriod | 'custom' };
   now: Date;
   /** The server query supplies only non-archived, non-demo vehicles from the authenticated company. */
   vehicles: readonly VehicleSource[];
   rentals: readonly RentalSource[];
   financeRentals?: readonly RentalSource[];
+  clientCount: number;
   maintenanceRecords: readonly MaintenanceSource[];
   washRecords: readonly WashSource[];
   manualTasks?: readonly ManualTaskSource[];
   leads?: readonly LeadSource[];
+  fines?: readonly FineSource[];
 };
 
 function overlaps(startsAt: Date, endsAt: Date | null | undefined, window: DashboardDateWindow) {
@@ -127,15 +163,6 @@ function isCompanyRealVehicle(vehicle: VehicleSource) {
 
 function clientLabel(client: RentalSource['client']) {
   return [client.lastName, client.firstName, client.middleName].filter(Boolean).join(' ');
-}
-
-function latestCommittedDepositOperation(operations: readonly RentalOperationSource[]) {
-  return operations
-    .filter((operation) => operation.status === 'COMMITTED' && operation.depositStatus !== null)
-    .sort(
-      (left, right) =>
-        right.occurredAt.getTime() - left.occurredAt.getTime() || right.id.localeCompare(left.id),
-    )[0];
 }
 
 function moscowDayStart(value: Date) {
@@ -188,10 +215,42 @@ function rentalWorkItems(
     phone: rental.client.phone,
     contractNumber: rental.contractNumber,
     href: `/rentals/${rental.id}`,
+    details: {
+      vehicleHref: `/vehicles/${rental.vehicleId}`,
+      clientHref: rental.clientId ? `/clients/${rental.clientId}` : undefined,
+      startsAt: rental.startsAt.toISOString(),
+      endsAt: rental.endsAt.toISOString(),
+      collectedMinor: rental.payments?.some((p) => p.kind === 'DEPOSIT' && p.status === 'CONFIRMED')
+        ? rental.payments
+            .filter((p) => p.kind === 'DEPOSIT' && p.status === 'CONFIRMED')
+            .reduce((sum, p) => sum + p.amountMinor, BigInt(0))
+            .toString()
+        : null,
+      history: [...rental.operations]
+        .filter((op) => op.status === 'COMMITTED')
+        .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
+        .slice(0, 5)
+        .map((op) => ({
+          id: op.id,
+          at: op.occurredAt.toISOString(),
+          label:
+            op.type === 'HANDOVER'
+              ? 'Автомобиль выдан'
+              : op.type === 'EXTENSION'
+                ? 'Аренда продлена'
+                : op.type === 'RETURN'
+                  ? 'Автомобиль возвращён'
+                  : 'Операция по договору',
+          notes: op.notes ?? null,
+        })),
+    },
   };
   const items: DashboardWorkItemDto[] = [];
 
-  if (rental.status === 'CONFIRMED' && occursIn(rental.startsAt, source.period)) {
+  if (
+    rental.status === 'CONFIRMED' &&
+    (occursIn(rental.startsAt, source.period) || isVisibleOverdue(rental.startsAt, source))
+  ) {
     const handover = rental.operations
       .filter((operation) => operation.status === 'COMMITTED' && operation.type === 'HANDOVER')
       .sort(
@@ -207,7 +266,7 @@ function rentalWorkItems(
       tone: 'info',
       address: handover?.fulfillmentAddress ?? null,
       amountMinor: null,
-      overdue: false,
+      overdue: rental.startsAt < source.now,
       ...shared,
     });
   }
@@ -230,28 +289,38 @@ function rentalWorkItems(
     });
   }
 
-  const deposit = latestCommittedDepositOperation(rental.operations);
+  const depositStatus = resolveRentalDepositState({
+    expectedMinor: rental.depositMinor,
+    operations: rental.operations,
+    payments: rental.payments ?? [],
+  });
   const committedReturn = rental.operations
     .filter((operation) => operation.status === 'COMMITTED' && operation.type === 'RETURN')
     .sort(
       (left, right) =>
         right.occurredAt.getTime() - left.occurredAt.getTime() || right.id.localeCompare(left.id),
     )[0];
-  const depositReturnDueAt = committedReturn?.occurredAt ?? rental.completedAt ?? rental.endsAt;
-  if (
-    rental.status === 'COMPLETED' &&
-    deposit?.depositStatus === 'COLLECTED' &&
-    occursIn(depositReturnDueAt, source.period)
-  ) {
+  const completedAt = committedReturn?.occurredAt ?? rental.completedAt ?? rental.endsAt;
+  const depositReturnDueAt = addPilotBusinessDays(completedAt, DEPOSIT_RETURN_BUSINESS_DAYS);
+  const depositReminderStartsAt = new Date(
+    depositReturnDueAt.getTime() - DEPOSIT_REMINDER_DAYS * DAY_MS,
+  );
+  const depositReminderVisible =
+    (depositReturnDueAt >= source.period.from &&
+      depositReminderStartsAt < source.period.toExclusive) ||
+    isVisibleOverdue(depositReturnDueAt, source);
+  const depositDateOrder = comparePilotBusinessDate(depositReturnDueAt, source.now);
+  const depositOverdue = depositDateOrder < 0;
+  if (rental.status === 'COMPLETED' && depositStatus === 'COLLECTED' && depositReminderVisible) {
     items.push({
       id: `deposit-return:${rental.id}`,
       kind: 'DEPOSIT_RETURN',
       scheduledAt: depositReturnDueAt.toISOString(),
-      title: 'Вернуть депозит',
-      tone: 'warning',
+      title: depositDateOrder === 0 ? 'Вернуть депозит сегодня' : 'Вернуть депозит',
+      tone: depositOverdue ? 'danger' : 'warning',
       address: null,
       amountMinor: rental.depositMinor?.toString() ?? null,
-      overdue: depositReturnDueAt < source.now,
+      overdue: depositOverdue,
       ...shared,
     });
   }
@@ -263,8 +332,9 @@ function serviceWorkItems(source: DashboardOverviewSource): DashboardWorkItemDto
   const maintenanceItems = source.maintenanceRecords.flatMap((record) => {
     if (
       !record.scheduledAt ||
-      !['PLANNED', 'IN_PROGRESS'].includes(record.status) ||
-      !occursIn(record.scheduledAt, source.period)
+      !['PLANNED', 'IN_PROGRESS', 'OVERDUE'].includes(record.status) ||
+      (!occursIn(record.scheduledAt, source.period) &&
+        !isVisibleOverdue(record.scheduledAt, source))
     )
       return [];
     const overdue = record.scheduledAt < source.now;
@@ -289,7 +359,8 @@ function serviceWorkItems(source: DashboardOverviewSource): DashboardWorkItemDto
   const washItems = source.washRecords.flatMap((record) => {
     if (
       !['PLANNED', 'IN_PROGRESS'].includes(record.status) ||
-      !occursIn(record.scheduledAt, source.period)
+      (!occursIn(record.scheduledAt, source.period) &&
+        !isVisibleOverdue(record.scheduledAt, source))
     )
       return [];
     const overdue = record.scheduledAt < source.now;
@@ -371,6 +442,73 @@ function leadWorkItems(source: DashboardOverviewSource): DashboardWorkItemDto[] 
   });
 }
 
+function fineWorkItems(source: DashboardOverviewSource): DashboardWorkItemDto[] {
+  return (source.fines ?? [])
+    .filter((fine) => !['PAID', 'CANCELLED'].includes(fine.status ?? ''))
+    .map((fine) => {
+      const discount =
+        fine.discountExpiresAt && fine.discountExpiresAt >= source.now
+          ? fine.discountExpiresAt
+          : null;
+      const discountToday = discount && comparePilotBusinessDate(discount, source.now) === 0;
+      const overdue = fine.status === 'OVERDUE';
+      return {
+        id: `fine:${fine.id}`,
+        kind: 'FINE',
+        scheduledAt: (discount ?? fine.createdAt).toISOString(),
+        title: discountToday
+          ? 'Скидка заканчивается сегодня'
+          : overdue
+            ? 'Просроченный штраф'
+            : fine.status === 'UNPAID'
+              ? 'Неоплаченный штраф'
+              : 'Новый штраф',
+        tone: 'warning' as const,
+        href: `/fines?query=${encodeURIComponent(fine.decreeNumber)}`,
+        vehicleLabel: fine.vehicleLabel ?? 'Автомобиль не определён',
+        clientLabel: fine.clientLabel ?? 'Клиент не определён',
+        phone: null,
+        contractNumber: fine.contractNumber,
+        address: fine.address,
+        amountMinor: fine.currentAmountMinor.toString(),
+        overdue,
+        unscheduled: !discount && !overdue,
+        dateOnly: Boolean(discount),
+        deadlineLabel: discountToday
+          ? 'Скидка заканчивается сегодня'
+          : discount
+            ? 'Окончание скидки'
+            : 'Срок оплаты не указан',
+      };
+    });
+}
+
+function lowFuelWorkItems(source: DashboardOverviewSource): DashboardWorkItemDto[] {
+  if (source.now < source.period.from || source.now >= source.period.toExclusive) return [];
+
+  return source.vehicles.flatMap((vehicle) => {
+    if (!isLowFuelLevel(vehicle.fuelLevelPercent)) return [];
+    const fuelLevelPercent = Math.round(vehicle.fuelLevelPercent as number);
+    return [
+      {
+        id: `low-fuel:${vehicle.id}`,
+        kind: 'LOW_FUEL' as const,
+        scheduledAt: source.now.toISOString(),
+        title: 'Мало топлива',
+        tone: 'danger' as const,
+        href: `/vehicles/${vehicle.id}`,
+        vehicleLabel: vehicle.label,
+        clientLabel: `Остаток топлива: ${fuelLevelPercent}%`,
+        phone: null,
+        contractNumber: null,
+        address: null,
+        amountMinor: null,
+        overdue: false,
+      },
+    ];
+  });
+}
+
 function attentionItems(
   workItems: readonly DashboardWorkItemDto[],
   vehicles: readonly VehicleSource[],
@@ -418,22 +556,39 @@ export function buildDashboardOverview(source: DashboardOverviewSource): Dashboa
     maintenanceRecords,
     washRecords,
   };
-  const serviceVehicleIds = new Set([
-    ...maintenanceRecords
-      .filter(
-        (record) =>
-          ['PLANNED', 'IN_PROGRESS'].includes(record.status) &&
-          record.scheduledAt &&
-          overlaps(record.scheduledAt, record.scheduledEndsAt, source.period),
-      )
+  const activeMaintenanceRecords = maintenanceRecords.filter((record) => {
+    if (!['PLANNED', 'IN_PROGRESS', 'DAMAGE_REPORTED', 'WAITING_REPAIR'].includes(record.status)) {
+      return false;
+    }
+    const startsAt =
+      record.recordType === 'REPAIR'
+        ? (record.damageReportedAt ?? record.scheduledAt)
+        : record.scheduledAt;
+    return Boolean(startsAt && overlaps(startsAt, record.scheduledEndsAt, source.period));
+  });
+  const maintenanceVehicleIds = new Set(
+    activeMaintenanceRecords
+      .filter((record) => record.recordType === 'MAINTENANCE')
       .map((record) => record.vehicleId),
-    ...washRecords
+  );
+  const repairVehicleIds = new Set(
+    activeMaintenanceRecords
+      .filter((record) => record.recordType === 'REPAIR')
+      .map((record) => record.vehicleId),
+  );
+  const washVehicleIds = new Set(
+    washRecords
       .filter(
         (record) =>
           ['PLANNED', 'IN_PROGRESS'].includes(record.status) &&
           overlaps(record.scheduledAt, record.completedAt ?? null, source.period),
       )
       .map((record) => record.vehicleId),
+  );
+  const serviceVehicleIds = new Set([
+    ...maintenanceVehicleIds,
+    ...repairVehicleIds,
+    ...washVehicleIds,
   ]);
   const occupiedVehicleIds = new Set(
     rentals
@@ -447,11 +602,14 @@ export function buildDashboardOverview(source: DashboardOverviewSource): Dashboa
       )
       .map((rental) => rental.vehicleId),
   );
+  const workSource = { ...companySource, period: source.workPeriod ?? source.period };
   const workItems = [
-    ...rentals.flatMap((rental) => rentalWorkItems(rental, companySource)),
-    ...serviceWorkItems(companySource),
-    ...manualTaskWorkItems(companySource),
-    ...leadWorkItems(companySource),
+    ...rentals.flatMap((rental) => rentalWorkItems(rental, workSource)),
+    ...serviceWorkItems(workSource),
+    ...manualTaskWorkItems(workSource),
+    ...leadWorkItems(workSource),
+    ...fineWorkItems(workSource),
+    ...lowFuelWorkItems(workSource),
   ].sort(
     (left, right) =>
       Number(right.overdue) - Number(left.overdue) ||
@@ -488,11 +646,33 @@ export function buildDashboardOverview(source: DashboardOverviewSource): Dashboa
     (total, rental) => total + (rental.depositMinor ?? BigInt(0)),
     BigInt(0),
   );
-  const heldDepositsMinor = rentals.reduce((total, rental) => {
-    const latestDeposit = latestCommittedDepositOperation(rental.operations);
-    return latestDeposit?.depositStatus === 'COLLECTED'
-      ? total + (rental.depositMinor ?? BigInt(0))
-      : total;
+  const heldDepositsMinor = financeRentals.reduce((total, rental) => {
+    const depositStatus = resolveRentalDepositState({
+      expectedMinor: rental.depositMinor,
+      operations: rental.operations,
+      payments: rental.payments ?? [],
+    });
+    // A terminal settlement accounts for both the refund and any retention.
+    // Confirmed deposit payments remain in the ledger as historical receipts.
+    if (depositStatus && ['RETURNED', 'PARTIALLY_WITHHELD', 'WITHHELD'].includes(depositStatus)) {
+      return total;
+    }
+    const received = (rental.payments ?? []).reduce(
+      (sum, payment) =>
+        payment.kind === 'DEPOSIT' && payment.status === 'CONFIRMED'
+          ? sum + payment.amountMinor
+          : sum,
+      BigInt(0),
+    );
+    // Older contracts can confirm receipt through a handover instead of a payment.
+    return (
+      total +
+      (received > BigInt(0)
+        ? received
+        : depositStatus === 'COLLECTED'
+          ? (rental.depositMinor ?? BigInt(0))
+          : BigInt(0))
+    );
   }, BigInt(0));
   const serviceVehicles = companyVehicles.filter((vehicle) =>
     serviceVehicleIds.has(vehicle.id),
@@ -502,6 +682,7 @@ export function buildDashboardOverview(source: DashboardOverviewSource): Dashboa
   ).length;
 
   return {
+    generatedAt: source.now.toISOString(),
     period: {
       key: source.period.key,
       label: source.period.label,
@@ -517,6 +698,11 @@ export function buildDashboardOverview(source: DashboardOverviewSource): Dashboa
       freeVehicles: companyVehicles.length - serviceVehicles - occupiedVehicles,
       occupiedVehicles,
       serviceVehicles,
+      maintenanceVehicles: maintenanceVehicleIds.size,
+      repairVehicles: repairVehicleIds.size,
+      washVehicles: washVehicleIds.size,
+      contracts: financeRentals.length,
+      clients: source.clientCount,
       offlineVehicles,
     },
     workItems,

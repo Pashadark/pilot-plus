@@ -37,6 +37,15 @@ function database(overrides: Record<string, unknown> = {}) {
       }),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
+    vehicle: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    telegramGroupBinding: {
+      findUnique: vi.fn().mockResolvedValue({
+        telegramChatId: '-100777',
+        boundByUserId: 'actor-1',
+      }),
+    },
+    telegramIdentity: { findFirst: vi.fn().mockResolvedValue({ id: 'identity-1' }) },
+    botNotificationJob: { createMany: vi.fn().mockResolvedValue({ count: 2 }) },
     auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
     ...overrides,
   };
@@ -69,7 +78,31 @@ describe('createRentalHandover', () => {
         data: expect.objectContaining({ status: 'COMMITTED', type: 'HANDOVER' }),
       }),
     );
+    expect(fixture.transaction.vehicle.updateMany).toHaveBeenCalledWith({
+      where: { id: 'vehicle-1', companyId: 'company-1' },
+      data: { odometerKm: 10_000 },
+    });
     expect(fixture.transaction.auditLog.create).toHaveBeenCalledTimes(1);
+    expect(fixture.transaction.botNotificationJob.createMany).toHaveBeenCalledWith({
+      data: expect.arrayContaining([
+        expect.objectContaining({
+          chatId: '-100777',
+          eventKey: 'rental-lifecycle:operation-1:group:-100777',
+          template: 'RENTAL_LIFECYCLE',
+          payload: {
+            kind: 'HANDOVER',
+            rentalId: 'rental-1',
+            operationId: 'operation-1',
+          },
+        }),
+        expect.objectContaining({
+          identityId: 'identity-1',
+          eventKey: 'rental-lifecycle:operation-1:client:identity-1',
+          template: 'CLIENT_RENTAL_LIFECYCLE',
+        }),
+      ]),
+      skipDuplicates: true,
+    });
   });
 
   it('returns an already committed idempotent operation without a second transition', async () => {
@@ -135,8 +168,48 @@ describe('createRentalHandover', () => {
     expect(fixture.transaction.rentalOperation.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ id: 'operation-draft', status: 'DRAFT' }),
-        data: expect.objectContaining({ status: 'COMMITTED', evidenceStatus: 'COMPLETE' }),
+        data: expect.objectContaining({
+          status: 'COMMITTED',
+          evidenceStatus: 'COMPLETE',
+          evidenceMissingReason: null,
+        }),
       }),
     );
+  });
+
+  it('blocks a new handover when the committed PDF is missing', async () => {
+    const fixture = database({
+      rental: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'rental-1',
+          companyId: 'company-1',
+          clientId: 'client-1',
+          vehicleId: 'vehicle-1',
+          status: 'CONFIRMED',
+          totalPriceMinor: BigInt(100_000),
+          depositMinor: BigInt(50_000),
+          documentVersions: [],
+          signatures: [
+            { party: 'CLIENT', status: 'SIGNED' },
+            { party: 'COMPANY', status: 'SIGNED' },
+          ],
+          payments: [
+            { kind: 'RENT', status: 'CONFIRMED', amountMinor: BigInt(100_000) },
+            { kind: 'DEPOSIT', status: 'CONFIRMED', amountMinor: BigInt(50_000) },
+          ],
+        }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    });
+    const handover = createRentalHandover(fixture.database as never);
+
+    await expect(
+      handover({
+        companyId: 'company-1',
+        actor: { id: 'actor-1', scope: 'COMPANY' },
+        command: { ...command, occurredAt: new Date('2026-09-03T09:00:00.000Z') },
+      }),
+    ).rejects.toThrow('Перед выдачей сформируйте PDF договора.');
+    expect(fixture.transaction.rental.updateMany).not.toHaveBeenCalled();
   });
 });

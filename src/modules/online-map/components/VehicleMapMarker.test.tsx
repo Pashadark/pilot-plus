@@ -34,6 +34,36 @@ it('показывает в карточке скорость, топливо и
   expect(marker.textContent).toContain('Последний сигнал: только что');
 });
 
+it('не показывает пустой процент, если топливо не передано', () => {
+  render(
+    <VehicleMapMarker
+      vehicle={{ ...onlineMapVehicles[0], fuelPercent: null }}
+      selected
+      onSelect={vi.fn()}
+    />,
+  );
+
+  expect(screen.getByRole('button').textContent).toContain('Топливо: Нет данных');
+  expect(screen.getByRole('button').textContent).not.toContain('Топливо: %');
+});
+
+it('показывает компактную угловую стрелку по направлению движения', () => {
+  render(
+    <VehicleMapMarker
+      vehicle={{ ...onlineMapVehicles[0], heading: 127 }}
+      selected={true}
+      onSelect={vi.fn()}
+    />,
+  );
+
+  const glyph = screen.getByTestId('vehicle-map-arrow');
+  expect(glyph.getAttribute('data-heading')).toBe('127');
+  expect(glyph.getAttribute('style')).toContain('rotate(127deg)');
+  expect(glyph.querySelector('svg path')?.getAttribute('d')).toBe('M16 1 29 31 16 25 3 31Z');
+  expect(screen.queryByTestId('vehicle-map-car')).toBeNull();
+  expect(glyph.className).toContain('--color-primary');
+});
+
 it('показывает устаревший GPS-сигнал красным с явной причиной', () => {
   const staleVehicle = {
     ...onlineMapVehicles[3],
@@ -47,6 +77,6 @@ it('показывает устаревший GPS-сигнал красным с
 
   render(<VehicleMapMarker vehicle={staleVehicle} selected={false} onSelect={vi.fn()} />);
 
-  expect(screen.getByLabelText('Давно не обновлялся').className).toContain('--color-danger');
+  expect(screen.getByTestId('vehicle-map-arrow').className).toContain('--color-danger');
   expect(screen.getByText(/Kia K5 · Давно не обновлялся/)).toBeTruthy();
 });

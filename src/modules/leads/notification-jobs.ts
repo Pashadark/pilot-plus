@@ -39,13 +39,6 @@ export function buildLeadNotificationRows(
       eventKey: `${prefix}:group`,
     });
   }
-  if (recipients.personalIdentityId) {
-    rows.push({
-      ...common,
-      identityId: recipients.personalIdentityId,
-      eventKey: `${prefix}:staff:${recipients.personalIdentityId}`,
-    });
-  }
 
   return rows;
 }

@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {fleetApi} from './server/fleet-api.mjs';
+test('production fleet transport fails closed and validates destination',async()=>{await assert.rejects(()=>fleetApi('',{},async()=>{}));await assert.rejects(()=>fleetApi('',{TGCAR_FLEET_URL:'http://example.com',TGCAR_LEAD_SECRET:'x'.repeat(40)},async()=>{}));});
+test('server fleet transport authenticates and rejects unsuccessful upstream',async()=>{const env={TGCAR_FLEET_URL:'http://127.0.0.1:3000/api/integrations/tgcar/fleet',TGCAR_LEAD_SECRET:'x'.repeat(40)};const r=await fleetApi('',env,async(url,options)=>{assert.equal(options.headers.Authorization,'Bearer '+env.TGCAR_LEAD_SECRET);return Response.json({cars:[]});});assert.deepEqual(await r.json(),{cars:[]});await assert.rejects(()=>fleetApi('',env,async()=>new Response('',{status:500})));});

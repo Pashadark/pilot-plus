@@ -1,3 +1,4 @@
+import { vehicleName } from '@/shared/lib/vehicle-name';
 import { notFound } from 'next/navigation';
 import { AppShell } from '@/shared/components/app-shell/AppShell';
 import { RentalDetailPanel } from '@/modules/rentals/components/RentalDetailPanel';
@@ -11,9 +12,33 @@ import {
 } from '@/modules/rentals/server/queries';
 import { rentalDetailPresentation } from '@/modules/rentals/components/rental-detail-presentation';
 import { evaluateHandoverReadiness } from '@/modules/rentals/readiness/evaluate-handover-readiness';
-export default async function RentalDetail({ params }: { params: Promise<{ id: string }> }) {
-  const rental = await getRentalDetailForCurrentUser((await params).id);
+import {
+  isCompleteWeeklyInspection,
+  moscowWeekRange,
+  nextFridayMorning,
+} from '@/modules/rentals/lease-to-own/weekly-inspection';
+export default async function RentalDetail({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ action?: string; settlement?: string }>;
+}) {
+  const [{ id }, query] = await Promise.all([
+    params,
+    searchParams ?? Promise.resolve<{ action?: string; settlement?: string }>({}),
+  ]);
+  const rental = await getRentalDetailForCurrentUser(id);
   if (!rental) notFound();
+  const initialAction =
+    query.action === 'extend'
+      ? 'EXTENSION'
+      : query.action === 'return'
+        ? 'RETURN'
+        : query.action === 'weekly-inspection'
+          ? 'WEEKLY_INSPECTION'
+          : null;
+  const defaultPaymentKind = query.settlement === 'deposit' ? 'DEPOSIT' : 'RENT';
   const client = [rental.client.lastName, rental.client.firstName, rental.client.middleName]
     .filter(Boolean)
     .join(' ');
@@ -26,7 +51,7 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
     clientId: rental.clientId,
     clientLabel: client,
     vehicleId: rental.vehicleId,
-    vehicleLabel: [rental.vehicle.make, rental.vehicle.modelName, rental.vehicle.registrationNumber]
+    vehicleLabel: [vehicleName(rental.vehicle.make, rental.vehicle.modelName), rental.vehicle.registrationNumber]
       .filter(Boolean)
       .join(' · '),
     startsAt: rental.startsAt.toISOString(),
@@ -91,6 +116,16 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
         ? 'COLLECTED'
         : 'NOT_COLLECTED',
   });
+  const currentWeek = moscowWeekRange(new Date());
+  const weeklyInspections = rental.operations.filter(
+    (operation) => operation.type === 'WEEKLY_INSPECTION',
+  );
+  const currentWeekInspection = weeklyInspections.find(
+    (operation) =>
+      operation.occurredAt >= currentWeek.start &&
+      operation.occurredAt < currentWeek.end &&
+      isCompleteWeeklyInspection(operation.media.map((medium) => medium.kind)),
+  );
   return (
     <AppShell
       breadcrumbs={[
@@ -104,6 +139,29 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
         data-testid="rental-detail-page"
       >
         <div className="grid min-w-0 gap-5">
+          {rental.agreementType === 'LEASE_TO_OWN' ? (
+            <section className="rounded-xl border border-[#673AB7]/30 bg-[#673AB7]/5 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <span className="inline-flex rounded-full bg-[#673AB7] px-3 py-1 text-xs font-bold text-white">
+                    С правом выкупа
+                  </span>
+                  <h2 className="mt-3 text-lg font-bold">Еженедельный контроль автомобиля</h2>
+                </div>
+                <a
+                  href={`?action=weekly-inspection#rental-actions`}
+                  className="inline-flex min-h-10 items-center rounded-lg bg-[#673AB7] px-4 text-sm font-semibold text-white"
+                >
+                  Добавить осмотр
+                </a>
+              </div>
+              <p className="mt-3 text-sm text-[var(--color-text-secondary)]">
+                {currentWeekInspection
+                  ? `За эту неделю выполнен ${new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow', dateStyle: 'short', timeStyle: 'short' }).format(currentWeekInspection.occurredAt)}.`
+                  : `За эту неделю осмотр ещё не загружен. Следующее напоминание: ${new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow', dateStyle: 'medium', timeStyle: 'short' }).format(nextFridayMorning(new Date()))}.`}
+              </p>
+            </section>
+          ) : null}
           <RentalDetailWorkspace detail={detail} />
           <RentalSettlementCard
             companyId={rental.companyId}
@@ -112,6 +170,14 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
             totalPriceMinor={rental.totalPriceMinor.toString()}
             depositRequiredMinor={rental.depositMinor?.toString() ?? null}
             canEdit={rental.canEdit ?? false}
+            rentalStatus={rental.status}
+            depositResolved={rental.operations.some(
+              (operation) =>
+                ['RETURNED', 'PARTIALLY_WITHHELD', 'WITHHELD'].includes(
+                  operation.depositStatus ?? '',
+                ),
+            )}
+            defaultPaymentKind={defaultPaymentKind}
             payments={rental.payments.map((payment) => ({
               id: payment.id,
               kind: payment.kind,
@@ -144,6 +210,10 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
               fulfillmentAddress: operation.fulfillmentAddress,
               nextEndsAt: operation.nextEndsAt?.toISOString() ?? null,
               totalChargeMinor: operation.totalChargeMinor?.toString() ?? null,
+              depositAmountMinor: operation.depositAmountMinor?.toString() ?? null,
+              depositWithheldMinor: operation.depositWithheldMinor?.toString() ?? null,
+              depositStatus: operation.depositStatus,
+              depositResolutionReason: operation.depositResolutionReason,
               media: operation.media,
             }))}
           />
@@ -172,8 +242,22 @@ export default async function RentalDetail({ params }: { params: Promise<{ id: s
           />
         </div>
         <RentalActionRail
+          key={`${rental.id}:${initialAction ?? 'none'}`}
           canEdit={rental.canEdit ?? false}
-          rental={{ id: rental.id, companyId: rental.companyId, status: rental.status }}
+          initialAction={initialAction}
+          rental={{
+            id: rental.id,
+            companyId: rental.companyId,
+            status: rental.status,
+            agreementType: rental.agreementType,
+            endsAt: rental.endsAt.toISOString(),
+            vehicleLabel: [
+              vehicleName(rental.vehicle.make, rental.vehicle.modelName),
+              rental.vehicle.registrationNumber,
+            ]
+              .filter(Boolean)
+              .join(' · '),
+          }}
           handoverReadiness={handoverReadiness}
         />
       </main>

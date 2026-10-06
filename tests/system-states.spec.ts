@@ -52,6 +52,6 @@ test('global error владеет документом, стилями и без
   expect(source).toContain("import './globals.css'");
   expect(source).toContain('<html');
   expect(source).toContain('<body');
-  expect(source).toContain('<title>Ошибка — Pilot+</title>');
+  expect(source).toContain('<title>Ошибка — СУПА ПРО</title>');
   expect(source).toContain('safeErrorReference(error)');
 });

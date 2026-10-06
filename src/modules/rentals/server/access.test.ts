@@ -12,6 +12,7 @@ vi.mock('server-only', () => ({}));
 import {
   RentalAccessDeniedError,
   canAccessRentalCompany,
+  canEditRental,
   canManageRentals,
   getRentalAccessForUser,
   getRentalAccess,
@@ -28,6 +29,19 @@ const superAdmin = {
 
 describe('серверный доступ к договорам аренды', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it.each([
+    ['оператор: черновик', 'COMPANY', ['company-a'], 'company-a', 'DRAFT', true],
+    ['оператор: подтверждён', 'COMPANY', ['company-a'], 'company-a', 'CONFIRMED', true],
+    ['оператор: активен', 'COMPANY', ['company-a'], 'company-a', 'ACTIVE', false],
+    ['оператор: чужая компания', 'COMPANY', ['company-a'], 'company-b', 'DRAFT', false],
+    ['суперадмин: завершён', 'SYSTEM', [], 'company-b', 'COMPLETED', true],
+    ['суперадмин: отменён', 'SYSTEM', [], 'company-b', 'CANCELLED', true],
+  ] as const)('%s', (_label, scope, companyIds, companyId, status, expected) => {
+    expect(canEditRental({ user: superAdmin, scope, companyIds }, companyId, status)).toBe(
+      expected,
+    );
+  });
 
   it.each([
     ['COMPANY_ADMIN', true],

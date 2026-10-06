@@ -54,6 +54,13 @@ describe('maintenance attachment route', () => {
     expect(await response.text()).toBe('image');
   });
 
+  it('downloads an image when download=1 while keeping it private', async () => {
+    const response = await GET(new Request('https://supapro.ru/x?download=1'), context);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-disposition')).toMatch(/^attachment;/);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+  });
+
   it('returns 404 before touching storage when the user has no session', async () => {
     auth.getAuthenticatedSession.mockResolvedValue(null);
 

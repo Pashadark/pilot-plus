@@ -6,6 +6,11 @@ import maplibregl from 'maplibre-gl';
 
 import { Button, EmptyState, ErrorState } from '@/shared/ui';
 
+import {
+  getFleetMapFallbackStyle,
+  getFleetMapStyleUrl,
+  type FleetMapTheme,
+} from '../map-style';
 import type {
   VehicleTrackEventView,
   VehicleTrackPeriodViewModel,
@@ -30,7 +35,7 @@ const RUSSIAN_MAP_LOCALE = {
 };
 
 interface MarkerResource {
-  vehicle: OnlineMapVehicle;
+  vehicleId: string;
   marker: maplibregl.Marker;
   root: Root;
 }
@@ -49,6 +54,7 @@ export interface OnlineFleetMapProps {
   selectedVehicleId: string | null;
   trackViewModel: VehicleTrackPeriodViewModel | null;
   playbackPoint: VehicleTrackPoint | null;
+  playbackHeading?: number;
   selectedEventId: string | null;
   previewedEventId: string | null;
   previewedSegmentId: string | null;
@@ -63,6 +69,7 @@ export function OnlineFleetMap({
   selectedVehicleId,
   trackViewModel,
   playbackPoint,
+  playbackHeading = 0,
   selectedEventId,
   previewedEventId,
   previewedSegmentId,
@@ -73,10 +80,14 @@ export function OnlineFleetMap({
 }: OnlineFleetMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const fittedTrackRef = useRef<{ map: maplibregl.Map; key: string } | null>(null);
   const mapReadyRef = useRef(false);
   const markersRef = useRef<MarkerResource[]>([]);
   const playbackMarkerRef = useRef<maplibregl.Marker | null>(null);
   const trackCleanupRef = useRef<(() => void) | null>(null);
+  const positionedVehiclesRef = useRef<
+    readonly (OnlineMapVehicle & { longitude: number; latitude: number })[]
+  >([]);
   const selectedVehicleIdRef = useRef(selectedVehicleId);
   const selectedEventIdRef = useRef(selectedEventId);
   const onVehicleSelectRef = useRef(onVehicleSelect);
@@ -92,6 +103,11 @@ export function OnlineFleetMap({
   const [trackInteractionKey, setTrackInteractionKey] = useState<string | null>(null);
   const [trackAttempt, setTrackAttempt] = useState(0);
   const [attempt, setAttempt] = useState(0);
+  const [mapTheme, setMapTheme] = useState<FleetMapTheme>(() =>
+    typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark'
+      ? 'dark'
+      : 'light',
+  );
   const vehiclesSnapshotKey = JSON.stringify(vehicles);
   const stableVehicles = useMemo(
     () => JSON.parse(vehiclesSnapshotKey) as readonly OnlineMapVehicle[],
@@ -104,8 +120,21 @@ export function OnlineFleetMap({
       ) as readonly (OnlineMapVehicle & { longitude: number; latitude: number })[],
     [stableVehicles],
   );
-  const instanceKey = `${attempt}:${stableVehicles.map((vehicle) => vehicle.id).join('|')}`;
+  const instanceKey = `${attempt}:${mapTheme}:${stableVehicles.map((vehicle) => vehicle.id).join('|')}`;
   const trackLayerFailed = failedTrackAttempt === trackAttempt;
+
+  useEffect(() => {
+    positionedVehiclesRef.current = positionedVehicles;
+  }, [positionedVehicles]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => {
+      setMapTheme(root.dataset.theme === 'dark' ? 'dark' : 'light');
+    });
+    observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     selectedVehicleIdRef.current = selectedVehicleId;
@@ -137,26 +166,16 @@ export function OnlineFleetMap({
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || positionedVehicles.length === 0) return;
+    const initialPositionedVehicles = positionedVehiclesRef.current;
+    if (!container || initialPositionedVehicles.length === 0) return;
 
     mapReadyRef.current = false;
     const map = new maplibregl.Map({
       container,
-      attributionControl: false,
-      style: {
-        version: 8,
-        sources: {
-          osm: {
-            type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-            tileSize: 256,
-            attribution: '© OpenStreetMap',
-          },
-        },
-        layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
-      },
-      center: positionedVehicles[0]
-        ? [positionedVehicles[0].longitude, positionedVehicles[0].latitude]
+      attributionControl: { compact: true },
+      style: getFleetMapStyleUrl(mapTheme),
+      center: initialPositionedVehicles[0]
+        ? [initialPositionedVehicles[0].longitude, initialPositionedVehicles[0].latitude]
         : DEFAULT_MAP_CENTER,
       zoom: 11,
       locale: RUSSIAN_MAP_LOCALE,
@@ -172,22 +191,32 @@ export function OnlineFleetMap({
     canvas.addEventListener('pointerdown', activateKeyboardMap);
     map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
 
+    let fallbackTimeout: number | null = null;
     const handleLoad = () => {
       window.clearTimeout(loadTimeout);
+      if (fallbackTimeout !== null) window.clearTimeout(fallbackTimeout);
       mapReadyRef.current = true;
       setFailedInstanceKey(null);
       map.resize();
     };
     map.once('load', handleLoad);
     const loadTimeout = window.setTimeout(() => {
-      if (!map.loaded()) setFailedInstanceKey(instanceKey);
+      if (map.loaded()) return;
+      try {
+        map.setStyle(getFleetMapFallbackStyle());
+        fallbackTimeout = window.setTimeout(() => {
+          if (!map.loaded()) setFailedInstanceKey(instanceKey);
+        }, MAP_LOAD_TIMEOUT_MS);
+      } catch {
+        setFailedInstanceKey(instanceKey);
+      }
     }, MAP_LOAD_TIMEOUT_MS);
 
     const resizeFrame = window.requestAnimationFrame(() => map.resize());
     const resizeObserver = new ResizeObserver(() => map.resize());
     resizeObserver.observe(container);
 
-    const markerResources = positionedVehicles.map((vehicle) => {
+    const markerResources = initialPositionedVehicles.map((vehicle) => {
       const element = document.createElement('div');
       const root = createRoot(element);
       const selectVehicle = (selectedVehicle: OnlineMapVehicle) => {
@@ -203,13 +232,13 @@ export function OnlineFleetMap({
         />,
       );
 
-      const marker = new maplibregl.Marker({ element, anchor: 'bottom' })
+      const marker = new maplibregl.Marker({ element, anchor: 'center' })
         .setLngLat([vehicle.longitude, vehicle.latitude])
         .addTo(map);
       element.removeAttribute('aria-label');
       element.removeAttribute('role');
 
-      return { vehicle, marker, root };
+      return { vehicleId: vehicle.id, marker, root };
     });
 
     markersRef.current = markerResources;
@@ -217,6 +246,7 @@ export function OnlineFleetMap({
     return () => {
       window.cancelAnimationFrame(resizeFrame);
       window.clearTimeout(loadTimeout);
+      if (fallbackTimeout !== null) window.clearTimeout(fallbackTimeout);
       resizeObserver.disconnect();
       canvas.removeEventListener('pointerdown', activateKeyboardMap);
       map.off('load', handleLoad);
@@ -230,10 +260,14 @@ export function OnlineFleetMap({
       map.remove();
       mapRef.current = null;
     };
-  }, [instanceKey, positionedVehicles]);
+  }, [instanceKey, mapTheme]);
 
   useEffect(() => {
-    for (const { root, vehicle } of markersRef.current) {
+    for (const resource of markersRef.current) {
+      const vehicle = positionedVehicles.find((candidate) => candidate.id === resource.vehicleId);
+      if (!vehicle) continue;
+      resource.marker.setLngLat([vehicle.longitude, vehicle.latitude]);
+      const { root } = resource;
       root.render(
         <VehicleMapMarker
           vehicle={vehicle}
@@ -245,11 +279,12 @@ export function OnlineFleetMap({
         />,
       );
     }
-  }, [selectedVehicleId]);
+  }, [positionedVehicles, selectedVehicleId]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !trackViewModel) {
+      fittedTrackRef.current = null;
       setFailedTrackAttempt(null);
       setTrackInteractionKey(null);
       return;
@@ -359,7 +394,10 @@ export function OnlineFleetMap({
           onEventActivate: activateEvent,
         });
 
-        fitTrackBounds(map, trackViewModel, containerRef.current);
+        if (fittedTrackRef.current?.map !== map || fittedTrackRef.current.key !== currentTrackInteractionKey) {
+          fitTrackBounds(map, trackViewModel, containerRef.current);
+          fittedTrackRef.current = { map, key: currentTrackInteractionKey };
+        }
         let layoutSignature = getMapLayoutSignature(containerRef.current);
         fitResizeObserver = new ResizeObserver(() => {
           const nextLayoutSignature = getMapLayoutSignature(containerRef.current);
@@ -466,15 +504,16 @@ export function OnlineFleetMap({
       if (playbackMarkerRef.current) {
         playbackMarkerRef.current.getElement().dataset.playbackPoint = playbackPoint.id;
         playbackMarkerRef.current.setLngLat([...playbackPoint.coordinates]);
+        playbackMarkerRef.current.getElement().style.transform = `rotate(${playbackHeading}deg)`;
       } else if (mapReadyRef.current) {
-        playbackMarkerRef.current = createPlaybackMarker(map, playbackPoint);
+        playbackMarkerRef.current = createPlaybackMarker(map, playbackPoint, playbackHeading);
       }
     } catch {
       playbackMarkerRef.current?.remove();
       playbackMarkerRef.current = null;
       queueMicrotask(() => setFailedTrackAttempt(trackAttempt));
     }
-  }, [instanceKey, playbackPoint, trackAttempt, trackViewModel]);
+  }, [instanceKey, playbackHeading, playbackPoint, trackAttempt, trackViewModel]);
 
   if (positionedVehicles.length === 0) {
     return (
@@ -580,7 +619,7 @@ export function getTrackFitOptions(width: number, height: number, reducedMotion:
 
   return {
     padding: desktop
-      ? { top: 72, right: 416, bottom: 88, left: 32 }
+      ? { top: 72, right: 416, bottom: 88, left: 392 }
       : {
           top: 144,
           right: 24,
@@ -603,12 +642,14 @@ function getTrackResourceKey(track: VehicleTrackPeriodViewModel): string {
   return `${track.vehicleId}:${track.period}:${track.trips.map((trip) => trip.date).join('|')}`;
 }
 
-function createPlaybackMarker(map: maplibregl.Map, point: VehicleTrackPoint): maplibregl.Marker {
+function createPlaybackMarker(map: maplibregl.Map, point: VehicleTrackPoint, heading = 0): maplibregl.Marker {
   const element = document.createElement('div');
   element.setAttribute('aria-label', 'Положение автомобиля на маршруте');
   element.dataset.playbackPoint = point.id;
   element.className =
-    'size-4 rounded-full border-2 border-white bg-[var(--color-primary)] shadow-[var(--shadow-card)]';
+    'size-5 border-2 border-white bg-[var(--color-primary)] shadow-[var(--shadow-card)]';
+  element.style.clipPath = 'polygon(50% 0%, 100% 100%, 50% 72%, 0% 100%)';
+  element.style.transform = `rotate(${heading}deg)`;
 
   return new maplibregl.Marker({ element, anchor: 'center' })
     .setLngLat([...point.coordinates])

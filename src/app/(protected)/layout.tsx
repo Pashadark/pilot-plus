@@ -9,13 +9,16 @@ import { listNotificationsForCurrentUser } from '@/modules/notifications/server/
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const user = await requireAdmin();
-  const [systemHealthSummary, clientAccess, rentalAccess, fineAccess, notifications] = await Promise.all([
-    getCachedSystemHealthSummary(),
-    getClientAccess('VIEW_CLIENTS'),
-    getRentalAccessForUser(user),
-    getFineAccessForUser(user),
-    listNotificationsForCurrentUser(),
-  ]);
+  const [systemHealthSummary, clientAccess, rentalAccess, fineAccess, notifications] =
+    await Promise.all([
+      user.role === 'SUPER_ADMIN'
+        ? getCachedSystemHealthSummary()
+        : Promise.resolve({ state: 'healthy' as const, count: 0, total: 0, checkedAt: '' }),
+      getClientAccess('VIEW_CLIENTS'),
+      getRentalAccessForUser(user),
+      getFineAccessForUser(user),
+      listNotificationsForCurrentUser(),
+    ]);
   const shellUser = {
     ...user,
     capabilities: [
@@ -25,8 +28,14 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     ].filter(Boolean) as ('CLIENTS' | 'RENTALS' | 'FINES')[],
   };
   return (
-    <AppShellUserProvider user={shellUser} systemHealthSummary={systemHealthSummary} notifications={notifications}>
-      <ToastProvider>{children}</ToastProvider>
-    </AppShellUserProvider>
+    <ToastProvider>
+      <AppShellUserProvider
+        user={shellUser}
+        systemHealthSummary={systemHealthSummary}
+        notifications={notifications}
+      >
+        {children}
+      </AppShellUserProvider>
+    </ToastProvider>
   );
 }

@@ -38,7 +38,7 @@ export function VehiclePhoto({
           fill
           unoptimized
           sizes={sizes}
-          className="object-cover transition-transform duration-[var(--motion-slow)] group-hover:scale-[1.02]"
+          className="object-cover"
           onError={() => setHasError(true)}
         />
       ) : (

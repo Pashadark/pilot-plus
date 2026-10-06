@@ -1,147 +1,223 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FiBell } from 'react-icons/fi';
 
-import { Badge, IconButton } from '@/shared/ui';
-import { markAllEventsReadAction, markEventReadAction } from '@/modules/events/actions';
+import { useToast } from '@/shared/providers/ToastProvider';
+import { AnchoredPopover } from '@/shared/ui';
+import { groupNotifications } from './group-notifications';
+import { markAllNotificationsReadAction, markNotificationReadAction } from './server/actions';
+import type { NotificationCategory, NotificationTone, PilotNotification } from './types';
 
-import type { NotificationTone, PilotNotification } from './types';
+type CategoryFilter = 'ALL' | NotificationCategory;
 
-const toneLabels: Record<NotificationTone, string> = {
-  success: 'Успешно',
-  warning: 'Внимание',
-  danger: 'Важно',
-  info: 'Информация',
+const filters: readonly { value: CategoryFilter; label: string }[] = [
+  { value: 'ALL', label: 'Все' },
+  { value: 'RENTAL', label: 'Аренды' },
+  { value: 'FINE', label: 'Штрафы' },
+  { value: 'CLIENT', label: 'Клиенты' },
+  { value: 'FLEET', label: 'Автопарк' },
+];
+
+const categoryLabels: Record<NotificationCategory, string> = {
+  RENTAL: 'Аренда',
+  FINE: 'Штраф',
+  CLIENT: 'Клиент',
+  FLEET: 'Автопарк',
+  SYSTEM: 'Система',
+};
+
+const toneDots: Record<NotificationTone, string> = {
+  success: 'bg-[var(--color-success)]',
+  warning: 'bg-[var(--color-warning)]',
+  danger: 'bg-[var(--color-danger)]',
+  info: 'bg-[var(--color-primary)]',
 };
 
 export function NotificationCenter({
   notifications,
+  globalScope = false,
 }: {
   notifications: readonly PilotNotification[];
+  globalScope?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const { showToast } = useToast();
+  const [filter, setFilter] = useState<CategoryFilter>('ALL');
+  const [showAll, setShowAll] = useState(false);
   const [readIds, setReadIds] = useState<Set<string>>(
     () => new Set(notifications.filter(({ isRead }) => isRead).map(({ id }) => id)),
   );
-  const rootRef = useRef<HTMLDivElement>(null);
-  const dialogRef = useRef<HTMLElement>(null);
-  const wasOpenRef = useRef(false);
   const unreadCount = notifications.filter((notification) => !readIds.has(notification.id)).length;
   const triggerLabel =
     unreadCount > 0 ? `Уведомления: ${unreadCount} непрочитанных` : 'Уведомления: новых нет';
+  const visibleNotifications = useMemo(
+    () =>
+      filter === 'ALL'
+        ? notifications
+        : notifications.filter(({ category }) => category === filter),
+    [filter, notifications],
+  );
+  const notificationGroups = useMemo(
+    () => groupNotifications([...visibleNotifications]),
+    [visibleNotifications],
+  );
+  const visibleGroups = showAll ? notificationGroups : notificationGroups.slice(0, 10);
 
-  useEffect(() => {
-    if (open) {
-      dialogRef.current?.focus();
-    } else if (wasOpenRef.current) {
-      rootRef.current?.querySelector<HTMLButtonElement>('[aria-haspopup="dialog"]')?.focus();
+  const markAllRead = async () => {
+    const previous = new Set(readIds);
+    setReadIds(new Set(notifications.map(({ id }) => id)));
+    const result = await markAllNotificationsReadAction(notifications.map(({ id }) => id));
+    if (result.status === 'error') {
+      setReadIds(previous);
+      showToast({ tone: 'danger', title: result.message });
+      return;
     }
-    wasOpenRef.current = open;
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const closeOnOutsideClick = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-
-    document.addEventListener('click', closeOnOutsideClick);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('click', closeOnOutsideClick);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [open]);
+    showToast({ tone: 'success', title: 'Все уведомления прочитаны.' });
+  };
 
   return (
-    <div ref={rootRef} className="relative">
-      <div className="relative">
-        <IconButton
-          label={triggerLabel}
-          variant="ghost"
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
-        >
+    <AnchoredPopover
+      ariaLabel={triggerLabel}
+      panelAriaLabel="Уведомления"
+      mobileTitle="Уведомления"
+      panelClassName="w-[min(27rem,calc(100vw-1rem))] sm:w-[27rem]"
+      trigger={
+        <span className="relative grid size-11 place-items-center rounded-[var(--radius-md)] transition-colors hover:bg-[var(--color-primary-soft)]">
           <FiBell aria-hidden="true" className="size-5" />
-        </IconButton>
-        {unreadCount > 0 && (
-          <Badge
-            data-testid="notification-count"
-            tone="danger"
-            className="pointer-events-none absolute -top-1 -right-1 min-h-5 min-w-5 justify-center px-1 text-[10px]"
-          >
-            {unreadCount}
-          </Badge>
-        )}
+          {unreadCount > 0 ? (
+            <span
+              data-testid="notification-count"
+              className="pointer-events-none absolute top-0.5 right-0.5 grid min-h-4 min-w-4 place-items-center rounded-full bg-[var(--color-danger)] px-1 text-[10px] leading-none font-bold text-white ring-2 ring-[var(--color-surface)]"
+            >
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          ) : null}
+        </span>
+      }
+    >
+      <div className="sticky top-0 z-10 border-b bg-[var(--color-surface)]">
+        <div className="flex min-h-14 items-center justify-between gap-3 px-4 py-2">
+          <div>
+            <h2 className="font-semibold">Уведомления</h2>
+            <p className="text-xs text-[var(--color-text-secondary)]">
+              {globalScope ? 'Все компании и сотрудники' : 'События вашей компании'}
+            </p>
+          </div>
+          {unreadCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => void markAllRead()}
+              className="min-h-10 rounded-[var(--radius-sm)] px-2 text-xs font-semibold text-[var(--color-primary)] hover:bg-[var(--color-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+            >
+              Прочитать все
+            </button>
+          ) : null}
+        </div>
+        <div className="flex gap-1 overflow-x-auto px-3 pb-3" aria-label="Фильтр уведомлений">
+          {filters.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              aria-pressed={filter === item.value}
+              onClick={() => setFilter(item.value)}
+              className="min-h-9 shrink-0 rounded-full border px-3 text-xs font-semibold transition-colors aria-pressed:border-[var(--color-primary)] aria-pressed:bg-[var(--color-primary-soft)] aria-pressed:text-[var(--color-primary)]"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {open && (
-        <section
-          ref={dialogRef}
-          role="dialog"
-          aria-label="Уведомления"
-          tabIndex={-1}
-          className="fixed top-[calc(var(--header-height)+0.5rem)] right-4 z-50 max-h-[calc(100dvh-var(--header-height)-1.5rem)] w-[calc(100vw-2rem)] max-w-sm overflow-y-auto rounded-[var(--radius-panel)] border bg-[var(--color-surface)] shadow-[var(--shadow-floating)]"
-        >
-          <div className="flex min-h-14 items-center justify-between gap-3 border-b px-4 py-2">
-            <h2 className="font-semibold">Уведомления</h2>
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setReadIds(new Set(notifications.map(({ id }) => id)));
-                  void markAllEventsReadAction({ read: 'unread', limit: 50 });
-                }}
-                className="min-h-11 rounded-[var(--radius-sm)] px-2 text-sm font-medium text-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
-              >
-                Отметить всё прочитанным
-              </button>
-            )}
-          </div>
-
-          {notifications.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-[var(--color-text-secondary)]">
-              Новых уведомлений нет.
-            </p>
-          ) : (
-            <ul className="divide-y divide-[var(--color-border)]">
-              {notifications.map((notification) => (
-                <li key={notification.id}>
+      {notificationGroups.length === 0 ? (
+        <p className="px-4 py-10 text-center text-sm text-[var(--color-text-secondary)]">
+          {notifications.length === 0 ? 'Новых уведомлений нет.' : 'В этой категории событий нет.'}
+        </p>
+      ) : (
+        <>
+          <ul className="divide-y divide-[var(--color-border)]">
+            {visibleGroups.map((group) => {
+              const notification = group.representative;
+              const unread = group.notificationIds.some((id) => !readIds.has(id));
+              return (
+                <li key={group.key} className="relative">
+                  {unread ? (
+                    <span className="absolute inset-y-3 left-0 w-0.5 rounded-r bg-[var(--color-primary)]" />
+                  ) : null}
                   <Link
                     href={notification.href}
                     onClick={() => {
-                      setReadIds((current) => new Set(current).add(notification.id));
-                      void markEventReadAction(notification.id);
-                      setOpen(false);
+                      setReadIds((current) => {
+                        const next = new Set(current);
+                        group.notificationIds.forEach((id) => next.add(id));
+                        return next;
+                      });
+                      void Promise.all(
+                        group.notificationIds.map((id) => markNotificationReadAction(id)),
+                      ).then((results) => {
+                        const failed = results.find((result) => result.status === 'error');
+                        if (failed) {
+                          setReadIds((current) => {
+                            const next = new Set(current);
+                            group.notificationIds.forEach((id) => next.delete(id));
+                            return next;
+                          });
+                          showToast({ tone: 'danger', title: failed.message });
+                        }
+                      });
                     }}
-                    className="flex min-h-11 gap-3 px-4 py-3 transition-colors hover:bg-[var(--color-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-primary)]"
+                    className="flex min-h-11 gap-3 px-4 py-3.5 transition-colors hover:bg-[var(--color-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-primary)]"
                   >
-                    <Badge tone={notification.tone} className="h-fit shrink-0">
-                      {toneLabels[notification.tone]}
-                    </Badge>
+                    <span
+                      aria-hidden="true"
+                      className={`mt-1.5 size-2 shrink-0 rounded-full ${toneDots[notification.tone]}`}
+                    />
                     <span className="min-w-0 flex-1">
-                      <strong className="block text-sm">{notification.title}</strong>
-                      <span className="mt-1 block text-sm text-[var(--color-text-secondary)]">
+                      <span className="flex items-start justify-between gap-3">
+                        <strong className="block text-sm leading-5">{notification.title}</strong>
+                        <time className="shrink-0 text-[11px] text-[var(--color-text-muted)]">
+                          {notification.createdAt}
+                        </time>
+                      </span>
+                      <span className="mt-1 line-clamp-2 block text-xs leading-5 text-[var(--color-text-secondary)]">
                         {notification.description}
                       </span>
-                      <time className="mt-1 block text-xs text-[var(--color-text-secondary)]">
-                        {notification.createdAt}
-                      </time>
+                      <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--color-text-muted)]">
+                        <span className="font-semibold text-[var(--color-primary)]">
+                          {categoryLabels[notification.category]}
+                        </span>
+                        {notification.actorLabel || notification.companyLabel ? (
+                          <span>
+                            {[notification.actorLabel, notification.companyLabel]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </span>
+                        ) : null}
+                        {group.count > 1 ? (
+                          <span className="rounded-full bg-[var(--color-primary-soft)] px-2 py-0.5 font-semibold text-[var(--color-primary)]">
+                            {group.count} событий
+                          </span>
+                        ) : null}
+                      </span>
                     </span>
                   </Link>
                 </li>
-              ))}
-            </ul>
-          )}
-        </section>
+              );
+            })}
+          </ul>
+          {notificationGroups.length > 10 ? (
+            <div className="border-t border-[var(--color-border)] p-3">
+              <button
+                type="button"
+                onClick={() => setShowAll((current) => !current)}
+                className="min-h-10 w-full rounded-[var(--radius-sm)] text-sm font-semibold text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+              >
+                {showAll ? 'Свернуть' : 'Показать все'}
+              </button>
+            </div>
+          ) : null}
+        </>
       )}
-    </div>
+    </AnchoredPopover>
   );
 }

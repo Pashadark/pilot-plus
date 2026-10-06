@@ -9,10 +9,12 @@ vi.mock('@/database/prisma/client', () => ({
     companyMember: { findFirst: vi.fn() },
     vehicle: { findMany: vi.fn() },
     rental: { findMany: vi.fn() },
+    client: { count: vi.fn() },
     maintenanceRecord: { findMany: vi.fn() },
     washRecord: { findMany: vi.fn() },
     operationsTask: { findMany: vi.fn() },
     lead: { findMany: vi.fn() },
+    fine: { findMany: vi.fn() },
   },
 }));
 
@@ -29,18 +31,34 @@ function repositoryFixture() {
         registrationNumber: 'A001AA777',
         archivedAt: null,
         isDemoImport: false,
-        positions: [{ recordedAt: NOW }],
+        positions: [{ id: 'position-1', recordedAt: NOW, fuelLevelPercent: null }],
+        rentalOperations: [],
       },
     ]),
     rentalFindMany: vi.fn().mockResolvedValue([]),
+    clientCount: vi.fn().mockResolvedValue(0),
     maintenanceFindMany: vi.fn().mockResolvedValue([]),
     washFindMany: vi.fn().mockResolvedValue([]),
     taskFindMany: vi.fn().mockResolvedValue([]),
     leadFindMany: vi.fn().mockResolvedValue([]),
+    fineFindMany: vi.fn().mockResolvedValue([]),
   };
 }
 
 describe('dashboard server queries', () => {
+  it('loads tomorrow and later tasks for today without widening the KPI period', async () => {
+    const repository = repositoryFixture();
+    const overview = await createDashboardQueries(
+      repository,
+      async () => ({ companyId: 'company-1', canViewClientPhone: false }),
+      { encryptionKey: ENCRYPTION_KEY },
+    ).getOverview('today', NOW);
+    const args = repository.taskFindMany.mock.calls[0]?.[0];
+    expect(args.where.dueAt.lt.getTime()).toBeGreaterThan(
+      new Date('2026-08-25T21:00:00Z').getTime(),
+    );
+    expect(overview.period.toExclusive).toBe('2026-08-24T21:00:00.000Z');
+  });
   it('loads lifetime finance rentals without the selected dashboard window', async () => {
     const repository = repositoryFixture();
 
@@ -73,10 +91,12 @@ describe('dashboard server queries', () => {
     for (const query of [
       repository.vehicleFindMany,
       repository.rentalFindMany,
+      repository.clientCount,
       repository.maintenanceFindMany,
       repository.washFindMany,
       repository.taskFindMany,
       repository.leadFindMany,
+      repository.fineFindMany,
     ]) {
       expect(query).toHaveBeenCalledWith(
         expect.objectContaining({ where: expect.objectContaining({ companyId: 'company-1' }) }),
@@ -87,23 +107,33 @@ describe('dashboard server queries', () => {
         where: expect.objectContaining({ archivedAt: null, isDemoImport: false }),
       }),
     );
+    expect(repository.clientCount).toHaveBeenCalledWith({
+      where: { companyId: 'company-1', archivedAt: null },
+    });
     expect(repository.maintenanceFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          scheduledAt: {
-            gte: new Date('2026-08-23T21:00:00.000Z'),
-            lt: new Date('2026-08-24T21:00:00.000Z'),
+          status: {
+            in: ['PLANNED', 'IN_PROGRESS', 'OVERDUE', 'DAMAGE_REPORTED', 'WAITING_REPAIR'],
           },
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              scheduledAt: { lt: new Date('2026-09-22T21:00:00.000Z') },
+            }),
+            expect.objectContaining({
+              recordType: 'REPAIR',
+              damageReportedAt: { lt: new Date('2026-09-22T21:00:00.000Z') },
+            }),
+          ]),
         }),
+        select: expect.objectContaining({ recordType: true, damageReportedAt: true }),
       }),
     );
     expect(repository.washFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          scheduledAt: {
-            gte: new Date('2026-08-23T21:00:00.000Z'),
-            lt: new Date('2026-08-24T21:00:00.000Z'),
-          },
+          status: { in: ['PLANNED', 'IN_PROGRESS'] },
+          scheduledAt: { lt: new Date('2026-09-22T21:00:00.000Z') },
         }),
       }),
     );
@@ -120,10 +150,12 @@ describe('dashboard server queries', () => {
 
     expect(repository.vehicleFindMany).not.toHaveBeenCalled();
     expect(repository.rentalFindMany).not.toHaveBeenCalled();
+    expect(repository.clientCount).not.toHaveBeenCalled();
     expect(repository.maintenanceFindMany).not.toHaveBeenCalled();
     expect(repository.washFindMany).not.toHaveBeenCalled();
     expect(repository.taskFindMany).not.toHaveBeenCalled();
     expect(repository.leadFindMany).not.toHaveBeenCalled();
+    expect(repository.fineFindMany).not.toHaveBeenCalled();
   });
 
   it('decrypts a client phone only for an authorized caller and never returns ciphertext', async () => {
@@ -218,9 +250,36 @@ describe('dashboard server queries', () => {
       OR: expect.arrayContaining([
         {
           status: { in: ['CONFIRMED', 'ACTIVE'] },
-          startsAt: { lt: new Date('2026-08-24T21:00:00.000Z') },
+          startsAt: { lt: new Date('2026-09-22T21:00:00.000Z') },
         },
       ]),
+    });
+  });
+
+  it('loads completed rentals and confirmed deposit payments for advance return reminders', async () => {
+    const repository = repositoryFixture();
+
+    await createDashboardQueries(
+      repository,
+      async () => ({ companyId: 'company-1', canViewClientPhone: false }),
+      { encryptionKey: ENCRYPTION_KEY },
+    ).getOverview('today', NOW);
+
+    const rentalQuery = repository.rentalFindMany.mock.calls[0]?.[0];
+
+    expect(rentalQuery?.where).toMatchObject({
+      companyId: 'company-1',
+      OR: expect.arrayContaining([
+        {
+          status: 'COMPLETED',
+          depositMinor: { gt: 0 },
+        },
+      ]),
+    });
+    expect(rentalQuery?.where.OR[1]).not.toHaveProperty('operations');
+    expect(rentalQuery?.select.payments).toEqual({
+      where: { kind: 'DEPOSIT', status: 'CONFIRMED' },
+      select: { kind: true, status: true, amountMinor: true },
     });
   });
 
@@ -268,5 +327,74 @@ describe('dashboard server queries', () => {
       }),
     );
     expect(JSON.stringify(overview)).not.toContain(encryptedPhone);
+  });
+
+  it('loads unresolved new fines with their vehicle, client and rental context', async () => {
+    const repository = repositoryFixture();
+
+    await createDashboardQueries(
+      repository,
+      async () => ({ companyId: 'company-1', canViewClientPhone: false }),
+      { encryptionKey: ENCRYPTION_KEY },
+    ).getOverview('today', NOW);
+
+    expect(repository.fineFindMany).toHaveBeenCalledWith({
+      where: {
+        companyId: 'company-1',
+        status: { in: ['NEW', 'UNPAID', 'OVERDUE'] },
+      },
+      select: expect.objectContaining({
+        id: true,
+        decreeNumber: true,
+        createdAt: true,
+        currentAmountMinor: true,
+        status: true,
+        discountExpiresAt: true,
+        vehicle: expect.any(Object),
+        client: expect.any(Object),
+        rental: expect.any(Object),
+      }),
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  });
+
+  it('loads current fuel and falls back to the latest committed rental reading', async () => {
+    const repository = repositoryFixture();
+    repository.vehicleFindMany.mockResolvedValue([
+      {
+        id: 'vehicle-1',
+        make: 'Kia',
+        model: 'Rio',
+        registrationNumber: 'A001AA777',
+        archivedAt: null,
+        isDemoImport: false,
+        positions: [{ id: 'position-1', recordedAt: NOW, fuelLevelPercent: null }],
+        rentalOperations: [
+          {
+            id: 'operation-1',
+            occurredAt: new Date('2026-08-24T08:50:00.000Z'),
+            fuelLevelPercent: 18,
+          },
+        ],
+      },
+    ]);
+
+    const overview = await createDashboardQueries(
+      repository,
+      async () => ({ companyId: 'company-1', canViewClientPhone: false }),
+      { encryptionKey: ENCRYPTION_KEY },
+    ).getOverview('today', NOW);
+
+    expect(repository.vehicleFindMany.mock.calls[0]?.[0]).toHaveProperty(
+      'select.positions.select.fuelLevelPercent',
+      true,
+    );
+    expect(repository.vehicleFindMany.mock.calls[0]?.[0]).toHaveProperty(
+      'select.rentalOperations.select.fuelLevelPercent',
+      true,
+    );
+    expect(overview.workItems).toContainEqual(
+      expect.objectContaining({ kind: 'LOW_FUEL', clientLabel: 'Остаток топлива: 18%' }),
+    );
   });
 });

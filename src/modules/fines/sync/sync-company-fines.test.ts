@@ -3,6 +3,22 @@ import { describe, expect, it, vi } from 'vitest';
 import { syncCompanyFinesWithDependencies } from './sync-company-fines';
 
 describe('company fine sync', () => {
+  it('пропускает штраф без даты и продолжает сохранять корректные штрафы', async () => {
+    const upsertFine = vi.fn().mockResolvedValue({ created: true });
+    const dependencies = {
+      listCars: vi.fn().mockResolvedValue({ current: 1, last: 1, items: [] }),
+      listFines: vi.fn().mockResolvedValue({ current: 1, last: 1, items: ['missing', 'valid'] }),
+      listPaidFines: vi.fn().mockResolvedValue({ current: 1, last: 1, items: [] }),
+      normalizeCar: vi.fn(),
+      normalizeFine: vi.fn((id: string) => ({ externalId: id, providerVehicleId: null,
+        offenseAt: id === 'missing' ? null as unknown as Date : new Date('2026-09-18T10:00:00Z') })),
+      upsertLink: vi.fn(), upsertFine,
+    };
+    const result = await syncCompanyFinesWithDependencies('company-a', dependencies);
+    expect(result).toMatchObject({ received: 2, created: 1, skipped: 1 });
+    expect(upsertFine).toHaveBeenCalledTimes(1);
+    expect(upsertFine).toHaveBeenCalledWith('company-a', expect.objectContaining({ externalId: 'valid' }), null);
+  });
   it('paginates, links a vehicle, and idempotently upserts fines', async () => {
     const upsertLink = vi.fn().mockResolvedValue({ vehicleId: 'vehicle-a' });
     const upsertFine = vi

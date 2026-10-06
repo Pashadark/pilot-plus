@@ -67,4 +67,20 @@ describe('VehicleFilters', () => {
     fireEvent.change(gpsFilter, { target: { value: 'MOVING' } });
     expect(onChange).toHaveBeenCalledWith({ ...initialVehicleFilters, gpsStatus: 'MOVING' });
   });
+
+  it('оставляет поиск и статус сверху, а дополнительные фильтры группирует', () => {
+    render(
+      <VehicleFilters
+        filters={{ ...initialVehicleFilters, city: 'Москва', gpsStatus: 'IN_PARK' }}
+        vehicles={[vehicle]}
+        onChange={vi.fn()}
+        onReset={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText('Поиск автомобилей')).toBeTruthy();
+    expect(screen.getByLabelText('Бизнес-состояние')).toBeTruthy();
+    expect(screen.getByText('Все фильтры · 2')).toBeTruthy();
+    expect(screen.getByTestId('vehicle-advanced-filters').getAttribute('open')).not.toBeNull();
+  });
 });

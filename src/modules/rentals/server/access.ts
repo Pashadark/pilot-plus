@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { CompanyRole } from '@/database/generated/prisma';
+import type { CompanyRole, RentalStatus } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 import type { SafeUser } from '@/modules/auth/types';
 import { readSession } from '@/services/auth/session';
@@ -24,6 +24,16 @@ export function canManageRentals(role: CompanyRole): boolean {
 
 export function canAccessRentalCompany(access: RentalAccess | null, companyId: string): boolean {
   return Boolean(access && (access.scope === 'SYSTEM' || access.companyIds.includes(companyId)));
+}
+
+export function canEditRental(
+  access: RentalAccess | null,
+  companyId: string,
+  status: RentalStatus,
+): boolean {
+  if (!canAccessRentalCompany(access, companyId)) return false;
+  if (access?.scope === 'SYSTEM') return true;
+  return status === 'DRAFT' || status === 'CONFIRMED';
 }
 
 export async function getRentalAccessForUser(user: SafeUser): Promise<RentalAccess | null> {

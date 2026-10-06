@@ -74,9 +74,7 @@ export function DeviceTable({
           <th scope="col" className="px-4 py-3 font-semibold">
             Статус
           </th>
-          <th scope="col" className="px-4 py-3 font-semibold">
-            <span className="sr-only">Действия</span>
-          </th>
+          <th scope="col" aria-label="Действия" className="px-4 py-3 font-semibold" />
         </tr>
       </thead>
       <tbody className="divide-y divide-[var(--color-border)]">

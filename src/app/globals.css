@@ -9,6 +9,7 @@
   --color-navigation-muted: #6b7280;
   --color-text: #1f2937;
   --color-text-secondary: #6b7280;
+  --color-text-muted: #9ca3af;
   --color-text-inverse: #ffffff;
   --color-primary: #2563eb;
   --color-primary-hover: #1d4ed8;
@@ -33,6 +34,9 @@
   --sidebar-width-expanded: 228px;
   --sidebar-width: var(--sidebar-width-collapsed);
   --header-height: 64px;
+  --shell-gutter: 0px;
+  --color-ice: #eff6ff;
+  --color-ice-text: #1e3a8a;
 }
 
 :root[data-theme='dark'] {
@@ -44,6 +48,7 @@
   --color-navigation-muted: #9ca3af;
   --color-text: #f9fafb;
   --color-text-secondary: #9ca3af;
+  --color-text-muted: #6b7280;
   --color-text-inverse: #ffffff;
   --color-primary: #818cf8;
   --color-primary-hover: #a5b4fc;
@@ -58,6 +63,82 @@
   --color-border-strong: #4b5563;
 }
 
+:root[data-interface='obsidian'][data-theme='light'] {
+  color-scheme: light;
+  --color-canvas: #f2f5f8;
+  --color-surface: #ffffff;
+  --color-elevated: #f7f9fb;
+  --color-navigation: #ffffff;
+  --color-navigation-muted: #697386;
+  --color-text: #12161c;
+  --color-text-secondary: #667085;
+  --color-text-muted: #98a2b3;
+  --color-text-inverse: #ffffff;
+  --color-primary: #2f66f6;
+  --color-primary-hover: #2457da;
+  --color-primary-soft: #e8efff;
+  --color-success: #168a58;
+  --color-success-soft: #e5f7ef;
+  --color-warning: #b56b16;
+  --color-warning-soft: #fff3df;
+  --color-danger: #c93c3c;
+  --color-danger-soft: #ffebeb;
+  --color-border: #dce3ea;
+  --color-border-strong: #c9d3dd;
+  --color-ice: #e2f3ff;
+  --color-ice-text: #10233d;
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 8px 24px rgb(16 24 40 / 0.04);
+  --shadow-floating: 0 18px 48px rgb(16 24 40 / 0.12), 0 2px 8px rgb(16 24 40 / 0.05);
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-panel: 22px;
+  --motion-fast: 160ms;
+  --motion-normal: 220ms;
+  --sidebar-width-collapsed: 72px;
+  --sidebar-width-expanded: 240px;
+  --header-height: 64px;
+  --shell-gutter: 16px;
+}
+
+:root[data-interface='obsidian'][data-theme='dark'] {
+  color-scheme: dark;
+  --color-canvas: #0b0d10;
+  --color-surface: #15191f;
+  --color-elevated: #1b2028;
+  --color-navigation: #101318;
+  --color-navigation-muted: #9aa4b2;
+  --color-text: #f5f7fa;
+  --color-text-secondary: #98a2b3;
+  --color-text-muted: #697586;
+  --color-text-inverse: #ffffff;
+  --color-primary: #4d7cff;
+  --color-primary-hover: #6a91ff;
+  --color-primary-soft: #1d2d58;
+  --color-success: #36c789;
+  --color-success-soft: #14382a;
+  --color-warning: #f4b860;
+  --color-warning-soft: #3f2d17;
+  --color-danger: #f06464;
+  --color-danger-soft: #442020;
+  --color-border: #2a313a;
+  --color-border-strong: #3b4551;
+  --color-ice: #ddf2ff;
+  --color-ice-text: #10233d;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.22), 0 12px 28px rgb(0 0 0 / 0.14);
+  --shadow-floating: 0 22px 56px rgb(0 0 0 / 0.38), 0 3px 10px rgb(0 0 0 / 0.24);
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-panel: 22px;
+  --motion-fast: 160ms;
+  --motion-normal: 220ms;
+  --sidebar-width-collapsed: 72px;
+  --sidebar-width-expanded: 240px;
+  --header-height: 64px;
+  --shell-gutter: 16px;
+}
+
 html,
 body {
   min-height: 100%;
@@ -67,13 +148,122 @@ body {
   margin: 0;
   background: var(--color-canvas);
   color: var(--color-text);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  font-variant-numeric: tabular-nums;
 }
 
 *,
 *::before,
 *::after {
   border-color: var(--color-border);
+}
+
+::selection {
+  background: var(--color-primary-soft);
+  color: var(--color-text);
+}
+
+input,
+textarea,
+[contenteditable='true'] {
+  caret-color: var(--color-primary);
+}
+
+:focus-visible {
+  outline-color: var(--color-primary);
+}
+
+:root[data-interface='obsidian'] body,
+:root[data-interface='obsidian'] [data-interface-shell] {
+  transition:
+    background-color var(--motion-normal) cubic-bezier(0.16, 1, 0.3, 1),
+    border-color var(--motion-fast) ease-out,
+    color var(--motion-fast) ease-out;
+}
+
+:root[data-interface='obsidian'] {
+  scrollbar-color: var(--color-border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+:root[data-interface='obsidian'] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+:root[data-interface='obsidian'] ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+  background-clip: padding-box;
+}
+
+:root[data-interface='classic'] .sidebar-navigation-group {
+  display: contents;
+}
+
+:root[data-interface='classic'] .sidebar-navigation-group-label,
+:root[data-interface='classic'] [data-active-indicator='true'] {
+  display: none;
+}
+
+:root[data-interface='obsidian'] .sidebar-navigation-group + .sidebar-navigation-group {
+  margin-top: 14px;
+}
+
+@media (min-width: 768px) {
+  :root[data-interface='obsidian'] [data-interface-shell='sidebar'] {
+    top: var(--shell-gutter);
+    bottom: var(--shell-gutter);
+    left: var(--shell-gutter);
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-floating);
+  }
+
+  :root[data-interface='obsidian'] [data-interface-shell='header'] {
+    top: var(--shell-gutter);
+    right: var(--shell-gutter);
+    left: calc(var(--sidebar-width) + var(--shell-gutter) * 2);
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-card);
+  }
+
+  :root[data-interface='obsidian'] [data-interface-shell='content'] {
+    padding-top: calc(var(--header-height) + var(--shell-gutter) * 2);
+    padding-left: calc(var(--sidebar-width) + var(--shell-gutter));
+  }
+}
+
+@media (max-width: 767px) {
+  :root[data-interface='obsidian'] {
+    --shell-gutter: 10px;
+    --header-height: 56px;
+  }
+
+  :root[data-interface='obsidian'] [data-interface-shell='header'] {
+    top: var(--shell-gutter);
+    right: var(--shell-gutter);
+    left: var(--shell-gutter);
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-card);
+  }
+
+  :root[data-interface='obsidian'] [data-interface-shell='content'] {
+    padding-top: calc(var(--header-height) + var(--shell-gutter) * 2);
+  }
 }
 
 .scrollbar-hidden {

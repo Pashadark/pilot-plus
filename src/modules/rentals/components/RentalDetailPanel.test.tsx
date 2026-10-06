@@ -7,6 +7,11 @@ const mocks = vi.hoisted(() => ({
   retry: vi.fn(),
   refresh: vi.fn(),
   toast: vi.fn(),
+  pending: false,
+}));
+vi.mock('react-dom', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-dom')>()),
+  useFormStatus: () => ({ pending: mocks.pending }),
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock('@/shared/providers/ToastProvider', () => ({
@@ -30,7 +35,15 @@ describe('RentalDetailPanel', () => {
           contractNumber: 'ME-2026-0001-BK',
         }}
         documents={[{ version: 2, format: 'PDF' }]}
-        generations={[{ version: 3, status: 'ERROR', updatedAt: '2026-08-13T09:00:00.000Z' }]}
+        generations={[
+          {
+            version: 3,
+            status: 'ERROR',
+            docxReady: false,
+            pdfReady: false,
+            updatedAt: '2026-08-13T09:00:00.000Z',
+          },
+        ]}
         source="Снимок подтверждённого договора"
         history={[
           {
@@ -51,7 +64,8 @@ describe('RentalDetailPanel', () => {
     );
     expect(screen.getByRole('button', { name: 'Повторить создание документов' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Отменить договор' })).toBeTruthy();
-    expect(screen.getByText('Версия 3: Не удалось подготовить')).toBeTruthy();
+    expect(screen.getByText('Версия 3: Ошибка')).toBeTruthy();
+    expect(screen.getByRole('status').getAttribute('aria-live')).toBe('polite');
     fireEvent.click(screen.getByRole('button', { name: 'Отменить договор' }));
     expect(screen.getByText('Отменить подтверждённый договор?')).toBeTruthy();
   });
@@ -76,5 +90,35 @@ describe('RentalDetailPanel', () => {
     expect(
       screen.getByText('Для этого договора действия пользователей не зафиксированы.'),
     ).toBeTruthy();
+  });
+
+  it('блокирует повторную отправку, пока документы формируются', () => {
+    mocks.pending = true;
+    render(
+      <RentalDetailPanel
+        rental={{
+          id: 'rental-1',
+          companyId: 'company-1',
+          status: 'CONFIRMED',
+          contractNumber: 'ME-2026-0001-BK',
+        }}
+        documents={[]}
+        generations={[
+          {
+            version: 1,
+            status: 'PENDING',
+            docxReady: false,
+            pdfReady: false,
+            updatedAt: '2026-08-13T09:00:00.000Z',
+          },
+        ]}
+        history={[]}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Документы формируются…' });
+    expect(button).toHaveProperty('disabled', true);
+    expect(screen.getByText('Версия 1: Подготовка')).toBeTruthy();
+    mocks.pending = false;
   });
 });

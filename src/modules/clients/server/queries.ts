@@ -1,3 +1,4 @@
+import { vehicleName } from '@/shared/lib/vehicle-name';
 import 'server-only';
 
 import type { Prisma } from '@/database/generated/prisma';
@@ -11,6 +12,7 @@ import type {
   ClientQueryFilters,
 } from '@/modules/clients/types';
 import { decryptField } from '@/services/security/field-encryption';
+import { parsePassportDetails } from '@/modules/clients/passport-details';
 
 type ClientRepository = {
   findMany(args: unknown): Promise<unknown[]>;
@@ -29,7 +31,8 @@ type RawClient = {
   middleName: string | null;
   lastName: string;
   birthDate: Date | null;
-  phoneEncrypted: string;
+  phoneEncrypted: string | null;
+  additionalPhoneEncrypted: string | null;
   email: string | null;
   passportEncrypted: string | null;
   registrationAddressEncrypted?: string | null;
@@ -56,6 +59,7 @@ type RawClient = {
         'NOT_COLLECTED' | 'COLLECTED' | 'RETURNED' | 'PARTIALLY_WITHHELD' | 'WITHHELD' | null;
       occurredAt: Date;
     }>;
+    payments?: Array<{ amountMinor: bigint }>;
   }>;
   _count: { rentals: number };
 };
@@ -76,6 +80,7 @@ const clientSelect = {
   lastName: true,
   birthDate: true,
   phoneEncrypted: true,
+  additionalPhoneEncrypted: true,
   email: true,
   passportEncrypted: true,
   registrationAddressEncrypted: true,
@@ -103,6 +108,10 @@ const clientSelect = {
         select: { depositStatus: true, occurredAt: true },
         orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
         take: 1,
+      },
+      payments: {
+        where: { kind: 'DEPOSIT', status: 'CONFIRMED' },
+        select: { amountMinor: true },
       },
     },
     orderBy: [{ startsAt: 'desc' }, { id: 'desc' }],
@@ -185,9 +194,7 @@ function fullName(client: RawClient): string {
 }
 
 function vehicleLabel(make: string, model: string): string {
-  return model.toLocaleLowerCase('ru-RU').startsWith(make.toLocaleLowerCase('ru-RU'))
-    ? model
-    : [make, model].filter(Boolean).join(' · ');
+  return vehicleName(make, model);
 }
 
 function mapCard(
@@ -195,31 +202,44 @@ function mapCard(
   encryptionKey: string,
   fineSummary: FineSummary = { total: 0, paidAmountMinor: BigInt(0) },
 ): ClientCardDto {
-  const phone = decryptField(client.phoneEncrypted, encryptionKey);
+  const phone = client.phoneEncrypted ? decryptField(client.phoneEncrypted, encryptionKey) : null;
+  const additionalPhone = client.additionalPhoneEncrypted
+    ? decryptField(client.additionalPhoneEncrypted, encryptionKey)
+    : null;
   const passport = client.passportEncrypted
     ? decryptField(client.passportEncrypted, encryptionKey)
     : null;
   const driverLicense = client.driverLicenseEncrypted
     ? decryptField(client.driverLicenseEncrypted, encryptionKey)
     : null;
-  const rentals = client.rentals.map((rental) => ({
-    id: rental.id,
-    contractNumber: rental.contractNumber,
-    status: rental.status,
-    startsAt: rental.startsAt.toISOString(),
-    endsAt: rental.endsAt.toISOString(),
-    totalPriceMinor: rental.totalPriceMinor.toString(),
-    depositMinor: rental.depositMinor?.toString() ?? null,
-    depositStatus: rental.operations[0]?.depositStatus ?? null,
-    depositReturnedAt:
-      rental.operations[0]?.depositStatus === 'RETURNED'
-        ? rental.operations[0].occurredAt.toISOString()
-        : null,
-    vehicle: {
-      label: vehicleLabel(rental.vehicle.make, rental.vehicle.model),
-      registrationNumber: rental.vehicle.registrationNumber,
-    },
-  }));
+  const rentals = client.rentals.map((rental) => {
+    const operationStatus = rental.operations[0]?.depositStatus ?? null;
+    const paidDepositMinor = (rental.payments ?? []).reduce(
+      (total, payment) => total + payment.amountMinor,
+      BigInt(0),
+    );
+    const depositStatus =
+      operationStatus ??
+      (rental.depositMinor && paidDepositMinor >= rental.depositMinor ? 'COLLECTED' : null);
+    return {
+      id: rental.id,
+      contractNumber: rental.contractNumber,
+      status: rental.status,
+      startsAt: rental.startsAt.toISOString(),
+      endsAt: rental.endsAt.toISOString(),
+      totalPriceMinor: rental.totalPriceMinor.toString(),
+      depositMinor: rental.depositMinor?.toString() ?? null,
+      depositStatus,
+      depositReturnedAt:
+        operationStatus === 'RETURNED'
+          ? rental.operations[0]?.occurredAt.toISOString() ?? null
+          : null,
+      vehicle: {
+        label: vehicleLabel(rental.vehicle.make, rental.vehicle.model),
+        registrationNumber: rental.vehicle.registrationNumber,
+      },
+    };
+  });
   const now = Date.now();
   const currentRentals = rentals.filter(
     (rental) =>
@@ -233,8 +253,9 @@ function mapCard(
     companyId: client.companyId,
     fullName: fullName(client),
     email: client.email,
-    phone: formatPhone(phone),
-    phoneMasked: maskPhone(phone),
+    phone: phone ? formatPhone(phone) : null,
+    additionalPhone: additionalPhone ? formatPhone(additionalPhone) : null,
+    phoneMasked: phone ? maskPhone(phone) : 'Нет телефона',
     passportMasked: passport ? maskDocument(passport) : null,
     driverLicenseMasked: driverLicense ? maskDocument(driverLicense) : null,
     driverLicenseExpiresAt: client.driverLicenseExpiresAt?.toISOString() ?? null,
@@ -265,16 +286,21 @@ function mapDetail(
   encryptionKey: string,
   fineSummary?: FineSummary,
 ): ClientDetailDto {
+  const passport = client.passportEncrypted
+    ? decryptField(client.passportEncrypted, encryptionKey)
+    : null;
   return {
     ...mapCard(client, encryptionKey, fineSummary),
     firstName: client.firstName,
     middleName: client.middleName,
     lastName: client.lastName,
     birthDate: client.birthDate?.toISOString() ?? null,
-    phone: decryptField(client.phoneEncrypted, encryptionKey),
-    passport: client.passportEncrypted
-      ? decryptField(client.passportEncrypted, encryptionKey)
+    phone: client.phoneEncrypted ? decryptField(client.phoneEncrypted, encryptionKey) : null,
+    additionalPhone: client.additionalPhoneEncrypted
+      ? decryptField(client.additionalPhoneEncrypted, encryptionKey)
       : null,
+    passport,
+    ...parsePassportDetails(passport),
     registrationAddress: client.registrationAddressEncrypted
       ? decryptField(client.registrationAddressEncrypted, encryptionKey)
       : null,

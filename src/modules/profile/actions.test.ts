@@ -7,6 +7,7 @@ const prismaMocks = vi.hoisted(() => ({
   transactionThrottleDeleteMany: vi.fn(),
   transactionSessionUpdateMany: vi.fn(),
   transactionSessionDeleteMany: vi.fn(),
+  sessionDeleteMany: vi.fn(),
   transaction: vi.fn(),
 }));
 const authMocks = vi.hoisted(() => ({
@@ -23,6 +24,7 @@ vi.mock('next/cache', () => ({ revalidatePath: revalidatePathMock }));
 vi.mock('@/database/prisma/client', () => ({
   prisma: {
     user: { findUnique: prismaMocks.userFindUnique },
+    session: { deleteMany: prismaMocks.sessionDeleteMany },
     $transaction: prismaMocks.transaction,
   },
 }));
@@ -40,7 +42,12 @@ vi.mock('@/modules/auth/throttle', () => ({
   recordLoginFailure: authMocks.recordLoginFailure,
 }));
 
-import { changePasswordAction, updateProfileAction } from './actions';
+import {
+  changePasswordAction,
+  terminateOtherProfileSessionsAction,
+  terminateProfileSessionAction,
+  updateProfileAction,
+} from './actions';
 
 const idle = { status: 'idle' as const };
 const currentSessionExpiresAt = new Date('2026-07-27T12:00:00.000Z');
@@ -100,6 +107,7 @@ describe('действия профиля', () => {
     prismaMocks.transactionUserUpdateMany.mockResolvedValue({ count: 1 });
     prismaMocks.transactionSessionUpdateMany.mockResolvedValue({ count: 1 });
     prismaMocks.transactionSessionDeleteMany.mockResolvedValue({ count: 2 });
+    prismaMocks.sessionDeleteMany.mockResolvedValue({ count: 1 });
     prismaMocks.transactionThrottleDeleteMany.mockResolvedValue({ count: 1 });
     prismaMocks.transaction.mockImplementation(
       async (callback: (transaction: unknown) => Promise<unknown>) =>
@@ -334,5 +342,42 @@ describe('действия профиля', () => {
     expect(serialized).not.toContain('Текущий пароль 2026');
     expect(serialized).not.toContain('Новый пароль 2026');
     expect(serialized).not.toContain('old-token-hash');
+  });
+
+  it('завершает выбранную собственную сессию, кроме текущей', async () => {
+    const data = new FormData();
+    data.set('sessionId', 'session-other');
+
+    await expect(terminateProfileSessionAction(idle, data)).resolves.toEqual({
+      status: 'success',
+      message: 'Сессия завершена.',
+    });
+    expect(prismaMocks.sessionDeleteMany).toHaveBeenCalledWith({
+      where: {
+        id: 'session-other',
+        userId: 'u1',
+        expiresAt: { gt: expect.any(Date) },
+      },
+    });
+  });
+
+  it('не завершает текущую сессию через управление устройствами', async () => {
+    const data = new FormData();
+    data.set('sessionId', 'session-current');
+
+    await expect(terminateProfileSessionAction(idle, data)).resolves.toMatchObject({
+      status: 'error',
+    });
+    expect(prismaMocks.sessionDeleteMany).not.toHaveBeenCalled();
+  });
+
+  it('завершает все остальные собственные сессии', async () => {
+    await expect(terminateOtherProfileSessionsAction(idle, new FormData())).resolves.toEqual({
+      status: 'success',
+      message: 'Остальные сессии завершены.',
+    });
+    expect(prismaMocks.sessionDeleteMany).toHaveBeenCalledWith({
+      where: { userId: 'u1', id: { not: 'session-current' } },
+    });
   });
 });

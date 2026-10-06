@@ -1,0 +1,88 @@
+/* Opt-in skin. Classic and Obsidian retain their existing rules. */
+:root[data-interface='material'] {
+  --color-primary: #0055ed;
+  --color-primary-hover: #0044c4;
+  --color-primary-soft: #eaf0ff;
+  --color-canvas: #f4f5f8;
+  --color-surface: #fff;
+  --color-elevated: #f7f8fb;
+  --color-navigation: #fff;
+  --color-text: #293144;
+  --color-text-secondary: #647086;
+  --color-text-muted: #748097;
+  --color-border: #e3e7ee;
+  --color-border-strong: #bac3d2;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-panel: 14px;
+  --shadow-card: 0 3px 16px rgb(34 48 76 / 0.07);
+  --shadow-floating: 0 12px 40px rgb(34 48 76 / 0.16);
+}
+
+:root[data-interface='material'][data-theme='dark'] {
+  --color-canvas: #171d2b;
+  --color-surface: #222a3b;
+  --color-elevated: #2b3448;
+  --color-navigation: #222a3b;
+  --color-text: #edf1fa;
+  --color-text-secondary: #b1bdd1;
+  --color-text-muted: #95a3bb;
+  --color-border: #354158;
+  --color-border-strong: #64728b;
+  --color-primary: #86adff;
+  --color-primary-hover: #aac5ff;
+  --color-primary-soft: #293e67;
+  --color-text-inverse: #102449;
+  --shadow-card: 0 3px 16px rgb(0 0 0 / 0.18);
+}
+
+[data-interface='material'] [data-ui-button] {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  transition: background-color 160ms, box-shadow 160ms, transform 160ms;
+}
+[data-interface='material'] [data-ui-button='primary'] {
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--color-primary) 24%, transparent);
+}
+[data-interface='material'] [data-ui-button]:active:not(:disabled) {
+  transform: translateY(1px);
+}
+[data-interface='material'] .pilot-form-control {
+  min-height: 48px;
+  font-size: 0.9375rem;
+  border-radius: 8px;
+  transition: border-color 160ms, box-shadow 160ms;
+}
+[data-interface='material'] .pilot-form-control:hover:not(:disabled) {
+  border-color: var(--color-text-secondary);
+}
+[data-interface='material'] .pilot-form-control:focus-visible {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+[data-interface='material'] .pilot-form-control[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+[data-interface='material'] [data-testid='rental-wizard'] ol {
+  gap: 8px;
+  margin-top: 16px;
+  counter-reset: rental-step;
+}
+[data-interface='material'] [data-testid='rental-wizard'] ol li {
+  border-bottom: 3px solid var(--color-border);
+  border-radius: 6px 6px 0 0;
+  padding: 12px 8px;
+  line-height: 1.5;
+}
+[data-interface='material'] [data-testid='rental-wizard'] ol li[aria-current='step'] {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+[data-interface='material'] [data-testid='rental-wizard'] form {
+  row-gap: 24px;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-interface='material'] [data-ui-button],
+  [data-interface='material'] .pilot-form-control { transition: none; }
+}

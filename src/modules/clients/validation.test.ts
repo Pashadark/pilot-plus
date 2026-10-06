@@ -13,6 +13,7 @@ function validFormData(overrides: Record<string, string> = {}): FormData {
     lastName: 'Иванова',
     birthDate: '1994-05-20',
     phone: '+7 (999) 123-45-67',
+    additionalPhone: '8 (916) 765-43-21',
     email: 'anna@example.com',
     passport: '4510 123456',
     driverLicense: '9910 123456',
@@ -46,6 +47,7 @@ describe('parseClientInput', () => {
         middleName: 'Сергеевна',
         lastName: 'Иванова',
         phone: '79991234567',
+        additionalPhone: '79167654321',
         email: 'anna@example.com',
         passport: '4510 123456',
         driverLicense: '9910 123456',
@@ -58,6 +60,34 @@ describe('parseClientInput', () => {
       expect(result.data.driverLicenseIssuedAt).toEqual(new Date('2020-01-01T00:00:00.000Z'));
       expect(result.data.driverLicenseExpiresAt).toEqual(new Date('2030-01-01T00:00:00.000Z'));
     }
+  });
+
+  it('оставляет дополнительный телефон необязательным и проверяет его только когда он заполнен', () => {
+    expect(parseClientInput(validFormData({ additionalPhone: '' }))).toMatchObject({
+      ok: true,
+      data: { additionalPhone: null },
+    });
+    expect(parseClientInput(validFormData({ additionalPhone: '123' }))).toMatchObject({
+      ok: false,
+      fieldErrors: { additionalPhone: expect.any(String) },
+    });
+  });
+
+  it('не выдумывает телефон, если его нет в документах', () => {
+    expect(parseClientInput(validFormData({ phone: '' }))).toMatchObject({
+      ok: true,
+      data: { phone: null },
+    });
+  });
+
+  it('сохраняет текущий телефон при редактировании, если поле нового номера оставили пустым', () => {
+    const formData = validFormData({ phone: '' });
+    formData.set('existingPhone', '+7 906 944-62-49');
+
+    expect(parseClientInput(formData)).toMatchObject({
+      ok: true,
+      data: { phone: '79069446249' },
+    });
   });
 
   it('отклоняет обязательные поля, невалидные контакты и несуществующие даты', () => {
@@ -98,5 +128,34 @@ describe('parseClientInput', () => {
     const result = parseClientInput(validFormData({ status: 'ARCHIVED' }));
 
     expect(result).toMatchObject({ ok: false });
+  });
+
+  it('принимает полные паспортные данные с длинным названием органа выдачи', () => {
+    const passport =
+      '4518 123456; Выдан: ОТДЕЛОМ МВД РОССИИ ПО ТВЕРСКОМУ РАЙОНУ ГОРОДА МОСКВЫ; Дата выдачи: 2018-03-12; Код подразделения: 770-001';
+    const result = parseClientInput(validFormData({ passport }));
+
+    expect(result).toMatchObject({ ok: true, data: { passport } });
+  });
+
+  it('собирает паспортные данные из отдельных полей на сервере', () => {
+    const result = parseClientInput(
+      validFormData({
+        passport: '',
+        passportSeries: '45 18',
+        passportNumber: '621431',
+        passportIssuedBy: 'ГУ МВД России по г. Москве',
+        passportIssuedAt: '2018-05-14',
+        passportDivisionCode: '770-001',
+      }),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        passport:
+          '45 18 621431; Выдан: ГУ МВД России по г. Москве; Дата выдачи: 2018-05-14; Код подразделения: 770-001',
+      },
+    });
   });
 });

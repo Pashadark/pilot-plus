@@ -11,8 +11,11 @@ from bot.keyboards.rentals import confirmation, document_links, extension_choice
 from bot.keyboards.staff import STAFF_MENU_LABELS
 from bot.services.errors import PilotApiError
 from bot.states.rental import ExtensionForm, NewRentalForm
+from bot.handlers.customer import show_client_home
 
 router = Router(name="rentals")
+router.message.filter(F.chat.type == "private")
+router.callback_query.filter(F.message.chat.type == "private")
 MOSCOW = ZoneInfo("Europe/Moscow")
 
 
@@ -128,18 +131,11 @@ async def rental_submit(callback: CallbackQuery, state: FSMContext, pilot_api) -
 
 @router.callback_query(F.data == CLIENT_RENTALS)
 async def my_rentals(callback: CallbackQuery, pilot_api) -> None:
-    try:
-        items = (await pilot_api.rentals(str(callback.from_user.id))).get("items", [])
-    except PilotApiError:
-        await callback.answer("Не удалось загрузить аренды", show_alert=True)
+    if not callback.message or callback.message.chat.type != "private":
+        await callback.answer("Откройте личный чат с ботом", show_alert=True)
         return
-    if callback.message:
-        if not items:
-            await callback.message.answer("Аренд пока нет.")
-        for item in items:
-            markup = rental_documents(item["id"]) if item.get("documentsReady") else None
-            await callback.message.answer(rental_card(item), parse_mode="HTML", reply_markup=markup)
     await callback.answer()
+    await show_client_home(callback.message, pilot_api, str(callback.from_user.id))
 
 
 @router.callback_query(F.data == "rental:cancel")

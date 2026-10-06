@@ -7,7 +7,7 @@ export interface ServiceHealthStatus {
 }
 
 export interface ServiceHealth extends ServiceHealthStatus {
-  key: 'api' | 'postgresql' | 'redis' | 'mqtt';
+  key: 'api' | 'postgresql' | 'redis' | 'mqtt' | 'clamav';
   label: string;
   message: string;
 }

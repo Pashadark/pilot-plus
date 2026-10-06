@@ -13,6 +13,7 @@ it('возвращает только активные реальные маши
           latitude: '55.751244',
           longitude: '37.618423',
           speedKph: 42,
+          heading: 127,
           fuelLevelPercent: '68.5',
           recordedAt: new Date('2026-08-20T12:00:00.000Z'),
         },
@@ -38,7 +39,7 @@ it('возвращает только активные реальные маши
   expect(findMany.mock.calls[0]?.[0].select.positions).toEqual(
     expect.objectContaining({
       where: { provider: 'GLONASSSOFT' },
-      select: expect.objectContaining({ address: true }),
+      select: expect.objectContaining({ address: true, heading: true }),
     }),
   );
   expect(result).toEqual([
@@ -55,6 +56,7 @@ it('возвращает только активные реальные маши
       latitude: 55.751244,
       longitude: 37.618423,
       speedKph: 42,
+      heading: 127,
       fuelPercent: 68.5,
       recordedAt: '2026-08-20T12:00:00.000Z',
       lastSeenLabel: '2 минуты назад',

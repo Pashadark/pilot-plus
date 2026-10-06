@@ -18,10 +18,12 @@ type DashboardSession = {
 type DashboardRepository = {
   vehicleFindMany(args: unknown): Promise<unknown[]>;
   rentalFindMany(args: unknown): Promise<unknown[]>;
+  clientCount(args: unknown): Promise<number>;
   maintenanceFindMany(args: unknown): Promise<unknown[]>;
   washFindMany(args: unknown): Promise<unknown[]>;
   taskFindMany(args: unknown): Promise<unknown[]>;
   leadFindMany(args: unknown): Promise<unknown[]>;
+  fineFindMany(args: unknown): Promise<unknown[]>;
 };
 
 type DashboardQueryDependencies = {
@@ -35,11 +37,17 @@ type RawVehicle = {
   registrationNumber: string | null;
   archivedAt: Date | null;
   isDemoImport: boolean;
-  positions: Array<{ recordedAt: Date }>;
+  positions: Array<{ id: string; recordedAt: Date; fuelLevelPercent: unknown | null }>;
+  rentalOperations: Array<{
+    id: string;
+    occurredAt: Date;
+    fuelLevelPercent: number | null;
+  }>;
 };
 
 type RawRental = {
   id: string;
+  clientId?: string;
   vehicleId: string;
   status: 'DRAFT' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
   startsAt: Date;
@@ -55,6 +63,11 @@ type RawRental = {
     phoneEncrypted?: string;
   };
   vehicle: { make: string | null; model: string; registrationNumber: string | null };
+  payments: Array<{
+    kind: 'RENT' | 'DEPOSIT';
+    status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'REFUNDED' | 'PARTIALLY_REFUNDED';
+    amountMinor: bigint;
+  }>;
   operations: Array<{
     id: string;
     type: 'HANDOVER' | 'EXTENSION' | 'RETURN';
@@ -66,6 +79,7 @@ type RawRental = {
     fulfillmentAddress: string | null;
     nextEndsAt: Date | null;
     extensionChargeMinor: bigint | null;
+    notes?: string | null;
   }>;
 };
 
@@ -73,7 +87,16 @@ type RawMaintenance = {
   id: string;
   vehicleId: string;
   title: string;
-  status: 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE' | 'CANCELLED';
+  recordType: 'MAINTENANCE' | 'REPAIR';
+  status:
+    | 'PLANNED'
+    | 'IN_PROGRESS'
+    | 'COMPLETED'
+    | 'OVERDUE'
+    | 'CANCELLED'
+    | 'DAMAGE_REPORTED'
+    | 'WAITING_REPAIR';
+  damageReportedAt: Date | null;
   scheduledAt: Date | null;
   scheduledEndsAt: Date | null;
   vehicle: { make: string | null; model: string; registrationNumber: string | null };
@@ -111,6 +134,26 @@ type RawLead = {
   assignedTo: { name: string } | null;
 };
 
+type RawFine = {
+  status?: string;
+  discountExpiresAt?: Date | null;
+  id: string;
+  decreeNumber: string;
+  createdAt: Date;
+  offenseAt: Date;
+  currentAmountMinor: bigint;
+  description: string | null;
+  address: string | null;
+  vehicle: {
+    make: string | null;
+    modelName: string | null;
+    model: string;
+    registrationNumber: string | null;
+  } | null;
+  client: { firstName: string; middleName: string | null; lastName: string } | null;
+  rental: { contractNumber: string | null } | null;
+};
+
 const vehicleSelect = {
   id: true,
   make: true,
@@ -120,15 +163,28 @@ const vehicleSelect = {
   isDemoImport: true,
   positions: {
     where: { provider: 'GLONASSSOFT' },
-    select: { recordedAt: true },
+    select: { id: true, recordedAt: true, fuelLevelPercent: true },
     orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+    take: 1,
+  },
+  rentalOperations: {
+    where: { status: 'COMMITTED', fuelLevelPercent: { not: null } },
+    select: { id: true, occurredAt: true, fuelLevelPercent: true },
+    orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
     take: 1,
   },
 } satisfies Prisma.VehicleSelect;
 
+function optionalNumber(value: unknown | null | undefined) {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function rentalSelect(canViewClientPhone: boolean) {
   return {
     id: true,
+    ...(canViewClientPhone ? { clientId: true } : {}),
     vehicleId: true,
     status: true,
     startsAt: true,
@@ -146,6 +202,10 @@ function rentalSelect(canViewClientPhone: boolean) {
       },
     },
     vehicle: { select: { make: true, model: true, registrationNumber: true } },
+    payments: {
+      where: { kind: 'DEPOSIT', status: 'CONFIRMED' },
+      select: { kind: true, status: true, amountMinor: true },
+    },
     operations: {
       where: { status: 'COMMITTED' },
       select: {
@@ -158,6 +218,7 @@ function rentalSelect(canViewClientPhone: boolean) {
         fulfillmentAddress: true,
         nextEndsAt: true,
         extensionChargeMinor: true,
+        notes: true,
       },
       orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
     },
@@ -168,7 +229,9 @@ const maintenanceSelect = {
   id: true,
   vehicleId: true,
   title: true,
+  recordType: true,
   status: true,
+  damageReportedAt: true,
   scheduledAt: true,
   scheduledEndsAt: true,
   vehicle: { select: { make: true, model: true, registrationNumber: true } },
@@ -186,10 +249,16 @@ const washSelect = {
 
 function vehicleLabel(vehicle: {
   make: string | null;
+  modelName?: string | null;
   model: string;
   registrationNumber: string | null;
 }) {
-  return [vehicle.make, vehicle.model, vehicle.registrationNumber].filter(Boolean).join(' · ');
+  const model = vehicle.modelName ?? vehicle.model;
+  const name =
+    vehicle.make && !model.toLocaleLowerCase().startsWith(vehicle.make.toLocaleLowerCase())
+      ? `${vehicle.make} ${model}`
+      : model;
+  return [name, vehicle.registrationNumber].filter(Boolean).join(' · ');
 }
 
 export function createDashboardQueries(
@@ -207,6 +276,10 @@ export function createDashboardQueries(
 
       const window = typeof period === 'string' ? getDashboardWindow(period, now) : period;
       const periodKey = typeof period === 'string' ? period : period.key;
+      const queueWindow =
+        periodKey === 'today'
+          ? { ...window, toExclusive: new Date(window.from.getTime() + 30 * 86_400_000) }
+          : window;
       const companyId = session.companyId;
       const activeRentalWhere = {
         companyId,
@@ -215,9 +288,14 @@ export function createDashboardQueries(
         endsAt: { gt: window.from },
       };
       const activeMaintenanceWhere = {
-        status: { in: ['PLANNED', 'IN_PROGRESS'] },
-        scheduledAt: { lt: window.toExclusive },
-        OR: [{ scheduledEndsAt: { gt: window.from } }, { scheduledEndsAt: null }],
+        status: { in: ['PLANNED', 'IN_PROGRESS', 'DAMAGE_REPORTED', 'WAITING_REPAIR'] },
+        OR: [
+          {
+            scheduledAt: { lt: window.toExclusive },
+            OR: [{ scheduledEndsAt: { gt: window.from } }, { scheduledEndsAt: null }],
+          },
+          { recordType: 'REPAIR', damageReportedAt: { lt: window.toExclusive } },
+        ],
       };
       const activeWashWhere = {
         status: { in: ['PLANNED', 'IN_PROGRESS'] },
@@ -229,10 +307,12 @@ export function createDashboardQueries(
         vehicles,
         rentals,
         financeRentals,
+        clientCount,
         maintenanceRecords,
         washRecords,
         manualTasks,
         leads,
+        fines,
       ] = await Promise.all([
         repository.vehicleFindMany({
           where: { companyId, archivedAt: null, isDemoImport: false },
@@ -250,11 +330,11 @@ export function createDashboardQueries(
             OR: [
               {
                 status: { in: ['CONFIRMED', 'ACTIVE'] },
-                startsAt: { lt: window.toExclusive },
+                startsAt: { lt: queueWindow.toExclusive },
               },
               {
                 status: 'COMPLETED',
-                completedAt: { gte: window.from, lt: window.toExclusive },
+                depositMinor: { gt: 0 },
               },
             ],
           },
@@ -269,12 +349,20 @@ export function createDashboardQueries(
           select: rentalSelect(session.canViewClientPhone),
           orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
         }),
+        repository.clientCount({ where: { companyId, archivedAt: null } }),
         repository.maintenanceFindMany({
           where: {
             companyId,
             vehicle: { companyId },
-            status: { in: ['PLANNED', 'IN_PROGRESS'] },
-            scheduledAt: { gte: window.from, lt: window.toExclusive },
+            status: {
+              in: ['PLANNED', 'IN_PROGRESS', 'OVERDUE', 'DAMAGE_REPORTED', 'WAITING_REPAIR'],
+            },
+            OR: [
+              {
+                scheduledAt: { lt: queueWindow.toExclusive },
+              },
+              { recordType: 'REPAIR', damageReportedAt: { lt: queueWindow.toExclusive } },
+            ],
           },
           select: maintenanceSelect,
           orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
@@ -284,7 +372,7 @@ export function createDashboardQueries(
             companyId,
             vehicle: { companyId },
             status: { in: ['PLANNED', 'IN_PROGRESS'] },
-            scheduledAt: { gte: window.from, lt: window.toExclusive },
+            scheduledAt: { lt: queueWindow.toExclusive },
           },
           select: washSelect,
           orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
@@ -294,9 +382,9 @@ export function createDashboardQueries(
             companyId,
             status: 'OPEN',
             dueAt:
-              window.toExclusive > now
-                ? { lt: window.toExclusive }
-                : { gte: window.from, lt: window.toExclusive },
+              queueWindow.toExclusive > now
+                ? { lt: queueWindow.toExclusive }
+                : { gte: queueWindow.from, lt: queueWindow.toExclusive },
           },
           select: {
             id: true,
@@ -314,9 +402,9 @@ export function createDashboardQueries(
             companyId,
             status: { in: ['NEW', 'CONTACTED', 'QUALIFIED'] },
             OR:
-              window.toExclusive > now
-                ? [{ nextContactAt: null }, { nextContactAt: { lt: window.toExclusive } }]
-                : [{ nextContactAt: { gte: window.from, lt: window.toExclusive } }],
+              queueWindow.toExclusive > now
+                ? [{ nextContactAt: null }, { nextContactAt: { lt: queueWindow.toExclusive } }]
+                : [{ nextContactAt: { gte: queueWindow.from, lt: queueWindow.toExclusive } }],
           },
           select: {
             id: true,
@@ -331,15 +419,50 @@ export function createDashboardQueries(
           },
           orderBy: [{ nextContactAt: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
         }),
+        repository.fineFindMany({
+          where: {
+            companyId,
+            status: { in: ['NEW', 'UNPAID', 'OVERDUE'] },
+          },
+          select: {
+            id: true,
+            status: true,
+            discountExpiresAt: true,
+            decreeNumber: true,
+            createdAt: true,
+            offenseAt: true,
+            currentAmountMinor: true,
+            description: true,
+            address: true,
+            vehicle: {
+              select: {
+                make: true,
+                modelName: true,
+                model: true,
+                registrationNumber: true,
+              },
+            },
+            client: {
+              select: { firstName: true, middleName: true, lastName: true },
+            },
+            rental: { select: { contractNumber: true } },
+          },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        }),
       ]);
 
       return buildDashboardOverview({
         period: { key: periodKey, ...window },
+        workPeriod: { key: periodKey, ...queueWindow },
         now,
+        clientCount,
         vehicles: (vehicles as RawVehicle[]).map((vehicle) => ({
           id: vehicle.id,
           label: vehicleLabel(vehicle),
           position: vehicle.positions[0] ?? null,
+          fuelLevelPercent:
+            optionalNumber(vehicle.positions[0]?.fuelLevelPercent) ??
+            optionalNumber(vehicle.rentalOperations[0]?.fuelLevelPercent),
           archivedAt: vehicle.archivedAt,
           isDemoImport: vehicle.isDemoImport,
         })),
@@ -386,6 +509,16 @@ export function createDashboardQueries(
               : null,
           assignedToName: lead.assignedTo?.name ?? null,
         })),
+        fines: (fines as RawFine[]).map((fine) => ({
+          ...fine,
+          vehicleLabel: fine.vehicle ? vehicleLabel(fine.vehicle) : null,
+          clientLabel: fine.client
+            ? [fine.client.lastName, fine.client.firstName, fine.client.middleName]
+                .filter(Boolean)
+                .join(' ')
+            : null,
+          contractNumber: fine.rental?.contractNumber ?? null,
+        })),
       });
     },
   };
@@ -416,6 +549,7 @@ const queries = createDashboardQueries(
   {
     vehicleFindMany: (args) => prisma.vehicle.findMany(args as Prisma.VehicleFindManyArgs),
     rentalFindMany: (args) => prisma.rental.findMany(args as Prisma.RentalFindManyArgs),
+    clientCount: (args) => prisma.client.count(args as Prisma.ClientCountArgs),
     maintenanceFindMany: (args) => {
       const query = args as Prisma.MaintenanceRecordFindManyArgs & {
         where: Prisma.MaintenanceRecordWhereInput & { companyId?: string };
@@ -435,6 +569,7 @@ const queries = createDashboardQueries(
     taskFindMany: (args) =>
       prisma.operationsTask.findMany(args as Prisma.OperationsTaskFindManyArgs),
     leadFindMany: (args) => prisma.lead.findMany(args as Prisma.LeadFindManyArgs),
+    fineFindMany: (args) => prisma.fine.findMany(args as Prisma.FineFindManyArgs),
   },
   getCurrentDashboardSession,
   { encryptionKey: process.env.CLIENT_DATA_ENCRYPTION_KEY ?? '' },

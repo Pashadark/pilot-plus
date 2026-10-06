@@ -241,6 +241,26 @@ Keep held-deposit state in domain data for reminders, but do not render it as a 
 
 Expected: PASS.
 
+### Task 2B: Выбор даты и периода
+
+**Files:**
+- Modify: `src/modules/dashboard/date-window.ts`
+- Modify: `src/modules/dashboard/date-window.test.ts`
+- Create: `src/modules/dashboard/DashboardDatePicker.tsx`
+- Create: `src/modules/dashboard/DashboardDatePicker.test.tsx`
+- Modify: `src/modules/dashboard/CommandCenterDashboard.tsx`
+- Modify: `src/app/(protected)/page.tsx`
+- Modify: `src/modules/dashboard/server/queries.ts`
+
+**Interfaces:**
+- Produces: validated preset or custom Moscow window; inclusive user `to` converted to exclusive server boundary.
+
+- [ ] Write failing parser and UI tests for single date, range, reversed/invalid input and preset reset.
+- [ ] Run targeted tests and verify failure.
+- [ ] Implement custom window parsing and compact calendar panel.
+- [ ] Pass the selected window through the dashboard query without changing lifetime finance totals.
+- [ ] Run targeted tests, typecheck and lint.
+
 ### Task 6: Риск клиента в мастере аренды
 
 **Files:**

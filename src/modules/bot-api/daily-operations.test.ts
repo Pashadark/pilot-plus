@@ -27,32 +27,28 @@ describe('daily operations', () => {
       telegramIdentity: { findFirst: vi.fn().mockResolvedValue({ user: { role: 'MEMBER' } }) },
       companyMember: { findFirst: vi.fn().mockResolvedValue({ role: 'DISPATCHER' }) },
       botRentalRequest: {
-        findMany: vi
-          .fn()
-          .mockResolvedValue([
-            {
-              id: 'q1',
-              startsAt: new Date('2026-08-20T08:00:00Z'),
-              endsAt: new Date('2026-08-20T10:00:00Z'),
-              fulfillmentMode: 'DELIVERY',
-              client: { firstName: 'Иван', lastName: 'Иванов' },
-              preferredVehicle: null,
-            },
-          ]),
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'q1',
+            startsAt: new Date('2026-08-20T08:00:00Z'),
+            endsAt: new Date('2026-08-20T10:00:00Z'),
+            fulfillmentMode: 'DELIVERY',
+            client: { firstName: 'Иван', lastName: 'Иванов' },
+            preferredVehicle: null,
+          },
+        ]),
       },
       rental: {
-        findMany: vi
-          .fn()
-          .mockResolvedValue([
-            {
-              id: 'r1',
-              contractNumber: 'ME-1',
-              startsAt: new Date('2026-08-19T22:00:00Z'),
-              endsAt: new Date('2026-08-20T09:00:00Z'),
-              client: { firstName: 'Павел', lastName: 'Седов' },
-              vehicle: { make: 'Kia', modelName: 'K5', model: 'K5', registrationNumber: 'А001АА' },
-            },
-          ]),
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'r1',
+            contractNumber: 'ME-1',
+            startsAt: new Date('2026-08-19T22:00:00Z'),
+            endsAt: new Date('2026-08-20T09:00:00Z'),
+            client: { firstName: 'Павел', lastName: 'Седов' },
+            vehicle: { make: 'Kia', modelName: 'K5', model: 'K5', registrationNumber: 'А001АА' },
+          },
+        ]),
       },
       vehicle: {
         findMany: vi.fn().mockResolvedValue([

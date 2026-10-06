@@ -79,6 +79,7 @@ describe('серверная сессия', () => {
       id: 'user-1',
       email: 'admin@example.com',
       name: 'Администратор',
+      avatarUrl: null,
       role: 'SUPER_ADMIN',
       canAccessAdmin: true,
     });
@@ -109,6 +110,7 @@ describe('серверная сессия', () => {
         id: 'user-1',
         email: 'admin@example.com',
         name: 'Администратор',
+        avatarUrl: null,
         role: 'SUPER_ADMIN',
         canAccessAdmin: true,
       },

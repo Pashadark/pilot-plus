@@ -27,6 +27,8 @@ const baseInput = {
   city: 'Москва',
   transmission: 'АКПП',
   fuelType: 'PETROL',
+  driveType: 'FRONT',
+  fuelConsumptionLitersPer100Km: '7.2',
   seats: '5',
   dailyPriceRubles: '3500',
   rangePriceRubles: '4200.50',
@@ -45,6 +47,7 @@ function transactionClient() {
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     rental: { findFirst: vi.fn().mockResolvedValue(null) },
+    fuelRecord: { create: vi.fn().mockResolvedValue({ id: 'fuel-1' }) },
     auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
   };
 }
@@ -123,6 +126,59 @@ describe('Server Actions управления автопарком', () => {
     expect(database.auditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ action: 'UPDATE' }) }),
     );
+  });
+
+  it('обновляет привод и расход, не стирая остальные особенности автомобиля', async () => {
+    const database = transactionClient();
+    database.vehicle.findFirst
+      .mockResolvedValueOnce({
+        id: 'vehicle-1',
+        internalNumber: 'RNT-001',
+        features: ['Apple CarPlay', 'Привод: Задний', 'Расход: 9,0 л/100 км'],
+      })
+      .mockResolvedValueOnce(null);
+    transactionMock.mockImplementation((callback: (tx: typeof database) => unknown) =>
+      callback(database),
+    );
+
+    const result = await updateVehicleAction(
+      null,
+      formData({ ...baseInput, vehicleId: 'vehicle-1' }),
+    );
+
+    expect(result).toEqual({ ok: true, vehicleId: 'vehicle-1' });
+    expect(database.vehicle.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          features: ['Apple CarPlay', 'Привод: Передний', 'Расход: 7,2 л/100 км'],
+        }),
+      }),
+    );
+  });
+
+  it('сохраняет введённый вручную процент топлива при редактировании автомобиля', async () => {
+    const database = transactionClient();
+    database.vehicle.findFirst
+      .mockResolvedValueOnce({ id: 'vehicle-1', internalNumber: 'RNT-001' })
+      .mockResolvedValueOnce(null);
+    transactionMock.mockImplementation((callback: (tx: typeof database) => unknown) =>
+      callback(database),
+    );
+
+    const result = await updateVehicleAction(
+      null,
+      formData({ ...baseInput, vehicleId: 'vehicle-1', fuelLevelPercent: '73' }),
+    );
+
+    expect(result).toEqual({ ok: true, vehicleId: 'vehicle-1' });
+    expect(database.fuelRecord.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        vehicleId: 'vehicle-1',
+        type: 'MANUAL_LEVEL',
+        levelPercent: 73,
+      }),
+      select: { id: true },
+    });
   });
 
   it('возвращает стабильную ошибку дубликата номера', async () => {

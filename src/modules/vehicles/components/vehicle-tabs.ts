@@ -1,8 +1,17 @@
 export type VehicleTab =
-  'overview' | 'trips' | 'routes' | 'events' | 'fuel' | 'maintenance' | 'rentals' | 'documents';
+  | 'overview'
+  | 'history'
+  | 'trips'
+  | 'routes'
+  | 'events'
+  | 'fuel'
+  | 'maintenance'
+  | 'rentals'
+  | 'documents';
 
 export const vehicleTabs: readonly { value: VehicleTab; label: string }[] = [
   { value: 'overview', label: 'Обзор' },
+  { value: 'history', label: 'История' },
   { value: 'trips', label: 'Поездки' },
   { value: 'routes', label: 'Маршруты' },
   { value: 'events', label: 'События' },
@@ -22,6 +31,10 @@ const emptyStates: Record<
   Exclude<VehicleTab, 'overview'>,
   { title: string; description: string }
 > = {
+  history: {
+    title: 'История автомобиля пока пуста',
+    description: 'Здесь появятся аренды, обслуживание, мойки и важные события автомобиля.',
+  },
   trips: {
     title: 'Поездки ещё не поступали',
     description: 'История появится после первой обработанной поездки автомобиля.',

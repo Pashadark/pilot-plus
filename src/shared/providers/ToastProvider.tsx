@@ -22,6 +22,7 @@ import {
   type ToastInput,
   type ToastRecord,
 } from './toast-state';
+import { toUserFacingGlobalError } from './global-error-toast';
 
 interface ToastContextValue {
   showToast(input: ToastInput): string;
@@ -29,6 +30,43 @@ interface ToastContextValue {
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
+
+function GlobalErrorToastBridge() {
+  const { showToast } = useToast();
+  const recentlyShown = useRef(new Map<string, number>());
+
+  useEffect(() => {
+    const notify = (reason: unknown) => {
+      const error = toUserFacingGlobalError(reason);
+      const key = `${error.kind}:${error.title}:${error.description}`;
+      const now = Date.now();
+      const previous = recentlyShown.current.get(key) ?? 0;
+      if (now - previous < 3_000) return;
+      recentlyShown.current.set(key, now);
+
+      showToast({
+        tone: 'danger',
+        title: error.title,
+        description: error.description,
+        durationMs: 10_000,
+        ...(error.kind === 'deployment-skew'
+          ? { actionLabel: 'Обновить', onAction: () => window.location.reload() }
+          : {}),
+      });
+    };
+    const onError = (event: ErrorEvent) => notify(event.error ?? event.message);
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => notify(event.reason);
+
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
+    };
+  }, [showToast]);
+
+  return null;
+}
 
 function TimedToast({
   toast,
@@ -80,6 +118,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   return (
     <ToastContext.Provider value={value}>
+      <GlobalErrorToastBridge />
       {children}
       <div
         aria-live="polite"

@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   RentalDetailWorkspace: ({ detail }: { detail: { id: string } }) => (
     <div data-testid="rental-detail-workspace">{detail.id}</div>
   ),
+  RentalSettlementCard: ({ rentalId }: { rentalId: string }) => (
+    <div data-testid="rental-settlement-card">{rentalId}</div>
+  ),
   getRentalDetailForCurrentUser: vi.fn(),
   listRentalAuditForCurrentUser: vi.fn(),
   rentalDetailPresentation: vi.fn(),
@@ -26,6 +29,9 @@ vi.mock('@/modules/rentals/components/RentalDetailPanel', () => ({
 }));
 vi.mock('@/modules/rentals/components/RentalDetailWorkspace', () => ({
   RentalDetailWorkspace: mocks.RentalDetailWorkspace,
+}));
+vi.mock('@/modules/rentals/settlement/components/RentalSettlementCard', () => ({
+  RentalSettlementCard: mocks.RentalSettlementCard,
 }));
 vi.mock('@/modules/rentals/server/queries', () => ({
   getRentalDetailForCurrentUser: mocks.getRentalDetailForCurrentUser,
@@ -69,8 +75,12 @@ const rental = {
   missingFuelPriceMinor: BigInt(10000),
   priceOverrideReason: null,
   drivers: [],
+  operations: [],
   documentVersions: [],
   documentGenerations: [],
+  payments: [],
+  signatures: [],
+  canEdit: false,
 };
 
 describe('RentalDetail route states', () => {
@@ -91,6 +101,7 @@ describe('RentalDetail route states', () => {
     expect(screen.getByTestId('rental-detail-panel').textContent).toContain(
       'Импортированный договор',
     );
+    expect(screen.getByTestId('rental-settlement-card').textContent).toContain('rental-1');
     expect(screen.queryByText('Условия выдачи')).toBeNull();
   });
 

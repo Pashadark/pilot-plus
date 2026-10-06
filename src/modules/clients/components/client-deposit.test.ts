@@ -12,22 +12,41 @@ const rental = {
   totalPriceMinor: '3000000',
   depositMinor: '2000000',
   depositStatus: 'COLLECTED' as const,
+  depositReturnedAt: null,
 };
 
 describe('client deposit presentation', () => {
-  it('shows a collected current deposit as money that must be returned', () => {
+  it('shows a collected current deposit as not returned', () => {
     expect(presentClientDeposit(rental, true)).toMatchObject({
       amount: '20 000 ₽',
-      label: 'Нужно вернуть',
+      label: 'Не возвращён',
       tone: 'warning',
+      returnedAtLabel: '—',
     });
   });
 
-  it('marks the deposit of a past rental as the last one', () => {
-    expect(presentClientDeposit({ ...rental, depositStatus: 'RETURNED' }, false)).toMatchObject({
-      label: 'Последний · Возвращён',
+  it('shows only the factual return status for a past rental', () => {
+    expect(
+      presentClientDeposit(
+        {
+          ...rental,
+          depositStatus: 'RETURNED',
+          depositReturnedAt: '2026-09-01T08:15:00.000Z',
+        },
+        false,
+      ),
+    ).toMatchObject({
+      label: 'Возвращён',
       tone: 'success',
+      returnedAtLabel: '01.09.2026, 11:15',
     });
+  });
+
+  it('does not add a last-rental prefix or middle-dot separator', () => {
+    const result = presentClientDeposit({ ...rental, depositStatus: 'COLLECTED' }, false);
+    expect(result.label).toBe('Не возвращён');
+    expect(result.label).not.toContain('Последний');
+    expect(result.label).not.toContain('·');
   });
 
   it('uses operational colors for active, resolved and unresolved rentals', () => {

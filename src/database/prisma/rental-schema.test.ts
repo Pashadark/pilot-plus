@@ -41,6 +41,22 @@ const rentalOperationsMigrationPath = new URL(
   './migrations/20260821120000_add_rental_operations/migration.sql',
   import.meta.url,
 );
+const rentalSettlementMigrationPath = new URL(
+  './migrations/20260902090000_add_rental_payments_signatures/migration.sql',
+  import.meta.url,
+);
+const rentalExtensionGuardMigrationPath = new URL(
+  './migrations/20260906154500_allow_active_rental_extension/migration.sql',
+  import.meta.url,
+);
+const rentalRevisionGuardMigrationPath = new URL(
+  './migrations/20260913170000_allow_audited_rental_legal_revision/migration.sql',
+  import.meta.url,
+);
+const leaseToOwnMigrationPath = new URL(
+  './migrations/20260913193000_add_lease_to_own_weekly_inspection/migration.sql',
+  import.meta.url,
+);
 const migrationRecoveryRunbookPath = new URL(
   '../../../docs/runbooks/rental-migration-recovery.md',
   import.meta.url,
@@ -97,6 +113,24 @@ const calculationPermits = ({
 };
 
 describe('доменная схема аренды', () => {
+  it('stores lease-to-own rentals and weekly inspections through an additive migration', () => {
+    const rental = schema.match(/model Rental \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(schema).toMatch(
+      /enum RentalAgreementType \{[\s\S]*\bSTANDARD\b[\s\S]*\bLEASE_TO_OWN\b/,
+    );
+    expect(rental).toMatch(
+      /agreementType\s+RentalAgreementType\s+@default\(STANDARD\)/,
+    );
+    expect(schema).toMatch(/enum RentalOperationType \{[\s\S]*\bWEEKLY_INSPECTION\b/);
+    expect(existsSync(leaseToOwnMigrationPath)).toBe(true);
+    if (!existsSync(leaseToOwnMigrationPath)) return;
+    const migration = readFileSync(leaseToOwnMigrationPath, 'utf8');
+    expect(migration).toContain('CREATE TYPE "public"."RentalAgreementType"');
+    expect(migration).toContain('ADD COLUMN "agreementType"');
+    expect(migration).toContain("ADD VALUE IF NOT EXISTS 'WEEKLY_INSPECTION'");
+    expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
+  });
+
   it('описывает статусы аренды и форматы документов', () => {
     expect(schema).toContain('enum RentalStatus {');
     expect(schema).toContain('DRAFT');
@@ -180,9 +214,15 @@ describe('доменная схема аренды', () => {
 
   it('persists immutable tenant-scoped handover, extension, and return facts', () => {
     const operation = schema.match(/model RentalOperation \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(schema).toMatch(/enum RentalOperationType \{[\s\S]*\bHANDOVER\b[\s\S]*\bEXTENSION\b[\s\S]*\bRETURN\b/);
-    expect(schema).toMatch(/enum RentalEvidenceStatus \{[\s\S]*\bCOMPLETE\b[\s\S]*\bVIDEO_MISSING\b[\s\S]*\bDASHBOARD_PHOTO_MISSING\b[\s\S]*\bMISSING\b/);
-    expect(schema).toMatch(/enum RentalOperationStatus \{[\s\S]*\bDRAFT\b[\s\S]*\bCOMMITTED\b[\s\S]*\bERROR\b/);
+    expect(schema).toMatch(
+      /enum RentalOperationType \{[\s\S]*\bHANDOVER\b[\s\S]*\bEXTENSION\b[\s\S]*\bRETURN\b/,
+    );
+    expect(schema).toMatch(
+      /enum RentalEvidenceStatus \{[\s\S]*\bCOMPLETE\b[\s\S]*\bVIDEO_MISSING\b[\s\S]*\bDASHBOARD_PHOTO_MISSING\b[\s\S]*\bMISSING\b/,
+    );
+    expect(schema).toMatch(
+      /enum RentalOperationStatus \{[\s\S]*\bDRAFT\b[\s\S]*\bCOMMITTED\b[\s\S]*\bERROR\b/,
+    );
     expect(operation).toMatch(/status\s+RentalOperationStatus\s+@default\(DRAFT\)/);
     expect(operation).toMatch(/committedAt\s+DateTime\?/);
     expect(operation).toMatch(/companyId\s+String/);
@@ -201,10 +241,39 @@ describe('доменная схема аренды', () => {
     expect(operation).toContain('@@index([companyId, clientId, occurredAt])');
   });
 
+  it('persists tenant-scoped rental payments and signatures through an additive migration', () => {
+    const payment = schema.match(/model RentalPayment \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const signature = schema.match(/model RentalSignature \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+    expect(schema).toContain('enum RentalPaymentKind {');
+    expect(schema).toContain('enum RentalPaymentStatus {');
+    expect(schema).toContain('enum RentalSignatureParty {');
+    expect(schema).toContain('enum RentalSignatureStatus {');
+    expect(payment).toContain('@@unique([companyId, rentalId, idempotencyKey])');
+    expect(payment).toContain('@@index([companyId, rentalId, kind, status])');
+    expect(payment).toMatch(/amountMinor\s+BigInt/);
+    expect(payment).toMatch(/recordedByUserId\s+String/);
+    expect(signature).toContain('@@unique([companyId, rentalId, party])');
+    expect(signature).toMatch(/signedAt\s+DateTime\?/);
+    expect(signature).toMatch(/recordedByUserId\s+String/);
+
+    expect(existsSync(rentalSettlementMigrationPath)).toBe(true);
+    if (!existsSync(rentalSettlementMigrationPath)) return;
+    const migration = readFileSync(rentalSettlementMigrationPath, 'utf8');
+    expect(migration).toContain('CREATE TABLE "public"."RentalPayment"');
+    expect(migration).toContain('CREATE TABLE "public"."RentalSignature"');
+    expect(migration).toContain('RentalPayment_amountMinor_positive_check');
+    expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
+  });
+
   it('persists a recoverable private-media lifecycle for rental operations', () => {
     const media = schema.match(/model RentalOperationMedia \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(schema).toMatch(/enum RentalOperationMediaKind \{[\s\S]*\bINSPECTION_VIDEO\b[\s\S]*\bDASHBOARD_PHOTO\b/);
-    expect(schema).toMatch(/enum RentalOperationMediaStatus \{[\s\S]*\bPENDING\b[\s\S]*\bSCANNING\b[\s\S]*\bCLEAN\b[\s\S]*\bCLEANING\b[\s\S]*\bERROR\b/);
+    expect(schema).toMatch(
+      /enum RentalOperationMediaKind \{[\s\S]*\bINSPECTION_VIDEO\b[\s\S]*\bDASHBOARD_PHOTO\b/,
+    );
+    expect(schema).toMatch(
+      /enum RentalOperationMediaStatus \{[\s\S]*\bPENDING\b[\s\S]*\bSCANNING\b[\s\S]*\bCLEAN\b[\s\S]*\bCLEANING\b[\s\S]*\bERROR\b/,
+    );
     expect(media).toMatch(/quarantineKey\s+String\s+@unique/);
     expect(media).toMatch(/storageKey\s+String\s+@unique/);
     expect(media).toMatch(/sha256\s+String\?/);
@@ -453,6 +522,47 @@ describe('доменная схема аренды', () => {
     expect(migration).toContain(
       "OLD.\"status\" IN ('CONFIRMED', 'ACTIVE') AND NEW.\"status\" = 'CANCELLED'",
     );
+  });
+
+  it('allows only coordinated forward extension changes on an active confirmed rental', () => {
+    expect(existsSync(rentalExtensionGuardMigrationPath)).toBe(true);
+    if (!existsSync(rentalExtensionGuardMigrationPath)) return;
+
+    const migration = readFileSync(rentalExtensionGuardMigrationPath, 'utf8');
+
+    expect(migration).toContain(
+      'CREATE OR REPLACE FUNCTION "public"."prevent_rental_legal_snapshot_mutation"()',
+    );
+    expect(migration).toContain('is_extension BOOLEAN := FALSE;');
+    expect(migration).toContain("OLD.\"status\" = 'ACTIVE'");
+    expect(migration).toContain("NEW.\"status\" = 'ACTIVE'");
+    expect(migration).toContain('NEW."endsAt" > OLD."endsAt"');
+    expect(migration).toContain('NEW."billableDays" > OLD."billableDays"');
+    expect(migration).toContain('NEW."basePriceMinor" > OLD."basePriceMinor"');
+    expect(migration).toContain('NEW."totalPriceMinor" > OLD."totalPriceMinor"');
+    expect(migration).toContain(
+      '(NEW."endsAt" IS DISTINCT FROM OLD."endsAt" AND NOT is_extension)',
+    );
+    expect(migration).toContain(
+      '(NEW."billableDays" IS DISTINCT FROM OLD."billableDays" AND NOT is_extension)',
+    );
+    expect(migration).toContain(
+      '(NEW."basePriceMinor" IS DISTINCT FROM OLD."basePriceMinor" AND NOT is_extension)',
+    );
+    expect(migration).toContain(
+      '(NEW."totalPriceMinor" IS DISTINCT FROM OLD."totalPriceMinor" AND NOT is_extension)',
+    );
+    expect(migration).toContain('NEW."snapshot" IS DISTINCT FROM OLD."snapshot"');
+    expect(migration).not.toMatch(/DROP\s+(FUNCTION|TRIGGER|TABLE|COLUMN)\b/i);
+  });
+
+  it('allows confirmed legal fields only inside an explicit transaction-local revision', () => {
+    expect(existsSync(rentalRevisionGuardMigrationPath)).toBe(true);
+    if (!existsSync(rentalRevisionGuardMigrationPath)) return;
+    const migration = readFileSync(rentalRevisionGuardMigrationPath, 'utf8');
+    expect(migration).toContain("current_setting('pilot.rental_legal_revision', true)");
+    expect(migration).toContain('AND NOT is_legal_revision');
+    expect(migration).not.toMatch(/DROP\s+(FUNCTION|TRIGGER|TABLE|COLUMN)\b/i);
   });
 
   it('uses one-statement Prisma-deploy-compatible concurrent migrations and a later FK wave', () => {

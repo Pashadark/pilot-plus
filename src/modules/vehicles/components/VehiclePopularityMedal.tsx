@@ -63,10 +63,40 @@ export function VehiclePopularityMedal({ rank }: { rank: PopularityRank }) {
         stroke={palette.dark}
         strokeWidth=".75"
       />
-      <circle cx="24" cy="22" r="15.6" fill="none" stroke={palette.light} strokeWidth="1.1" opacity=".72" />
-      <circle cx="24" cy="22" r="13.9" fill={`url(#${faceGradientId})`} stroke={palette.dark} strokeWidth="1.25" />
-      <circle cx="24" cy="22" r="11.3" fill="none" stroke={palette.light} strokeWidth="1" opacity=".78" />
-      <path d="M16 17.5a10 10 0 0 1 13.7-5.1" fill="none" stroke="#fff" strokeWidth="1.25" strokeLinecap="round" opacity=".58" />
+      <circle
+        cx="24"
+        cy="22"
+        r="15.6"
+        fill="none"
+        stroke={palette.light}
+        strokeWidth="1.1"
+        opacity=".72"
+      />
+      <circle
+        cx="24"
+        cy="22"
+        r="13.9"
+        fill={`url(#${faceGradientId})`}
+        stroke={palette.dark}
+        strokeWidth="1.25"
+      />
+      <circle
+        cx="24"
+        cy="22"
+        r="11.3"
+        fill="none"
+        stroke={palette.light}
+        strokeWidth="1"
+        opacity=".78"
+      />
+      <path
+        d="M16 17.5a10 10 0 0 1 13.7-5.1"
+        fill="none"
+        stroke="#fff"
+        strokeWidth="1.25"
+        strokeLinecap="round"
+        opacity=".58"
+      />
       <text
         x="24"
         y="28.2"

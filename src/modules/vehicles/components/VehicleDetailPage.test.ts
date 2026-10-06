@@ -3,7 +3,8 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { cleanup, fireEvent, render as renderClient, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+vi.mock('@/modules/maintenance/service-plan-actions', () => ({ readServicePlan: vi.fn().mockResolvedValue({ canEdit: false, current: null, record: null }), saveServicePlan: vi.fn() }));
 
 import type { VehicleDetailDto } from '../types';
 import { VehicleDetailPage } from './VehicleDetailPage';
@@ -154,7 +155,8 @@ describe('VehicleDetailPage', () => {
     expect(markup).toContain('234 100 км');
     expect(markup).toContain('34%');
     expect(markup).toContain('Зелёный проспект, 22');
-    expect(markup).toContain('В парке');
+    expect(markup).toContain('В аренде');
+    expect(markup).not.toContain('>В парке</span>');
   });
 
   it('собирает обзор по утверждённому макету с фото, техническим состоянием, действиями и вкладками', () => {
@@ -280,7 +282,7 @@ describe('VehicleDetailPage', () => {
     expect(markup).not.toContain('А 123 МР 77');
   });
 
-  it('показывает базовый интервал ТО 7 000 км, когда пробег есть, а план ещё не создан', () => {
+  it('не выдумывает интервал ТО до загрузки сохранённого плана', () => {
     const markup = renderPage({
       vehicle: {
         ...vehicle,
@@ -290,7 +292,8 @@ describe('VehicleDetailPage', () => {
       activeTab: 'overview',
     });
 
-    expect(markup).toContain('7 000 км');
+    expect(markup).not.toContain('5 301 км');
+    expect(markup).toContain('Загрузка ТО');
     expect(markup).not.toContain('Следующее ТО</p><p class="text-sm font-medium ">Нет данных');
   });
 
@@ -303,75 +306,25 @@ describe('VehicleDetailPage', () => {
     expect(markup).not.toContain('45.6 км');
   });
 
-  it('показывает типизированные истории ТО и мойки с русскими статусами', () => {
-    const markup = renderToStaticMarkup(
-      createElement(VehicleDetailPage, { vehicle, activeTab: 'maintenance' }),
-    );
-
-    expect(markup).toContain('История технического обслуживания');
+  it('показывает историю обслуживания без моек', () => {
+    const markup = renderPage({ vehicle, activeTab: 'maintenance' });
+    expect(markup).toContain('История обслуживания');
     expect(markup).toContain('Замена масла');
-    expect(markup).toContain('Масло');
     expect(markup).toContain('Завершено');
-    expect(markup).toContain('История моек');
-    expect(markup).toContain('Комплексная');
-    expect(markup).toContain('В работе');
-  });
-
-  it('показывает даты обслуживания в Europe/Moscow независимо от TZ сервера', () => {
-    const originalTimeZone = process.env.TZ;
-    process.env.TZ = 'America/New_York';
-
-    try {
-      const markup = renderToStaticMarkup(
-        createElement(VehicleDetailPage, { vehicle, activeTab: 'maintenance' }),
-      );
-
-      expect(markup).toContain('20 июл. 2026 г., 13:00');
-      expect(markup).toContain('21 июл. 2026 г., 13:00');
-    } finally {
-      process.env.TZ = originalTimeZone;
-    }
-  });
-
-  it('объясняет отсутствие мойки, не скрывая историю ТО', () => {
-    const markup = renderToStaticMarkup(
-      createElement(VehicleDetailPage, {
-        vehicle: { ...vehicle, washRecords: [] },
-        activeTab: 'maintenance',
-      }),
-    );
-
-    expect(markup).toContain('История технического обслуживания');
-    expect(markup).toContain('История моек');
-    expect(markup).toContain('Записей о мойке пока нет');
-  });
-
-  it('объясняет отсутствие ТО, не скрывая историю мойки', () => {
-    const markup = renderToStaticMarkup(
-      createElement(VehicleDetailPage, {
-        vehicle: { ...vehicle, maintenanceRecords: [] },
-        activeTab: 'maintenance',
-      }),
-    );
-
-    expect(markup).toContain('История технического обслуживания');
-    expect(markup).toContain('Записей о ТО пока нет');
-    expect(markup).toContain('История моек');
-    expect(markup).toContain('Комплексная');
-    expect(markup).not.toContain('Записей о мойке пока нет');
-  });
-
-  it('показывает общий empty state, когда обе истории отсутствуют', () => {
-    const markup = renderToStaticMarkup(
-      createElement(VehicleDetailPage, {
-        vehicle: { ...vehicle, maintenanceRecords: [], washRecords: [] },
-        activeTab: 'maintenance',
-      }),
-    );
-
-    expect(markup).toContain('Обслуживание ещё не запланировано');
-    expect(markup).toContain('Здесь будут регламенты, выполненные работы, даты и пробег.');
-    expect(markup).not.toContain('История технического обслуживания');
     expect(markup).not.toContain('История моек');
+    expect(markup).not.toContain('Комплексная');
+  });
+
+  it('показывает дату завершения в московском часовом поясе', () => {
+    const markup = renderPage({ vehicle, activeTab: 'maintenance' });
+    expect(markup).toContain('20 июля 2026');
+    expect(markup).not.toContain('21 июля 2026');
+  });
+
+  it('не показывает мойки даже при пустой истории обслуживания', () => {
+    const markup = renderPage({ vehicle: { ...vehicle, maintenanceRecords: [] }, activeTab: 'maintenance' });
+    expect(markup).toContain('Обслуживание ещё не запланировано');
+    expect(markup).not.toContain('История моек');
+    expect(markup).not.toContain('Комплексная');
   });
 });

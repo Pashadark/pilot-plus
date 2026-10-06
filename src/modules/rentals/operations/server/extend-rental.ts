@@ -1,7 +1,8 @@
 import { calculateExtensionCharges } from '../calculation';
+import { enqueueRentalLifecycleNotifications } from './enqueue-lifecycle-notifications';
 
 type Count = { count: number };
-type Transaction = {
+type Transaction = Parameters<typeof enqueueRentalLifecycleNotifications>[0] & {
   companyMember: { findFirst(args: unknown): Promise<{ id: string } | null> };
   user: { findFirst(args: unknown): Promise<{ id: string } | null> };
   rentalOperation: {
@@ -189,6 +190,13 @@ export function createRentalExtension(database: Database) {
                   extensionChargeMinor: calculation.extensionChargeMinor,
                 },
               },
+            });
+            await enqueueRentalLifecycleNotifications(tx, {
+              companyId: input.companyId,
+              rentalId: rental.id,
+              operationId: operation.id,
+              kind: 'EXTENSION',
+              occurredAt: input.command.occurredAt,
             });
             return { operationId: operation.id, rentalId: rental.id };
           },

@@ -83,6 +83,11 @@ describe('protected rental contract download route', () => {
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
     await expect(response.text()).resolves.toBe('%PDF-safe');
     expect(mocks.findFirst).toHaveBeenCalledTimes(2);
+    expect(mocks.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.not.objectContaining({ rental: expect.anything() }),
+      }),
+    );
     expect(mocks.openPrivate).toHaveBeenCalledWith(
       documentVersion.clientDocumentVersion.storageKey,
     );

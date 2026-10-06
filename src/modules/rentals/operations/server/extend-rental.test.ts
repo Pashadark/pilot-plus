@@ -27,6 +27,13 @@ describe('createRentalExtension', () => {
       },
       maintenanceRecord: { findFirst: vi.fn().mockResolvedValue(null) },
       auditLog: { create: vi.fn().mockResolvedValue({}) },
+      telegramGroupBinding: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValue({ telegramChatId: 'group-1', boundByUserId: 'actor-1' }),
+      },
+      telegramIdentity: { findFirst: vi.fn().mockResolvedValue({ id: 'staff-1' }) },
+      botNotificationJob: { createMany: vi.fn().mockResolvedValue({ count: 2 }) },
     };
     const extend = createRentalExtension({
       $transaction: vi.fn(async (work) => work(transaction)),
@@ -43,6 +50,33 @@ describe('createRentalExtension', () => {
         },
       }),
     ).resolves.toEqual({ operationId: 'extension-1', rentalId: 'rental-1' });
+    expect(transaction.botNotificationJob.createMany).toHaveBeenCalledWith({
+      data: expect.arrayContaining([
+        expect.objectContaining({
+          template: 'RENTAL_LIFECYCLE',
+          chatId: 'group-1',
+          payload: { kind: 'EXTENSION', rentalId: 'rental-1', operationId: 'extension-1' },
+        }),
+      ]),
+      skipDuplicates: true,
+    });
+    transaction.rentalOperation.findFirst.mockResolvedValue({
+      id: 'extension-1',
+      rentalId: 'rental-1',
+      type: 'EXTENSION',
+      status: 'COMMITTED',
+    });
+    await extend({
+      companyId: 'company-1',
+      actor: { id: 'actor-1', scope: 'COMPANY' },
+      command: {
+        rentalId: 'rental-1',
+        idempotencyKey: 'extension-key',
+        occurredAt: new Date('2026-08-21T08:00:00Z'),
+        nextEndsAt: new Date('2026-08-23T09:00:00Z'),
+      },
+    });
+    expect(transaction.botNotificationJob.createMany).toHaveBeenCalledTimes(1);
     expect(transaction.rental.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

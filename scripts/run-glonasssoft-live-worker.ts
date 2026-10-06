@@ -1,10 +1,12 @@
 import { prisma } from '../src/database/prisma/client';
 import { runLiveWorker } from '../src/modules/telematics/glonasssoft/live-worker';
+import { createGlonassSoftClientRegistry } from '../src/modules/telematics/glonasssoft/client-registry';
 import { syncCompanyLatestPositions } from '../src/modules/telematics/glonasssoft/sync-company.server';
 import { publishLivePositionEvent } from '../src/modules/telematics/live-position-events';
 import { closeRedisClient, getRedisClient } from '../src/services/redis/client.server';
 
 const controller = new AbortController();
+const clientRegistry = createGlonassSoftClientRegistry();
 process.once('SIGINT', () => controller.abort());
 process.once('SIGTERM', () => controller.abort());
 
@@ -32,7 +34,10 @@ runLiveWorker(
         orderBy: { companyId: 'asc' },
         take: 100,
       }),
-    sync: (companyId) => syncCompanyLatestPositions(companyId),
+    sync: (companyId) =>
+      syncCompanyLatestPositions(companyId, {
+        createClient: (configuration) => clientRegistry.get(companyId, configuration),
+      }),
     publish: async (event) => publishLivePositionEvent(event, await getRedisClient()),
     delay,
     now: Date.now,

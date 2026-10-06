@@ -21,6 +21,7 @@ import { Sidebar } from './Sidebar';
 
 const storageKey = 'pilot-sidebar-expanded';
 const sidebarStorageEvent = 'pilot-sidebar-storage';
+const wideDesktopQuery = '(min-width: 1280px)';
 
 function subscribeToSidebarStorage(onStoreChange: () => void) {
   window.addEventListener('storage', onStoreChange);
@@ -44,6 +45,22 @@ function getSidebarServerSnapshot() {
   return true;
 }
 
+function subscribeToWideDesktop(onStoreChange: () => void) {
+  if (typeof window.matchMedia !== 'function') return () => undefined;
+
+  const mediaQuery = window.matchMedia(wideDesktopQuery);
+  mediaQuery.addEventListener('change', onStoreChange);
+  return () => mediaQuery.removeEventListener('change', onStoreChange);
+}
+
+function getWideDesktopSnapshot() {
+  return typeof window.matchMedia === 'function' && window.matchMedia(wideDesktopQuery).matches;
+}
+
+function getWideDesktopServerSnapshot() {
+  return false;
+}
+
 export function ShellFrame({
   children,
   breadcrumbs,
@@ -59,14 +76,25 @@ export function ShellFrame({
 }) {
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const { toggleTheme } = useTheme();
-  const expanded = useSyncExternalStore(
+  const preferredExpanded = useSyncExternalStore(
     subscribeToSidebarStorage,
     getSidebarSnapshot,
     getSidebarServerSnapshot,
   );
+  const wideDesktop = useSyncExternalStore(
+    subscribeToWideDesktop,
+    getWideDesktopSnapshot,
+    getWideDesktopServerSnapshot,
+  );
+  const expanded = wideDesktop && preferredExpanded;
   const openMobileNavigation = useCallback(() => setMobileNavigationOpen(true), []);
   const closeMobileNavigation = useCallback(() => setMobileNavigationOpen(false), []);
   const focusSearch = useCallback(() => {
+    const trigger = document.querySelector<HTMLButtonElement>('[data-global-search-trigger]');
+    if (trigger) {
+      trigger.click();
+      return true;
+    }
     const search = Array.from(
       document.querySelectorAll<HTMLInputElement>('input[type="search"]'),
     ).find((input) => {
@@ -124,16 +152,20 @@ export function ShellFrame({
       />
       <aside
         data-testid="desktop-sidebar"
+        data-interface-shell="sidebar"
         className="fixed inset-y-0 left-0 z-50 hidden w-[var(--sidebar-width)] border-r bg-[var(--color-navigation)] transition-[width] duration-200 md:flex md:flex-col"
       >
         <Sidebar
           expanded={expanded}
-          onToggle={toggleSidebar}
+          onToggle={wideDesktop ? toggleSidebar : undefined}
           user={user}
           systemHealthSummary={systemHealthSummary}
         />
       </aside>
-      <main className="min-h-screen pt-[var(--header-height)] transition-[padding] duration-200 md:pl-[var(--sidebar-width)]">
+      <main
+        data-interface-shell="content"
+        className="min-h-screen pt-[var(--header-height)] transition-[padding] duration-200 md:pl-[var(--sidebar-width)]"
+      >
         <div className="mx-auto max-w-[1680px] p-4 lg:p-5">{children}</div>
       </main>
       <ScrollToTopButton />

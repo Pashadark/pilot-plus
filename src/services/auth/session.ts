@@ -100,6 +100,9 @@ export async function getAuthenticatedSession(): Promise<AuthenticatedSession | 
         id: session.user.id,
         email: session.user.email,
         name: session.user.name,
+        avatarUrl: session.user.avatarPath
+          ? `/profile/avatar?v=${session.user.updatedAt.getTime().toString(36)}`
+          : null,
         role: session.user.role,
         canAccessAdmin:
           session.user.role === 'SUPER_ADMIN' ||

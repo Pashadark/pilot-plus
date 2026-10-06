@@ -32,7 +32,6 @@ const SAVE_ERROR: ClientActionState = {
   message: 'Не удалось сохранить клиента. Попробуйте позже.',
 };
 const DUPLICATE_PHONE_ERROR = 'Клиент с таким номером телефона уже существует.';
-
 function formString(formData: FormData, field: string): string {
   const value = formData.get(field);
   return typeof value === 'string' ? value.trim() : '';
@@ -64,6 +63,10 @@ function keys(): { encryptionKey: string; searchKey: string } {
   return { encryptionKey, searchKey };
 }
 
+function initialClientStatus(status: ClientInput['status']): ClientInput['status'] {
+  return status === 'DRAFT' || status === 'BLOCKED' ? status : 'VERIFYING';
+}
+
 function encryptedCreateData(input: ClientInput, userId: string) {
   const { encryptionKey, searchKey } = keys();
   return {
@@ -72,10 +75,19 @@ function encryptedCreateData(input: ClientInput, userId: string) {
     middleName: input.middleName,
     lastName: input.lastName,
     birthDate: input.birthDate,
-    phoneEncrypted: encryptField(input.phone, encryptionKey),
-    phoneIndex: blindIndex(input.phone, searchKey, normalizeRussianPhone),
+    phoneEncrypted: input.phone ? encryptField(input.phone, encryptionKey) : null,
+    phoneIndex: input.phone ? blindIndex(input.phone, searchKey, normalizeRussianPhone) : null,
+    additionalPhoneEncrypted: input.additionalPhone
+      ? encryptField(input.additionalPhone, encryptionKey)
+      : null,
     email: input.email,
     passportEncrypted: input.passport ? encryptField(input.passport, encryptionKey) : null,
+    registrationAddressEncrypted: input.registrationAddress
+      ? encryptField(input.registrationAddress, encryptionKey)
+      : null,
+    actualAddressEncrypted: input.actualAddress
+      ? encryptField(input.actualAddress, encryptionKey)
+      : null,
     passportIndex: input.passport
       ? blindIndex(input.passport, searchKey, normalizedDocument)
       : null,
@@ -88,7 +100,7 @@ function encryptedCreateData(input: ClientInput, userId: string) {
     driverCategories: [],
     driverLicenseIssuedAt: input.driverLicenseIssuedAt,
     driverLicenseExpiresAt: input.driverLicenseExpiresAt,
-    status: input.status,
+    status: initialClientStatus(input.status),
     createdByUserId: userId,
   };
 }
@@ -100,10 +112,19 @@ function encryptedUpdateData(input: ClientInput) {
     middleName: input.middleName,
     lastName: input.lastName,
     birthDate: input.birthDate,
-    phoneEncrypted: encryptField(input.phone, encryptionKey),
-    phoneIndex: blindIndex(input.phone, searchKey, normalizeRussianPhone),
+    phoneEncrypted: input.phone ? encryptField(input.phone, encryptionKey) : null,
+    phoneIndex: input.phone ? blindIndex(input.phone, searchKey, normalizeRussianPhone) : null,
+    additionalPhoneEncrypted: input.additionalPhone
+      ? encryptField(input.additionalPhone, encryptionKey)
+      : null,
     email: input.email,
     passportEncrypted: input.passport ? encryptField(input.passport, encryptionKey) : null,
+    registrationAddressEncrypted: input.registrationAddress
+      ? encryptField(input.registrationAddress, encryptionKey)
+      : null,
+    actualAddressEncrypted: input.actualAddress
+      ? encryptField(input.actualAddress, encryptionKey)
+      : null,
     passportIndex: input.passport
       ? blindIndex(input.passport, searchKey, normalizedDocument)
       : null,
@@ -193,7 +214,7 @@ export async function createClientAction(
         created.id,
         {
           created: true,
-          status: parsed.data.status,
+          status: initialClientStatus(parsed.data.status),
         },
         transaction,
       );

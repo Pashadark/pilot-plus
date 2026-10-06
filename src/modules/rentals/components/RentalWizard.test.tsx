@@ -51,9 +51,16 @@ describe('RentalWizard', () => {
       true,
     );
     expect(screen.getByRole('heading', { name: 'Клиент' })).toBeTruthy();
+    expect(screen.getByRole('radiogroup', { name: 'Тип аренды' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Обычная аренда' })).toHaveProperty('checked', true);
+    fireEvent.click(screen.getByRole('radio', { name: 'Аренда с правом выкупа' }));
+    expect(screen.getByRole('radio', { name: 'Аренда с правом выкупа' })).toHaveProperty(
+      'checked',
+      true,
+    );
   });
 
-  it('explains why an unavailable vehicle cannot be selected', () => {
+  it('keeps an unavailable vehicle option compact without appending readiness blockers', () => {
     render(
       createElement(
         ToastProvider,
@@ -72,10 +79,28 @@ describe('RentalWizard', () => {
           vehicles: [
             {
               id: 'vehicle-1',
-              label: 'Volkswagen Polo А000АА',
+              label: 'Skoda Karoq Х193АК997',
               dailyMinor: 250000,
               available: false,
-              reasons: ['Занят подтверждённой арендой'],
+              reasons: ['Автомобиль на техническом обслуживании'],
+              readiness: {
+                ready: false,
+                blockers: [
+                  {
+                    code: 'VEHICLE_VIN_MISSING',
+                    message: 'Укажите VIN.',
+                    href: '/vehicles/vehicle-1/edit',
+                    severity: 'BLOCKER',
+                  },
+                  {
+                    code: 'VEHICLE_OSAGO_MISSING',
+                    message: 'Заполните данные ОСАГО.',
+                    href: '/vehicles/vehicle-1/edit',
+                    severity: 'BLOCKER',
+                  },
+                ],
+                warnings: [],
+              },
             },
           ],
         }),
@@ -83,9 +108,126 @@ describe('RentalWizard', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
-    expect(screen.getByRole('option', { name: /Занят подтверждённой арендой/u })).toHaveProperty(
+    expect(screen.getByRole('option', { name: 'Skoda Karoq Х193АК997 — на ТО' })).toHaveProperty(
       'disabled',
       true,
     );
+    expect(screen.queryByRole('option', { name: /Укажите VIN/u })).toBeNull();
+    expect(screen.queryByRole('option', { name: /ОСАГО/u })).toBeNull();
+  });
+
+  it('allows a legally incomplete vehicle to be selected for a draft', () => {
+    render(
+      createElement(
+        ToastProvider,
+        null,
+        createElement(RentalWizard, {
+          client: {
+            id: 'client-1',
+            companyId: 'company-1',
+            fullName: 'Анна Воронова',
+            phone: '+79991234567',
+            passport: '0000 000000',
+            driverLicense: '0000 000000',
+            driverLicenseExpiresAt: '2027-01-01T00:00:00.000Z',
+            documentsReady: true,
+          },
+          templateVersionId: 'template-1',
+          vehicles: [
+            {
+              id: 'vehicle-1',
+              label: 'Volkswagen Polo А000АА',
+              dailyMinor: 250000,
+              available: true,
+              reasons: [],
+              legalReady: false,
+              readiness: {
+                ready: false,
+                blockers: [
+                  {
+                    code: 'VEHICLE_OSAGO_MISSING',
+                    message: 'Заполните данные ОСАГО.',
+                    href: '/vehicles/vehicle-1/edit#insurance',
+                    severity: 'BLOCKER',
+                  },
+                ],
+                warnings: [],
+              },
+            },
+          ],
+        }),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
+    const option = screen.getByRole('option', { name: 'Volkswagen Polo А000АА' });
+    expect(option).toHaveProperty('disabled', false);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Автомобиль' }), {
+      target: { value: 'vehicle-1' },
+    });
+    expect(screen.getByRole('combobox', { name: 'Автомобиль' })).toHaveProperty(
+      'value',
+      'vehicle-1',
+    );
+  });
+
+  it('shows correction links in the contract preflight', () => {
+    const { container } = render(
+      createElement(
+        ToastProvider,
+        null,
+        createElement(RentalWizard, {
+          client: {
+            id: 'client-1',
+            companyId: 'company-1',
+            fullName: 'Анна Воронова',
+            phone: '+79991234567',
+            passport: '0000 000000',
+            driverLicense: '0000 000000',
+            driverLicenseExpiresAt: '2027-01-01T00:00:00.000Z',
+            documentsReady: false,
+          },
+          templateVersionId: null,
+          vehicles: [
+            {
+              id: 'vehicle-1',
+              label: 'Volkswagen Polo А000АА',
+              dailyMinor: 250000,
+              available: true,
+              reasons: [],
+              legalReady: true,
+              readiness: { ready: true, blockers: [], warnings: [] },
+            },
+          ],
+        }),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Автомобиль' }), {
+      target: { value: 'vehicle-1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
+    const dateInputs = container.querySelectorAll<HTMLInputElement>('input[type="datetime-local"]');
+    fireEvent.change(dateInputs[0]!, {
+      target: { value: '2026-09-03T10:00' },
+    });
+    fireEvent.change(dateInputs[1]!, {
+      target: { value: '2026-09-05T10:00' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
+
+    expect(
+      screen.getByRole('heading', { name: 'Документы и юридическая готовность' }),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole('link', { name: 'Загрузите паспорт и водительское удостоверение.' })
+        .getAttribute('href'),
+    ).toBe('/clients/client-1?tab=documents');
+    expect(
+      screen.getByRole('link', { name: 'Опубликуйте шаблон договора.' }).getAttribute('href'),
+    ).toBe('/admin');
   });
 });

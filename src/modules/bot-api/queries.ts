@@ -25,7 +25,7 @@ export interface BotRentalSummary {
   documentsReady: boolean;
 }
 
-type IdentityDb = Pick<typeof prisma, 'telegramIdentity'>;
+type IdentityDb = Pick<typeof prisma, 'telegramIdentity' | 'companyMember'>;
 type RentalDb = Pick<typeof prisma, 'rental'>;
 
 export async function resolveBotIdentity(
@@ -33,7 +33,8 @@ export async function resolveBotIdentity(
   database: IdentityDb = prisma,
 ): Promise<BotIdentityContext> {
   if (!/^[1-9]\d{0,19}$/u.test(telegramUserId)) throw new BotApiError('IDENTITY_REQUIRED', 401);
-  const identity = await database.telegramIdentity.findFirst({
+  const identities = await database.telegramIdentity.findMany({
+    take: 2,
     where: {
       telegramUserId,
       isActive: true,
@@ -53,10 +54,20 @@ export async function resolveBotIdentity(
       clientId: true,
       userId: true,
       client: { select: { firstName: true, lastName: true } },
-      user: { select: { name: true } },
+      user: { select: { name: true, role: true } },
     },
   });
-  if (!identity) throw new BotApiError('IDENTITY_REQUIRED', 401);
+  if (identities.length !== 1) throw new BotApiError('IDENTITY_REQUIRED', 401);
+  const identity = identities[0];
+  if (identity.kind === 'STAFF' && identity.user?.role !== 'SUPER_ADMIN') {
+    if (!identity.userId) throw new BotApiError('FORBIDDEN', 403);
+    const membership = await database.companyMember.findFirst({
+      where: { companyId: identity.companyId, userId: identity.userId },
+      select: { role: true },
+    });
+    if (!membership || !['COMPANY_ADMIN', 'DISPATCHER'].includes(membership.role))
+      throw new BotApiError('FORBIDDEN', 403);
+  }
   return {
     identityId: identity.id,
     telegramUserId: identity.telegramUserId,
@@ -139,6 +150,7 @@ export async function createRentalDocumentGrant(
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
   return ['DOCX', 'PDF'].map((format) => {
     const grant = signRentalDocumentGrant({
+      identityId: identity.identityId,
       companyId: identity.companyId,
       clientId,
       rentalId: rental.id,
@@ -150,6 +162,7 @@ export async function createRentalDocumentGrant(
     const url = new URL(path, base);
     url.searchParams.set('expires', String(expiresAt.getTime()));
     url.searchParams.set('grant', grant);
+    url.searchParams.set('identity', identity.identityId);
     return { url: url.toString(), expiresAt: expiresAt.toISOString() };
   });
 }

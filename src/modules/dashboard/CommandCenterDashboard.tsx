@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { FiPlus } from 'react-icons/fi';
 import type { DashboardOverviewDto } from './overview-types';
-import { AttentionPanel } from './AttentionPanel';
 import { CommandCenterKpis } from './CommandCenterKpis';
 import { DashboardDatePicker } from './DashboardDatePicker';
 import { WorkdayBoard } from './WorkdayBoard';
@@ -76,13 +75,15 @@ export function CommandCenterDashboard({
         ))}
       </nav>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-        <div className="order-2 lg:order-1">
-          <WorkdayBoard items={overview.workItems} />
+      <div className="grid gap-4">
+        <div>
+          <WorkdayBoard
+            items={overview.workItems}
+            now={overview.generatedAt ?? overview.period.from}
+          />
         </div>
-        <div className="order-1 lg:order-2">
+        <div className="max-w-xl">
           <div className="grid gap-4">
-            <AttentionPanel items={overview.attentionItems} />
             <TaskComposer />
           </div>
         </div>

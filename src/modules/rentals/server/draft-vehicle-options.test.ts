@@ -46,6 +46,13 @@ describe('rental draft vehicle options', () => {
         available: true,
         reasons: [],
         legalReady: false,
+        readiness: expect.objectContaining({
+          ready: false,
+          blockers: expect.arrayContaining([
+            expect.objectContaining({ code: 'VEHICLE_NOT_ENABLED' }),
+            expect.objectContaining({ code: 'VEHICLE_VIN_MISSING' }),
+          ]),
+        }),
       }),
     ]);
     expect(vehicleFindMany).toHaveBeenCalledWith(

@@ -189,7 +189,7 @@ function AnimatedCounter({ from, to, duration }: { from: number; to: number; dur
   }, [inView, from, to, duration]);
   return (
     <span ref={ref} className="text-3xl font-bold text-[var(--color-primary)] tabular-nums">
-      {count.toLocaleString()}
+      {count.toLocaleString('ru-RU')}
     </span>
   );
 }
@@ -3930,7 +3930,7 @@ export function UiKitSections() {
                         </Badge>
                       </div>
                       <p className="text-xs text-[var(--color-text-secondary)]">
-                        {v.model} · {v.mileage.toLocaleString()} км
+                        {v.model} · {v.mileage.toLocaleString('ru-RU')} км
                       </p>
                       <p className="mt-0.5 flex items-center gap-1 text-xs text-[var(--color-text-secondary)]">
                         <FiMapPin className="size-3" />
@@ -4062,7 +4062,7 @@ export function UiKitSections() {
                         <p className="mb-0.5 text-xs text-[var(--color-text-secondary)]">Пробег</p>
                         <div className="flex items-center gap-1.5">
                           <FiNavigation className="size-3.5 text-[var(--color-text-secondary)]" />
-                          <p className="font-medium">{v.mileage.toLocaleString()} км</p>
+                          <p className="font-medium">{v.mileage.toLocaleString('ru-RU')} км</p>
                         </div>
                       </div>
                       <div>
@@ -4104,7 +4104,7 @@ export function UiKitSections() {
                         >
                           {v.nextService === 0
                             ? 'Просрочено'
-                            : `${v.nextService.toLocaleString()} км`}
+                            : `${v.nextService.toLocaleString('ru-RU')} км`}
                         </p>
                       </div>
                       <div className="col-span-2">
@@ -4643,7 +4643,7 @@ export function UiKitSections() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <p className="text-xs">{m.mileage.toLocaleString()}</p>
+                        <p className="text-xs">{m.mileage.toLocaleString('ru-RU')}</p>
                       </TableCell>
                       <TableCell>
                         <p className="text-xs">{m.serviceName}</p>
@@ -4697,10 +4697,10 @@ export function UiKitSections() {
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10px]">
                       <span className="text-[var(--color-text-secondary)]">
-                        {p.currentKm.toLocaleString()} км
+                        {p.currentKm.toLocaleString('ru-RU')} км
                       </span>
                       <span className="text-[var(--color-text-secondary)]">
-                        {p.nextKm.toLocaleString()} км
+                        {p.nextKm.toLocaleString('ru-RU')} км
                       </span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-[var(--color-border)]">
@@ -4712,7 +4712,7 @@ export function UiKitSections() {
                     <div className="flex justify-between text-[10px]">
                       <span className="font-medium">
                         {p.remaining > 0
-                          ? `Осталось: ${p.remaining.toLocaleString()} км`
+                          ? `Осталось: ${p.remaining.toLocaleString('ru-RU')} км`
                           : 'Просрочено!'}
                       </span>
                       <span>{p.percent}%</span>
@@ -4743,7 +4743,7 @@ export function UiKitSections() {
                   </div>
                   <div className="grid grid-cols-2 gap-1.5 text-xs text-[var(--color-text-secondary)]">
                     <span>🔧 {m.typeLabel.join(', ')}</span>
-                    <span>📏 {m.mileage.toLocaleString()} км</span>
+                    <span>📏 {m.mileage.toLocaleString('ru-RU')} км</span>
                     <span>🏪 {m.serviceName}</span>
                     <span>💰 {m.cost}</span>
                   </div>

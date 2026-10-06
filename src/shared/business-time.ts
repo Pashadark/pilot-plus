@@ -101,3 +101,37 @@ export function getPilotBusinessDateParts(value: Date) {
   const { year, month, day } = pilotParts(value);
   return { year, month, day };
 }
+
+export function comparePilotBusinessDate(left: Date, right: Date): -1 | 0 | 1 {
+  const leftParts = getPilotBusinessDateParts(left);
+  const rightParts = getPilotBusinessDateParts(right);
+  const leftKey = leftParts.year * 10_000 + leftParts.month * 100 + leftParts.day;
+  const rightKey = rightParts.year * 10_000 + rightParts.month * 100 + rightParts.day;
+
+  return leftKey === rightKey ? 0 : leftKey < rightKey ? -1 : 1;
+}
+
+export function addPilotBusinessDays(value: Date, days: number) {
+  if (!Number.isInteger(days) || days < 0) {
+    throw new RangeError('Количество рабочих дней должно быть целым неотрицательным числом.');
+  }
+
+  const source = pilotParts(value);
+  const calendar = new Date(Date.UTC(source.year, source.month - 1, source.day, 12));
+  let added = 0;
+
+  while (added < days) {
+    calendar.setUTCDate(calendar.getUTCDate() + 1);
+    const weekday = calendar.getUTCDay();
+    if (weekday !== 0 && weekday !== 6) added += 1;
+  }
+
+  const localValue = [
+    `${calendar.getUTCFullYear()}-${String(calendar.getUTCMonth() + 1).padStart(2, '0')}-${String(calendar.getUTCDate()).padStart(2, '0')}`,
+    `${String(source.hour).padStart(2, '0')}:${String(source.minute).padStart(2, '0')}`,
+  ].join('T');
+  const result = parsePilotDateTimeLocal(localValue);
+  if (!result) throw new RangeError('Не удалось рассчитать дату в часовом поясе компании.');
+
+  return new Date(result.getTime() + source.second * 1_000 + value.getUTCMilliseconds());
+}

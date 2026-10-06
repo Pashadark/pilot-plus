@@ -414,6 +414,7 @@ enum BotNotificationStatus {
   PROCESSING
   SENT
   ERROR
+  CANCELLED
 }
 
 enum OperationsTaskStatus {
@@ -440,6 +441,7 @@ enum LeadStatus {
 model User {
   id                       String                    @id @default(cuid())
   email                    String                    @unique
+  login                    String?                   @unique
   name                     String
   avatarPath               String?
   profileBannerPath        String?
@@ -564,6 +566,9 @@ model Company {
   botNotificationJobs       BotNotificationJob[]
   operationsTasks           OperationsTask[]
   leads                     Lead[]
+  avitoInboxEvents          AvitoInboxEvent[]
+  avitoDialogues            AvitoDialogue[]
+  avitoOutgoing             AvitoOutgoing[]
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
 }
@@ -1883,6 +1888,61 @@ model VehicleDocument {
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model AvitoInboxEvent {
+  id          String   @id
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  accountId   String
+  chatId      String
+  messageId   String
+  state       String   @default("PENDING")
+  attempts    Int      @default(0)
+  nextAttempt DateTime @default(now())
+  leadId      String?
+  errorCode   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, accountId, chatId, messageId])
+  @@index([state, nextAttempt])
+}
+
+model AvitoDialogue {
+  id               String   @id
+  companyId        String
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  accountId        String
+  chatId           String
+  leadId           String
+  contentEncrypted String
+  reminderAt       DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([companyId, accountId, chatId])
+  @@index([companyId, reminderAt])
+}
+
+model AvitoOutgoing {
+  id               String   @id
+  companyId        String
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  accountId        String
+  chatId           String
+  incomingId       String
+  textEncrypted    String
+  state            String   @default("PENDING")
+  providerId       String?
+  sentAt           DateTime?
+  attemptedAt      DateTime?
+  errorCode        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([companyId, accountId, chatId, incomingId])
+  @@index([companyId, state, createdAt])
+}
+
 model spatial_ref_sys {
   srid      Int     @id
   auth_name String? @db.VarChar(256)

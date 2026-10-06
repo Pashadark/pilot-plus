@@ -62,7 +62,7 @@ describe('ProtectedLayout', () => {
     expect(mocks.requireAdmin.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.getCachedSystemHealthSummary.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
-    expect(result.props).toMatchObject({
+    expect(result.props.children.props).toMatchObject({
       systemHealthSummary: {
         state: 'healthy',
         count: 3,

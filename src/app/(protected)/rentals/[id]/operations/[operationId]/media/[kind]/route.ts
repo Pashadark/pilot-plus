@@ -16,7 +16,14 @@ type MediaTarget = {
 };
 
 const safeId = /^[A-Za-z0-9_-]{1,128}$/u;
-const mediaKinds = new Set<RentalOperationMediaKind>(['INSPECTION_VIDEO', 'DASHBOARD_PHOTO']);
+const mediaKinds = new Set<RentalOperationMediaKind>([
+  'INSPECTION_VIDEO',
+  'DASHBOARD_PHOTO',
+  'BODY_PHOTO_FRONT',
+  'BODY_PHOTO_REAR',
+  'BODY_PHOTO_LEFT',
+  'BODY_PHOTO_RIGHT',
+]);
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

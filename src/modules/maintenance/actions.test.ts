@@ -23,7 +23,11 @@ vi.mock('@/services/storage/local-private-storage', () => ({
   LocalPrivateStorage: { create: vi.fn().mockResolvedValue(storageMocks) },
 }));
 
-import { createMaintenanceAction, createRepairAction, transitionMaintenanceAction } from './actions';
+import {
+  createMaintenanceAction,
+  createRepairAction,
+  transitionMaintenanceAction,
+} from './actions';
 
 const initialState = { status: 'idle' as const };
 const session = {
@@ -115,7 +119,9 @@ describe('действия технического обслуживания', (
         status: 'IN_PROGRESS',
         startedAt: expect.any(Date),
         workItems: {
-          create: [{ title: 'Диагностика креплений', description: null, costMinor: null, position: 0 }],
+          create: [
+            { title: 'Диагностика креплений', description: null, costMinor: null, position: 0 },
+          ],
         },
       }),
     });
@@ -139,7 +145,10 @@ describe('действия технического обслуживания', (
       message: 'Ремонт добавлен.',
     });
 
-    expect(storageMocks.putQuarantine).toHaveBeenCalledWith(expect.any(String), expect.any(Uint8Array));
+    expect(storageMocks.putQuarantine).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Uint8Array),
+    );
     expect(storageMocks.promote).toHaveBeenCalledWith(
       expect.any(String),
       expect.stringMatching(/^companies\/company-1\/vehicles\/vehicle-1\/maintenance\//u),
@@ -147,9 +156,7 @@ describe('действия технического обслуживания', (
     expect(repository.maintenanceRecord.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         attachments: {
-          create: [
-            expect.objectContaining({ kind: 'DAMAGE_BEFORE', verifiedMime: 'image/jpeg' }),
-          ],
+          create: [expect.objectContaining({ kind: 'DAMAGE_BEFORE', verifiedMime: 'image/jpeg' })],
         },
       }),
     });

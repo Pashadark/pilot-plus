@@ -13,6 +13,9 @@ describe('rental operation media validation', () => {
     expect(
       validateOperationMediaFile({ kind: 'INSPECTION_VIDEO', name: 'car.mp4', bytes: mp4 }),
     ).toMatchObject({ mime: 'video/mp4', extension: 'mp4', bytes: 12 });
+    expect(
+      validateOperationMediaFile({ kind: 'BODY_PHOTO_FRONT', name: 'front.jpg', bytes: jpeg }),
+    ).toMatchObject({ mime: 'image/jpeg', extension: 'jpg', bytes: 4 });
   });
 
   it('rejects mismatched kinds and extensions', () => {
@@ -36,8 +39,8 @@ describe('rental operation media validation', () => {
       validateOperationMediaFile({
         kind: 'INSPECTION_VIDEO',
         name: 'car.mp4',
-        bytes: { byteLength: 150 * 1024 * 1024 + 1 } as Uint8Array,
+        bytes: { byteLength: 90 * 1024 * 1024 + 1 } as Uint8Array,
       }),
-    ).toThrow('150 МБ');
+    ).toThrow('90 МБ');
   });
 });

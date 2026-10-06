@@ -52,6 +52,7 @@ export async function admitOperationMedia(input: {
   ): Promise<
     { ok: true; status: 'CLEAN' | 'BLOCKED' | 'ERROR' } | { ok: false; status: 'OWNERSHIP_LOST' }
   >;
+  skipAntivirus?: boolean;
   randomId(): string;
 }) {
   const operation = await input.repository.findOperation({
@@ -94,6 +95,32 @@ export async function admitOperationMedia(input: {
       data: { status: 'ERROR', lastErrorCode: 'QUARANTINE_WRITE_FAILED' },
     });
     throw error;
+  }
+  if (input.skipAntivirus) {
+    try {
+      await input.storage.promote(uploadId, storageKey);
+      const now = new Date();
+      const committed = await input.repository.updateMany({
+        where: { id: media.id, companyId: input.companyId, status: 'PENDING' },
+        data: {
+          status: 'CLEAN',
+          promotedAt: now,
+          committedAt: now,
+          lastErrorCode: null,
+        },
+      });
+      if (committed.count !== 1) {
+        await input.storage.removePrivate(storageKey).catch(() => undefined);
+        throw new Error('Право на сохранение файла потеряно.');
+      }
+      return { mediaId: media.id, status: 'CLEAN' as const };
+    } catch (error) {
+      await input.repository.updateMany({
+        where: { id: media.id, companyId: input.companyId, status: 'PENDING' },
+        data: { status: 'ERROR', lastErrorCode: 'DIRECT_STORE_FAILED' },
+      });
+      throw error;
+    }
   }
   const scanned = await input.scan(media);
   if (!scanned.ok) throw new Error('Право на обработку файла потеряно.');

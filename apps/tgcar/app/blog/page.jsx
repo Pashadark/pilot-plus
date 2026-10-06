@@ -1,0 +1,3 @@
+import BlogIndex from './blog-index';
+export const metadata={title:'Блог — TG CAR',description:'Практические советы по аренде автомобилей, выбору машины и поездкам по Москве.',alternates:{canonical:'https://tgcar.ru/blog'}};
+export default function BlogPage(){return <main className="wrap blog-page"><nav className="blog-breadcrumbs" aria-label="Хлебные крошки"><a href="/">Главная</a><span aria-hidden="true">/</span><span>Блог</span></nav><header className="blog-heading"><span className="blog-kicker">TG CAR · ПОЛЕЗНО ПЕРЕД ПОЕЗДКОЙ</span><h1>Блог</h1><p>Меньше вопросов. Больше приятных поездок.<br/>Об автомобилях и аренде — простыми словами.</p></header><BlogIndex/></main>}

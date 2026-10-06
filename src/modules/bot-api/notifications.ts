@@ -20,8 +20,13 @@ import {
   formatOperationalAlert,
 } from './operational-alerts';
 import { formatOperationsDigest } from './operations-digest';
-import { formatRentalLifecycleMessage } from './rental-lifecycle-notifications';
+import {
+  formatRentalLifecycleMessage,
+  formatRentalExtensionMessage,
+} from './rental-lifecycle-notifications';
 import { formatUnpaidFinesReport } from './unpaid-fines-report';
+import { returnReminderStage } from './client-return-reminders';
+import { notificationDestination } from './notification-routing';
 
 type ClaimDb = Pick<typeof prisma, '$transaction'>;
 type UpdateDb = Pick<typeof prisma, 'botNotificationJob'>;
@@ -200,11 +205,7 @@ export async function enqueueDailyOperationsDigests(now: Date, database = prisma
       ]
         .filter(Boolean)
         .join(' ');
-      const client = [
-        rental.client.lastName,
-        rental.client.firstName,
-        rental.client.middleName,
-      ]
+      const client = [rental.client.lastName, rental.client.firstName, rental.client.middleName]
         .filter(Boolean)
         .join(' ');
       rows.push({
@@ -227,7 +228,7 @@ export async function enqueueDailyOperationsDigests(now: Date, database = prisma
     }
   }
   const result = await database.botNotificationJob.createMany({
-    data: rows,
+    data: rows.filter((row) => !row.identityId),
     skipDuplicates: true,
   });
   return result.count;
@@ -463,7 +464,10 @@ export async function enqueueOperationalAlerts(now: Date, database = prisma) {
       }),
   );
   if (!rows.length) return 0;
-  const result = await database.botNotificationJob.createMany({ data: rows, skipDuplicates: true });
+  const result = await database.botNotificationJob.createMany({
+    data: rows.filter((row) => !('identityId' in row)),
+    skipDuplicates: true,
+  });
   return result.count;
 }
 
@@ -482,6 +486,8 @@ export async function enqueueReturnReminders(now: Date, database = prisma) {
   });
   const rows = rentals.flatMap((rental) => {
     const suffix = rental.endsAt.toISOString();
+    const stage = returnReminderStage(now, rental.endsAt);
+    if (!stage) return [];
     const common = {
       companyId: rental.companyId,
       payload: { rentalId: rental.id },
@@ -500,8 +506,9 @@ export async function enqueueReturnReminders(now: Date, database = prisma) {
           {
             ...common,
             identityId: identity.id,
-            eventKey: `rental-return:${rental.id}:${suffix}:24h:client`,
+            eventKey: `rental-return:${rental.id}:${suffix}:${stage}:client`,
             template: 'RENTAL_RETURN_CLIENT',
+            payload: { rentalId: rental.id, endsAt: suffix, stage },
           },
         ]
       : [staff];
@@ -521,7 +528,13 @@ async function hydrateJob(
     payload: unknown;
     chatId: string | null;
     claimToken: string | null;
-    identity: { telegramUserId: string; isActive: boolean } | null;
+    identity: {
+      telegramUserId: string;
+      isActive: boolean;
+      clientId: string | null;
+      companyId: string;
+      kind: string;
+    } | null;
   },
 ) {
   if (job.template === 'LEAD_CREATED' || job.template === 'LEAD_STATUS_CHANGED') {
@@ -571,7 +584,16 @@ async function hydrateJob(
           });
     return { ...job, payload: { message, parseMode: 'HTML' } };
   }
-  if (job.template === 'RENTAL_LIFECYCLE') {
+  if (job.template === 'RENTAL_LIFECYCLE' || job.template === 'CLIENT_RENTAL_LIFECYCLE') {
+    const customer = job.template === 'CLIENT_RENTAL_LIFECYCLE';
+    if (
+      customer &&
+      (!job.identity?.isActive ||
+        job.identity.kind !== 'CLIENT' ||
+        !job.identity.clientId ||
+        job.identity.companyId !== job.companyId)
+    )
+      return null;
     const payload =
       typeof job.payload === 'object' && job.payload !== null
         ? (job.payload as Record<string, unknown>)
@@ -579,7 +601,11 @@ async function hydrateJob(
     const kind = String(payload.kind ?? '');
     const rentalId = String(payload.rentalId ?? '');
     const operationId = String(payload.operationId ?? '');
-    if (!rentalId || !operationId || (kind !== 'HANDOVER' && kind !== 'RETURN')) {
+    if (
+      !rentalId ||
+      !operationId ||
+      (kind !== 'HANDOVER' && kind !== 'RETURN' && kind !== 'EXTENSION')
+    ) {
       return { ...job, payload: { message: 'Операция аренды уже недоступна.' } };
     }
     const operation = await tx.rentalOperation.findFirst({
@@ -589,16 +615,29 @@ async function hydrateJob(
         rentalId,
         status: 'COMMITTED',
         type: kind,
+        ...(customer
+          ? {
+              rental: {
+                clientId: job.identity!.clientId!,
+                companyId: job.companyId,
+                client: { archivedAt: null, status: { notIn: ['BLOCKED', 'ARCHIVED'] } },
+              },
+            }
+          : {}),
       },
       select: {
         type: true,
         occurredAt: true,
+        previousEndsAt: true,
+        nextEndsAt: true,
+        extensionChargeMinor: true,
         mileageKm: true,
         fuelLevelPercent: true,
         actor: { select: { name: true } },
         rental: {
           select: {
             contractNumber: true,
+            endsAt: true,
             client: { select: { firstName: true, middleName: true, lastName: true } },
             vehicle: {
               select: { make: true, modelName: true, model: true, registrationNumber: true },
@@ -607,13 +646,43 @@ async function hydrateJob(
         },
       },
     });
+    if (kind === 'EXTENSION') {
+      if (
+        !operation?.rental ||
+        !operation.previousEndsAt ||
+        !operation.nextEndsAt ||
+        operation.extensionChargeMinor == null
+      ) {
+        return customer
+          ? null
+          : { ...job, payload: { message: 'Операция продления уже недоступна.' } };
+      }
+      return {
+        ...job,
+        payload: {
+          parseMode: 'HTML',
+          ...(customer ? { clientMenu: true } : {}),
+          message: formatRentalExtensionMessage({
+            vehicle: vehicleTitle(operation.rental.vehicle),
+            registrationNumber: operation.rental.vehicle.registrationNumber,
+            clientName: personName(operation.rental.client),
+            contractNumber: operation.rental.contractNumber,
+            actorName: operation.actor.name,
+            occurredAt: operation.occurredAt,
+            previousEndsAt: operation.previousEndsAt,
+            nextEndsAt: operation.nextEndsAt,
+            extensionChargeMinor: operation.extensionChargeMinor,
+          }),
+        },
+      };
+    }
     if (
       !operation ||
       operation.mileageKm === null ||
       operation.fuelLevelPercent === null ||
       !operation.rental
     ) {
-      return { ...job, payload: { message: 'Операция аренды уже недоступна.' } };
+      return customer ? null : { ...job, payload: { message: 'Операция аренды уже недоступна.' } };
     }
     const handover =
       kind === 'RETURN'
@@ -631,20 +700,25 @@ async function hydrateJob(
     return {
       ...job,
       payload: {
-        message: formatRentalLifecycleMessage({
-          kind,
-          occurredAt: operation.occurredAt,
-          contractNumber: operation.rental.contractNumber,
-          vehicle: vehicleTitle(operation.rental.vehicle),
-          registrationNumber: operation.rental.vehicle.registrationNumber,
-          clientName: personName(operation.rental.client),
-          actorName: operation.actor.name,
-          mileageKm: operation.mileageKm,
-          fuelLevelPercent: operation.fuelLevelPercent,
-          handoverMileageKm: handover?.mileageKm,
-          handoverFuelLevelPercent: handover?.fuelLevelPercent,
-        }),
+        message:
+          formatRentalLifecycleMessage({
+            kind,
+            occurredAt: operation.occurredAt,
+            contractNumber: operation.rental.contractNumber,
+            vehicle: vehicleTitle(operation.rental.vehicle),
+            registrationNumber: operation.rental.vehicle.registrationNumber,
+            clientName: personName(operation.rental.client),
+            actorName: operation.actor.name,
+            mileageKm: operation.mileageKm,
+            fuelLevelPercent: operation.fuelLevelPercent,
+            handoverMileageKm: handover?.mileageKm,
+            handoverFuelLevelPercent: handover?.fuelLevelPercent,
+          }) +
+          (customer && kind === 'HANDOVER'
+            ? `\n📅 Возврат: ${new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow', dateStyle: 'short', timeStyle: 'short' }).format(operation.rental.endsAt)} (МСК)`
+            : ''),
         parseMode: 'HTML',
+        ...(customer ? { clientMenu: true } : {}),
       },
     };
   }
@@ -737,8 +811,11 @@ async function hydrateJob(
         ? tx.fine.findFirst({
             where: { id: fineId, companyId: job.companyId },
             select: {
+              decreeNumber: true,
               currentAmountMinor: true,
               articleCode: true,
+              description: true,
+              offenseAt: true,
               clientId: true,
               client: {
                 select: {
@@ -780,9 +857,12 @@ async function hydrateJob(
           eventRecordedAt:
             typeof payload.recordedAt === 'string'
               ? new Date(payload.recordedAt)
-              : event?.recordedAt ?? null,
+              : (event?.recordedAt ?? null),
           fineAmountMinor: fine?.currentAmountMinor.toString() ?? null,
+          fineDecreeNumber: fine?.decreeNumber ?? null,
           fineArticle: fine?.articleCode ?? null,
+          fineDescription: fine?.description ?? null,
+          fineOffenseAt: fine?.offenseAt ?? null,
           fineAttributedToClient: Boolean(fine?.clientId),
           fuelLevelPercent: numberOrNull(payload.fuelLevelPercent),
           borderCountry: typeof payload.borderCountry === 'string' ? payload.borderCountry : null,
@@ -807,6 +887,7 @@ async function hydrateJob(
       orderBy: [{ offenseAt: 'desc' }, { id: 'desc' }],
       take: 500,
       select: {
+        decreeNumber: true,
         offenseAt: true,
         discountExpiresAt: true,
         originalAmountMinor: true,
@@ -832,6 +913,7 @@ async function hydrateJob(
         message: formatUnpaidFinesReport(
           range.date,
           sortedFines.map((fine) => ({
+            decreeNumber: fine.decreeNumber,
             clientLastName: fine.client?.lastName ?? null,
             vehicle: fine.vehicle ? vehicleTitle(fine.vehicle) : 'Автомобиль не определён',
             registrationNumber: fine.vehicle?.registrationNumber ?? null,
@@ -1252,12 +1334,35 @@ async function hydrateJob(
     };
   }
   if (job.template !== 'RENTAL_RETURN_STAFF' && job.template !== 'RENTAL_RETURN_CLIENT') return job;
+  const clientReminder = job.template === 'RENTAL_RETURN_CLIENT';
+  if (
+    clientReminder &&
+    (!job.identity?.isActive ||
+      job.identity.kind !== 'CLIENT' ||
+      !job.identity.clientId ||
+      job.identity.companyId !== job.companyId)
+  )
+    return null;
+  const reminderPayload =
+    typeof job.payload === 'object' && job.payload !== null
+      ? (job.payload as Record<string, unknown>)
+      : {};
   const rentalId =
     typeof job.payload === 'object' && job.payload !== null && 'rentalId' in job.payload
       ? String(job.payload.rentalId)
       : '';
   const rental = await tx.rental.findFirst({
-    where: { id: rentalId, status: { in: ['CONFIRMED', 'ACTIVE'] } },
+    where: {
+      id: rentalId,
+      companyId: job.companyId,
+      status: { in: ['CONFIRMED', 'ACTIVE'] },
+      ...(clientReminder
+        ? {
+            clientId: job.identity!.clientId!,
+            client: { archivedAt: null, status: { notIn: ['BLOCKED', 'ARCHIVED'] } },
+          }
+        : {}),
+    },
     select: {
       contractNumber: true,
       endsAt: true,
@@ -1265,7 +1370,15 @@ async function hydrateJob(
       vehicle: { select: { make: true, modelName: true, model: true, registrationNumber: true } },
     },
   });
-  if (!rental) return { ...job, payload: { message: 'Аренда уже недоступна.' } };
+  if (!rental) return null;
+  const stage = returnReminderStage(now, rental.endsAt);
+  if (
+    clientReminder &&
+    (!stage ||
+      reminderPayload.endsAt !== rental.endsAt.toISOString() ||
+      reminderPayload.stage !== stage)
+  )
+    return null;
   const at = new Intl.DateTimeFormat('ru-RU', {
     timeZone: 'Europe/Moscow',
     dateStyle: 'short',
@@ -1277,7 +1390,18 @@ async function hydrateJob(
     return {
       ...job,
       payload: {
-        message: `Напоминание: ${vehicle} нужно вернуть ${at}. Договор ${rental.contractNumber ?? 'без номера'}.`,
+        message: [
+          stage === '24h'
+            ? 'Скоро заканчивается аренда. Если хотите продлить — отправьте запрос менеджеру.'
+            : stage === '3h'
+              ? 'До возврата осталось не больше 3 часов. Проверьте условия по мойке и топливу в договоре.'
+              : 'До возврата осталось не больше 30 минут. Если опаздываете, свяжитесь с менеджером.',
+          vehicle,
+          `Возврат: ${at} (МСК).`,
+          `Договор ${rental.contractNumber ?? 'без номера'}.`,
+          'Запрос на продление не меняет срок аренды до подтверждения менеджером.',
+        ].join('\n'),
+        clientMenu: true,
       },
     };
   const key = process.env.CLIENT_DATA_ENCRYPTION_KEY;
@@ -1343,10 +1467,43 @@ export async function claimNotificationJobs(
           template: true,
           payload: true,
           chatId: true,
-          identity: { select: { telegramUserId: true, isActive: true } },
+          identity: {
+            select: {
+              telegramUserId: true,
+              isActive: true,
+              clientId: true,
+              companyId: true,
+              kind: true,
+            },
+          },
         },
       });
-      if (job) claimed.push(await hydrateJob(tx, now, job));
+      if (job) {
+        const binding = job.identity
+          ? null
+          : await tx.telegramGroupBinding.findUnique({
+              where: { companyId: job.companyId },
+              select: { telegramChatId: true },
+            });
+        const destination = notificationDestination(job, binding?.telegramChatId ?? null);
+        const hydrated = destination
+          ? await hydrateJob(tx, now, {
+              ...job,
+              chatId: job.identity ? null : destination,
+            })
+          : null;
+        if (hydrated) claimed.push(hydrated);
+        else
+          await tx.botNotificationJob.updateMany({
+            where: { id: job.id, claimToken: job.claimToken, status: 'PROCESSING' },
+            data: {
+              status: 'CANCELLED',
+              claimToken: null,
+              leaseExpiresAt: null,
+              lastErrorCode: 'SUPERSEDED_OR_ACCESS_REVOKED',
+            },
+          });
+      }
     }
     return claimed;
   });

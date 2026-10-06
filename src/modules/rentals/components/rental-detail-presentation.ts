@@ -1,3 +1,4 @@
+import { vehicleName } from '@/shared/lib/vehicle-name';
 export type RentalStatus = 'DRAFT' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
 
 export type RentalDetailInput = {
@@ -129,8 +130,7 @@ function daysLabel(value: number): string {
 
 function vehicleLabel(vehicle: Record<string, unknown>, fallback: string): string {
   const parts = [
-    optionalText(vehicle.make),
-    optionalText(vehicle.model),
+    vehicleName(optionalText(vehicle.make), optionalText(vehicle.model)),
     optionalText(vehicle.registrationNumber),
   ].filter((value): value is string => Boolean(value));
   return parts.length ? parts.join(' · ') : fallback;

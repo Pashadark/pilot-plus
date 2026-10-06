@@ -5,6 +5,7 @@ export type VehicleFuelType = 'PETROL' | 'DIESEL' | 'ELECTRIC' | 'HYBRID' | 'OTH
 
 export interface VehicleTelemetrySummary {
   odometerKm: number | null;
+  engineHours?: number | null;
   fuelLevelPercent: number | null;
   speedKph?: number | null;
   lastSeenAt: string | null;
@@ -32,7 +33,10 @@ export interface VehicleCardDto {
   office: string | null;
   registrationNumber: string | null;
   transmission: string;
+  manufacturedYear?: number | null;
   engineLiters: number | null;
+  driveType?: string | null;
+  fuelConsumptionLitersPer100Km?: number | null;
   fuelType: VehicleFuelType;
   seats: number;
   dailyPriceMinor: number;

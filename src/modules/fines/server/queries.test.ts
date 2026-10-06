@@ -8,8 +8,10 @@ const vehicleFindManyMock = vi.hoisted(() => vi.fn());
 const clientFindManyMock = vi.hoisted(() => vi.fn());
 const fineCountMock = vi.hoisted(() => vi.fn());
 const fineAggregateMock = vi.hoisted(() => vi.fn());
+const tollLoadMock = vi.hoisted(() => vi.fn());
 
 vi.mock('server-only', () => ({}));
+vi.mock('./toll-queries', () => ({ loadTollDebts: tollLoadMock }));
 vi.mock('../access', () => ({
   getFineAccess: getFineAccessMock,
   FineAccessDeniedError: class extends Error {},
@@ -29,6 +31,7 @@ import { listFinesForCurrentUser } from './queries';
 describe('fine queries', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    tollLoadMock.mockResolvedValue({ items: [], unavailable: false });
     vehicleFindManyMock.mockResolvedValue([]);
     clientFindManyMock.mockResolvedValue([]);
     fineCountMock.mockResolvedValue(0);
@@ -36,6 +39,39 @@ describe('fine queries', () => {
       _count: { _all: 0 },
       _sum: { currentAmountMinor: null },
     });
+  });
+
+  it('includes road debts in common pagination and totals, respects paid filter', async () => {
+    getFineAccessMock.mockResolvedValue({
+      scope: 'COMPANY',
+      companyIds: ['company-a'],
+      rolesByCompany: { 'company-a': 'DISPATCHER' },
+    });
+    companyFindManyMock.mockResolvedValue([{ id: 'company-a', name: 'A' }]);
+    findManyMock.mockResolvedValue([]);
+    const items = Array.from({ length: 25 }, (_, i) => ({
+      id: `toll:company-a:${i}`,
+      companyId: 'company-a',
+      kind: 'TOLL',
+      roadLabel: 'МСД',
+      status: 'UNPAID',
+      offenseAt: '2026-09-22T09:00:00Z',
+      currentAmountMinor: '10000',
+      originalAmountMinor: '10000',
+      assigned: false,
+      vehicleLabel: 'Polo',
+    }));
+    tollLoadMock.mockResolvedValue({ items, unavailable: false });
+    const first = await listFinesForCurrentUser({ status: 'UNPAID' });
+    expect(first.fines).toHaveLength(24);
+    expect(first.pagination.total).toBe(25);
+    expect(first.summary.unpaidAmountMinor).toBe('250000');
+    const second = await listFinesForCurrentUser({ status: 'UNPAID', page: '2' });
+    expect(second.fines).toHaveLength(1);
+    const paid = await listFinesForCurrentUser({ status: 'PAID' });
+    expect(paid.fines).toHaveLength(0);
+    expect(paid.summary.unpaidAmountMinor).toBe('0');
+    expect(tollLoadMock).toHaveBeenCalledWith(['company-a']);
   });
 
   it('forces exact tenant IDs for company users', async () => {
@@ -233,7 +269,12 @@ describe('fine queries', () => {
       discountEndingSoonCount: 3,
       bailiffRiskCount: 2,
     });
-    expect(findManyMock).toHaveBeenCalledWith(expect.objectContaining({ skip: 24, take: 24 }));
+    expect(findManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 24,
+        where: { AND: [{ companyId: 'company-a' }, { id: { in: [] } }] },
+      }),
+    );
     expect(fineAggregateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         _count: { _all: true },

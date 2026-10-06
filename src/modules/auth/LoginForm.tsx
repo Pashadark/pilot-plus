@@ -19,13 +19,14 @@ export function LoginForm() {
         </div>
       )}
       <Input
-        label="Email"
-        name="email"
-        type="email"
-        inputMode="email"
+        label="Логин"
+        name="login"
+        type="text"
+        autoCapitalize="none"
+        spellCheck={false}
         autoComplete="username"
-        placeholder="admin@example.com"
-        error={state.fieldErrors?.email}
+        placeholder="Ваш логин"
+        error={state.fieldErrors?.login}
         required
         autoFocus
       />

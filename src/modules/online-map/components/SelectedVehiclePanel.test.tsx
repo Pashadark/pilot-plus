@@ -2,11 +2,20 @@
 
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+vi.mock('@/modules/maintenance/service-plan-actions', () => ({
+  readServicePlan: vi.fn().mockResolvedValue({ canEdit: false, current: null, record: null }),
+  saveServicePlan: vi.fn(),
+}));
 
 import { onlineMapVehicles } from '../fixtures';
 import { SelectedVehiclePanel } from './SelectedVehiclePanel';
 
 afterEach(cleanup);
+
+it('keeps maintenance out of the map panel', () => {
+  render(<SelectedVehiclePanel vehicle={onlineMapVehicles[0]} onClose={() => {}} trackControls={null} trackSummary={null} trackSegments={null} trackEvents={null} />);
+  expect(screen.queryByText('До следующего ТО')).toBeNull();
+});
 
 it('показывает устаревший GPS-сигнал красной меткой и последним сигналом', () => {
   const vehicle = {
@@ -27,7 +36,6 @@ it('показывает устаревший GPS-сигнал красной м
       trackSummary={null}
       trackSegments={null}
       trackEvents={null}
-      trackPlayback={null}
     />,
   );
 

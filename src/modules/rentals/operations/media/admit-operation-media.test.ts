@@ -80,6 +80,35 @@ describe('admitOperationMedia', () => {
     expect(storage.putQuarantine).not.toHaveBeenCalled();
   });
 
+  it('can promote validated return evidence directly without antivirus scanning', async () => {
+    const { repository, storage, scan } = fixture();
+
+    await expect(
+      admitOperationMedia({
+        companyId: 'company-1',
+        operationId: 'operation-1',
+        actorUserId: 'user-1',
+        kind: 'DASHBOARD_PHOTO',
+        file: { name: 'dashboard.jpg', bytes: jpeg },
+        repository,
+        storage,
+        scan,
+        skipAntivirus: true,
+        randomId: () => 'upload-1',
+      }),
+    ).resolves.toEqual({ mediaId: 'media-1', status: 'CLEAN' });
+    expect(scan).not.toHaveBeenCalled();
+    expect(storage.promote).toHaveBeenCalledWith(
+      'upload-1',
+      'companies/company-1/rental-operations/operation-1/dashboard_photo.jpg',
+    );
+    expect(repository.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'CLEAN' }),
+      }),
+    );
+  });
+
   it('converges an already clean duplicate without writing another file', async () => {
     const { repository, storage, scan } = fixture();
     repository.findMedia.mockResolvedValue({ id: 'media-existing', status: 'CLEAN' });

@@ -10,6 +10,12 @@ function loginData(email: string, password: string) {
 }
 
 describe('parseLoginInput', () => {
+  it('accepts and normalizes a username independently of email', () => {
+    const data = new FormData();
+    data.set('login', ' Sedoff ');
+    data.set('password', 'test-password-only');
+    expect(parseLoginInput(data)).toEqual({ok: true, login: 'sedoff', password: 'test-password-only'});
+  });
   it('нормализует email и сохраняет пароль только при успехе', () => {
     expect(parseLoginInput(loginData(' Admin@Example.COM ', 'Надёжный пароль 2026'))).toEqual({
       ok: true,

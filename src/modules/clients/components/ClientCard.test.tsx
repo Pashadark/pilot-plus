@@ -15,6 +15,7 @@ describe('ClientCard', () => {
           fullName: 'Анна Воронова',
           email: 'anna@example.test',
           phone: '+7 999 123-45-67',
+          additionalPhone: '+7 916 765-43-21',
           phoneMasked: '+7 ••• •••-12-34',
           passportMasked: null,
           driverLicenseMasked: '12 ••• 456',
@@ -41,6 +42,7 @@ describe('ClientCard', () => {
     expect(screen.getByText('Нет аренды')).toBeTruthy();
     expect(screen.getByTestId('client-card').textContent).toMatch(/Штрафы:\s*2/);
     expect(screen.getByTestId('client-card').textContent).toMatch(/Оплачено:\s*7\s*500\s*₽/);
+    expect(screen.getByText(/\+7 916 765-43-21/)).toBeTruthy();
   });
 
   it('shows a compact five-star reliability score when staff provides one', () => {

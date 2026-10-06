@@ -29,13 +29,17 @@ export async function runLiveWorker(
     throw new Error('INVALID_LIVE_WORKER_INTERVAL');
   }
   const log = dependencies.log ?? console.info;
+  const retryAfterByCompany = new Map<string, number>();
   while (!options.signal.aborted) {
     const startedAt = dependencies.now();
     const companies = await dependencies.listCompanies();
     for (const { companyId } of companies) {
       if (options.signal.aborted) break;
+      const retryAfter = retryAfterByCompany.get(companyId);
+      if (retryAfter !== undefined && retryAfter > dependencies.now()) continue;
       try {
         const result = await dependencies.sync(companyId);
+        retryAfterByCompany.delete(companyId);
         if (result.changedVehicleIds.length > 0) {
           await dependencies.publish({
             companyId,
@@ -47,6 +51,7 @@ export async function runLiveWorker(
           `GLONASSSOFT_LIVE_OK company=${companyId} requested=${result.requested} saved=${result.saved}`,
         );
       } catch (error) {
+        retryAfterByCompany.set(companyId, dependencies.now() + providerCooldownMs(error));
         log(`GLONASSSOFT_LIVE_ERROR company=${companyId} code=${safeCode(error)}`);
       }
     }
@@ -54,6 +59,13 @@ export async function runLiveWorker(
     const remaining = Math.max(0, options.intervalMs - (dependencies.now() - startedAt));
     if (remaining > 0) await dependencies.delay(remaining, options.signal);
   }
+}
+
+export function providerCooldownMs(error: unknown): number {
+  const code = safeCode(error);
+  if (code === 'RATE_LIMITED') return 60_000;
+  if (['INVALID_REQUEST', 'AUTH_REJECTED', 'FORBIDDEN'].includes(code)) return 30 * 60_000;
+  return 30_000;
 }
 
 function safeCode(error: unknown): string {

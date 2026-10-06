@@ -5,6 +5,13 @@ import { prisma } from '@/database/prisma/client';
 import { requireVehicleManagementAccess } from '@/modules/vehicles/manage/access';
 import { VehicleForm } from '@/modules/vehicles/manage/components/VehicleForm';
 import { VehicleGallery } from '@/modules/vehicles/manage/components/VehicleGallery';
+import { VehicleDocumentsPanel } from '@/modules/vehicles/manage/components/VehicleDocumentsPanel';
+import { ArchiveVehiclePanel } from '@/modules/vehicles/manage/components/ArchiveVehiclePanel';
+import { latestFuelLevelPercent } from '@/modules/vehicles/current-fuel';
+import {
+  driveTypeCodeFromFeatures,
+  fuelConsumptionFromFeatures,
+} from '@/modules/vehicles/technical-features';
 import { AppShell } from '@/shared/components/app-shell/AppShell';
 
 function moneyFromMinor(value: bigint | null) {
@@ -37,6 +44,7 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
       color: true,
       category: true,
       bodyType: true,
+      features: true,
       engineLiters: true,
       odometerKm: true,
       valueMinor: true,
@@ -56,10 +64,43 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
       cascoPolicyNumber: true,
       cascoStartsAt: true,
       cascoEndsAt: true,
+      positions: {
+        where: { provider: 'GLONASSSOFT', fuelLevelPercent: { not: null } },
+        select: { fuelLevelPercent: true, recordedAt: true },
+        orderBy: { recordedAt: 'desc' },
+        take: 1,
+      },
+      rentalOperations: {
+        where: {
+          status: 'COMMITTED',
+          type: { in: ['HANDOVER', 'RETURN'] },
+          fuelLevelPercent: { not: null },
+        },
+        select: { fuelLevelPercent: true, occurredAt: true },
+        orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+        take: 1,
+      },
+      fuelRecords: {
+        where: { levelPercent: { not: null } },
+        select: { levelPercent: true, recordedAt: true },
+        orderBy: { recordedAt: 'desc' },
+        take: 1,
+      },
       company: { select: { name: true } },
       images: {
         select: { id: true, localPath: true, alt: true, isPrimary: true },
         orderBy: { position: 'asc' },
+      },
+      documents: {
+        select: {
+          id: true,
+          title: true,
+          type: true,
+          expiresAt: true,
+          originalName: true,
+          storageKey: true,
+        },
+        orderBy: { createdAt: 'desc' },
       },
     },
   });
@@ -119,7 +160,24 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
             category: vehicle.category,
             bodyType: vehicle.bodyType,
             engineLiters: vehicle.engineLiters?.toString() ?? null,
+            driveType: driveTypeCodeFromFeatures(vehicle.features),
+            fuelConsumptionLitersPer100Km:
+              fuelConsumptionFromFeatures(vehicle.features)?.toString() ?? null,
             odometerKm: vehicle.odometerKm?.toString() ?? null,
+            fuelLevelPercent: latestFuelLevelPercent(
+              {
+                value: vehicle.positions[0]?.fuelLevelPercent,
+                recordedAt: vehicle.positions[0]?.recordedAt,
+              },
+              {
+                value: vehicle.rentalOperations[0]?.fuelLevelPercent,
+                recordedAt: vehicle.rentalOperations[0]?.occurredAt,
+              },
+              {
+                value: vehicle.fuelRecords[0]?.levelPercent,
+                recordedAt: vehicle.fuelRecords[0]?.recordedAt,
+              },
+            ),
             valueRubles: moneyFromMinor(vehicle.valueMinor),
             rangePriceRubles: moneyFromMinor(vehicle.rangePriceMinor),
             depositRubles: moneyFromMinor(vehicle.depositMinor),
@@ -140,6 +198,23 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
           }}
         />
         <VehicleGallery vehicleId={vehicle.id} images={vehicle.images} />
+        <VehicleDocumentsPanel
+          vehicleId={vehicle.id}
+          compact
+          documents={vehicle.documents.map((document) => ({
+            id: document.id,
+            title: document.title,
+            type: document.type,
+            expiresAt: document.expiresAt?.toISOString() ?? null,
+            originalName: document.originalName,
+            hasFile: Boolean(document.storageKey),
+          }))}
+        />
+        <ArchiveVehiclePanel
+          companyId={vehicle.companyId}
+          vehicleId={vehicle.id}
+          vehicleLabel={`${vehicle.make} ${vehicle.modelName} · ${vehicle.registrationNumber}`}
+        />
       </main>
     </AppShell>
   );

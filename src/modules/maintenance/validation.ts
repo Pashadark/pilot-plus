@@ -191,12 +191,7 @@ export function parseRepairInput(formData: FormData): RepairInputResult {
     });
   }
 
-  if (
-    Object.keys(fieldErrors).length > 0 ||
-    !status ||
-    !damageReportedAt ||
-    !parsedCost.ok
-  ) {
+  if (Object.keys(fieldErrors).length > 0 || !status || !damageReportedAt || !parsedCost.ok) {
     return { ok: false, state: { status: 'error', fieldErrors } };
   }
 

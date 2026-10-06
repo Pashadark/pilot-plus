@@ -18,6 +18,7 @@ export function VehicleTabs({
         {vehicleTabs.map((tab) => (
           <li key={tab.value}>
             <Link
+              scroll={false}
               href={
                 tab.value === 'overview'
                   ? `/vehicles/${vehicleId}`

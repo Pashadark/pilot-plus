@@ -80,9 +80,20 @@ describe('жизненный цикл создания ТО в workspace', () =>
   it('разделяет создание ТО и ремонта на две понятные кнопки', () => {
     render(createElement(MaintenanceWorkspace, { records: [], vehicles, rentals: [] }));
 
+    expect(screen.getByTestId('maintenance-desktop-table').className).toContain('xl:block');
+    expect(screen.getByTestId('maintenance-mobile-list').className).toContain('xl:hidden');
     expect(screen.getByRole('button', { name: 'Запланировать ТО' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Добавить ремонт' }));
     expect(screen.getByRole('dialog').textContent).toContain('Добавить ремонт');
     expect(screen.getByRole('button', { name: 'Завершить создание ремонта' })).toBeTruthy();
+  });
+
+  it('прячет дополнительные условия обслуживания под компактный фильтр', () => {
+    render(createElement(MaintenanceWorkspace, { records: [], vehicles, rentals: [] }));
+
+    expect(screen.getByLabelText('Поиск по обслуживанию')).toBeTruthy();
+    expect(screen.getByLabelText('Статус')).toBeTruthy();
+    expect(screen.getByText('Все фильтры')).toBeTruthy();
+    expect(screen.getByTestId('maintenance-advanced-filters')).toBeTruthy();
   });
 });

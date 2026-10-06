@@ -1,7 +1,8 @@
 import { calculateReturnCharges } from '../calculation';
-import { deriveEvidenceStatus } from '../evidence-status';
-import type { RentalDepositStatus, RentalEvidenceStatus, RentalVehicleCondition } from '../types';
+import { deriveReturnEvidenceStatus } from '../evidence-status';
+import type { RentalEvidenceStatus, RentalVehicleCondition } from '../types';
 import { recordAutomaticRatingEvent } from '@/modules/client-rating/automatic-events';
+import { enqueueRentalLifecycleNotifications } from './enqueue-lifecycle-notifications';
 
 type Count = { count: number };
 type Transaction = {
@@ -25,7 +26,18 @@ type Transaction = {
       includedMileageKm: number | null;
       overageMileagePriceMinor: bigint | null;
       missingFuelPriceMinor: bigint | null;
+      vehicle: {
+        includedMileageKm: number | null;
+        overageMileagePriceMinor: bigint | null;
+        missingFuelPriceMinor: bigint | null;
+      };
     } | null>;
+    updateMany(args: unknown): Promise<Count>;
+  };
+  vehicle: { updateMany(args: unknown): Promise<Count> };
+  maintenanceRecord?: {
+    findFirst(args: unknown): Promise<{ id: string; targetOdometerKm: unknown | null } | null>;
+    create(args: unknown): Promise<{ id: string }>;
     updateMany(args: unknown): Promise<Count>;
   };
   clientRatingEvent: {
@@ -34,6 +46,13 @@ type Transaction = {
   clientComment: {
     findFirst(args: unknown): Promise<{ id: string } | null>;
   };
+  telegramGroupBinding?: Parameters<
+    typeof enqueueRentalLifecycleNotifications
+  >[0]['telegramGroupBinding'];
+  telegramIdentity?: Parameters<typeof enqueueRentalLifecycleNotifications>[0]['telegramIdentity'];
+  botNotificationJob?: Parameters<
+    typeof enqueueRentalLifecycleNotifications
+  >[0]['botNotificationJob'];
   auditLog: { create(args: unknown): Promise<unknown> };
 };
 type Database = {
@@ -42,6 +61,8 @@ type Database = {
     options: { isolationLevel: 'Serializable' },
   ): Promise<T>;
 };
+const MAINTENANCE_INTERVAL_KM = 7_000;
+const DEFAULT_MISSING_FUEL_PRICE_MINOR = BigInt(15_000);
 function prismaCode(error: unknown, code: string) {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
 }
@@ -49,6 +70,31 @@ function safeMinor(value: bigint | null, label: string) {
   if (value === null || value < BigInt(0) || value > BigInt(Number.MAX_SAFE_INTEGER))
     throw new Error(`${label} не настроена.`);
   return Number(value);
+}
+
+export function resolveReturnPricing(input: {
+  includedMileageKm: number | null;
+  overageMileagePriceMinor: bigint | null;
+  missingFuelPriceMinor: bigint | null;
+  vehicle?: {
+    includedMileageKm: number | null;
+    overageMileagePriceMinor: bigint | null;
+    missingFuelPriceMinor: bigint | null;
+  };
+}) {
+  return {
+    includedMileageKmPerDay: input.includedMileageKm ?? input.vehicle?.includedMileageKm ?? 0,
+    overageMileagePriceMinor: safeMinor(
+      input.overageMileagePriceMinor ?? input.vehicle?.overageMileagePriceMinor ?? null,
+      'Цена перепробега',
+    ),
+    missingFuelPriceMinor: safeMinor(
+      input.missingFuelPriceMinor ??
+        input.vehicle?.missingFuelPriceMinor ??
+        DEFAULT_MISSING_FUEL_PRICE_MINOR,
+      'Цена топлива',
+    ),
+  };
 }
 async function authorize(
   tx: Transaction,
@@ -82,10 +128,6 @@ export function createRentalReturn(database: Database) {
       evidenceMissingReason?: string;
       vehicleCondition: RentalVehicleCondition;
       damageDescription?: string;
-      depositStatus: RentalDepositStatus;
-      depositAmountMinor?: number;
-      depositWithheldMinor?: number;
-      depositResolutionReason?: string;
     };
   }) {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -95,7 +137,13 @@ export function createRentalReturn(database: Database) {
             await authorize(tx, input.companyId, input.actor);
             const existing = await tx.rentalOperation.findFirst({
               where: { companyId: input.companyId, idempotencyKey: input.command.idempotencyKey },
-              select: { id: true, rentalId: true, status: true, type: true },
+              select: {
+                id: true,
+                rentalId: true,
+                actorUserId: true,
+                status: true,
+                type: true,
+              },
             });
             if (existing) {
               if (
@@ -123,6 +171,13 @@ export function createRentalReturn(database: Database) {
                 includedMileageKm: true,
                 overageMileagePriceMinor: true,
                 missingFuelPriceMinor: true,
+                vehicle: {
+                  select: {
+                    includedMileageKm: true,
+                    overageMileagePriceMinor: true,
+                    missingFuelPriceMinor: true,
+                  },
+                },
               },
             });
             if (!rental) throw new Error('Активный договор не найден.');
@@ -136,24 +191,27 @@ export function createRentalReturn(database: Database) {
               select: { mileageKm: true, fuelLevelPercent: true },
               orderBy: { occurredAt: 'desc' },
             });
-            if (
-              !handover ||
-              typeof handover.mileageKm !== 'number' ||
-              typeof handover.fuelLevelPercent !== 'number'
-            )
-              throw new Error('Нет показателей выдачи автомобиля.');
+            const hasHandoverReadings =
+              Boolean(handover) &&
+              typeof handover?.mileageKm === 'number' &&
+              typeof handover?.fuelLevelPercent === 'number';
+            const pricing = resolveReturnPricing(rental);
             const charges = calculateReturnCharges({
-              handoverMileageKm: handover.mileageKm,
+              // Для импортированных старых договоров показателей выдачи может не быть.
+              // В таком случае используем показатели возврата как нейтральную базу и не
+              // начисляем неподтверждённые перепробег и топливо.
+              handoverMileageKm: hasHandoverReadings
+                ? (handover?.mileageKm as number)
+                : input.command.mileageKm,
               returnMileageKm: input.command.mileageKm,
               billableDays: rental.billableDays,
-              includedMileageKmPerDay: rental.includedMileageKm ?? 0,
-              overageMileagePriceMinor: safeMinor(
-                rental.overageMileagePriceMinor,
-                'Цена перепробега',
-              ),
-              handoverFuelLevelPercent: handover.fuelLevelPercent,
+              includedMileageKmPerDay: pricing.includedMileageKmPerDay,
+              overageMileagePriceMinor: pricing.overageMileagePriceMinor,
+              handoverFuelLevelPercent: hasHandoverReadings
+                ? (handover?.fuelLevelPercent as number)
+                : input.command.fuelLevelPercent,
               returnFuelLevelPercent: input.command.fuelLevelPercent,
-              missingFuelPriceMinor: safeMinor(rental.missingFuelPriceMinor, 'Цена топлива'),
+              missingFuelPriceMinor: pricing.missingFuelPriceMinor,
             });
             const updated = await tx.rental.updateMany({
               where: { id: rental.id, companyId: input.companyId, status: 'ACTIVE' },
@@ -167,7 +225,7 @@ export function createRentalReturn(database: Database) {
                 where: { companyId: input.companyId, operationId: existing.id, status: 'CLEAN' },
                 select: { kind: true, status: true },
               });
-              evidenceStatus = deriveEvidenceStatus({
+              evidenceStatus = deriveReturnEvidenceStatus({
                 hasVideo: media.some((item) => item.kind === 'INSPECTION_VIDEO'),
                 hasDashboardPhoto: media.some((item) => item.kind === 'DASHBOARD_PHOTO'),
               });
@@ -186,22 +244,17 @@ export function createRentalReturn(database: Database) {
               occurredAt: input.command.occurredAt,
               committedAt: input.command.occurredAt,
               evidenceStatus,
-              evidenceMissingReason: input.command.evidenceMissingReason,
+              evidenceMissingReason:
+                evidenceStatus === 'COMPLETE' ? null : input.command.evidenceMissingReason,
               mileageKm: input.command.mileageKm,
               fuelLevelPercent: input.command.fuelLevelPercent,
               mileageChargeMinor: BigInt(charges.mileageChargeMinor),
               fuelChargeMinor: BigInt(charges.fuelChargeMinor),
               totalChargeMinor: BigInt(charges.totalChargeMinor),
-              depositStatus: input.command.depositStatus,
-              depositAmountMinor:
-                input.command.depositAmountMinor === undefined
-                  ? undefined
-                  : BigInt(input.command.depositAmountMinor),
-              depositWithheldMinor:
-                input.command.depositWithheldMinor === undefined
-                  ? undefined
-                  : BigInt(input.command.depositWithheldMinor),
-              depositResolutionReason: input.command.depositResolutionReason,
+              depositStatus: null,
+              depositAmountMinor: null,
+              depositWithheldMinor: null,
+              depositResolutionReason: null,
               vehicleCondition: input.command.vehicleCondition,
               damageDescription: input.command.damageDescription,
             };
@@ -224,6 +277,50 @@ export function createRentalReturn(database: Database) {
                 data: operationData,
                 select: { id: true },
               });
+            }
+            const vehicleUpdated = await tx.vehicle.updateMany({
+              where: { id: rental.vehicleId, companyId: input.companyId },
+              data: { odometerKm: input.command.mileageKm },
+            });
+            if (vehicleUpdated.count !== 1)
+              throw Object.assign(new Error('Stale vehicle'), { code: 'P2034' });
+            if (tx.maintenanceRecord) {
+              const openMaintenance = await tx.maintenanceRecord.findFirst({
+                where: {
+                  vehicleId: rental.vehicleId,
+                  status: { in: ['PLANNED', 'IN_PROGRESS'] },
+                },
+                select: { id: true, targetOdometerKm: true },
+                orderBy: { createdAt: 'desc' },
+              });
+              if (!openMaintenance) {
+                await tx.maintenanceRecord.create({
+                  data: {
+                    vehicleId: rental.vehicleId,
+                    title: 'Плановое ТО через 7 000 км',
+                    kind: 'INSPECTION',
+                    status: 'PLANNED',
+                    odometerKm: input.command.mileageKm,
+                    targetOdometerKm: input.command.mileageKm + MAINTENANCE_INTERVAL_KM,
+                  },
+                  select: { id: true },
+                });
+              } else if (openMaintenance.targetOdometerKm === null) {
+                const maintenanceUpdated = await tx.maintenanceRecord.updateMany({
+                  where: {
+                    id: openMaintenance.id,
+                    vehicleId: rental.vehicleId,
+                    status: { in: ['PLANNED', 'IN_PROGRESS'] },
+                    targetOdometerKm: null,
+                  },
+                  data: {
+                    odometerKm: input.command.mileageKm,
+                    targetOdometerKm: input.command.mileageKm + MAINTENANCE_INTERVAL_KM,
+                  },
+                });
+                if (maintenanceUpdated.count !== 1)
+                  throw Object.assign(new Error('Stale maintenance'), { code: 'P2034' });
+              }
             }
             const openProblem =
               input.command.vehicleCondition === 'GOOD'
@@ -274,8 +371,16 @@ export function createRentalReturn(database: Database) {
                   operationId: operation.id,
                   totalChargeMinor: charges.totalChargeMinor,
                   evidenceStatus,
+                  handoverReadingsMissing: !hasHandoverReadings,
                 },
               },
+            });
+            await enqueueRentalLifecycleNotifications(tx, {
+              companyId: input.companyId,
+              rentalId: rental.id,
+              operationId: operation.id,
+              kind: 'RETURN',
+              occurredAt: input.command.occurredAt,
             });
             return { operationId: operation.id, rentalId: rental.id };
           },

@@ -23,8 +23,10 @@ export default async function FinesRoute({
   return (
     <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Штрафы' }]}>
       <FinesPage
+        referenceTime={new Date().toISOString()}
         summary={data.summary}
         fines={data.fines}
+        tollsUnavailable={data.tollsUnavailable}
         companies={data.companies}
         vehicles={data.vehicles}
         clients={data.clients}

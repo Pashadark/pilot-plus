@@ -1,0 +1,32 @@
+:root{color-scheme:light;--page:#f6f6f6;--panel:#fff;--soft:#f1f3f6;--ink:#20232a;--muted:#626873;--edge:#d8dbe2;--link:#0752cc}
+:root[data-theme=dark]{color-scheme:dark;--page:#17191e;--panel:#22252c;--soft:#2c3039;--ink:#f1f3f7;--muted:#b2b8c4;--edge:#4b515e;--link:#9bbcff;--text-secondary:#b2b8c4;--surface:#22252c;--surface-soft:#2c3039;--line:#404650}
+body{background:var(--page);color:var(--ink)}
+.theme-toggle{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:8px 0;min-height:44px;min-width:48px;background:transparent;border:0;cursor:pointer}
+.theme-track{position:relative;display:block;width:44px;height:24px;flex-shrink:0;border-radius:32px;overflow:hidden;box-sizing:border-box;background:#e3e6ec;outline:1px solid transparent;outline-offset:2px;transition:background-color .2s ease}
+.theme-handle{position:absolute;z-index:2;left:3px;top:3px;width:18px;height:18px;background:#fff;border-radius:50%;box-shadow:0 1px 3px #0002;transform:translateX(0);transition:transform .2s var(--motion-ease)}
+.theme-track svg{position:absolute;top:5px;width:14px;height:14px;color:#727887}.theme-sun{left:5px}.theme-moon{right:5px}
+.theme-toggle[aria-checked=true] .theme-track{background:#465578}.theme-toggle[aria-checked=true] .theme-handle{transform:translateX(20px)}.theme-toggle[aria-checked=true] svg{color:#e9efff}
+.theme-toggle:focus-visible{outline:2px solid var(--link);outline-offset:3px;border-radius:12px}
+.tg-dialog{position:fixed;inset:0;margin:auto;width:min(520px,calc(100% - 32px));max-width:520px;max-height:calc(100dvh - 48px);padding:40px;border:0;border-radius:32px;overflow:auto;overscroll-behavior:contain;background:var(--panel);color:var(--ink);box-shadow:0 24px 80px #0003;scrollbar-width:thin;scrollbar-color:var(--edge) transparent}
+.tg-dialog:not([open]){display:none}.tg-dialog[open]{animation:dialog-enter .2s var(--motion-ease)}.tg-dialog::backdrop{background:rgb(13 20 34 / 52%)}
+.tg-dialog .modal-close{position:absolute;top:14px;right:14px;width:36px;height:36px;border-radius:12px;background:var(--soft);color:var(--muted);z-index:1}.modal-close svg{width:20px;height:20px}.modal-close:focus-visible{outline:2px solid var(--link);outline-offset:3px}
+.tg-dialog h2,.tg-dialog .client-form h3{font-size:28px;line-height:1.2;font-weight:600;letter-spacing:-.025em;padding-right:18px;margin:12px 0 20px;color:var(--ink)}
+.tg-dialog p{font-size:15px;line-height:1.6;color:var(--muted);margin:0 0 24px}.tg-dialog .button{width:100%;min-height:52px;border-radius:16px}.tg-dialog .client-form{margin:0;padding:0;border:0;background:transparent}.tg-dialog .client-form label{font-size:14px;color:var(--ink)}.tg-dialog .client-form input,.tg-dialog .client-form textarea{background:var(--panel);color:var(--ink);border-color:var(--edge)}.tg-dialog .client-form small{color:var(--muted);font-size:12px;line-height:1.5}.tg-dialog .client-form .check{font-size:13px}
+.storage-notice{left:0;right:0;bottom:24px;width:70%;max-width:880px;display:flex;flex-direction:row;align-items:center;gap:12px;padding:16px 18px;border-radius:16px;background:#252831;color:#fff;box-shadow:0 8px 32px #0002;font-size:13px;line-height:1.5}
+.storage-notice>div{flex:1}.storage-notice a{color:#c5d8ff;text-decoration:underline;text-underline-offset:3px}.storage-notice .cookie-icon{width:28px;height:28px;flex-shrink:0;color:#fff}.storage-notice .button{min-width:68px;min-height:40px;padding:9px 20px;border-radius:12px;flex-shrink:0;font-size:14px}
+[data-theme=dark] :is(h1,h2,h3,.price,.car-top h3,.specs strong,.footer-grid strong,.calculation strong,.calculation b){color:var(--ink)}
+[data-theme=dark] :is(.preview,.photo-empty){background:var(--page);color:var(--muted)}
+[data-theme=dark] :is(.site-header,.search,.categories .category,.car,.news,.detail-box,.booking-card,.rental-step,footer,.toast,.legal-page){background:var(--panel);color:var(--ink);border-color:var(--edge)}
+[data-theme=dark] :is(p,.spec-line,.category small,.section-title p,.search label,.search small,.date-fields label,.detail-heading p,.specs small,.footer-note,.footer-bottom,.toast-copy p,.car-top>span,.back){color:var(--muted)}
+[data-theme=dark] :is(.brand,.brand b,.review-link,.detail-box a,.footer-grid a:not(.brand),.footer-bottom a,.text-button,.moscow a,.legal-page a){color:var(--link)}
+[data-theme=dark] :is(.outline,.header-cta,.chip,.photo-tabs button,.location,.calculation,.empty-review,.step-icon,.pill,.menu-toggle){background:var(--soft);color:var(--ink)}
+[data-theme=dark] :is(.site-header nav a:hover,.site-header nav a.nav-active,.chip.chosen,.photo-tabs button.selected,.categories .category:hover){background:#2c3c5e;color:#bdd1ff}
+[data-theme=dark] :is(.search input,.date-fields input,.client-form input:not([type=checkbox]),.client-form textarea){background:var(--panel);color:var(--ink);border-color:var(--edge)}
+[data-theme=dark] :is(input::placeholder,textarea::placeholder){color:var(--muted)}
+[data-theme=dark] .free-filter{color:var(--ink)}[data-theme=dark] .availability-badge.free{background:#1e4234;color:#a6e5be}[data-theme=dark] .availability-badge.busy{background:#493821;color:#f3d399}[data-theme=dark] .availability-badge.pending{background:var(--soft);color:var(--muted)}
+[data-theme=dark] .toast-copy strong{color:var(--ink)}[data-theme=dark] .button:disabled{background:#363d4c;color:#b5bdcb}
+/* Keep real white studio photos and the city hero faithful in both themes. */
+[data-theme=dark] .hero h1,[data-theme=dark] .hero em{color:#17191c}[data-theme=dark] .hero p{color:#444950}
+@keyframes dialog-enter{from{opacity:.5;transform:translateY(12px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(max-width:700px){.site-header .header-cta{display:none}.site-header .theme-toggle{margin-left:auto}.site-header .brand{margin-right:0}.tg-dialog{width:calc(100% - 24px);max-height:calc(100dvh - 24px);padding:28px 24px;border-radius:24px}.tg-dialog h2,.tg-dialog .client-form h3{font-size:25px;margin-top:24px}.storage-notice{bottom:12px;width:94%;max-height:40dvh;flex-direction:row;flex-wrap:wrap;padding:16px;gap:12px;align-items:flex-start}.storage-notice>div{flex:1;min-width:180px}.storage-notice .button{margin-left:auto}.storage-notice .cookie-icon{width:24px;height:24px}.site-header{gap:8px}}
+@media(prefers-reduced-motion:reduce){.tg-dialog[open]{animation:none}.theme-handle,.theme-track{transition:none}}

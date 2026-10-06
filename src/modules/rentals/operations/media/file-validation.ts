@@ -1,7 +1,7 @@
 import type { RentalOperationMediaKind } from '../types';
 
 export const maxDashboardPhotoBytes = 15 * 1024 * 1024;
-export const maxInspectionVideoBytes = 150 * 1024 * 1024;
+export const maxInspectionVideoBytes = 90 * 1024 * 1024;
 
 type OperationMediaFile = {
   kind: RentalOperationMediaKind;
@@ -42,14 +42,14 @@ function extension(name: string) {
 }
 
 export function validateOperationMediaFile(file: OperationMediaFile) {
-  const maximum =
-    file.kind === 'DASHBOARD_PHOTO' ? maxDashboardPhotoBytes : maxInspectionVideoBytes;
+  const isPhoto = file.kind !== 'INSPECTION_VIDEO';
+  const maximum = isPhoto ? maxDashboardPhotoBytes : maxInspectionVideoBytes;
   const maximumMb = maximum / 1024 / 1024;
   if (file.bytes.byteLength <= 0 || file.bytes.byteLength > maximum)
     throw new Error(`Размер файла не должен превышать ${maximumMb} МБ.`);
   const detected = detect(file.bytes);
-  if (file.kind === 'DASHBOARD_PHOTO' && detected.media !== 'photo')
-    throw new Error('Фото приборной панели должно быть изображением.');
+  if (isPhoto && detected.media !== 'photo')
+    throw new Error('Фотография должна быть изображением.');
   if (file.kind === 'INSPECTION_VIDEO' && detected.media !== 'video')
     throw new Error('Видео осмотра должно быть видеофайлом.');
   if (extension(file.name) !== detected.extension)
