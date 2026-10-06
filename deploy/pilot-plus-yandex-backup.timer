@@ -1,0 +1,10 @@
+[Unit]
+Description=Upload Pilot+ backup to Yandex Disk nightly
+
+[Timer]
+OnCalendar=*-*-* 01:30:00 Europe/Moscow
+Persistent=true
+Unit=pilot-plus-yandex-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,21 @@
+[Unit]
+Description=Upload verified Pilot+ backup to encrypted Yandex Disk
+After=network-online.target docker.service pilot-plus-backup.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/local/sbin/pilot-plus-upload-yandex-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=read-only
+ProtectSystem=strict
+ReadOnlyPaths=/opt/pilot-plus/backups /root/.config/rclone
+ReadWritePaths=/var/lib/pilot-plus-yandex-backup
