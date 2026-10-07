@@ -28,6 +28,9 @@ export type RentalWizardVehicle = {
   id: string;
   label: string;
   dailyMinor: number;
+  depositMinor?: number;
+  registrationNumber?: string | null;
+  imageUrl?: string | null;
   available: boolean;
   reasons: readonly string[];
   legalReady?: boolean;

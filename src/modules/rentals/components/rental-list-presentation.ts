@@ -3,6 +3,7 @@ export type RentalListLifecycle =
 
 export type RentalListSource = {
   id: string;
+  companyId?: string;
   clientId: string;
   vehicleId: string;
   status: string;
@@ -36,7 +37,7 @@ export type RentalListUrgency = 'overdue' | 'today' | 'soon' | 'normal' | 'close
 
 const presentation = {
   DRAFT: { label: 'Черновик', tone: 'neutral' },
-  CONFIRMED: { label: 'Ожидает выдачи', tone: 'info' },
+  CONFIRMED: { label: 'Бронирование', tone: 'info' },
   ACTIVE: { label: 'Действует', tone: 'success' },
   EXTENDED: { label: 'Продлён', tone: 'warning' },
   COMPLETED: { label: 'Закрыт', tone: 'danger' },

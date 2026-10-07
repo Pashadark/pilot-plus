@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { AppShell } from '@/shared/components/app-shell/AppShell';
 import { RentalListPage } from '@/modules/rentals/components/RentalListPage';
 import { RentalCalendar } from '@/modules/rentals/components/RentalCalendar';
+import { RentalBookingDrawer } from '@/modules/rentals/booking/components/RentalBookingDrawer';
+import { getBookingWorkspace } from '@/modules/rentals/booking/server/queries';
 import { listFilteredRentalsForCurrentUser } from '@/modules/rentals/server/queries';
 import { decryptField } from '@/services/security/field-encryption';
 
@@ -30,10 +32,15 @@ export default async function RentalsPage({
     view?: string;
     archive?: string;
     important?: string;
+    booking?: string;
   }>;
 }) {
   const filters = await searchParams;
-  const records = await listFilteredRentalsForCurrentUser(filters);
+  const { booking, ...listFilters } = filters;
+  const [records, bookingWorkspace] = await Promise.all([
+    listFilteredRentalsForCurrentUser(listFilters),
+    booking === 'new' ? getBookingWorkspace() : Promise.resolve(null),
+  ]);
   return (
     <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Договоры аренды' }]}>
       {filters.view === 'calendar' ? (
@@ -51,6 +58,7 @@ export default async function RentalsPage({
             month={new Date().toISOString().slice(0, 7)}
             rentals={records.map((r) => ({
               id: r.id,
+              companyId: r.companyId,
               startsAt: r.startsAt.toISOString(),
               endsAt: r.endsAt.toISOString(),
               status: r.status,
@@ -111,9 +119,12 @@ export default async function RentalsPage({
               clientPhone: clientPhone(r.client.phoneEncrypted),
             };
           })}
-          filters={filters}
+          filters={listFilters}
         />
       )}
+      {booking === 'new' && bookingWorkspace ? (
+        <RentalBookingDrawer workspace={bookingWorkspace} />
+      ) : null}
     </AppShell>
   );
 }

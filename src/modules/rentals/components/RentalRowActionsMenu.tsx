@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import {
   FiClock,
   FiCopy,
@@ -16,8 +16,10 @@ import {
   FiShield,
   FiTruck,
   FiUser,
+  FiXCircle,
 } from 'react-icons/fi';
 
+import { cancelRentalAction } from '@/modules/rentals/server/actions';
 import { useToast } from '@/shared/providers/ToastProvider';
 
 type DocumentLink = {
@@ -31,6 +33,8 @@ export type RentalRowActionsMenuProps = {
   vehicleId: string;
   contractNumber: string | null;
   documents: readonly DocumentLink[];
+  companyId?: string;
+  status?: string;
 };
 
 const itemClass =
@@ -48,12 +52,15 @@ export function RentalRowActionsMenu({
   vehicleId,
   contractNumber,
   documents,
+  companyId,
+  status,
 }: RentalRowActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0, maxHeight: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
+  const [cancelling, startCancellation] = useTransition();
   const label = contractNumber ?? 'договора';
   const pdf = latestDocument(documents, 'PDF');
   const docx = latestDocument(documents, 'DOCX');
@@ -81,7 +88,9 @@ export function RentalRowActionsMenu({
   useEffect(() => {
     if (!open) return;
     updatePosition();
-    const firstItem = menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)');
+    const firstItem = menuRef.current?.querySelector<HTMLElement>(
+      '[role="menuitem"]:not(:disabled)',
+    );
     firstItem?.focus();
     let frameId: number | null = null;
 
@@ -130,6 +139,21 @@ export function RentalRowActionsMenu({
     }
   }
 
+  function cancelBooking() {
+    if (!companyId || !window.confirm('Отменить бронирование и освободить автомобиль?')) return;
+    startCancellation(async () => {
+      const data = new FormData();
+      data.set('companyId', companyId);
+      data.set('rentalId', rentalId);
+      const result = await cancelRentalAction(null, data);
+      showToast({
+        tone: result.ok ? 'success' : 'danger',
+        title: result.ok ? 'Бронирование отменено.' : result.message,
+      });
+      if (result.ok) window.location.reload();
+    });
+  }
+
   const menu = open ? (
     <div
       ref={menuRef}
@@ -156,11 +180,21 @@ export function RentalRowActionsMenu({
         items[next]?.focus();
       }}
     >
-      <Link role="menuitem" href={`/rentals/${rentalId}`} className={itemClass} onClick={() => close()}>
+      <Link
+        role="menuitem"
+        href={`/rentals/${rentalId}`}
+        className={itemClass}
+        onClick={() => close()}
+      >
         <FiExternalLink aria-hidden className="shrink-0 text-[var(--color-primary)]" />
         Открыть договор
       </Link>
-      <Link role="menuitem" href={`/rentals/${rentalId}/edit`} className={itemClass} onClick={() => close()}>
+      <Link
+        role="menuitem"
+        href={`/rentals/${rentalId}/edit`}
+        className={itemClass}
+        onClick={() => close()}
+      >
         <FiEdit3 aria-hidden className="shrink-0 text-[var(--color-primary)]" />
         Редактировать условия
       </Link>
@@ -185,11 +219,21 @@ export function RentalRowActionsMenu({
 
       <div role="separator" className="my-1 border-t border-[var(--color-border)]" />
 
-      <Link role="menuitem" href={`/clients/${clientId}`} className={itemClass} onClick={() => close()}>
+      <Link
+        role="menuitem"
+        href={`/clients/${clientId}`}
+        className={itemClass}
+        onClick={() => close()}
+      >
         <FiUser aria-hidden className="shrink-0 text-[var(--color-text-secondary)]" />
         Открыть клиента
       </Link>
-      <Link role="menuitem" href={`/vehicles/${vehicleId}`} className={itemClass} onClick={() => close()}>
+      <Link
+        role="menuitem"
+        href={`/vehicles/${vehicleId}`}
+        className={itemClass}
+        onClick={() => close()}
+      >
         <FiTruck aria-hidden className="shrink-0 text-[var(--color-text-secondary)]" />
         Открыть автомобиль
       </Link>
@@ -266,6 +310,21 @@ export function RentalRowActionsMenu({
         <FiLink aria-hidden className="shrink-0 text-[var(--color-text-secondary)]" />
         Скопировать ссылку
       </button>
+      {status === 'CONFIRMED' && companyId ? (
+        <>
+          <div role="separator" className="my-1 border-t border-[var(--color-border)]" />
+          <button
+            role="menuitem"
+            type="button"
+            disabled={cancelling}
+            className={`${itemClass} text-[var(--color-danger)]`}
+            onClick={cancelBooking}
+          >
+            <FiXCircle aria-hidden className="shrink-0" />
+            {cancelling ? 'Отменяем…' : 'Отменить бронирование'}
+          </button>
+        </>
+      ) : null}
     </div>
   ) : null;
 

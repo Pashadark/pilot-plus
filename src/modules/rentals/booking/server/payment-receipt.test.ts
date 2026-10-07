@@ -67,8 +67,7 @@ describe('admitBookingReceipt', () => {
       }),
     ).resolves.toEqual({
       uploadId: 'upload-1',
-      storageKey:
-        'companies/company-1/rentals/rental-1/rental-payment-receipts/upload-1.jpg',
+      storageKey: 'companies/company-1/rentals/rental-1/rental-payment-receipts/upload-1.jpg',
       originalName: 'receipt.jpg',
       verifiedMime: 'image/jpeg',
       bytes: 4,
@@ -81,8 +80,7 @@ describe('admitBookingReceipt', () => {
     expect(scan).toHaveBeenCalledWith(
       expect.objectContaining({
         uploadId: 'upload-1',
-        storageKey:
-          'companies/company-1/rentals/rental-1/rental-payment-receipts/upload-1.jpg',
+        storageKey: 'companies/company-1/rentals/rental-1/rental-payment-receipts/upload-1.jpg',
       }),
     );
   });

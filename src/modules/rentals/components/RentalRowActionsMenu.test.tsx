@@ -9,6 +9,7 @@ const showToast = vi.fn();
 vi.mock('@/shared/providers/ToastProvider', () => ({
   useToast: () => ({ showToast }),
 }));
+vi.mock('@/modules/rentals/server/actions', () => ({ cancelRentalAction: vi.fn() }));
 
 import { RentalRowActionsMenu } from './RentalRowActionsMenu';
 
@@ -20,6 +21,23 @@ afterEach(() => {
 });
 
 describe('RentalRowActionsMenu', () => {
+  it('offers cancellation for a confirmed booking', async () => {
+    const user = userEvent.setup();
+    render(
+      <RentalRowActionsMenu
+        rentalId="rental-1"
+        clientId="client-1"
+        vehicleId="vehicle-1"
+        companyId="company-1"
+        status="CONFIRMED"
+        contractNumber="ME-2026-0001"
+        documents={[]}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Ещё действия ME-2026-0001' }));
+    expect(screen.getByRole('menuitem', { name: 'Отменить бронирование' })).toBeTruthy();
+  });
+
   it('keeps missing document actions visible and disabled', async () => {
     const user = userEvent.setup();
     render(
@@ -33,9 +51,9 @@ describe('RentalRowActionsMenu', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Ещё действия ME-2026-0001' }));
-    expect((screen.getByRole('menuitem', { name: 'Скачать PDF' }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    expect(
+      (screen.getByRole('menuitem', { name: 'Скачать PDF' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
     expect(
       (screen.getByRole('menuitem', { name: 'Скачать DOCX' }) as HTMLButtonElement).disabled,
     ).toBe(true);

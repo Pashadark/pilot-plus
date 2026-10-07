@@ -38,8 +38,7 @@ function validateReceipt(file: ReceiptFile) {
   if (file.bytes.byteLength <= 0 || file.bytes.byteLength > maxReceiptBytes)
     throw new Error('Размер фотографии чека не должен превышать 10 МБ.');
   const detected = detectReceipt(file.bytes);
-  if (!detected)
-    throw new Error('Фотография чека должна быть изображением JPEG, PNG или WebP.');
+  if (!detected) throw new Error('Фотография чека должна быть изображением JPEG, PNG или WebP.');
   if (fileExtension(file.name) !== detected.extension)
     throw new Error('Расширение фотографии чека не соответствует её содержимому.');
   return detected;
@@ -80,11 +79,7 @@ export async function admitBookingReceipt(input: {
       uploadId,
       storageKey,
     });
-    if (
-      result.status !== 'CLEAN' ||
-      !result.audit.engine ||
-      !result.audit.signatureVersion
-    ) {
+    if (result.status !== 'CLEAN' || !result.audit.engine || !result.audit.signatureVersion) {
       await input.storage.removeUploadArtifacts(uploadId).catch(() => undefined);
       if (result.status === 'CLEAN') {
         await input.storage.removePrivate(storageKey).catch(() => undefined);

@@ -87,6 +87,11 @@ describe('client mutations', () => {
       status: 'success',
       message: 'Клиент создан.',
       clientId: 'client-1',
+      client: {
+        id: 'client-1',
+        fullName: 'Воронова Анна Сергеевна',
+        phone: '79991234567',
+      },
     });
 
     expect(repository.client.create).toHaveBeenCalledWith({

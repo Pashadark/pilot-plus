@@ -101,7 +101,12 @@ export type ClientListResult = {
 
 export type ClientActionState =
   | { status: 'idle' }
-  | { status: 'success'; message: string; clientId: string }
+  | {
+      status: 'success';
+      message: string;
+      clientId: string;
+      client?: { id: string; fullName: string; phone: string | null };
+    }
   | { status: 'error'; message: string; fieldErrors?: Record<string, string> };
 
 export type ClientRentalWorkspaceDto = {

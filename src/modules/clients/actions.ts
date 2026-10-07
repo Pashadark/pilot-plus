@@ -221,7 +221,18 @@ export async function createClientAction(
       return created;
     });
     revalidateClient(client.id);
-    return { status: 'success', message: 'Клиент создан.', clientId: client.id };
+    return {
+      status: 'success',
+      message: 'Клиент создан.',
+      clientId: client.id,
+      client: {
+        id: client.id,
+        fullName: [parsed.data.lastName, parsed.data.firstName, parsed.data.middleName]
+          .filter(Boolean)
+          .join(' '),
+        phone: parsed.data.phone,
+      },
+    };
   } catch (error) {
     return isDuplicatePhone(error) ? duplicatePhoneState() : SAVE_ERROR;
   }

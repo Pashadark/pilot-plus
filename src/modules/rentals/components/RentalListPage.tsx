@@ -482,6 +482,8 @@ export function RentalListPage({
                               (document): document is { format: 'PDF' | 'DOCX'; version: number } =>
                                 document.format === 'PDF' || document.format === 'DOCX',
                             )}
+                            companyId={rentals.find((rental) => rental.id === row.id)?.companyId}
+                            status={row.lifecycle}
                           />
                         </div>
                       </td>
@@ -580,6 +582,8 @@ export function RentalListPage({
                         (document): document is { format: 'PDF' | 'DOCX'; version: number } =>
                           document.format === 'PDF' || document.format === 'DOCX',
                       )}
+                      companyId={rentals.find((rental) => rental.id === row.id)?.companyId}
+                      status={row.lifecycle}
                     />
                   </div>
                 </article>

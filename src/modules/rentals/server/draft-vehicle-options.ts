@@ -15,6 +15,11 @@ export async function listRentalDraftVehicleOptions(
       modelName: true,
       model: true,
       registrationNumber: true,
+      images: {
+        select: { localPath: true },
+        orderBy: [{ isPrimary: 'desc' as const }, { position: 'asc' as const }],
+        take: 1,
+      },
       vin: true,
       dailyPriceMinor: true,
       depositMinor: true,
@@ -55,6 +60,9 @@ export async function listRentalDraftVehicleOptions(
         .filter(Boolean)
         .join(' '),
       dailyMinor: vehicle.dailyPriceMinor,
+      depositMinor: vehicle.depositMinor === null ? undefined : Number(vehicle.depositMinor),
+      registrationNumber: vehicle.registrationNumber,
+      imageUrl: vehicle.images?.[0]?.localPath ?? null,
       available: reasons.length === 0,
       reasons,
       legalReady: readiness.ready,
