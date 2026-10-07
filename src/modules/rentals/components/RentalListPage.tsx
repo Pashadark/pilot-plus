@@ -22,7 +22,7 @@ type Filters = {
 
 const statusOptions = [
   ['ACTIVE', 'Действуют'],
-  ['CONFIRMED', 'Ожидают выдачи'],
+  ['CONFIRMED', 'Бронирования'],
   ['COMPLETED', 'Закрыты'],
   ['DRAFT', 'Черновики'],
   ['CANCELLED', 'Отменены'],
@@ -153,12 +153,20 @@ export function RentalListPage({
     >
       <header className="flex flex-wrap items-center justify-between gap-3 lg:pl-5">
         <h1 className="text-2xl font-bold tracking-tight sm:text-[28px]">Аренда</h1>
-        <Link
-          href="/rentals/new"
-          className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--color-primary-hover)]"
-        >
-          <FiPlusCircle aria-hidden /> Новый договор
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/rentals?status=CONFIRMED&booking=new"
+            className="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-primary)] bg-[var(--color-surface)] px-4 text-sm font-semibold text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+          >
+            <FiCalendar aria-hidden /> Новое бронирование
+          </Link>
+          <Link
+            href="/rentals/new"
+            className="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-primary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+          >
+            <FiPlusCircle aria-hidden /> Новый договор
+          </Link>
+        </div>
       </header>
 
       <section className="mt-5 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm">
@@ -170,7 +178,7 @@ export function RentalListPage({
             ['current', 'Текущие', queryString(filters, { archive: undefined, status: undefined })],
             [
               'handover',
-              'Ожидают выдачи',
+              'Бронирования',
               queryString(filters, { archive: undefined, status: 'CONFIRMED' }),
             ],
             ['archive', 'Архив', queryString(filters, { archive: '1', status: undefined })],
@@ -280,8 +288,8 @@ export function RentalListPage({
             Просрочено <b className="ml-1 text-[var(--color-text)]">{overdueCount}</b>
           </span>
           <span aria-hidden className="h-5 w-px bg-[var(--color-border)]" />
-          <span aria-label={`Ожидают выдачи ${handoverCount}`}>
-            Ожидают выдачи <b className="ml-1 text-[var(--color-text)]">{handoverCount}</b>
+          <span aria-label={`Бронирования ${handoverCount}`}>
+            Бронирования <b className="ml-1 text-[var(--color-text)]">{handoverCount}</b>
           </span>
         </div>
 

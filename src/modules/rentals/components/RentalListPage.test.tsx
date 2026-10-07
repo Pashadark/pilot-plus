@@ -109,8 +109,12 @@ describe('RentalListPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Аренда' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Новый договор' })).toBeTruthy();
-    for (const tab of ['Текущие', 'Ожидают выдачи', 'Архив'])
+    expect(
+      screen.getByRole('link', { name: 'Новое бронирование' }).getAttribute('href'),
+    ).toBe('/rentals?status=CONFIRMED&booking=new');
+    for (const tab of ['Текущие', 'Бронирования', 'Архив'])
       expect(screen.getByRole('link', { name: tab })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Ожидают выдачи' })).toBeNull();
     for (const heading of [
       'Договор / Клиент',
       'Автомобиль / Гос. номер',
@@ -135,7 +139,7 @@ describe('RentalListPage', () => {
     expect(screen.getByText('Нет телефона')).toBeTruthy();
     expect(screen.getByLabelText(/Действуют\s+\d/u)).toBeTruthy();
     expect(screen.getByLabelText(/Возврат сегодня\s+\d/u)).toBeTruthy();
-    expect(screen.getByLabelText(/Ожидают выдачи\s+\d/u)).toBeTruthy();
+    expect(screen.getByLabelText(/Бронирования\s+\d/u)).toBeTruthy();
     expect(screen.getByText('Показано 1–2 из 2')).toBeTruthy();
     expect(screen.getByRole('combobox', { name: 'Договоров на странице' })).toBeTruthy();
     expect(screen.getAllByText('Продлён').length).toBeGreaterThan(0);
