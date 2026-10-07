@@ -11,7 +11,10 @@ describe('BookingClientStep', () => {
     render(
       <BookingClientStep companyId="company-1" clients={[]} selectedId="" onSelect={vi.fn()} />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Создать нового' }));
+    const action = screen.getByRole('button', { name: 'Новый клиент' });
+    expect(action.className).toContain('whitespace-nowrap');
+    expect(screen.getByRole('group', { name: 'Поиск и создание клиента' })).toBeTruthy();
+    await userEvent.click(action);
     expect(screen.getByRole('heading', { name: 'Новый клиент' })).toBeTruthy();
   });
 });

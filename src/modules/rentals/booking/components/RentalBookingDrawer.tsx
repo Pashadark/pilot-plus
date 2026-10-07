@@ -1,33 +1,25 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   FiArrowLeft,
   FiArrowRight,
-  FiCalendar,
   FiCheck,
-  FiFileText,
+  FiCalendar,
   FiTruck,
   FiUpload,
-  FiUser,
   FiX,
 } from 'react-icons/fi';
 
-import { Drawer } from '@/shared/ui';
+import { Button, Drawer, IconButton } from '@/shared/ui';
 
 import { confirmBookingAction, saveBookingDraftAction } from '../server/actions';
 import type { BookingClientOption, BookingVehicleOption, BookingWorkspaceData } from '../types';
 import { BookingClientStep } from './BookingClientStep';
+import { BookingProgress } from './BookingProgress';
 import { BookingSuccess } from './BookingSuccess';
-
-const steps = [
-  { label: 'Клиент', icon: FiUser },
-  { label: 'Автомобиль', icon: FiTruck },
-  { label: 'Даты и цена', icon: FiCalendar },
-  { label: 'Договор и чек', icon: FiFileText },
-];
 
 function rubles(minor: number) {
   return `${new Intl.NumberFormat('ru-RU').format(Math.round(minor / 100))} ₽`;
@@ -50,6 +42,8 @@ function periodLabel(startsAt: string, endsAt: string) {
 
 export function RentalBookingDrawer({ workspace }: { workspace: BookingWorkspaceData }) {
   const router = useRouter();
+  const [drawerOpen, setDrawerOpen] = useState(true);
+  const closingRef = useRef(false);
   const [step, setStep] = useState(0);
   const [client, setClient] = useState<BookingClientOption | null>(null);
   const [vehicle, setVehicle] = useState<BookingVehicleOption | null>(null);
@@ -93,8 +87,10 @@ export function RentalBookingDrawer({ workspace }: { workspace: BookingWorkspace
   );
 
   function close() {
-    router.replace('/rentals?status=CONFIRMED');
-    router.refresh();
+    if (closingRef.current) return;
+    closingRef.current = true;
+    setDrawerOpen(false);
+    router.replace('/rentals?status=CONFIRMED', { scroll: false });
   }
 
   function formData() {
@@ -142,7 +138,7 @@ export function RentalBookingDrawer({ workspace }: { workspace: BookingWorkspace
 
   return (
     <Drawer
-      open
+      open={drawerOpen}
       onOpenChange={(open) => {
         if (!open) close();
       }}
@@ -150,17 +146,17 @@ export function RentalBookingDrawer({ workspace }: { workspace: BookingWorkspace
       description="Создайте бронь, договор и подтверждение оплаты в одном окне."
       hideTitle
       backdropClassName="p-0 sm:p-4"
-      className="m-0 ml-auto h-full max-w-[620px] overflow-hidden p-0 max-sm:max-w-none max-sm:rounded-none sm:h-[calc(100dvh-2rem)]"
+      className="m-0 ml-auto h-full max-w-[656px] overflow-hidden p-0 max-sm:max-w-none max-sm:rounded-none sm:h-[calc(100dvh-2rem)]"
     >
       <div className="flex h-full min-h-0 flex-col">
-        <button
-          type="button"
-          aria-label="Закрыть"
+        <IconButton
+          label="Закрыть"
+          variant="secondary"
           onClick={close}
-          className="absolute top-4 right-4 z-10 grid size-11 place-items-center rounded-full text-[var(--color-text-secondary)] hover:bg-[var(--color-elevated)]"
+          className="absolute top-4 right-4 z-10 text-[var(--color-text-secondary)]"
         >
           <FiX aria-hidden />
-        </button>
+        </IconButton>
         {success ? (
           <div className="overflow-y-auto p-5">
             <BookingSuccess
@@ -173,26 +169,21 @@ export function RentalBookingDrawer({ workspace }: { workspace: BookingWorkspace
           </div>
         ) : (
           <>
-            <ol
-              aria-label="Шаги бронирования"
-              className="grid grid-cols-4 gap-1 border-y border-[var(--color-border)] bg-[var(--color-elevated)]/45 px-4 py-3"
-            >
-              {steps.map((item, index) => {
-                const Icon = item.icon;
-                return (
-                  <li
-                    data-testid="booking-step"
-                    key={item.label}
-                    aria-current={step === index ? 'step' : undefined}
-                    className={`grid justify-items-center gap-1 rounded-lg px-1 py-2 text-center text-[11px] font-semibold ${step === index ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]' : index < step ? 'text-[var(--color-success)]' : 'text-[var(--color-text-secondary)]'}`}
-                  >
-                    <Icon aria-hidden className="text-base" />
-                    <span>{item.label}</span>
-                  </li>
-                );
-              })}
-            </ol>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+            <header className="flex items-start gap-3 px-4 pt-4 pr-16 pb-3 sm:px-5 sm:pt-5 sm:pr-20">
+              <span className="grid size-11 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--color-primary-soft)] text-lg text-[var(--color-primary)]">
+                <FiCalendar aria-hidden />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-xl font-bold tracking-[-0.02em]">Новое бронирование</span>
+                <span className="mt-0.5 block text-sm text-[var(--color-text-secondary)]">
+                  Клиент, машина и договор — в одном процессе
+                </span>
+              </span>
+            </header>
+            <div className="px-4 pb-3 sm:px-5 sm:pb-4">
+              <BookingProgress currentStep={step} />
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 sm:px-5">
               {step === 0 ? (
                 <BookingClientStep
                   companyId={workspace.companyId}
@@ -378,41 +369,38 @@ export function RentalBookingDrawer({ workspace }: { workspace: BookingWorkspace
                 </p>
               ) : null}
             </div>
-            <footer className="grid gap-2 border-t border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:grid-cols-[auto_1fr_auto]">
-              <button
-                type="button"
+            <footer className="grid gap-2 border-t border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:grid-cols-[auto_1fr_auto] sm:px-5">
+              <Button
+                variant="secondary"
                 onClick={() => setStep((current) => Math.max(0, current - 1))}
                 disabled={step === 0 || pending}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 text-sm font-semibold disabled:opacity-40"
+                leadingIcon={<FiArrowLeft aria-hidden />}
               >
-                <FiArrowLeft aria-hidden /> Назад
-              </button>
-              <button
-                type="button"
+                Назад
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={() => saveDraft()}
                 disabled={!client || !vehicle || !calculation || calculation.overlapping || pending}
-                className="min-h-11 rounded-[var(--radius-md)] px-4 text-sm font-semibold text-[var(--color-primary)] disabled:opacity-40"
+                className="text-[var(--color-primary)]"
               >
                 {rentalId ? 'Черновик сохранён' : 'Сохранить черновик'}
-              </button>
+              </Button>
               {step < 3 ? (
-                <button
-                  type="button"
+                <Button
                   onClick={() => (step === 2 ? saveDraft(3) : setStep((current) => current + 1))}
                   disabled={!canContinue || pending}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-5 text-sm font-semibold text-white disabled:opacity-40"
+                  trailingIcon={<FiArrowRight aria-hidden />}
                 >
-                  Далее <FiArrowRight aria-hidden />
-                </button>
+                  Далее
+                </Button>
               ) : (
-                <button
-                  type="button"
+                <Button
                   onClick={confirm}
                   disabled={!canConfirm || pending}
-                  className="min-h-11 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-5 text-sm font-semibold text-white disabled:opacity-40"
                 >
                   {pending ? 'Создаём…' : 'Создать бронирование'}
-                </button>
+                </Button>
               )}
             </footer>
           </>

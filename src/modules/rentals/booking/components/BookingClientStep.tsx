@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from 'react';
 import { FiCheck, FiPlus, FiSearch, FiUser } from 'react-icons/fi';
 
 import { createClientAction } from '@/modules/clients/actions';
+import { Button } from '@/shared/ui';
 
 import type { BookingClientOption } from '../types';
 
@@ -148,34 +149,40 @@ export function BookingClientStep({
 
   return (
     <section className="grid gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-bold">Клиент</h3>
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-            Найдите по имени или телефону.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-primary)] px-3 text-sm font-semibold text-[var(--color-primary)]"
-        >
-          <FiPlus aria-hidden /> Создать нового
-        </button>
+      <div>
+        <h3 className="text-lg font-bold">Клиент</h3>
+        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+          Найдите клиента по имени или телефону
+        </p>
       </div>
-      <label className="relative">
-        <FiSearch
-          aria-hidden
-          className="absolute top-3.5 left-3 text-[var(--color-text-tertiary)]"
-        />
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          aria-label="Поиск клиента"
-          placeholder="ФИО или телефон"
-          className="min-h-11 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] pr-3 pl-10 text-sm"
-        />
-      </label>
+      <div
+        role="group"
+        aria-label="Поиск и создание клиента"
+        className="grid grid-cols-[minmax(0,1fr)_auto] gap-2"
+      >
+        <label className="relative min-w-0">
+          <FiSearch
+            aria-hidden
+            className="absolute top-3.5 left-3 text-[var(--color-text-tertiary)]"
+          />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Поиск клиента"
+            placeholder="Имя или телефон"
+            className="min-h-11 w-full rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] pr-3 pl-10 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+          />
+        </label>
+        <Button
+          variant="soft"
+          size="sm"
+          onClick={() => setCreating(true)}
+          leadingIcon={<FiPlus aria-hidden />}
+          className="whitespace-nowrap"
+        >
+          Новый клиент
+        </Button>
+      </div>
       <div className="grid max-h-[42dvh] gap-2 overflow-y-auto pr-1">
         {filtered.map((client) => (
           <button
@@ -183,19 +190,26 @@ export function BookingClientStep({
             type="button"
             onClick={() => onSelect(client)}
             aria-pressed={selectedId === client.id}
-            className="flex min-h-14 items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-left transition-colors aria-pressed:border-[var(--color-primary)] aria-pressed:bg-[var(--color-primary-soft)]"
+            className="flex min-h-[72px] items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-left transition-[border-color,background-color,box-shadow] duration-[var(--motion-fast)] hover:border-[var(--color-border-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] aria-pressed:border-[var(--color-primary)] aria-pressed:bg-[var(--color-primary-soft)] aria-pressed:shadow-[var(--shadow-card)]"
           >
             <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--color-elevated)] text-[var(--color-primary)]">
               <FiUser aria-hidden />
             </span>
             <span className="min-w-0 flex-1">
               <b className="block truncate text-sm">{client.fullName}</b>
-              <span className="text-xs text-[var(--color-text-secondary)]">
+              <span className="block text-xs text-[var(--color-text-secondary)]">
                 {client.phone ?? 'Телефон не указан'}
               </span>
+              {client.documentsReady ? (
+                <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--color-success)]">
+                  <span className="size-1.5 rounded-full bg-[var(--color-success)]" /> Документы проверены
+                </span>
+              ) : null}
             </span>
             {selectedId === client.id ? (
-              <FiCheck aria-hidden className="text-[var(--color-primary)]" />
+              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[var(--color-primary)] text-[var(--color-text-inverse)]">
+                <FiCheck aria-hidden />
+              </span>
             ) : null}
           </button>
         ))}
