@@ -14,10 +14,10 @@ export type EditableVehicle = {
   id: string;
   companyId: string;
   internalNumber: string;
-  registrationNumber: string;
-  make: string;
-  model: string;
-  year: number;
+  registrationNumber: string | null;
+  make: string | null;
+  model: string | null;
+  year: number | null;
   vin: string | null;
   city: string;
   dailyPriceRubles: string;
@@ -106,21 +106,21 @@ export function VehicleForm({
           name="registrationNumber"
           label="Государственный номер"
           required
-          defaultValue={vehicle?.registrationNumber}
+          defaultValue={vehicle?.registrationNumber ?? ''}
           error={fieldError('registrationNumber')}
         />
         <Input
           name="make"
           label="Марка"
           required
-          defaultValue={vehicle?.make}
+          defaultValue={vehicle?.make ?? ''}
           error={fieldError('make')}
         />
         <Input
           name="model"
           label="Модель"
           required
-          defaultValue={vehicle?.model}
+          defaultValue={vehicle?.model ?? ''}
           error={fieldError('model')}
         />
         <Input
@@ -129,7 +129,7 @@ export function VehicleForm({
           min="1950"
           label="Год выпуска"
           required
-          defaultValue={vehicle?.year}
+          defaultValue={vehicle?.year ?? ''}
           error={fieldError('year')}
         />
         <Input name="vin" label="VIN" defaultValue={vehicle?.vin ?? ''} error={fieldError('vin')} />

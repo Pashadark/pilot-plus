@@ -106,20 +106,16 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
   });
   if (!vehicle) notFound();
   await requireVehicleManagementAccess(vehicle.companyId);
-  if (
-    !vehicle.registrationNumber ||
-    !vehicle.make ||
-    !vehicle.modelName ||
-    !vehicle.manufacturedYear
-  )
-    notFound();
 
   return (
     <AppShell
       breadcrumbs={[
         { label: 'СУПА ПРО', href: '/' },
         { label: 'Автомобили', href: '/vehicles' },
-        { label: vehicle.modelName, href: `/vehicles/${vehicle.id}` },
+        {
+          label: vehicle.modelName ?? vehicle.registrationNumber ?? 'Автомобиль',
+          href: `/vehicles/${vehicle.id}`,
+        },
         { label: 'Редактирование' },
       ]}
     >
@@ -213,7 +209,10 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
         <ArchiveVehiclePanel
           companyId={vehicle.companyId}
           vehicleId={vehicle.id}
-          vehicleLabel={`${vehicle.make} ${vehicle.modelName} · ${vehicle.registrationNumber}`}
+          vehicleLabel={
+            [vehicle.make, vehicle.modelName, vehicle.registrationNumber].filter(Boolean).join(' ') ||
+            'Автомобиль без заполненных данных'
+          }
         />
       </main>
     </AppShell>
