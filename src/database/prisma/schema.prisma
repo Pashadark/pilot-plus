@@ -548,6 +548,7 @@ model Company {
   rentalOperations          RentalOperation[]
   rentalOperationMedia      RentalOperationMedia[]
   rentalPayments            RentalPayment[]
+  rentalPaymentReceipts     RentalPaymentReceipt[]
   rentalSignatures          RentalSignature[]
   contractTemplates         ContractTemplateVersion[]
   clientComments            ClientComment[]
@@ -1246,12 +1247,33 @@ model RentalPayment {
   recordedAt       DateTime            @default(now()) @db.Timestamptz(3)
   recordedByUserId String
   recordedBy       User                @relation("RentalPaymentRecorder", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+  receipts         RentalPaymentReceipt[]
   createdAt        DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime            @updatedAt @db.Timestamptz(3)
 
   @@unique([companyId, rentalId, idempotencyKey])
+  @@unique([companyId, id])
   @@index([companyId, rentalId, kind, status])
   @@index([recordedByUserId, recordedAt])
+}
+
+model RentalPaymentReceipt {
+  id               String        @id @default(cuid())
+  companyId        String
+  company          Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  paymentId        String
+  payment          RentalPayment @relation(fields: [companyId, paymentId], references: [companyId, id], onDelete: Cascade)
+  storageKey       String        @unique
+  originalName     String
+  verifiedMime     String
+  bytes            Int
+  sha256           String
+  scanEngine       String
+  signatureVersion String
+  scannedAt        DateTime      @db.Timestamptz(3)
+  createdAt        DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@index([companyId, paymentId, createdAt])
 }
 
 model RentalSignature {
