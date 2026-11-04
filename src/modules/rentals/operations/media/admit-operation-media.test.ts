@@ -20,6 +20,7 @@ function fixture() {
       uploadId: 'upload-1',
       companyId: 'company-1',
       storageKey: 'companies/company-1/rental-operations/operation-1/dashboard-photo.jpg',
+      verifiedMime: 'image/jpeg',
     }),
     updateMany: vi.fn().mockResolvedValue({ count: 1 }),
   };
@@ -82,6 +83,12 @@ describe('admitOperationMedia', () => {
 
   it('can promote validated return evidence directly without antivirus scanning', async () => {
     const { repository, storage, scan } = fixture();
+    const createPreview = vi.fn().mockResolvedValue({
+      mime: 'image/webp',
+      bytes: 123,
+      sha256: 'b'.repeat(64),
+    });
+    const randomId = vi.fn().mockReturnValueOnce('upload-1').mockReturnValueOnce('preview-temp-1');
 
     await expect(
       admitOperationMedia({
@@ -94,7 +101,8 @@ describe('admitOperationMedia', () => {
         storage,
         scan,
         skipAntivirus: true,
-        randomId: () => 'upload-1',
+        randomId,
+        createPreview,
       }),
     ).resolves.toEqual({ mediaId: 'media-1', status: 'CLEAN' });
     expect(scan).not.toHaveBeenCalled();
@@ -104,7 +112,23 @@ describe('admitOperationMedia', () => {
     );
     expect(repository.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: 'CLEAN' }),
+        data: expect.objectContaining({
+          status: 'CLEAN',
+          previewStorageKey:
+            'companies/company-1/rental-operations/operation-1/dashboard_photo.jpg.preview.webp',
+          previewMime: 'image/webp',
+          previewBytes: 123,
+          previewSha256: 'b'.repeat(64),
+          previewGeneratedAt: expect.any(Date),
+        }),
+      }),
+    );
+    expect(createPreview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceStorageKey:
+          'companies/company-1/rental-operations/operation-1/dashboard_photo.jpg',
+        temporaryUploadId: 'preview-temp-1',
+        profile: 'RENTAL_VEHICLE_PHOTO',
       }),
     );
   });

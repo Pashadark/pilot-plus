@@ -26,6 +26,7 @@ type StaleUpload = {
   uploadId: string | null;
   version: number;
   storageKey: string;
+  previewStorageKey: string | null;
   sha256: string;
   bytes: number;
   ledgerCommittedBytes: number;
@@ -229,6 +230,7 @@ export async function reconcileStaleClientDocumentUploads(
       uploadId: true,
       version: true,
       storageKey: true,
+      previewStorageKey: true,
       sha256: true,
       bytes: true,
       ledgerCommittedBytes: true,
@@ -298,6 +300,9 @@ export async function reconcileStaleClientDocumentUploads(
       ownedLease = mutationLease;
       const cleanup = await Promise.allSettled([
         removePrivateIfPresent(storage, candidate.storageKey),
+        ...(candidate.previewStorageKey
+          ? [removePrivateIfPresent(storage, candidate.previewStorageKey)]
+          : []),
         ...(candidate.uploadId ? [storage.removeUploadArtifacts(candidate.uploadId)] : []),
       ]);
       const cleaned = cleanup.every((result) => result.status === 'fulfilled');
@@ -662,6 +667,9 @@ export async function reconcileStaleClientDocumentUploads(
     const cleanup = await Promise.allSettled([
       storage.removeUploadArtifacts(candidate.uploadId),
       removePrivateIfPresent(storage, candidate.storageKey),
+      ...(candidate.previewStorageKey
+        ? [removePrivateIfPresent(storage, candidate.previewStorageKey)]
+        : []),
     ]);
     if (cleanup[0]?.status === 'fulfilled') staleFilesRemoved += cleanup[0].value;
     const cleaned = cleanup.every((result) => result.status === 'fulfilled');

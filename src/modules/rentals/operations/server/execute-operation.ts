@@ -94,7 +94,13 @@ export function createOperationMediaRepository(database: OperationMediaDatabase)
     createMedia: (value: Record<string, unknown>) =>
       database.rentalOperationMedia.create({
         data: value,
-        select: { id: true, uploadId: true, companyId: true, storageKey: true },
+        select: {
+          id: true,
+          uploadId: true,
+          companyId: true,
+          storageKey: true,
+          verifiedMime: true,
+        },
       } as never) as never,
     updateMany: (value: Parameters<typeof prisma.rentalOperationMedia.updateMany>[0]) =>
       database.rentalOperationMedia.updateMany(value as never),

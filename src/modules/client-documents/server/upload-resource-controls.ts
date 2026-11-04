@@ -218,6 +218,7 @@ export async function settleClientUploadPermit(
     now: Date;
     status: 'COMPLETED' | 'RELEASED';
     committedBytes: number;
+    maximumCommittedBytes?: number;
   },
 ) {
   return serializable(database, (transaction) =>
@@ -233,6 +234,7 @@ export async function settleClientUploadPermitInTransaction(
     now: Date;
     status: 'COMPLETED' | 'RELEASED';
     committedBytes: number;
+    maximumCommittedBytes?: number;
   },
 ) {
   const permit = await transaction.clientUploadPermit.findFirst({
@@ -246,7 +248,17 @@ export async function settleClientUploadPermitInTransaction(
   });
   if (completed.count !== 1) throw serializationConflict();
   const ledger = await transaction.clientStorageLedger.updateMany({
-    where: { companyId: input.companyId, reservedBytes: { gte: BigInt(permit.reservedBytes) } },
+    where: {
+      companyId: input.companyId,
+      reservedBytes: { gte: BigInt(permit.reservedBytes) },
+      ...(input.maximumCommittedBytes === undefined
+        ? {}
+        : {
+            committedBytes: {
+              lte: BigInt(input.maximumCommittedBytes - input.committedBytes),
+            },
+          }),
+    },
     data: {
       reservedBytes: { decrement: BigInt(permit.reservedBytes) },
       committedBytes: { increment: BigInt(input.committedBytes) },

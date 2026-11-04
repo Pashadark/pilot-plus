@@ -83,9 +83,34 @@ async function findReadyMedia(
       verifiedMime: true,
       storageKey: true,
       sha256: true,
+      previewStorageKey: true,
+      previewMime: true,
+      previewSha256: true,
       operation: { select: { rentalId: true, status: true } },
     },
   });
+}
+
+function selectedAsset(media: {
+  storageKey: string;
+  verifiedMime: string | null;
+  sha256: string | null;
+  previewStorageKey: string | null;
+  previewMime: string | null;
+  previewSha256: string | null;
+}) {
+  if (
+    media.previewStorageKey &&
+    media.previewMime === 'image/webp' &&
+    media.previewSha256
+  ) {
+    return {
+      storageKey: media.previewStorageKey,
+      mime: media.previewMime,
+      sha256: media.previewSha256,
+    };
+  }
+  return { storageKey: media.storageKey, mime: media.verifiedMime, sha256: media.sha256 };
 }
 
 async function reauthorize(
@@ -127,11 +152,13 @@ export async function GET(_request: Request, context: MediaContext) {
     return candidate;
   });
   if (!initial?.verifiedMime) return unavailable();
+  const initialAsset = selectedAsset(initial);
+  if (!initialAsset.mime) return unavailable();
 
   let stream: Readable;
   try {
     const storage = await LocalPrivateStorage.create(privateStorageRoot());
-    stream = await storage.openPrivate(initial.storageKey);
+    stream = await storage.openPrivate(initialAsset.storageKey);
   } catch {
     return unavailable();
   }
@@ -140,11 +167,15 @@ export async function GET(_request: Request, context: MediaContext) {
     const current = await prisma.$transaction(async (transaction) => {
       if (!(await reauthorize(transaction, access, initial.companyId))) return null;
       const record = await findReadyMedia(transaction, access, target);
+      const asset = record ? selectedAsset(record) : null;
       if (
         !record ||
+        !asset?.mime ||
         record.id !== initial.id ||
-        record.storageKey !== initial.storageKey ||
-        record.sha256 !== initial.sha256
+        record.sha256 !== initial.sha256 ||
+        asset.storageKey !== initialAsset.storageKey ||
+        asset.mime !== initialAsset.mime ||
+        asset.sha256 !== initialAsset.sha256
       ) {
         return null;
       }
@@ -160,9 +191,9 @@ export async function GET(_request: Request, context: MediaContext) {
         },
         transaction,
       );
-      return record;
+      return { record, asset };
     });
-    if (!current?.verifiedMime) {
+    if (!current?.asset.mime) {
       stream.destroy();
       return unavailable();
     }
@@ -170,7 +201,7 @@ export async function GET(_request: Request, context: MediaContext) {
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Disposition': 'inline',
-        'Content-Type': current.verifiedMime,
+        'Content-Type': current.asset.mime,
         'X-Content-Type-Options': 'nosniff',
       },
     });

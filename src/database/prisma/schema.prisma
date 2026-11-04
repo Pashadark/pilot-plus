@@ -862,6 +862,11 @@ model ClientDocumentVersion {
   uploadId              String?                @unique
   version               Int
   storageKey            String                 @unique
+  previewStorageKey     String?                @unique
+  previewMime           String?
+  previewBytes          Int?
+  previewSha256         String?
+  previewGeneratedAt    DateTime?
   originalName          String
   verifiedMime          String
   bytes                 Int
@@ -1539,30 +1544,35 @@ model RentalOperation {
 }
 
 model RentalOperationMedia {
-  id               String                     @id @default(cuid())
-  companyId        String
-  company          Company                    @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  operationId      String
-  operation        RentalOperation            @relation(fields: [companyId, operationId], references: [companyId, id], onDelete: Restrict)
-  kind             RentalOperationMediaKind
-  status           RentalOperationMediaStatus @default(PENDING)
-  uploadId         String                     @unique
-  originalName     String
-  verifiedMime     String?
-  bytes            Int?
-  sha256           String?
-  quarantineKey    String                     @unique
-  storageKey       String                     @unique
-  scanEngine       String?
-  signatureVersion String?
-  leaseExpiresAt   DateTime?                  @db.Timestamptz(3)
-  claimToken       String?                    @unique
-  retryCount       Int                        @default(0)
-  lastErrorCode    String?
-  promotedAt       DateTime?                  @db.Timestamptz(3)
-  committedAt      DateTime?                  @db.Timestamptz(3)
-  createdAt        DateTime                   @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime                   @updatedAt @db.Timestamptz(3)
+  id                 String                     @id @default(cuid())
+  companyId          String
+  company            Company                    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  operationId        String
+  operation          RentalOperation            @relation(fields: [companyId, operationId], references: [companyId, id], onDelete: Restrict)
+  kind               RentalOperationMediaKind
+  status             RentalOperationMediaStatus @default(PENDING)
+  uploadId           String                     @unique
+  originalName       String
+  verifiedMime       String?
+  bytes              Int?
+  sha256             String?
+  quarantineKey      String                     @unique
+  storageKey         String                     @unique
+  previewStorageKey  String?                    @unique
+  previewMime        String?
+  previewBytes       Int?
+  previewSha256      String?
+  previewGeneratedAt DateTime?                  @db.Timestamptz(3)
+  scanEngine         String?
+  signatureVersion   String?
+  leaseExpiresAt     DateTime?                  @db.Timestamptz(3)
+  claimToken         String?                    @unique
+  retryCount         Int                        @default(0)
+  lastErrorCode      String?
+  promotedAt         DateTime?                  @db.Timestamptz(3)
+  committedAt        DateTime?                  @db.Timestamptz(3)
+  createdAt          DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                   @updatedAt @db.Timestamptz(3)
 
   @@unique([operationId, kind])
   @@index([companyId, status, leaseExpiresAt])

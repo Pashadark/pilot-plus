@@ -45,6 +45,9 @@ const downloadable = {
   originalName: "договор O'Brien.pdf",
   verifiedMime: 'application/pdf',
   sha256: 'a'.repeat(64),
+  previewStorageKey: null,
+  previewMime: null,
+  previewSha256: null,
 };
 const context = {
   params: Promise.resolve({ id: 'client-1', documentId: 'document-1' }),
@@ -148,6 +151,36 @@ describe('protected client document download route', () => {
       2,
       expect.any(Object),
     );
+  });
+
+  it('serves the derived WebP for an image preview while retaining the original for downloads', async () => {
+    const image = {
+      ...downloadable,
+      storageKey: 'companies/company-1/clients/client-1/documents/document-1/2.jpg',
+      originalName: 'passport.jpg',
+      verifiedMime: 'image/jpeg',
+      previewStorageKey:
+        'companies/company-1/clients/client-1/documents/document-1/2.jpg.preview.webp',
+      previewMime: 'image/webp',
+      previewSha256: 'b'.repeat(64),
+    };
+    mocks.getDownloadableClientDocument.mockResolvedValue(image);
+    mocks.openPrivate.mockResolvedValue(Readable.from([Buffer.from('webp-preview')]));
+
+    const response = await GET(
+      new Request('http://localhost/download?preview=1&v=2'),
+      context,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/webp');
+    expect(mocks.openPrivate).toHaveBeenCalledWith(image.previewStorageKey);
+
+    mocks.openPrivate.mockClear();
+    mocks.openPrivate.mockResolvedValue(Readable.from([Buffer.from('jpeg-original')]));
+    const download = await GET(new Request('http://localhost/download'), context);
+    expect(download.headers.get('content-type')).toBe('image/jpeg');
+    expect(mocks.openPrivate).toHaveBeenCalledWith(image.storageKey);
   });
 
   it.each([

@@ -8,6 +8,8 @@ describe('reconcileOperationMedia', () => {
       id: 'media-1',
       uploadId: 'upload-1',
       storageKey: 'companies/company-1/rental-operations/operation-1/video.mp4',
+      previewStorageKey:
+        'companies/company-1/rental-operations/operation-1/video.mp4.preview.webp',
       status: 'SCANNING',
       claimToken: 'dead-worker',
       leaseExpiresAt: new Date('2026-08-21T09:00:00Z'),
@@ -32,6 +34,8 @@ describe('reconcileOperationMedia', () => {
       }),
     ).resolves.toEqual({ cleaned: 1, skipped: 0 });
     expect(repository.updateMany).toHaveBeenCalledBefore(storage.removeUploadArtifacts);
+    expect(storage.removePrivate).toHaveBeenCalledWith(candidate.storageKey);
+    expect(storage.removePrivate).toHaveBeenCalledWith(candidate.previewStorageKey);
     expect(repository.deleteMany).toHaveBeenCalledWith({
       where: { id: 'media-1', status: 'CLEANING', claimToken: 'reconciler-1' },
     });

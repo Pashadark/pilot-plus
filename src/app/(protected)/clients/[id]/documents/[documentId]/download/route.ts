@@ -34,6 +34,36 @@ function encodedFilename(value: string) {
   );
 }
 
+function selectedAsset(
+  document: {
+    storageKey: string;
+    verifiedMime: string;
+    sha256: string;
+    previewStorageKey: string | null;
+    previewMime: string | null;
+    previewSha256: string | null;
+  },
+  preview: boolean,
+) {
+  if (
+    preview &&
+    document.previewStorageKey &&
+    document.previewMime === 'image/webp' &&
+    document.previewSha256
+  ) {
+    return {
+      storageKey: document.previewStorageKey,
+      mime: document.previewMime,
+      sha256: document.previewSha256,
+    };
+  }
+  return {
+    storageKey: document.storageKey,
+    mime: document.verifiedMime,
+    sha256: document.sha256,
+  };
+}
+
 export async function GET(request: Request, context: DownloadContext) {
   const access = await getClientAccess('VIEW_CLIENTS');
   if (!access) {
@@ -58,11 +88,12 @@ export async function GET(request: Request, context: DownloadContext) {
     expectedVersion,
   );
   if (!initial) return unavailable();
+  const initialAsset = selectedAsset(initial, preview);
 
   let stream: Readable;
   try {
     const storage = await LocalPrivateStorage.create(privateStorageRoot());
-    stream = await storage.openPrivate(initial.storageKey);
+    stream = await storage.openPrivate(initialAsset.storageKey);
   } catch {
     return unavailable();
   }
@@ -78,9 +109,16 @@ export async function GET(request: Request, context: DownloadContext) {
       );
       if (
         !current ||
-        current.storageKey !== initial.storageKey ||
         current.version !== initial.version ||
         current.sha256 !== initial.sha256
+      ) {
+        return null;
+      }
+      const currentAsset = selectedAsset(current, preview);
+      if (
+        currentAsset.storageKey !== initialAsset.storageKey ||
+        currentAsset.mime !== initialAsset.mime ||
+        currentAsset.sha256 !== initialAsset.sha256
       ) {
         return null;
       }
@@ -94,7 +132,7 @@ export async function GET(request: Request, context: DownloadContext) {
         changes: { sha256: current.sha256, version: current.version },
       };
       await writeAuditLog({ ...auditBase, action: preview ? 'VIEW' : 'DOWNLOAD' }, transaction);
-      return current;
+      return { current, asset: currentAsset };
     });
 
     if (!authorized) {
@@ -105,8 +143,8 @@ export async function GET(request: Request, context: DownloadContext) {
     return new Response(Readable.toWeb(stream) as ReadableStream<Uint8Array>, {
       headers: {
         'Cache-Control': 'private, no-store',
-        'Content-Disposition': `${preview ? 'inline' : 'attachment'}; filename*=UTF-8''${encodedFilename(authorized.originalName)}`,
-        'Content-Type': authorized.verifiedMime,
+        'Content-Disposition': `${preview ? 'inline' : 'attachment'}; filename*=UTF-8''${encodedFilename(authorized.current.originalName)}`,
+        'Content-Type': authorized.asset.mime,
         'X-Content-Type-Options': 'nosniff',
       },
     });

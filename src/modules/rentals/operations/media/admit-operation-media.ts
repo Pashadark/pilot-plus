@@ -1,4 +1,8 @@
 import type { PrivateStorage } from '@/services/storage/private-storage';
+import {
+  createStoredWebpPreview,
+  supportsWebpPreview,
+} from '@/services/media/webp-preview';
 
 import type { RentalOperationMediaKind } from '../types';
 import { validateOperationMediaFile } from './file-validation';
@@ -11,7 +15,13 @@ type Operation = {
   status: string;
 };
 type Media = { id: string; status: string };
-type CreatedMedia = { id: string; uploadId: string; companyId: string; storageKey: string };
+type CreatedMedia = {
+  id: string;
+  uploadId: string;
+  companyId: string;
+  storageKey: string;
+  verifiedMime: string;
+};
 
 export type OperationMediaRepository = {
   findOperation(input: {
@@ -54,6 +64,7 @@ export async function admitOperationMedia(input: {
   >;
   skipAntivirus?: boolean;
   randomId(): string;
+  createPreview?: typeof createStoredWebpPreview;
 }) {
   const operation = await input.repository.findOperation({
     companyId: input.companyId,
@@ -97,8 +108,33 @@ export async function admitOperationMedia(input: {
     throw error;
   }
   if (input.skipAntivirus) {
+    let preview:
+      | { storageKey: string; mime: 'image/webp'; bytes: number; sha256: string; generatedAt: Date }
+      | undefined;
     try {
       await input.storage.promote(uploadId, storageKey);
+      if (supportsWebpPreview(validated.mime)) {
+        const previewStorageKey = `${storageKey}.preview.webp`;
+        try {
+          const generated = await (input.createPreview ?? createStoredWebpPreview)({
+            storage: input.storage,
+            sourceStorageKey: storageKey,
+            previewStorageKey,
+            verifiedMime: validated.mime,
+            profile: 'RENTAL_VEHICLE_PHOTO',
+            temporaryUploadId: input.randomId(),
+          });
+          preview = {
+            storageKey: previewStorageKey,
+            mime: generated.mime,
+            bytes: generated.bytes,
+            sha256: generated.sha256,
+            generatedAt: new Date(),
+          };
+        } catch {
+          // Keep the validated original; backfill repairs the optional derivative.
+        }
+      }
       const now = new Date();
       const committed = await input.repository.updateMany({
         where: { id: media.id, companyId: input.companyId, status: 'PENDING' },
@@ -107,10 +143,17 @@ export async function admitOperationMedia(input: {
           promotedAt: now,
           committedAt: now,
           lastErrorCode: null,
+          previewStorageKey: preview?.storageKey,
+          previewMime: preview?.mime,
+          previewBytes: preview?.bytes,
+          previewSha256: preview?.sha256,
+          previewGeneratedAt: preview?.generatedAt,
         },
       });
       if (committed.count !== 1) {
         await input.storage.removePrivate(storageKey).catch(() => undefined);
+        if (preview)
+          await input.storage.removePrivate(preview.storageKey).catch(() => undefined);
         throw new Error('Право на сохранение файла потеряно.');
       }
       return { mediaId: media.id, status: 'CLEAN' as const };

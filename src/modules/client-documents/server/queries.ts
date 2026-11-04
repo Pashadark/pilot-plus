@@ -23,6 +23,9 @@ type RawVersion = {
   verifiedMime: string;
   bytes: number;
   sha256: string;
+  previewStorageKey: string | null;
+  previewMime: string | null;
+  previewSha256: string | null;
   scanVerdict: string | null;
 };
 
@@ -45,6 +48,9 @@ const versionSelect = {
   verifiedMime: true,
   bytes: true,
   sha256: true,
+  previewStorageKey: true,
+  previewMime: true,
+  previewSha256: true,
   scanVerdict: true,
 } satisfies Prisma.ClientDocumentVersionSelect;
 
@@ -156,6 +162,9 @@ export function createClientDocumentQueries(repository: ClientDocumentRepository
         originalName: version.originalName,
         verifiedMime: version.verifiedMime,
         sha256: version.sha256,
+        previewStorageKey: version.previewStorageKey,
+        previewMime: version.previewMime,
+        previewSha256: version.previewSha256,
       };
     },
   };

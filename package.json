@@ -15,6 +15,8 @@
     "db:preflight:maintenance": "tsx scripts/maintenance-migration-preflight.ts",
     "db:migrate:fresh:verify": "tsx scripts/verify-fresh-migrations.ts",
     "client-documents:reconcile": "tsx scripts/reconcile-client-document-uploads.ts",
+    "media-previews:backfill:dry-run": "tsx scripts/backfill-uploaded-media-webp-previews.ts",
+    "media-previews:backfill:apply": "tsx scripts/backfill-uploaded-media-webp-previews.ts --apply",
     "rental-operations:reconcile-media": "tsx scripts/reconcile-rental-operation-media.ts",
     "rentals:readiness-report": "tsx --conditions=react-server scripts/report-rental-readiness.ts",
     "vehicles:sync-images": "tsx scripts/sync-vehicle-images.ts",

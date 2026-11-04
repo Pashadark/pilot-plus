@@ -34,6 +34,9 @@ const target = {
   verifiedMime: 'video/mp4',
   storageKey: 'companies/company-1/rentals/rental-1/operations/operation-1/video.mp4',
   sha256: 'a'.repeat(64),
+  previewStorageKey: null,
+  previewMime: null,
+  previewSha256: null,
   operation: { rentalId: 'rental-1', status: 'COMMITTED' as const },
 };
 const context = {
@@ -107,6 +110,34 @@ describe('protected rental operation media route', () => {
 
     expect(response.status).toBe(404);
     expect(mocks.openPrivate).not.toHaveBeenCalled();
+  });
+
+  it('serves the derived WebP for vehicle photos', async () => {
+    const photo = {
+      ...target,
+      kind: 'DASHBOARD_PHOTO' as const,
+      originalName: 'Приборка.jpg',
+      verifiedMime: 'image/jpeg',
+      storageKey: 'companies/company-1/rentals/rental-1/operations/operation-1/dashboard.jpg',
+      previewStorageKey:
+        'companies/company-1/rentals/rental-1/operations/operation-1/dashboard.jpg.preview.webp',
+      previewMime: 'image/webp',
+      previewSha256: 'b'.repeat(64),
+    };
+    mocks.findFirst.mockResolvedValue(photo);
+    mocks.openPrivate.mockResolvedValue(Readable.from([Buffer.from('safe-webp')]));
+
+    const response = await GET(new Request('http://localhost/media'), {
+      params: Promise.resolve({
+        id: 'rental-1',
+        operationId: 'operation-1',
+        kind: 'DASHBOARD_PHOTO',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/webp');
+    expect(mocks.openPrivate).toHaveBeenCalledWith(photo.previewStorageKey);
   });
 
   it('rejects path-shaped identifiers and unknown media kinds before database or storage access', async () => {

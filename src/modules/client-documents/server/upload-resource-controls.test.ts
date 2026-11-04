@@ -287,4 +287,31 @@ describe('durable client upload resource controls', () => {
       },
     });
   });
+
+  it('не позволяет производному preview превысить общий лимит committed bytes', async () => {
+    const { settleClientUploadPermit } = await import('./upload-resource-controls');
+    const { database, permit, ledger } = dependencies();
+    permit.findFirst.mockResolvedValue({ reservedBytes: 15 });
+
+    await settleClientUploadPermit(database, {
+      uploadId: '123e4567-e89b-42d3-a456-426614174000',
+      companyId: 'company-1',
+      now,
+      status: 'COMPLETED',
+      committedBytes: 20,
+      maximumCommittedBytes: 100,
+    });
+
+    expect(ledger.updateMany).toHaveBeenCalledWith({
+      where: {
+        companyId: 'company-1',
+        reservedBytes: { gte: BigInt(15) },
+        committedBytes: { lte: BigInt(80) },
+      },
+      data: {
+        reservedBytes: { decrement: BigInt(15) },
+        committedBytes: { increment: BigInt(20) },
+      },
+    });
+  });
 });

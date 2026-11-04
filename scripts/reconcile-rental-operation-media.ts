@@ -27,6 +27,7 @@ async function main() {
             id: true,
             uploadId: true,
             storageKey: true,
+            previewStorageKey: true,
             status: true,
             claimToken: true,
             leaseExpiresAt: true,

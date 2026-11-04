@@ -1,6 +1,12 @@
+import { randomUUID } from 'node:crypto';
+
 import type { MalwareScanner } from '@/services/malware-scanner/types';
 import type { PrivateStorage } from '@/services/storage/private-storage';
 import { scanPendingUpload } from '@/modules/client-documents/scan-upload';
+import {
+  createStoredWebpPreview,
+  supportsWebpPreview,
+} from '@/services/media/webp-preview';
 
 type Count = { count: number };
 type MediaRepository = { updateMany(args: unknown): Promise<Count> };
@@ -11,6 +17,7 @@ export async function scanOperationMedia(input: {
     uploadId: string;
     companyId: string;
     storageKey: string;
+    verifiedMime: string;
   };
   now: Date;
   leaseMs: number;
@@ -18,6 +25,8 @@ export async function scanOperationMedia(input: {
   repository: MediaRepository;
   storage: PrivateStorage;
   scanner: MalwareScanner;
+  randomId?: () => string;
+  createPreview?: typeof createStoredWebpPreview;
 }): Promise<
   { ok: true; status: 'CLEAN' | 'BLOCKED' | 'ERROR' } | { ok: false; status: 'OWNERSHIP_LOST' }
 > {
@@ -52,6 +61,31 @@ export async function scanOperationMedia(input: {
     storageKey: input.media.storageKey,
     renewMutationLease,
   });
+  const previewStorageKey = `${input.media.storageKey}.preview.webp`;
+  let preview:
+    | { storageKey: string; mime: 'image/webp'; bytes: number; sha256: string; generatedAt: Date }
+    | undefined;
+  if (result.status === 'CLEAN' && supportsWebpPreview(input.media.verifiedMime)) {
+    try {
+      const generated = await (input.createPreview ?? createStoredWebpPreview)({
+        storage: input.storage,
+        sourceStorageKey: input.media.storageKey,
+        previewStorageKey,
+        verifiedMime: input.media.verifiedMime,
+        profile: 'RENTAL_VEHICLE_PHOTO',
+        temporaryUploadId: (input.randomId ?? randomUUID)(),
+      });
+      preview = {
+        storageKey: previewStorageKey,
+        mime: generated.mime,
+        bytes: generated.bytes,
+        sha256: generated.sha256,
+        generatedAt: new Date(),
+      };
+    } catch {
+      // A clean original remains usable; the idempotent backfill repairs the derivative.
+    }
+  }
   const terminal = await input.repository.updateMany({
     where: {
       id: input.media.id,
@@ -68,12 +102,19 @@ export async function scanOperationMedia(input: {
       leaseExpiresAt: null,
       promotedAt: result.status === 'CLEAN' ? input.now : undefined,
       committedAt: result.status === 'CLEAN' ? input.now : undefined,
+      previewStorageKey: preview?.storageKey,
+      previewMime: preview?.mime,
+      previewBytes: preview?.bytes,
+      previewSha256: preview?.sha256,
+      previewGeneratedAt: preview?.generatedAt,
       lastErrorCode: result.status === 'ERROR' ? 'SCAN_ERROR' : null,
     },
   });
   if (terminal.count !== 1) {
-    if (result.status === 'CLEAN')
+    if (result.status === 'CLEAN') {
       await input.storage.removePrivate(input.media.storageKey).catch(() => undefined);
+      if (preview) await input.storage.removePrivate(preview.storageKey).catch(() => undefined);
+    }
     return { ok: false, status: 'OWNERSHIP_LOST' };
   }
   return { ok: true, status: result.status };

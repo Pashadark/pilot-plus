@@ -13,6 +13,7 @@
 ## Task 1: Shared image-preview normalizer
 
 **Files:**
+
 - Create: `src/services/media/webp-preview.ts`
 - Test: `src/services/media/webp-preview.test.ts`
 
@@ -24,6 +25,7 @@
 ## Task 2: Additive preview metadata schema
 
 **Files:**
+
 - Modify: `src/database/prisma/schema.prisma`
 - Create: `src/database/prisma/migrations/20261104120000_add_uploaded_media_webp_previews/migration.sql`
 
@@ -34,6 +36,7 @@
 ## Task 3: Generate client-document previews after CLEAN scan
 
 **Files:**
+
 - Modify: `src/modules/client-documents/actions.ts`
 - Modify: `src/modules/client-documents/server/reconcile-stale-uploads.ts`
 - Modify: `src/modules/client-documents/server/upload-resource-controls.ts`
@@ -49,6 +52,7 @@
 ## Task 4: Generate rental-operation photo previews
 
 **Files:**
+
 - Modify: `src/modules/rentals/operations/media/admit-operation-media.ts`
 - Modify: `src/modules/rentals/operations/media/scan-operation-media.ts`
 - Modify: `src/modules/rentals/operations/media/reconcile-operation-media.ts`
@@ -64,6 +68,7 @@
 ## Task 5: Idempotent backfill and recovery
 
 **Files:**
+
 - Create: `scripts/backfill-uploaded-media-webp-previews.ts`
 - Create: `scripts/backfill-uploaded-media-webp-previews.test.ts`
 - Modify: `package.json`
@@ -76,6 +81,7 @@
 ## Task 6: Documentation, full verification, and production rollout
 
 **Files:**
+
 - Modify: `docs/PROJECT_GUIDE.md`
 
 1. Document the original/preview storage rule, quota semantics, exclusions, recovery, and backfill command.
@@ -84,4 +90,3 @@
 4. Deploy with the established zero-downtime release procedure.
 5. Run production migration, backfill dry-run, apply, and a second dry-run proving zero pending work.
 6. Verify Supa Pro HTTP health, service health, protected previews, original downloads, and unchanged PDFs/videos/static assets.
-

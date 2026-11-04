@@ -37,6 +37,10 @@ import { ClamAvClient } from '@/services/malware-scanner/clamav-client';
 import { LocalPrivateStorage } from '@/services/storage/local-private-storage';
 import type { PrivateStorage } from '@/services/storage/private-storage';
 import { encryptField } from '@/services/security/field-encryption';
+import {
+  createStoredWebpPreview,
+  supportsWebpPreview,
+} from '@/services/media/webp-preview';
 
 const documentCategories = new Set<ClientDocumentCategory>([
   'PASSPORT',
@@ -97,6 +101,15 @@ type UploadRecord = {
   uploadId: string;
   storageKey: string;
   bytes: number;
+  verifiedMime: string;
+};
+
+type GeneratedPreview = {
+  storageKey: string;
+  mime: 'image/webp';
+  bytes: number;
+  sha256: string;
+  generatedAt: Date;
 };
 
 function hasPrismaCode(error: unknown, code: string) {
@@ -398,6 +411,7 @@ async function createNewUpload(
       uploadId,
       storageKey,
       bytes: verified.bytes,
+      verifiedMime: verified.mime,
     } satisfies UploadRecord;
   });
 }
@@ -482,6 +496,7 @@ async function createReplacementUpload(
       uploadId,
       storageKey,
       bytes: verified.bytes,
+      verifiedMime: verified.mime,
     } satisfies UploadRecord;
   });
 }
@@ -490,7 +505,10 @@ async function finalizeUpload(
   access: ClientAccess,
   upload: UploadRecord,
   result: ScanPendingUploadResult,
+  preview: GeneratedPreview | null,
+  maximumCommittedBytes: number,
 ) {
+  const committedBytes = result.status === 'CLEAN' ? upload.bytes + (preview?.bytes ?? 0) : 0;
   return prisma.$transaction(async (transaction) => {
     const version = await transaction.clientDocumentVersion.updateMany({
       where: {
@@ -508,7 +526,12 @@ async function finalizeUpload(
           result.status === 'ERROR' ? new Date(Date.now() + scanRetryDelayMs(0)) : null,
         quarantineExpiresAt: result.status === 'ERROR' ? undefined : null,
         scannedAt: new Date(),
-        ledgerCommittedBytes: result.status === 'CLEAN' ? upload.bytes : 0,
+        previewStorageKey: result.status === 'CLEAN' ? preview?.storageKey : undefined,
+        previewMime: result.status === 'CLEAN' ? preview?.mime : undefined,
+        previewBytes: result.status === 'CLEAN' ? preview?.bytes : undefined,
+        previewSha256: result.status === 'CLEAN' ? preview?.sha256 : undefined,
+        previewGeneratedAt: result.status === 'CLEAN' ? preview?.generatedAt : undefined,
+        ledgerCommittedBytes: committedBytes,
       },
     });
     let documentCount = 1;
@@ -568,7 +591,8 @@ async function finalizeUpload(
           companyId: upload.companyId,
           now: new Date(),
           status: 'COMPLETED',
-          committedBytes: result.status === 'CLEAN' ? upload.bytes : 0,
+          committedBytes,
+          maximumCommittedBytes,
         },
       );
       if (!settled) throw new Error('Резервирование ресурсов загрузки истекло.');
@@ -580,6 +604,7 @@ async function compensateFailedFinalization(
   storage: PrivateStorage,
   upload: UploadRecord,
   result: ScanPendingUploadResult,
+  preview: GeneratedPreview | null = null,
 ): Promise<ScanPendingUploadResult['status'] | null> {
   const cleanupRetryAt = new Date(Date.now() + cleanupRetryMs);
   let claimed: boolean;
@@ -663,10 +688,11 @@ async function compensateFailedFinalization(
             committed.document.status === 'CLEAN';
       if (!documentMatches) return null;
       if (committed.scanVerdict === 'ERROR' && result.status === 'CLEAN') {
-        const cleaned = await storage
-          .removePrivate(upload.storageKey)
-          .then(() => true)
-          .catch(() => false);
+        const cleanedOriginal = await removePrivateTracked(storage, upload.storageKey);
+        const cleanedPreview = preview
+          ? await removePrivateTracked(storage, preview.storageKey)
+          : true;
+        const cleaned = cleanedOriginal && cleanedPreview;
         await prisma.clientDocumentVersion
           .updateMany({
             where: {
@@ -692,10 +718,9 @@ async function compensateFailedFinalization(
 
   let cleanupSucceeded = true;
   if (result.status === 'CLEAN') {
-    cleanupSucceeded = await storage
-      .removePrivate(upload.storageKey)
-      .then(() => true)
-      .catch(() => false);
+    const cleanedOriginal = await removePrivateTracked(storage, upload.storageKey);
+    const cleanedPreview = preview ? await removePrivateTracked(storage, preview.storageKey) : true;
+    cleanupSucceeded = cleanedOriginal && cleanedPreview;
   } else if (result.status === 'ERROR') {
     cleanupSucceeded = await storage
       .removeQuarantine(upload.uploadId)
@@ -820,9 +845,9 @@ export async function uploadClientDocumentAction(
     } catch {
       const failed = { status: 'ERROR', audit: { sha256: hash, verdict: 'ERROR' } } as const;
       try {
-        await finalizeUpload(access, upload, failed);
+        await finalizeUpload(access, upload, failed, null, permit.limits.companyQuotaBytes);
       } catch {
-        const committed = await compensateFailedFinalization(storage, upload, failed);
+        const committed = await compensateFailedFinalization(storage, upload, failed, null);
         if (committed) return duplicateState(committed, upload.documentId);
       }
       return uploadError;
@@ -893,10 +918,39 @@ export async function uploadClientDocumentAction(
       scanResult = { status: 'ERROR', audit: { sha256: hash, verdict: 'ERROR' } };
     }
     retainPermit = scanResult.status === 'ERROR';
+    let preview: GeneratedPreview | null = null;
+    if (scanResult.status === 'CLEAN' && supportsWebpPreview(upload.verifiedMime)) {
+      const previewStorageKey = `${upload.storageKey}.preview.webp`;
+      try {
+        const generated = await createStoredWebpPreview({
+          storage,
+          sourceStorageKey: upload.storageKey,
+          previewStorageKey,
+          verifiedMime: upload.verifiedMime,
+          profile: 'CLIENT_DOCUMENT',
+          temporaryUploadId: `preview-${randomUUID()}`,
+        });
+        preview = {
+          storageKey: previewStorageKey,
+          mime: generated.mime,
+          bytes: generated.bytes,
+          sha256: generated.sha256,
+          generatedAt: new Date(),
+        };
+      } catch {
+        // The clean original remains available; reconciliation/backfill retries the derivative.
+      }
+    }
     try {
-      await finalizeUpload(access, upload, scanResult);
+      await finalizeUpload(
+        access,
+        upload,
+        scanResult,
+        preview,
+        permit.limits.companyQuotaBytes,
+      );
     } catch {
-      const committed = await compensateFailedFinalization(storage, upload, scanResult);
+      const committed = await compensateFailedFinalization(storage, upload, scanResult, preview);
       if (committed) {
         revalidatePath(`/clients/${client.id}`);
         return duplicateState(committed, upload.documentId);
@@ -981,6 +1035,7 @@ export async function archiveClientDocumentAction(
           id: true,
           uploadId: true,
           storageKey: true,
+          previewStorageKey: true,
           ledgerCommittedBytes: true,
         },
       });
@@ -1045,8 +1100,11 @@ export async function archiveClientDocumentAction(
           data: { cleanupLeaseExpiresAt: mutationLease },
         });
         if (ownsMutation.count !== 1) continue;
-        const [privateRemoved, quarantineRemoved] = await Promise.all([
+        const [privateRemoved, previewRemoved, quarantineRemoved] = await Promise.all([
           removePrivateTracked(storage, version.storageKey),
+          version.previewStorageKey
+            ? removePrivateTracked(storage, version.previewStorageKey)
+            : Promise.resolve(true),
           version.uploadId
             ? storage
                 .removeUploadArtifacts(version.uploadId)
@@ -1057,7 +1115,7 @@ export async function archiveClientDocumentAction(
         cleanupResults.push({
           ...version,
           cleanupLeaseExpiresAt: mutationLease,
-          cleaned: privateRemoved && quarantineRemoved,
+          cleaned: privateRemoved && previewRemoved && quarantineRemoved,
         });
       }
       const cleaned = cleanupResults.filter((result) => result.cleaned);

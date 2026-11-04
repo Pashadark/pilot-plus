@@ -38,6 +38,9 @@ export interface DownloadableClientDocument {
   originalName: string;
   verifiedMime: string;
   sha256: string;
+  previewStorageKey: string | null;
+  previewMime: string | null;
+  previewSha256: string | null;
 }
 
 export interface DownloadableClientPhoto {

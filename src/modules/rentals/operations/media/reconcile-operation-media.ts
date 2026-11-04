@@ -2,6 +2,7 @@ type Candidate = {
   id: string;
   uploadId: string;
   storageKey: string;
+  previewStorageKey: string | null;
   status: string;
   claimToken: string | null;
   leaseExpiresAt: Date | null;
@@ -54,6 +55,11 @@ export async function reconcileOperationMedia(input: {
     await input.storage.removePrivate(candidate.storageKey).catch((error: unknown) => {
       if (!isMissingFile(error)) throw error;
     });
+    if (candidate.previewStorageKey) {
+      await input.storage.removePrivate(candidate.previewStorageKey).catch((error: unknown) => {
+        if (!isMissingFile(error)) throw error;
+      });
+    }
     const removed = await input.repository.deleteMany({
       where: { id: candidate.id, status: 'CLEANING', claimToken },
     });

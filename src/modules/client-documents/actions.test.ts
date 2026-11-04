@@ -62,6 +62,8 @@ const mocks = vi.hoisted(() => {
     settleClientUploadPermitInTransaction: vi.fn(),
     clientUploadLimitsFromEnvironment: vi.fn(),
     sharp: vi.fn(),
+    createStoredWebpPreview: vi.fn(),
+    supportsWebpPreview: vi.fn(),
   };
 });
 
@@ -84,6 +86,10 @@ vi.mock('./server/upload-resource-controls', () => ({
   clientUploadLimitsFromEnvironment: mocks.clientUploadLimitsFromEnvironment,
 }));
 vi.mock('sharp', () => ({ default: mocks.sharp }));
+vi.mock('@/services/media/webp-preview', () => ({
+  createStoredWebpPreview: mocks.createStoredWebpPreview,
+  supportsWebpPreview: mocks.supportsWebpPreview,
+}));
 
 import {
   archiveClientDocumentAction,
@@ -147,12 +153,15 @@ describe('client document upload authorization and workflow', () => {
         id: 'version-1',
         uploadId: '123e4567-e89b-42d3-a456-426614174000',
         storageKey: 'companies/company-1/clients/client-1/documents/document-1/1.jpg',
+        previewStorageKey:
+          'companies/company-1/clients/client-1/documents/document-1/1.jpg.preview.webp',
         ledgerCommittedBytes: 10,
       },
       {
         id: 'version-2',
         uploadId: '223e4567-e89b-42d3-a456-426614174000',
         storageKey: 'companies/company-1/clients/client-1/documents/document-1/2.pdf',
+        previewStorageKey: null,
         ledgerCommittedBytes: 20,
       },
     ]);
@@ -203,6 +212,13 @@ describe('client document upload authorization and workflow', () => {
         engine: 'ClamAV',
         signatureVersion: '27692',
       },
+    });
+    mocks.supportsWebpPreview.mockImplementation((mime: string) => mime.startsWith('image/'));
+    mocks.createStoredWebpPreview.mockResolvedValue({
+      buffer: Buffer.from('preview'),
+      mime: 'image/webp',
+      bytes: 7,
+      sha256: 'b'.repeat(64),
     });
     mocks.writeAuditLog.mockResolvedValue(undefined);
     mocks.acquireClientUploadPermit.mockResolvedValue({
@@ -331,6 +347,9 @@ describe('client document upload authorization and workflow', () => {
       'companies/company-1/clients/client-1/documents/document-1/1.jpg',
     );
     expect(mocks.storage.removePrivate).toHaveBeenCalledWith(
+      'companies/company-1/clients/client-1/documents/document-1/1.jpg.preview.webp',
+    );
+    expect(mocks.storage.removePrivate).toHaveBeenCalledWith(
       'companies/company-1/clients/client-1/documents/document-1/2.pdf',
     );
     expect(mocks.storage.removeUploadArtifacts).toHaveBeenCalledTimes(2);
@@ -358,6 +377,7 @@ describe('client document upload authorization and workflow', () => {
         id: `version-${index + 1}`,
         uploadId: `${index + 1}23e4567-e89b-42d3-a456-426614174000`,
         storageKey: `companies/company-1/clients/client-1/documents/document-1/${index + 1}.jpg`,
+        previewStorageKey: null,
         ledgerCommittedBytes: 10,
       }));
       const take =
@@ -490,6 +510,60 @@ describe('client document upload authorization and workflow', () => {
       },
       data: expect.objectContaining({ scanVerdict: 'CLEAN', scanLeaseExpiresAt: null }),
     });
+  });
+
+  it('stores WebP preview metadata and counts both files for a CLEAN image document', async () => {
+    await expect(uploadClientDocumentAction(initialState, uploadForm())).resolves.toMatchObject({
+      status: 'success',
+      documentId: 'document-1',
+    });
+
+    expect(mocks.createStoredWebpPreview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        storage: mocks.storage,
+        sourceStorageKey:
+          'companies/company-1/clients/client-1/documents/document-1/1.jpg',
+        previewStorageKey:
+          'companies/company-1/clients/client-1/documents/document-1/1.jpg.preview.webp',
+        verifiedMime: 'image/jpeg',
+        profile: 'CLIENT_DOCUMENT',
+      }),
+    );
+    expect(mocks.repository.clientDocumentVersion.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          previewStorageKey:
+            'companies/company-1/clients/client-1/documents/document-1/1.jpg.preview.webp',
+          previewMime: 'image/webp',
+          previewBytes: 7,
+          previewSha256: 'b'.repeat(64),
+          previewGeneratedAt: expect.any(Date),
+          ledgerCommittedBytes: 13,
+        }),
+      }),
+    );
+    expect(mocks.settleClientUploadPermitInTransaction).toHaveBeenCalledWith(
+      mocks.repository,
+      expect.objectContaining({ committedBytes: 13, maximumCommittedBytes: 1024 * 1024 * 1024 }),
+    );
+  });
+
+  it('keeps a CLEAN original when derived preview generation fails', async () => {
+    mocks.createStoredWebpPreview.mockRejectedValueOnce(new Error('sharp failed'));
+
+    await expect(uploadClientDocumentAction(initialState, uploadForm())).resolves.toMatchObject({
+      status: 'success',
+      documentId: 'document-1',
+    });
+
+    expect(mocks.repository.clientDocumentVersion.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          scanVerdict: 'CLEAN',
+          ledgerCommittedBytes: 6,
+        }),
+      }),
+    );
   });
 
   it('denies a replacement racing an initial PENDING upload before creating version 2', async () => {
