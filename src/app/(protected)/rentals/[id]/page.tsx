@@ -190,13 +190,6 @@ export default async function RentalDetail({
               recordedAt: payment.recordedAt.toISOString(),
               actorName: payment.recordedBy.name,
             }))}
-            signatures={rental.signatures.map((signature) => ({
-              party: signature.party,
-              status: signature.status,
-              signedByName: signature.signedByName,
-              signedAt: signature.signedAt?.toISOString() ?? null,
-              actorName: signature.recordedBy.name,
-            }))}
           />
           <RentalOperationTimeline
             rentalId={rental.id}

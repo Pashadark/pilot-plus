@@ -1,14 +1,13 @@
 'use client';
 
 import { useActionState, useState } from 'react';
-import { FiCheckCircle, FiCreditCard, FiPenTool } from 'react-icons/fi';
+import { FiCreditCard } from 'react-icons/fi';
 
 import { Button, Card, CardContent, CardHeader, Input, Select } from '@/shared/ui';
 
 import {
   recordRentalPaymentAction,
   returnRentalDepositAction,
-  setRentalSignatureAction,
   type SettlementActionResult,
 } from '../server/actions';
 
@@ -22,14 +21,6 @@ type Payment = {
   actorName: string;
 };
 
-type Signature = {
-  party: 'CLIENT' | 'COMPANY';
-  status: 'MISSING' | 'SIGNED' | 'REVOKED';
-  signedByName: string | null;
-  signedAt: string | null;
-  actorName: string;
-};
-
 type Props = {
   companyId: string;
   rentalId: string;
@@ -40,20 +31,10 @@ type Props = {
   rentalStatus?: 'DRAFT' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
   depositResolved?: boolean;
   payments: readonly Payment[];
-  signatures: readonly Signature[];
   defaultPaymentKind?: 'RENT' | 'DEPOSIT';
 };
 
 const initialState: SettlementActionResult | null = null;
-const moscowDateTime = new Intl.DateTimeFormat('ru-RU', {
-  timeZone: 'Europe/Moscow',
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-});
 
 function money(value: bigint, currency: string) {
   return new Intl.NumberFormat('ru-RU', {
@@ -67,10 +48,6 @@ export function RentalSettlementCard(props: Props) {
   const [showCorrections, setShowCorrections] = useState(false);
   const [paymentState, paymentAction, paymentPending] = useActionState(
     recordRentalPaymentAction,
-    initialState,
-  );
-  const [signatureState, signatureAction, signaturePending] = useActionState(
-    setRentalSignatureAction,
     initialState,
   );
   const [depositState, depositAction, depositPending] = useActionState(
@@ -93,8 +70,6 @@ export function RentalSettlementCard(props: Props) {
   const depositCollected = props.payments
     .filter((payment) => payment.kind === 'DEPOSIT' && payment.status === 'CONFIRMED')
     .reduce((sum, payment) => sum + BigInt(payment.amountMinor), BigInt(0));
-  const clientSignature = props.signatures.find((signature) => signature.party === 'CLIENT');
-  const companySignature = props.signatures.find((signature) => signature.party === 'COMPANY');
   const isOperational = props.rentalStatus === 'ACTIVE' || props.rentalStatus === 'COMPLETED';
   const showMutationForms = props.canEdit && (!isOperational || showCorrections);
   const canResolveDeposit =
@@ -108,9 +83,11 @@ export function RentalSettlementCard(props: Props) {
       <CardHeader className="grid gap-1">
         <h2 className="flex items-center gap-2 text-lg font-bold">
           <FiCreditCard aria-hidden="true" />
-          Расчёты и подписи
+          Расчёты
         </h2>
-        <p className="text-sm text-[var(--color-text-secondary)]">Фактическое состояние оплаты, залога и подписей по договору.</p>
+        <p className="text-sm text-[var(--color-text-secondary)]">
+          Фактическое состояние оплаты и залога по договору.
+        </p>
       </CardHeader>
       <CardContent className="grid gap-5">
         <div className="grid gap-3 sm:grid-cols-3">
@@ -120,11 +97,6 @@ export function RentalSettlementCard(props: Props) {
             label="Залог внесён"
             value={`${money(depositCollected, props.currency)} / ${money(BigInt(props.depositRequiredMinor ?? '0'), props.currency)}`}
           />
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-2">
-          <SignatureStatus label="Клиент" signature={clientSignature} />
-          <SignatureStatus label="Компания" signature={companySignature} />
         </div>
 
         {canResolveDeposit ? (
@@ -146,13 +118,13 @@ export function RentalSettlementCard(props: Props) {
 
         {props.canEdit && isOperational ? (
           <Button type="button" variant="secondary" className="w-fit" onClick={() => setShowCorrections((value) => !value)}>
-            {showCorrections ? 'Скрыть исправления' : 'Исправить оплату и подписи'}
+            {showCorrections ? 'Скрыть исправления' : 'Исправить оплату'}
           </Button>
         ) : null}
 
         {showMutationForms ? (
-          <div className="grid gap-5 border-t pt-5 lg:grid-cols-2">
-            <form action={paymentAction} className="grid gap-3">
+          <div className="border-t pt-5">
+            <form action={paymentAction} className="grid max-w-xl gap-3">
               <h3 className="font-semibold">Записать оплату</h3>
               <input type="hidden" name="companyId" value={props.companyId} />
               <input type="hidden" name="rentalId" value={props.rentalId} />
@@ -177,26 +149,6 @@ export function RentalSettlementCard(props: Props) {
                 Записать оплату
               </Button>
             </form>
-
-            <form action={signatureAction} className="grid gap-3">
-              <h3 className="font-semibold">Отметить подпись</h3>
-              <input type="hidden" name="companyId" value={props.companyId} />
-              <input type="hidden" name="rentalId" value={props.rentalId} />
-              <input type="hidden" name="status" value="SIGNED" />
-              <Select label="Сторона" name="party" defaultValue="CLIENT">
-                <option value="CLIENT">Клиент</option>
-                <option value="COMPANY">Компания</option>
-              </Select>
-              <Input label="ФИО подписанта" name="signedByName" required />
-              {signatureState ? <ActionMessage state={signatureState} /> : null}
-              <Button
-                type="submit"
-                loading={signaturePending}
-                leadingIcon={<FiPenTool aria-hidden="true" />}
-              >
-                Отметить подпись
-              </Button>
-            </form>
           </div>
         ) : null}
       </CardContent>
@@ -209,31 +161,6 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div className="rounded-[var(--radius-md)] border p-3">
       <p className="text-xs text-[var(--color-text-secondary)]">{label}</p>
       <p className="mt-1 font-bold">{value}</p>
-    </div>
-  );
-}
-
-function SignatureStatus({ label, signature }: { label: string; signature?: Signature }) {
-  const signed = signature?.status === 'SIGNED';
-  const missingLabel = label === 'Компания' ? 'компании' : 'клиента';
-  return (
-    <div className="rounded-[var(--radius-md)] border p-3">
-      <p
-        className={
-          signed
-            ? 'flex items-center gap-2 text-[var(--color-success)]'
-            : 'text-[var(--color-danger)]'
-        }
-      >
-        {signed ? <FiCheckCircle aria-hidden="true" /> : null}
-        {signed ? `${label} подписал` : `Подпись ${missingLabel} отсутствует`}
-      </p>
-      {signed ? (
-        <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-          {signature.signedByName} ·{' '}
-          {signature.signedAt ? moscowDateTime.format(new Date(signature.signedAt)) : ''}
-        </p>
-      ) : null}
     </div>
   );
 }
