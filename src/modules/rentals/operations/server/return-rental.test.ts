@@ -22,6 +22,26 @@ describe('createRentalReturn', () => {
     });
   });
 
+  it('uses 200 km per day when a standard legacy rental and vehicle have no mileage limit', () => {
+    expect(
+      resolveReturnPricing({
+        agreementType: 'STANDARD',
+        includedMileageKm: null,
+        overageMileagePriceMinor: BigInt(1_000),
+        missingFuelPriceMinor: BigInt(15_000),
+        vehicle: {
+          includedMileageKm: null,
+          overageMileagePriceMinor: BigInt(1_000),
+          missingFuelPriceMinor: BigInt(15_000),
+        },
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        includedMileageKmPerDay: 200,
+      }),
+    );
+  });
+
   it('disables mileage charges for a lease-to-own rental', () => {
     expect(
       resolveReturnPricing({

@@ -2,6 +2,7 @@ import { calculateReturnCharges } from '../calculation';
 import { deriveReturnEvidenceStatus } from '../evidence-status';
 import type { RentalEvidenceStatus, RentalVehicleCondition } from '../types';
 import { recordAutomaticRatingEvent } from '@/modules/client-rating/automatic-events';
+import { resolveRentalMileagePolicy } from '@/modules/rentals/domain/mileage-policy';
 import { enqueueRentalLifecycleNotifications } from './enqueue-lifecycle-notifications';
 
 type Count = { count: number };
@@ -85,10 +86,13 @@ export function resolveReturnPricing(input: {
   };
 }) {
   const leaseToOwn = input.agreementType === 'LEASE_TO_OWN';
+  const mileagePolicy = resolveRentalMileagePolicy({
+    agreementType: leaseToOwn ? 'LEASE_TO_OWN' : 'STANDARD',
+    billableDays: 1,
+    includedMileageKm: input.includedMileageKm ?? input.vehicle?.includedMileageKm,
+  });
   return {
-    includedMileageKmPerDay: leaseToOwn
-      ? 0
-      : (input.includedMileageKm ?? input.vehicle?.includedMileageKm ?? 0),
+    includedMileageKmPerDay: mileagePolicy.dailyLimitKm ?? 0,
     overageMileagePriceMinor: leaseToOwn
       ? 0
       : safeMinor(
