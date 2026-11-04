@@ -192,7 +192,7 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
         <section
           data-testid="vehicle-specifications"
           aria-label="Характеристики автомобиля"
-          className="mx-4 mt-4 rounded-[var(--radius-lg)] bg-[#eeeeef] p-3 text-sm"
+          className="mx-4 mt-4 rounded-[var(--radius-lg)] bg-[var(--color-elevated)] p-3 text-sm"
         >
           <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
             <Specification
@@ -238,7 +238,7 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
         <section
           data-testid="vehicle-telemetry"
           aria-label="Телематика автомобиля"
-          className="mx-4 mt-3 grid flex-1 grid-cols-2 content-start gap-x-4 gap-y-4 rounded-[var(--radius-lg)] bg-[#eeeeef] p-3 text-sm"
+          className="mx-4 mt-3 grid flex-1 grid-cols-2 content-start gap-x-4 gap-y-4 rounded-[var(--radius-lg)] bg-[var(--color-elevated)] p-3 text-sm"
         >
           <span className="flex gap-2">
             <FiActivity aria-hidden="true" className="mt-0.5 text-[var(--color-primary)]" />

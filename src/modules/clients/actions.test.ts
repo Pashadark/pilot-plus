@@ -15,7 +15,12 @@ vi.mock('@/database/prisma/client', () => ({ prisma: repository }));
 vi.mock('@/modules/clients/access', () => ({ getClientAccess: getClientAccessMock }));
 vi.mock('@/modules/admin/audit', () => ({ writeAuditLog: writeAuditLogMock }));
 
-import { archiveClientAction, createClientAction, updateClientAction } from './actions';
+import {
+  applyClientOcrReviewAction,
+  archiveClientAction,
+  createClientAction,
+  updateClientAction,
+} from './actions';
 
 const encryptionKey = Buffer.alloc(32, 19).toString('base64');
 process.env.CLIENT_DATA_ENCRYPTION_KEY = encryptionKey;
@@ -64,6 +69,22 @@ function archiveForm() {
   const formData = new FormData();
   formData.set('clientId', 'client-1');
   formData.set('expectedUpdatedAt', '2026-08-04T12:00:00.000Z');
+  return formData;
+}
+
+function ocrReviewForm() {
+  const formData = new FormData();
+  formData.set('clientId', 'client-1');
+  formData.set('companyId', 'c1');
+  formData.set('expectedUpdatedAt', '2026-08-04T12:00:00.000Z');
+  formData.set('firstName', 'Анна');
+  formData.set('middleName', 'Сергеевна');
+  formData.set('lastName', 'Воронова');
+  formData.set('birthDate', '1990-04-12');
+  formData.set('passport', '4510 123456');
+  formData.set('driverLicense', '9910 654321');
+  formData.set('driverLicenseIssuedAt', '2020-01-01');
+  formData.set('driverLicenseExpiresAt', '2030-01-01');
   return formData;
 }
 
@@ -232,6 +253,61 @@ describe('client mutations', () => {
       expect.objectContaining({ entityType: 'CLIENT', action: 'UPDATE', entityId: 'client-1' }),
       repository,
     );
+  });
+
+  it('applies only reviewed OCR identity fields without overwriting unrelated client data', async () => {
+    await expect(applyClientOcrReviewAction(initialState, ocrReviewForm())).resolves.toEqual({
+      status: 'success',
+      message: 'Распознанные данные сохранены.',
+      clientId: 'client-1',
+    });
+
+    expect(repository.client.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'client-1',
+        companyId: { in: ['c1'] },
+        AND: { companyId: 'c1' },
+        updatedAt: new Date('2026-08-04T12:00:00.000Z'),
+        archivedAt: null,
+      },
+      data: {
+        firstName: 'Анна',
+        middleName: 'Сергеевна',
+        lastName: 'Воронова',
+        birthDate: new Date('1990-04-12T00:00:00.000Z'),
+        passportEncrypted: expect.any(String),
+        passportIndex: expect.any(String),
+        driverLicenseEncrypted: expect.any(String),
+        driverLicenseIndex: expect.any(String),
+        driverLicenseIssuedAt: new Date('2020-01-01T00:00:00.000Z'),
+        driverLicenseExpiresAt: new Date('2030-01-01T00:00:00.000Z'),
+      },
+    });
+    const writtenData = repository.client.updateMany.mock.calls.at(-1)?.[0]?.data;
+    expect(writtenData).not.toHaveProperty('phoneEncrypted');
+    expect(writtenData).not.toHaveProperty('email');
+    expect(writtenData).not.toHaveProperty('status');
+    expect(writeAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'UPDATE',
+        entityType: 'CLIENT',
+        entityId: 'client-1',
+        changes: {
+          reviewedOcrFields: [
+            'firstName',
+            'middleName',
+            'lastName',
+            'birthDate',
+            'passport',
+            'driverLicense',
+            'driverLicenseIssuedAt',
+            'driverLicenseExpiresAt',
+          ],
+        },
+      }),
+      repository,
+    );
+    expect(JSON.stringify(writeAuditLogMock.mock.calls.at(-1))).not.toContain('4510 123456');
   });
 
   it('does not allow a dispatcher to archive a client', async () => {

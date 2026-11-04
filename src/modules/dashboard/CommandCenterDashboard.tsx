@@ -30,7 +30,7 @@ export function CommandCenterDashboard({
   weather?: MoscowWeather | null;
 }) {
   return (
-    <div className="grid gap-4 pb-8">
+    <div className="graphite-dashboard grid gap-4 pb-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-[var(--color-primary)]">СУПА ПРО</p>

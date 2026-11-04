@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" role="img" aria-labelledby="title">
+  <title id="title">SUPA CAR</title>
+  <defs>
+    <linearGradient id="supa-car-gradient" x1="24" y1="28" x2="84" y2="82" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF7A00"/>
+      <stop offset="0.52" stop-color="#FF5200"/>
+      <stop offset="1" stop-color="#FF3024"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#supa-car-gradient)" font-family="Arial Black, Arial, sans-serif" font-weight="900" text-anchor="middle">
+    <text x="54" y="51" font-size="22" letter-spacing="-1.2">SUPA</text>
+    <text x="54" y="76" font-size="23" letter-spacing="-1.1">CAR</text>
+  </g>
+</svg>

@@ -3,9 +3,18 @@ import 'server-only';
 import { prisma as defaultPrisma } from '@/database/prisma/client';
 import { decryptField } from '@/services/security/field-encryption';
 import { findRussiaBorderProximity } from '@/modules/geography/russia-border';
+import { detectConfirmedImpoundStay } from '@/modules/geography/impound-lots';
 import { processFuelStationPosition } from '@/modules/fuel-stations/server/visit-service';
 
 import { GlonassSoftClient } from './client.server';
+import {
+  detectAndPersistHarshAcceleration,
+  type HarshAccelerationRepository,
+} from './harsh-acceleration-events.server';
+import {
+  detectAndPersistHarshBraking,
+  type HarshBrakingRepository,
+} from './harsh-braking-events.server';
 
 export class TelematicsSyncError extends Error {
   constructor(public readonly code: 'NOT_CONFIGURED') {
@@ -45,13 +54,28 @@ interface SyncTransaction {
   vehiclePosition: {
     createMany(args: unknown): Promise<{ count: number }>;
     findFirst?: (args: unknown) => Promise<{
+      id?: string;
       latitude: unknown;
       longitude: unknown;
       speedKph: number | null;
       recordedAt: Date;
     } | null>;
+    findMany?: (args: unknown) => Promise<
+      Array<{
+        id?: string;
+        latitude: unknown;
+        longitude: unknown;
+        speedKph: number | null;
+        recordedAt: Date;
+      }>
+    >;
   };
-  vehicleEvent?: { createMany(args: unknown): Promise<{ count: number }> };
+  vehicleEvent?: {
+    createMany(args: unknown): Promise<{ count: number }>;
+    upsert?(args: unknown): Promise<{ id: string }>;
+  };
+  companyGpsSettings?: { findUnique(args: unknown): Promise<unknown> };
+  vehicleGpsSettingsOverride?: { findUnique(args: unknown): Promise<unknown> };
   vehicle: {
     updateMany(args: unknown): Promise<{ count: number }>;
     findFirst?: (args: unknown) => Promise<{
@@ -64,6 +88,8 @@ interface SyncTransaction {
   };
   rental?: {
     findFirst(args: unknown): Promise<{
+      id?: string;
+      clientId?: string;
       contractNumber: string | null;
       client: { firstName: string; middleName: string | null; lastName: string };
     } | null>;
@@ -71,9 +97,16 @@ interface SyncTransaction {
   telegramGroupBinding?: {
     findUnique(args: unknown): Promise<{ telegramChatId: string } | null>;
   };
+  telegramIdentity?: {
+    findUnique(args: unknown): Promise<{ id: string; isActive: boolean } | null>;
+  };
   botNotificationJob?: { createMany(args: unknown): Promise<{ count: number }> };
   fuelStation?: { findMany(args: unknown): Promise<unknown[]> };
-  fuelStationVisit?: { findFirst(args: unknown): Promise<unknown>; create(args: unknown): Promise<unknown>; update(args: unknown): Promise<unknown> };
+  fuelStationVisit?: {
+    findFirst(args: unknown): Promise<unknown>;
+    create(args: unknown): Promise<unknown>;
+    update(args: unknown): Promise<unknown>;
+  };
 }
 
 interface SyncClient {
@@ -249,6 +282,8 @@ async function savePoint(
       status: stateToStatus(point.state),
     },
   });
+  await persistHarshAccelerationEvent(database, companyId, vehicleId, externalId);
+  await persistHarshBrakingEvent(database, companyId, vehicleId, externalId);
   const previousSpeedKph = previous?.speedKph ?? null;
   const crossedSpeedingThreshold =
     point.speedKph >= SPEEDING_ALERT_THRESHOLD_KPH &&
@@ -272,19 +307,185 @@ async function savePoint(
     });
   }
   await enqueueBorderAlert(database, companyId, vehicleId, recordedAt, point, currentVehicle);
+  await enqueueImpoundAlert(database, companyId, vehicleId, recordedAt);
   if (database.fuelStation && database.fuelStationVisit) {
-    await processFuelStationPosition(
-      database as never,
-      {
-        companyId,
-        vehicleId,
-        latitude: point.latitude,
-        longitude: point.longitude,
-        recordedAt,
-      },
-    ).catch(() => undefined);
+    await processFuelStationPosition(database as never, {
+      companyId,
+      vehicleId,
+      latitude: point.latitude,
+      longitude: point.longitude,
+      recordedAt,
+    }).catch(() => undefined);
   }
   return true;
+}
+
+async function persistHarshAccelerationEvent(
+  database: SyncTransaction,
+  companyId: string,
+  vehicleId: string,
+  positionExternalId: string,
+) {
+  if (
+    !database.companyGpsSettings?.findUnique ||
+    !database.vehicleGpsSettingsOverride?.findUnique ||
+    !database.vehiclePosition.findMany ||
+    !database.vehiclePosition.findFirst ||
+    !database.rental?.findFirst ||
+    !database.vehicleEvent?.upsert
+  ) {
+    return;
+  }
+
+  const latestPosition = await database.vehiclePosition.findFirst({
+    where: { vehicleId, provider: 'GLONASSSOFT', externalId: positionExternalId },
+    select: {
+      id: true,
+      latitude: true,
+      longitude: true,
+      speedKph: true,
+      recordedAt: true,
+    },
+  });
+  if (!latestPosition?.id) return;
+
+  await detectAndPersistHarshAcceleration({
+    companyId,
+    vehicleId,
+    latestPositionId: latestPosition.id,
+    prisma: database as unknown as HarshAccelerationRepository,
+  }).catch(() => undefined);
+}
+
+async function persistHarshBrakingEvent(
+  database: SyncTransaction,
+  companyId: string,
+  vehicleId: string,
+  positionExternalId: string,
+) {
+  if (
+    !database.companyGpsSettings?.findUnique ||
+    !database.vehicleGpsSettingsOverride?.findUnique ||
+    !database.vehiclePosition.findMany ||
+    !database.vehiclePosition.findFirst ||
+    !database.rental?.findFirst ||
+    !database.vehicleEvent?.upsert
+  ) {
+    return;
+  }
+
+  const latestPosition = await database.vehiclePosition.findFirst({
+    where: { vehicleId, provider: 'GLONASSSOFT', externalId: positionExternalId },
+    select: {
+      id: true,
+      latitude: true,
+      longitude: true,
+      speedKph: true,
+      recordedAt: true,
+    },
+  });
+  if (!latestPosition?.id) return;
+
+  await detectAndPersistHarshBraking({
+    companyId,
+    vehicleId,
+    latestPositionId: latestPosition.id,
+    prisma: database as unknown as HarshBrakingRepository,
+  }).catch(() => undefined);
+}
+
+async function enqueueImpoundAlert(
+  database: SyncTransaction,
+  companyId: string,
+  vehicleId: string,
+  recordedAt: Date,
+) {
+  if (
+    !database.vehiclePosition.findMany ||
+    !database.telegramGroupBinding?.findUnique ||
+    !database.botNotificationJob?.createMany
+  ) {
+    return;
+  }
+  const recentPositions = await database.vehiclePosition.findMany({
+    where: {
+      vehicleId,
+      provider: 'GLONASSSOFT',
+      recordedAt: {
+        gte: new Date(recordedAt.getTime() - 45 * 60_000),
+        lte: recordedAt,
+      },
+    },
+    select: { latitude: true, longitude: true, speedKph: true, recordedAt: true },
+    orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }],
+    take: 100,
+  });
+  const stay = detectConfirmedImpoundStay(
+    recentPositions.map((position) => ({
+      latitude: Number(position.latitude),
+      longitude: Number(position.longitude),
+      speedKph: position.speedKph,
+      recordedAt: position.recordedAt,
+    })),
+  );
+  if (!stay) return;
+  const { lot, enteredAt } = stay;
+  const binding = await database.telegramGroupBinding.findUnique({
+    where: { companyId },
+    select: { telegramChatId: true },
+  });
+  if (!binding) return;
+  const rental = database.rental
+    ? await database.rental.findFirst({
+        where: {
+          companyId,
+          vehicleId,
+          status: { in: ['CONFIRMED', 'ACTIVE'] },
+          startsAt: { lte: recordedAt },
+          endsAt: { gte: recordedAt },
+        },
+        orderBy: [{ startsAt: 'desc' }, { id: 'desc' }],
+        select: {
+          id: true,
+          contractNumber: true,
+          client: { select: { firstName: true, middleName: true, lastName: true } },
+        },
+      })
+    : null;
+  await database.botNotificationJob.createMany({
+    data: [
+      {
+        companyId,
+        chatId: binding.telegramChatId,
+        template: 'OPERATIONAL_ALERT',
+        eventKey: `impound-entry:${companyId}:${vehicleId}:${lot.id}:${moscowDateKey(enteredAt)}`,
+        payload: {
+          kind: 'IMPOUND_LOT_ENTRY',
+          vehicleId,
+          ...(rental?.id ? { rentalId: rental.id } : {}),
+          impoundLotId: lot.id,
+          recordedAt: recordedAt.toISOString(),
+        },
+        availableAt: recordedAt,
+      },
+    ],
+    skipDuplicates: true,
+  });
+}
+
+function moscowDateKey(value: Date): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Europe/Moscow',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .formatToParts(value)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 async function enqueueBorderAlert(
@@ -326,7 +527,11 @@ async function enqueueBorderAlert(
         },
       })
     : null;
-  const vehicleName = [vehicle?.make, vehicle?.modelName ?? vehicle?.model, vehicle?.registrationNumber]
+  const vehicleName = [
+    vehicle?.make,
+    vehicle?.modelName ?? vehicle?.model,
+    vehicle?.registrationNumber,
+  ]
     .filter(Boolean)
     .join(' ');
   const driverName = rental
@@ -386,7 +591,7 @@ function bearingDegrees(
     Math.cos(fromLat) * Math.sin(toLat) -
       Math.sin(fromLat) * Math.cos(toLat) * Math.cos(deltaLongitude),
   );
-  return Math.round((((bearing * 180) / Math.PI + 360) % 360 + 360) % 360);
+  return Math.round(((((bearing * 180) / Math.PI + 360) % 360) + 360) % 360);
 }
 
 function stateToStatus(state: number) {

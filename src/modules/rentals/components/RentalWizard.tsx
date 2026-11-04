@@ -23,6 +23,8 @@ import {
 } from '@/modules/rentals/server/actions';
 import { useToast } from '@/shared/providers/ToastProvider';
 import { Button, Card, CardContent, CardHeader, Input, Select } from '@/shared/ui';
+import { RentalDocumentScanStep } from './RentalDocumentScanStep';
+import { rentalWizardSteps, validateRentalWizardStep } from './rental-wizard-flow';
 
 export type RentalWizardVehicle = {
   id: string;
@@ -43,34 +45,40 @@ type Props = {
     id: string;
     companyId: string;
     fullName: string;
+    firstName?: string;
+    middleName?: string | null;
+    lastName?: string;
+    birthDate?: string | null;
     phone: string | null;
+    additionalPhone?: string | null;
+    email?: string | null;
     passport: string | null;
+    registrationAddress?: string | null;
+    actualAddress?: string | null;
     driverLicense: string | null;
+    driverLicenseIssuedAt?: string | null;
     driverLicenseExpiresAt: string | null;
+    status?: string;
+    updatedAt?: string;
+    localPhotoUrl?: string | null;
     documentsReady?: boolean;
   };
   templateVersionId: string | null;
   vehicles: readonly RentalWizardVehicle[];
 };
 
-const stepLabels = [
-  'Клиент',
-  'Автомобиль',
-  'Срок и место',
-  'Цена и услуги',
-  'Документы',
-  'Проверка',
-];
+const stepLabels = rentalWizardSteps;
 const initialState: RentalActionResult | null = null;
 function rubles(minor: number) {
   return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(minor / 100);
 }
-function legalReady(client: Props['client'], templateVersionId: string | null) {
-  return Boolean(templateVersionId && client.documentsReady);
+function legalReady(documentsReady: boolean, templateVersionId: string | null) {
+  return Boolean(templateVersionId && documentsReady);
 }
 
 export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
   const [step, setStep] = useState(0);
+  const [documentsReady, setDocumentsReady] = useState(Boolean(client.documentsReady));
   const [agreementType, setAgreementType] = useState<'STANDARD' | 'LEASE_TO_OWN'>('STANDARD');
   const [vehicleId, setVehicleId] = useState('');
   const [startsAt, setStartsAt] = useState('');
@@ -120,7 +128,7 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
   }, [discountMinor, endsAt, selectedVehicle, servicesMinor, startsAt]);
   const preflightBlockers = useMemo(() => {
     const blockers: { code: string; message: string; href?: string }[] = [];
-    if (!client.documentsReady) {
+    if (!documentsReady) {
       blockers.push({
         code: 'CLIENT_DOCUMENTS',
         message: 'Загрузите паспорт и водительское удостоверение.',
@@ -160,7 +168,7 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
     );
   }, [
     calculation,
-    client.documentsReady,
+    documentsReady,
     client.id,
     selectedAvailable,
     selectedReasons,
@@ -171,24 +179,29 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
     selectedAvailable &&
     selectedVehicle?.legalReady !== false &&
     calculation &&
-    legalReady(client, templateVersionId),
+    legalReady(documentsReady, templateVersionId),
   );
   const saveAction = useCallback(
-    async (previous: RentalActionResult | null, formData: FormData) => {
+    async (
+      previous: RentalActionResult | null,
+      formData: FormData,
+    ): Promise<RentalActionResult> => {
       const result = rentalId
         ? await updateRentalDraftAction(previous, formData)
         : await createRentalDraftAction(previous, formData);
-      if (result.ok) setRentalId(result.rentalId);
+      if (result.ok) {
+        setRentalId(result.rentalId);
+        if (formData.get('wizardIntent') === 'confirm' && ready) {
+          formData.set('rentalId', result.rentalId);
+          return confirmAndGenerateRentalAction(null, formData);
+        }
+      }
       return result;
     },
-    [rentalId],
+    [ready, rentalId],
   );
   const [draftState, draftFormAction, saving] = useActionState(saveAction, initialState);
   const currentRentalId = rentalId;
-  const [confirmState, confirmFormAction, confirming] = useActionState(
-    confirmAndGenerateRentalAction,
-    initialState,
-  );
   const [retryState, retryFormAction, retrying] = useActionState(
     generateRentalDocumentsAction,
     initialState,
@@ -197,16 +210,14 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
   useEffect(() => {
     if (!draftState) return;
     if (draftState.ok) {
-      showToast({ tone: 'success', title: 'Черновик договора сохранён.' });
+      showToast({
+        tone: 'success',
+        title: draftState.documentVersion
+          ? 'Договор создан, автомобиль занят.'
+          : 'Черновик договора сохранён.',
+      });
     } else showToast({ tone: 'danger', title: draftState.message });
   }, [draftState, showToast]);
-  useEffect(() => {
-    if (!confirmState) return;
-    showToast({
-      tone: confirmState.ok ? 'success' : 'danger',
-      title: confirmState.ok ? 'Договор подтверждён, документы готовы.' : confirmState.message,
-    });
-  }, [confirmState, showToast]);
   useEffect(() => {
     if (!retryState) return;
     showToast({
@@ -219,31 +230,26 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
   }, [step]);
 
   function next() {
-    const error =
-      step === 1 && !selectedVehicle
-        ? 'Выберите автомобиль.'
-        : step === 1 && !selectedAvailable
-          ? 'Этот автомобиль недоступен для аренды.'
-          : step === 2 && !calculation
-            ? 'Укажите корректные московские дату и время выдачи и возврата.'
-            : '';
+    const error = validateRentalWizardStep(step, {
+      documentsReady,
+      vehicleSelected: Boolean(selectedVehicle),
+      vehicleAvailable: selectedAvailable,
+      calculationReady: Boolean(calculation),
+    });
     if (error) return setLocalError(error);
     setLocalError('');
     setStep((current) => Math.min(current + 1, stepLabels.length - 1));
   }
-  const serverError =
-    (!draftState?.ok && draftState?.message) || (!confirmState?.ok && confirmState?.message);
-  const documentVersion = confirmState?.ok
-    ? confirmState.documentVersion
+  const serverError = !draftState?.ok && draftState?.message;
+  const documentVersion = draftState?.ok
+    ? draftState.documentVersion
     : retryState?.ok
       ? retryState.documentVersion
       : undefined;
   const confirmedNeedsDocuments =
-    Boolean(confirmState && !confirmState.ok && confirmState.confirmedNeedsDocuments) ||
+    Boolean(draftState && !draftState.ok && draftState.confirmedNeedsDocuments) ||
     Boolean(retryState && !retryState.ok && retryState.confirmedNeedsDocuments);
-  const confirmedRentalId =
-    confirmState && !confirmState.ok ? confirmState.rentalId : currentRentalId;
-  const confirmReady = ready && Boolean(currentRentalId);
+  const confirmedRentalId = draftState && !draftState.ok ? draftState.rentalId : currentRentalId;
 
   return (
     <main
@@ -266,9 +272,9 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
             Новый договор аренды
           </h1>
           <p className="text-sm text-[var(--color-text-secondary)]">
-            {client.fullName} · Шаг {step + 1} из 6
+            {client.fullName} · Шаг {step + 1} из 3
           </p>
-          <ol aria-label="Этапы договора" className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-6">
+          <ol aria-label="Этапы договора" className="grid grid-cols-3 gap-2 text-sm">
             {stepLabels.map((label, index) => (
               <li
                 key={label}
@@ -319,10 +325,8 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
               <input type="hidden" name="rentalId" value={currentRentalId} />
             ) : null}
             {step === 0 ? (
-              <section aria-labelledby="step-client">
-                <h2 id="step-client" className="text-lg font-bold">
-                  Клиент
-                </h2>
+              <section aria-labelledby="step-client" className="grid gap-5">
+                <RentalDocumentScanStep client={client} onReady={setDocumentsReady} />
                 <dl className="mt-3 grid gap-2 rounded-[var(--radius-md)] bg-[var(--color-elevated)] p-4 text-sm">
                   <div>
                     <dt className="text-[var(--color-text-secondary)]">ФИО</dt>
@@ -335,7 +339,7 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                   <div>
                     <dt className="text-[var(--color-text-secondary)]">Реквизиты</dt>
                     <dd>
-                      {client.documentsReady ? 'Заполнены' : 'Нужно заполнить в карточке клиента'}
+                      {documentsReady ? 'Паспорт и права готовы' : 'Загрузите паспорт и права выше'}
                     </dd>
                   </div>
                 </dl>
@@ -402,7 +406,7 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                 ) : null}
               </section>
             ) : null}
-            {step === 2 ? (
+            {step === 1 ? (
               <section aria-labelledby="step-term" className="grid gap-4">
                 <h2 id="step-term" className="text-lg font-bold">
                   Срок и место выдачи
@@ -486,7 +490,7 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                 </div>
               </section>
             ) : null}
-            {step === 3 ? (
+            {step === 1 ? (
               <section aria-labelledby="step-price" className="grid gap-4">
                 <h2 id="step-price" className="text-lg font-bold">
                   Цена и услуги
@@ -571,7 +575,7 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                 )}
               </section>
             ) : null}
-            {step === 4 ? (
+            {step === 2 ? (
               <section aria-labelledby="step-documents" className="grid gap-3">
                 <h2 id="step-documents" className="text-lg font-bold">
                   Документы и юридическая готовность
@@ -605,7 +609,7 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                 )}
               </section>
             ) : null}
-            {step === 5 ? (
+            {step === 2 ? (
               <section aria-labelledby="step-review" className="grid gap-3">
                 <h2 id="step-review" className="text-lg font-bold">
                   Проверка и подтверждение
@@ -657,7 +661,7 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                   setLocalError('');
                   setStep((current) => Math.max(current - 1, 0));
                 }}
-                disabled={step === 0 || saving || confirming}
+                disabled={step === 0 || saving}
               >
                 Назад
               </Button>
@@ -667,30 +671,28 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
                   variant="outline"
                   loading={saving}
                   leadingIcon={<FiSave aria-hidden="true" />}
+                  name="wizardIntent"
+                  value="draft"
                 >
                   Сохранить черновик
                 </Button>
-                {step < 5 ? (
-                  <>
-                    <Button
-                      type="button"
-                      onClick={next}
-                      trailingIcon={<FiArrowRight aria-hidden="true" />}
-                    >
-                      Далее
-                    </Button>
-                    <Button type="button" disabled>
-                      Подтвердить и занять автомобиль
-                    </Button>
-                  </>
+                {step < 2 ? (
+                  <Button
+                    type="button"
+                    onClick={next}
+                    trailingIcon={<FiArrowRight aria-hidden="true" />}
+                  >
+                    Далее
+                  </Button>
                 ) : (
                   <Button
-                    formAction={confirmFormAction}
                     type="submit"
-                    disabled={!confirmReady}
-                    loading={confirming}
+                    name="wizardIntent"
+                    value={ready ? 'confirm' : 'draft'}
+                    disabled={!calculation || !selectedAvailable}
+                    loading={saving}
                   >
-                    Подтвердить и занять автомобиль
+                    {ready ? 'Создать договор' : 'Создать черновик'}
                   </Button>
                 )}
               </div>
@@ -713,7 +715,7 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
               </form>
             </div>
           ) : null}
-          {documentVersion && (confirmState?.ok || retryState?.ok) ? (
+          {documentVersion && (draftState?.ok || retryState?.ok) ? (
             <div
               aria-live="polite"
               className="mt-5 grid gap-3 rounded-[var(--radius-md)] bg-[var(--color-success-soft)] p-4"
@@ -722,14 +724,14 @@ export function RentalWizard({ client, templateVersionId, vehicles }: Props) {
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Link
                   className="inline-flex min-h-11 items-center gap-2 text-[var(--color-primary)] hover:underline"
-                  href={`/rentals/${(confirmState?.ok ? confirmState.rentalId : retryState?.rentalId) ?? currentRentalId}/documents/${documentVersion}/DOCX`}
+                  href={`/rentals/${(draftState?.ok ? draftState.rentalId : retryState?.rentalId) ?? currentRentalId}/documents/${documentVersion}/DOCX`}
                 >
                   <FiDownload aria-hidden="true" />
                   Скачать DOCX
                 </Link>
                 <Link
                   className="inline-flex min-h-11 items-center gap-2 text-[var(--color-primary)] hover:underline"
-                  href={`/rentals/${(confirmState?.ok ? confirmState.rentalId : retryState?.rentalId) ?? currentRentalId}/documents/${documentVersion}/PDF`}
+                  href={`/rentals/${(draftState?.ok ? draftState.rentalId : retryState?.rentalId) ?? currentRentalId}/documents/${documentVersion}/PDF`}
                 >
                   <FiDownload aria-hidden="true" />
                   Скачать PDF

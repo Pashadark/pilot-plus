@@ -57,7 +57,7 @@ export function CommandCenterKpis({
       hint: 'Без возвратов и удержаний',
       icon: FiClock,
       tone: 'text-[var(--color-warning)]',
-      href: '/rentals?finance=deposits',
+      href: '/deposits',
     },
     {
       label: 'Свободно',

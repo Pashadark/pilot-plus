@@ -1,4 +1,9 @@
-const customerTemplates = new Set(['RENTAL_RETURN_CLIENT', 'CLIENT_RENTAL_LIFECYCLE']);
+const customerTemplates = new Set([
+  'RENTAL_RETURN_CLIENT',
+  'CLIENT_RENTAL_LIFECYCLE',
+  'CLIENT_IMPOUND_ALERT',
+  'CLIENT_GPS_EVENT',
+]);
 const internalTemplates = new Set([
   'CLIENT_SUPPORT_REQUEST',
   'DAILY_OPERATIONS_DIGEST',

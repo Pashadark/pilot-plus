@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatOperationsDigest, type OperationsDigestInput } from './operations-digest';
+import {
+  formatOperationsDigest,
+  formatOperationsDigestParts,
+  type OperationsDigestInput,
+} from './operations-digest';
 
 function fixture(overrides: Partial<OperationsDigestInput> = {}): OperationsDigestInput {
   return {
@@ -29,6 +33,62 @@ function fixture(overrides: Partial<OperationsDigestInput> = {}): OperationsDige
 }
 
 describe('formatOperationsDigest', () => {
+  it('splits the daily digest into three bounded, explicit sections', () => {
+    const parts = formatOperationsDigestParts(
+      fixture({
+        returns: [],
+        criticalProblems: [],
+        trackerProblems: [],
+        offlineVehicles: [],
+        freeVehicles: [],
+        yesterday: {
+          revenueMinor: '22049000',
+          completedRentals: 2,
+          incidents: 4,
+          loadPercent: 88,
+        },
+        fleet: { rented: 22, free: 3, booked: 0, maintenance: 0, unknown: 0, total: 25 },
+      }),
+    );
+
+    expect(parts.map((part) => part.key)).toEqual(['critical', 'trackers', 'totals']);
+    expect(parts[0].message).toContain('🌙 <b>Сводка СУПА ПРО</b>');
+    expect(parts[0].message).toContain('✅ <b>Критических проблем нет</b>');
+    expect(parts[1].message).toContain('✅ <b>Проблем с трекерами нет</b>');
+    expect(parts[1].message).toContain('✅ <b>Все автомобили на связи</b>');
+    expect(parts[2].message).toContain('✅ <b>Возвратов на сегодня нет</b>');
+    expect(parts[2].message).toContain('🚫 <b>Свободных автомобилей нет</b>');
+    expect(parts.every((part) => part.message.length <= 3900)).toBe(true);
+  });
+
+  it('limits long digest lists and reports the hidden item count', () => {
+    const returns = Array.from({ length: 14 }, (_, index) => ({
+      at: new Date(`2026-08-27T${String(index).padStart(2, '0')}:00:00Z`),
+      title: 'Принять возврат автомобиля',
+      contractNumber: `ME-${index + 1}`,
+      vehicle: 'Kia K5',
+      registrationNumber: `А${String(index).padStart(3, '0')}АА997`,
+      client: `Клиент ${index + 1}`,
+      phone: '+79990000000',
+    }));
+    const problems = Array.from({ length: 23 }, (_, index) => ({
+      vehicle: `Автомобиль ${index + 1}`,
+      registrationNumber: `В${String(index).padStart(3, '0')}ВВ997`,
+      details: 'Нет связи 1 дн. 2 ч.',
+      action: 'Позвонить клиенту.',
+    }));
+
+    const parts = formatOperationsDigestParts(
+      fixture({ returns, criticalProblems: problems, trackerProblems: problems }),
+    );
+
+    expect(parts[0].message).toContain('…и ещё 3');
+    expect(parts[1].message).toContain('…и ещё 3');
+    expect(parts[2].message).toContain('…и ещё 4');
+    expect(parts[2].message).not.toContain('ME-11');
+    expect(parts.every((part) => part.message.length <= 3900)).toBe(true);
+  });
+
   it('formats a readable return card with Telegram HTML', () => {
     const html = formatOperationsDigest(fixture());
 

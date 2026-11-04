@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyGpsSilence,
   classifyRentalDeadline,
+  formatClientGpsEvent,
   formatOperationalAlert,
+  formatOperationalAlertForAudience,
 } from './operational-alerts';
 
 describe('operational alert thresholds', () => {
@@ -74,9 +76,118 @@ describe('operational alert thresholds', () => {
       eventRecordedAt: new Date('2026-09-18T11:32:00.000Z'),
     });
 
-    expect(message).toContain('Водитель: <b>Задорин Николай Константинович</b>');
+    expect(message).toContain('👤 <b>Клиент</b>');
+    expect(message).toContain('└ Задорин Николай Константинович');
+    expect(message).toContain('📍 <b>Событие</b>');
     expect(message).toContain('Скорость 127 км/ч');
     expect(message).toContain('18.09.2026, 14:32');
+    expect(message).toContain('⚡ <b>Действие</b>');
+  });
+
+  it('formats a harsh-acceleration event in the same Supa Pro block style', () => {
+    const message = formatOperationalAlert({
+      kind: 'HARSH_ACCELERATION',
+      vehicle: 'Kia K5',
+      registrationNumber: 'М022АН997',
+      clientName: 'Иванов Иван Иванович',
+      eventTitle: 'Резкий разгон · 3,6 м/с²',
+      eventDescription: 'Скорость выросла с 12 до 52 км/ч за 3 секунды.',
+      eventRecordedAt: new Date('2026-10-25T12:00:00.000Z'),
+    });
+
+    expect(message).toContain('🟠 <b>Резкий разгон</b>');
+    expect(message).toContain('🚗 <b>Авто</b>');
+    expect(message).toContain('👤 <b>Клиент</b>');
+    expect(message).toContain('Резкий разгон · 3,6 м/с²');
+    expect(message).toContain('25.10.2026, 15:00 МСК');
+    expect(message).toContain('Проверить маршрут и связаться с водителем');
+  });
+
+  it('formats harsh braking in the same Supa Pro block style for staff and client', () => {
+    const input = {
+      kind: 'HARSH_BRAKING' as const,
+      vehicle: 'Kia Ceed',
+      registrationNumber: 'А429АУ997',
+      eventTitle: 'Резкое торможение',
+      eventDescription: 'Скорость снизилась с 92 до 48 км/ч за 3 сек.',
+      eventRecordedAt: new Date('2026-10-27T12:00:00.000Z'),
+    };
+
+    const staffMessage = formatOperationalAlert({
+      ...input,
+      clientName: 'Щапова Екатерина Николаевна',
+    });
+    const clientMessage = formatClientGpsEvent(input);
+
+    expect(staffMessage).toContain('🔵 <b>Резкое торможение</b>');
+    expect(staffMessage).toContain('Щапова Екатерина Николаевна');
+    expect(staffMessage).toContain('92 до 48 км/ч');
+    expect(staffMessage).toContain('Проверить маршрут и связаться с водителем');
+    expect(clientMessage).toContain('🔵 <b>Резкое торможение</b>');
+    expect(clientMessage).toContain('GPS-событие, а не постановление о штрафе');
+  });
+
+  it('formats a client speeding notice as a GPS event rather than an official fine', () => {
+    const message = formatClientGpsEvent({
+      kind: 'SPEEDING',
+      vehicle: 'Kia K5',
+      registrationNumber: 'М022АН997',
+      eventTitle: 'Скорость 149 км/ч',
+      eventDescription: 'Зафиксирована скорость 145 км/ч или выше.',
+      eventRecordedAt: new Date('2026-10-25T12:00:00.000Z'),
+    });
+
+    expect(message).toContain('⚡ <b>Превышение скорости</b>');
+    expect(message).toContain('Kia K5');
+    expect(message).toContain('Скорость 149 км/ч');
+    expect(message).toContain('25.10.2026, 15:00 МСК');
+    expect(message).toContain('GPS-событие, а не постановление о штрафе');
+  });
+
+  it.each([
+    ['CLIENT', 'Снизьте скорость и продолжайте движение безопасно'],
+    ['MANAGER', 'Связаться с водителем и потребовать снизить скорость'],
+    ['SUPER_ADMIN', 'Проверить обработку события ответственным менеджером'],
+  ] as const)('formats speeding for %s in the shared block layout', (audience, action) => {
+    const message = formatOperationalAlertForAudience(
+      {
+        kind: 'SPEEDING',
+        vehicle: 'Toyota Camry',
+        registrationNumber: 'У899АВ997',
+        clientName: 'Гончаров Михаил Дмитриевич',
+        eventTitle: 'Скорость 153 км/ч',
+        eventDescription: 'Зафиксирована скорость 145 км/ч или выше.',
+        eventRecordedAt: new Date('2026-10-26T10:38:00.000Z'),
+      },
+      audience,
+    );
+
+    expect(message).toContain('⚡ <b>Превышение скорости</b>');
+    expect(message).toContain('🚗 <b>Авто</b>');
+    expect(message).toContain('👤 <b>Клиент</b>');
+    expect(message).toContain('📍 <b>Событие</b>');
+    expect(message).toContain(`⚡ <b>Действие</b>\n└ ${action}`);
+  });
+
+  it('formats an impound-lot alert in the approved block style', () => {
+    const message = formatOperationalAlert({
+      kind: 'IMPOUND_LOT_ENTRY',
+      vehicle: 'Toyota Camry',
+      registrationNumber: 'У899АВ997',
+      clientName: 'Гончаров Михаил Дмитриевич',
+      eventRecordedAt: new Date('2026-10-23T13:00:00Z'),
+      impoundCity: 'Москва',
+      impoundAddress: 'улица Подольских Курсантов, вл. 7а',
+    });
+
+    expect(message).toContain('🚨 <b>Автомобиль на территории штрафстоянки</b>');
+    expect(message).toContain('🚗 <b>Авто</b>\n└ Toyota Camry');
+    expect(message).toContain('👤 <b>Клиент</b>\n└ Гончаров Михаил Дмитриевич');
+    expect(message).toContain('📍 <b>Штрафстоянка</b>');
+    expect(message).toContain('├ Москва');
+    expect(message).toContain('├ улица Подольских Курсантов, вл. 7а');
+    expect(message).toContain('└ 23.10.2026, 16:00 МСК');
+    expect(message).toContain('Срочно связаться с клиентом и проверить эвакуацию');
   });
   it('includes the full fine description, article and Moscow offense time', () => {
     const message = formatOperationalAlert({
@@ -92,7 +203,8 @@ describe('operational alert thresholds', () => {
     expect(message).toContain('28.09.2026, 13:29');
     expect(message).toContain('Неуплата за размещение транспортного средства &lt;на парковке&gt;');
     expect(message).toContain('Статья: 8.14 ч.2');
-    expect(message).toContain('Постановление № <code>18810550260831038048</code>');
+    expect(message).toContain('📄 <b>Постановление</b>');
+    expect(message).toContain('№ <code>18810550260831038048</code>');
   });
   it('does not invent a missing fine description or date', () => {
     const message = formatOperationalAlert({

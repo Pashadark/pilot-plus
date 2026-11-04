@@ -1,0 +1,2 @@
+// Apply the sole interface before first paint, preserving the light/dark preference.
+export const appearanceBootstrap = `(function(){var root=document.documentElement;root.dataset.interface='graphite';var theme='dark';try{theme=localStorage.getItem('pilot-theme')==='light'?'light':'dark'}catch(_){}root.dataset.theme=theme;try{localStorage.setItem('pilot-interface','graphite');localStorage.removeItem('pilot-previous-interface');localStorage.removeItem('pilot-previous-theme');localStorage.removeItem('pilot-graphite-rollout')}catch(_){}})()`;

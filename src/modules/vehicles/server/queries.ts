@@ -468,7 +468,7 @@ function currentOdometerKm(...readings: Array<unknown | null | undefined>) {
   const values = readings
     .map(optionalNumber)
     .filter((value): value is number => value !== null && Number.isFinite(value));
-  return values.length ? Math.max(...values) : null;
+  return values[0] ?? null;
 }
 
 function mapCard(

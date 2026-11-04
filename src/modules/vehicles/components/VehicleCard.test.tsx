@@ -200,8 +200,10 @@ describe('VehicleCard', () => {
     expect(
       specifications.compareDocumentPosition(telemetry) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(specifications.className).toContain('bg-[#eeeeef]');
-    expect(telemetry.className).toContain('bg-[#eeeeef]');
+    expect(specifications.className).toContain('bg-[var(--color-elevated)]');
+    expect(telemetry.className).toContain('bg-[var(--color-elevated)]');
+    expect(specifications.className).not.toContain('bg-[#eeeeef]');
+    expect(telemetry.className).not.toContain('bg-[#eeeeef]');
     expect(specifications.className).not.toContain('border-y');
     expect(telemetry.className).not.toContain('border');
     expect(screen.getByText('2020')).toBeTruthy();

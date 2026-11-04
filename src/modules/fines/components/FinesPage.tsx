@@ -1,18 +1,37 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Modal } from '@/shared/ui/Overlays';
-import { FiChevronDown, FiChevronLeft, FiChevronRight, FiRefreshCw } from 'react-icons/fi';
+import {
+  FiChevronDown,
+  FiChevronLeft,
+  FiChevronRight,
+  FiDownload,
+  FiFileText,
+  FiClock,
+  FiMapPin,
+  FiSearch,
+  FiSend,
+  FiSliders,
+  FiRefreshCw,
+  FiUser,
+} from 'react-icons/fi';
+import { deadlineWeek } from '../deadline-queue';
+import { DeadlineTable } from './DeadlineTable';
+import styles from './deadline-workspace.module.css';
 
 import { syncFinesAction } from '../server/sync-action';
-import { Badge, Button, Card, CardContent, PageHeader, StatCard } from '@/shared/ui';
+import { Badge, Button, Card, CardContent } from '@/shared/ui';
+import { getVehiclePromoForFine } from '@/modules/dashboard/vehicle-promo';
 
 import { type FineAssignmentCandidate } from './FineAssignmentReview';
 import { FinePaymentPanel } from './FinePaymentPanel';
 import { discountBadge } from './fine-card-presentation';
 import { FineCard } from './FineCard';
+import { ViolationIconPng } from './ViolationIconPng';
 
 export interface FineItem {
   kind?: 'TOLL';
@@ -21,6 +40,7 @@ export interface FineItem {
   checkedAt?: string | null;
   id: string;
   companyId?: string;
+  vehicleId?: string | null;
   decreeNumber: string;
   decreeAt?: string | null;
   assignmentConfirmedAt?: string | null;
@@ -50,17 +70,26 @@ export interface FineFilters {
   offenseTo?: string;
   vehicleId?: string;
   clientId?: string;
+  pageSize?: string;
+  discountDay?: string;
 }
 
 interface FinesPageProps {
   referenceTime?: string;
+  deadlineDays?: { day: string; count: number; amountMinor: string }[];
   summary: {
     newCount: number;
+    newAmountMinor?: string;
     unpaidCount: number;
     unpaidAmountMinor: string;
     unassignedCount: number;
+    unassignedAmountMinor?: string;
+    urgentCount?: number;
+    urgentAmountMinor?: string;
     discountEndingSoonCount?: number;
     bailiffRiskCount?: number;
+    tollCount?: number;
+    tollAmountMinor?: string;
   };
   fines: readonly FineItem[];
   companies: readonly { id: string; name: string }[];
@@ -112,8 +141,169 @@ function filterUrl(filters: FineFilters, page: number) {
   return query ? `/fines?${query}` : '/fines';
 }
 
+function exportUrl(filters: FineFilters) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value) params.set(key, value);
+  });
+  const query = params.toString();
+  return query ? `/fines/export.xlsx?${query}` : '/fines/export.xlsx';
+}
+
+function TollDebtDetails({ fine }: { fine: FineItem }) {
+  return (
+    <Card className="min-w-0" data-testid="toll-debt-card">
+      <CardContent className="space-y-4 !p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone="primary">{fine.roadLabel}</Badge>
+          <Badge tone="neutral">Платная дорога</Badge>
+          <Badge tone="warning">Не оплачен</Badge>
+        </div>
+        <div>
+          <h2 className="text-base leading-6 font-semibold">{fine.vehicleLabel}</h2>
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{fine.description}</p>
+        </div>
+        <strong className="block text-2xl font-semibold tabular-nums">
+          {money(fine.currentAmountMinor)}
+        </strong>
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 border-t border-[var(--color-border)] pt-3 text-xs">
+          <dt className="text-[var(--color-text-secondary)]">Арендатор</dt>
+          <dd className="break-words">{fine.clientLabel ?? 'Не определён'}</dd>
+          <dt className="text-[var(--color-text-secondary)]">Проезд</dt>
+          <dd>{formatDate(fine.offenseAt)}</dd>
+          <dt className="text-[var(--color-text-secondary)]">Договор</dt>
+          <dd>
+            {fine.rentalId ? (
+              <Link className="text-[var(--color-primary)] hover:underline" href={`/rentals/${fine.rentalId}`}>
+                {fine.rentalLabel}
+              </Link>
+            ) : (
+              'Не найден однозначно'
+            )}
+          </dd>
+        </dl>
+        {fine.checkedAt ? (
+          <p className="text-xs text-[var(--color-text-tertiary)]">Проверено {formatDate(fine.checkedAt)}</p>
+        ) : null}
+        {fine.rentalId ? (
+          <Link
+            className="flex min-h-11 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 text-sm font-medium text-[var(--color-primary)]"
+            href={`/rentals/${fine.rentalId}`}
+          >
+            Открыть аренду
+          </Link>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function FineStatus({ fine }: { fine: FineItem }) {
+  if (fine.kind === 'TOLL') return <Badge tone="warning">К оплате</Badge>;
+  const tone =
+    fine.status === 'PAID'
+      ? 'success'
+      : fine.status === 'CANCELLED'
+        ? 'neutral'
+        : fine.status === 'NEW'
+          ? 'primary'
+          : 'danger';
+  return <Badge tone={tone}>{statusPresentation[fine.status].label}</Badge>;
+}
+
+function discountDeadline(fine: FineItem, referenceTime: string) {
+  const discount = discountBadge(fine, referenceTime);
+  if (!discount || !fine.discountExpiresAt) return null;
+  const hours = Math.max(0, Math.ceil((discount.expires - Date.parse(referenceTime)) / (60 * 60 * 1000)));
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  return {
+    date: formatDate(fine.discountExpiresAt),
+    remaining: days ? `${days} д ${remainingHours} ч` : `${remainingHours} ч`,
+    urgent: hours <= 72,
+  };
+}
+
+function FineDetailModalContent({
+  fine,
+  referenceTime,
+  canPay,
+  onPay,
+}: {
+  fine: FineItem;
+  referenceTime: string;
+  canPay: boolean;
+  onPay: () => void;
+}) {
+  const promo = getVehiclePromoForFine(fine.vehicleId, fine.vehicleLabel);
+  const deadline = discountDeadline(fine, referenceTime);
+  const [model, plate] = fine.vehicleLabel.split(' · ');
+  const closed = fine.status === 'PAID' || fine.status === 'CANCELLED';
+
+  return (
+    <div data-testid="fine-detail-modal-content" className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)] pb-4">
+        <div className="flex min-w-0 items-center gap-3">
+          {promo ? <Image src={promo.localPath} alt={promo.alt} width={138} height={88} className="h-20 w-32 shrink-0 object-contain" /> : <FiFileText className="size-12 text-[var(--color-text-secondary)]" aria-hidden />}
+          <div className="min-w-0">
+            <p className="text-base font-semibold">{model || 'Автомобиль не привязан'}</p>
+            {plate ? <p className="mt-1 text-sm font-medium tabular-nums text-[var(--color-text-secondary)]">{plate}</p> : null}
+          </div>
+        </div>
+        <FineStatus fine={fine} />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {deadline ? (
+          <div className={`rounded-[var(--radius-md)] border p-4 ${deadline.urgent ? 'border-[color-mix(in_srgb,var(--color-danger)_55%,var(--color-border))] bg-[color-mix(in_srgb,var(--color-danger)_10%,var(--color-surface))]' : 'border-[var(--color-warning)] bg-[var(--color-warning-soft)]'}`}>
+            <div className="flex gap-3">
+              <FiClock className="mt-0.5 size-5 shrink-0 text-[var(--color-warning)]" aria-hidden />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">Оплатить до</p>
+                <p className="mt-1 font-bold tabular-nums">{deadline.date}</p>
+                <p className="mt-1 text-sm font-semibold text-[var(--color-warning)]">Осталось {deadline.remaining}</p>
+              </div>
+            </div>
+          </div>
+        ) : <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] p-4 text-sm text-[var(--color-text-secondary)]">Для этого начисления скидка не применяется.</div>}
+
+        <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">Сумма к оплате</p>
+          <strong className="mt-1 block text-2xl tabular-nums">{money(fine.currentAmountMinor)}</strong>
+          {fine.currentAmountMinor !== fine.originalAmountMinor ? <del className="mt-1 block text-sm tabular-nums text-[var(--color-text-secondary)]">Полная сумма {money(fine.originalAmountMinor)}</del> : null}
+        </div>
+      </div>
+
+      <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] p-4">
+        <p className="text-xs font-semibold tracking-wide text-[var(--color-text-secondary)] uppercase">Нарушение</p>
+        <div className="mt-3 flex items-start gap-3">
+          <ViolationIconPng description={fine.description} kind={fine.kind} />
+          <div className="min-w-0">
+            <p className="font-semibold">{fine.description || fine.roadLabel || 'Нарушение ПДД'}</p>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{formatDate(fine.offenseAt)}</p>
+          </div>
+        </div>
+      </section>
+
+      <dl className="grid gap-4 border-y border-[var(--color-border)] py-4 text-sm sm:grid-cols-2">
+        <div className="flex gap-3"><FiUser className="mt-0.5 shrink-0 text-[var(--color-text-secondary)]" aria-hidden /><div><dt className="text-xs text-[var(--color-text-secondary)]">Водитель</dt><dd className="mt-0.5 font-semibold">{fine.clientLabel ?? 'Не привязан'}</dd></div></div>
+        <div className="flex gap-3"><FiFileText className="mt-0.5 shrink-0 text-[var(--color-text-secondary)]" aria-hidden /><div><dt className="text-xs text-[var(--color-text-secondary)]">Договор аренды</dt><dd className="mt-0.5 font-semibold">{fine.rentalLabel ?? 'Не найден'}</dd></div></div>
+        <div className="flex gap-3 sm:col-span-2"><FiMapPin className="mt-0.5 shrink-0 text-[var(--color-text-secondary)]" aria-hidden /><div><dt className="text-xs text-[var(--color-text-secondary)]">Место нарушения</dt><dd className="mt-0.5">{fine.address ?? 'Не указано в постановлении'}</dd></div></div>
+        {fine.kind !== 'TOLL' ? <div className="sm:col-span-2"><dt className="text-xs text-[var(--color-text-secondary)]">Постановление</dt><dd className="mt-0.5 font-medium break-all tabular-nums">№ {fine.decreeNumber || 'Не указано'}</dd></div> : null}
+      </dl>
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        {fine.photoAvailable ? <Link href={`/fines/${fine.id}/photo`} className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 text-sm font-semibold hover:bg-[var(--color-elevated)]">Постановление и фото</Link> : null}
+        {canPay && !closed ? <Button className="w-full" onClick={onPay}>Оплатить штраф</Button> : null}
+        <button type="button" disabled title="Отправка станет доступна после подключения Telegram клиента" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 text-sm font-semibold text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:opacity-55"><FiSend aria-hidden /> Отправить в Telegram</button>
+      </div>
+    </div>
+  );
+}
+
 export function FinesPage({
   referenceTime,
+  deadlineDays,
   summary,
   fines,
   companies,
@@ -141,6 +331,9 @@ export function FinesPage({
   );
   const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
   const [paymentFine, setPaymentFine] = useState<FineItem | null>(null);
+  const [activeFine, setActiveFine] = useState<FineItem | null>(null);
+  const [listKind, setListKind] = useState<'ALL' | 'FINE' | 'TOLL'>('ALL');
+  const [listOrder, setListOrder] = useState<'NEWEST' | 'OLDEST'>('NEWEST');
   const [copyFeedback, setCopyFeedback] = useState<{ id: string; text: string } | null>(null);
   const copyDecree = async (fine: FineItem) => {
     try {
@@ -167,15 +360,31 @@ export function FinesPage({
     filters.vehicleId,
     filters.clientId,
   ].filter(Boolean).length;
+  const remainingFines = orderedFines;
+  const days = deadlineDays ?? deadlineWeek(fines, renderTime);
+  const remainingFineCount = remainingFines.filter((fine) => fine.kind !== 'TOLL').length;
+  const remainingTollCount = remainingFines.length - remainingFineCount;
+  const visibleRemainingFines = [...remainingFines]
+    .filter((fine) => listKind === 'ALL' || (listKind === 'TOLL' ? fine.kind === 'TOLL' : fine.kind !== 'TOLL'))
+    .sort((a, b) =>
+      listOrder === 'NEWEST'
+        ? Date.parse(b.offenseAt) - Date.parse(a.offenseAt)
+        : Date.parse(a.offenseAt) - Date.parse(b.offenseAt),
+    );
+  const effectiveFilters = { ...filters, companyId: selectedCompanyId ?? filters.companyId };
 
+  const [showFilters, setShowFilters] = useState(false);
   return (
-    <div className="flex flex-col gap-5">
-      <div className="order-[-2]">
-        <PageHeader
-          eyebrow="Контроль автопарка"
-          title="Штрафы"
-          description="Штрафы и платные дороги, связанные с автомобилями, арендами и клиентами."
-        />
+    <div className={`flex flex-col ${styles.workspace}`}>
+      <div className={styles.heading}>
+        <h1>Штрафы</h1>
+        <form action="/fines" method="get" className={styles.toolbar}>
+          {Object.entries(effectiveFilters).filter(([key, value]) => key !== 'query' && value).map(([key, value]) => <input key={key} type="hidden" name={key} value={value} />)}
+          <label className={styles.search}><FiSearch aria-hidden/><span className="sr-only">Поиск по всем штрафам и платным дорогам</span><input name="query" defaultValue={filters.query ?? ''} placeholder="Поиск по номеру, водителю, нарушению…" /></label>
+          <button type="submit" className="sr-only">Найти</button>
+          <button type="button" className={styles.action} aria-expanded={showFilters} onClick={() => setShowFilters(value => !value)}><FiSliders aria-hidden/>Фильтры</button>
+          <Link href={exportUrl(effectiveFilters)} className={styles.action} data-primary="true"><FiDownload aria-hidden/>Экспорт в Excel</Link>
+        </form>
       </div>
       {tollsUnavailable ? (
         <p
@@ -205,62 +414,56 @@ export function FinesPage({
             : 'Не удалось обновить Driver Helper. Проверьте доступ к сервису и повторите.'}
         </div>
       ) : null}
-      <Card>
+      <Card hidden={!showFilters} className="!border-[var(--color-border)] !bg-[var(--color-surface)]">
         <CardContent>
           <form action="/fines" method="get" className="grid min-w-0 gap-3">
-            <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(12rem,0.7fr)_minmax(10rem,0.45fr)_minmax(16rem,1fr)_auto] lg:items-end">
-              <label className="grid min-w-0 gap-1.5" htmlFor="fine-company">
-                <span className="text-sm font-medium">Фирма</span>
-                <select
-                  id="fine-company"
-                  name="companyId"
-                  defaultValue={selectedCompanyId ?? ''}
-                  className="min-h-11 min-w-0 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3"
-                >
-                  {companies.length > 1 ? <option value="">Все доступные фирмы</option> : null}
-                  {companies.map((company) => (
-                    <option key={company.id} value={company.id}>
-                      {company.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid min-w-0 gap-1.5">
-                <span className="text-sm font-medium">Статус</span>
-                <select
-                  name="status"
-                  defaultValue={filters.status ?? ''}
-                  className="min-h-11 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3"
-                >
-                  <option value="">Все статусы</option>
-                  {Object.entries(statusPresentation).map(([value, presentation]) => (
-                    <option key={value} value={value}>
-                      {presentation.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid min-w-0 gap-1.5">
-                <span className="text-sm font-medium">Поиск</span>
+            {selectedCompanyId && companies.length <= 1 ? (
+              <input type="hidden" name="companyId" value={selectedCompanyId} />
+            ) : null}
+            {pagination ? <input type="hidden" name="pageSize" value={pagination.pageSize} /> : null}
+            <div className="flex min-w-0 flex-col gap-2 md:flex-row">
+              <label className="relative min-w-0 flex-1">
+                <span className="sr-only">Уточнить поиск</span>
+                <FiSearch aria-hidden className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-[var(--color-text-secondary)]" />
                 <input
                   name="query"
                   defaultValue={filters.query ?? ''}
-                  placeholder="Номер, клиент, постановление или договор"
-                  className="min-h-11 min-w-0 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3"
+                  placeholder="Машина, госномер, клиент, договор, постановление, платная дорога или дата"
+                  className="min-h-14 w-full rounded-[1rem] border border-[var(--color-border)] bg-[var(--color-elevated)] pr-4 pl-12 text-base outline-none focus:border-[var(--color-primary)]"
                 />
               </label>
-              <Button type="submit">Показать</Button>
+              <Button type="submit" size="lg">Найти</Button>
+              <Link href={exportUrl(effectiveFilters)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 text-sm font-semibold hover:bg-[var(--color-elevated)]">
+                <FiDownload aria-hidden /> Скачать Excel
+              </Link>
             </div>
             <details
               data-testid="fine-advanced-filters"
               open={advancedFilterCount > 0 || undefined}
-              className="group border-t border-[var(--color-border)] pt-3"
+              className="group"
             >
-              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between rounded-[var(--radius-sm)] px-2 text-sm font-semibold text-[var(--color-primary)] hover:bg-[var(--color-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]">
-                <span>Все фильтры{advancedFilterCount ? ` · ${advancedFilterCount}` : ''}</span>
+              <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-[var(--radius-sm)] px-3 text-sm font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-elevated)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]">
+                <FiSliders aria-hidden />
+                <span>Фильтры{advancedFilterCount ? ` · ${advancedFilterCount}` : ''}</span>
                 <FiChevronDown aria-hidden className="transition-transform group-open:rotate-180" />
               </summary>
-              <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:items-end">
+              <div className="mt-3 grid min-w-0 gap-3 border-t border-[var(--color-border)] pt-3 sm:grid-cols-2 xl:grid-cols-5 xl:items-end">
+                {companies.length > 1 ? (
+                  <label className="grid min-w-0 gap-1.5" htmlFor="fine-company">
+                    <span className="text-sm font-medium">Фирма</span>
+                    <select id="fine-company" name="companyId" defaultValue={selectedCompanyId ?? ''} className="min-h-11 min-w-0 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3">
+                      <option value="">Все доступные фирмы</option>
+                      {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+                    </select>
+                  </label>
+                ) : null}
+                <label className="grid min-w-0 gap-1.5">
+                  <span className="text-sm font-medium">Статус</span>
+                  <select name="status" defaultValue={filters.status ?? ''} className="min-h-11 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3">
+                    <option value="">Все статусы</option>
+                    {Object.entries(statusPresentation).map(([value, presentation]) => <option key={value} value={value}>{presentation.label}</option>)}
+                  </select>
+                </label>
                 <label className="grid min-w-0 gap-1.5">
                   <span className="text-sm font-medium">Нарушение с</span>
                   <input
@@ -315,112 +518,114 @@ export function FinesPage({
           {canSync && selectedCompanyId ? (
             <form action={syncFinesAction} className="mt-4">
               <input type="hidden" name="companyId" value={selectedCompanyId} />
-              <Button type="submit" leadingIcon={<FiRefreshCw aria-hidden="true" />}>
+              <Button type="submit" variant="secondary" leadingIcon={<FiRefreshCw aria-hidden="true" />}>
                 Обновить штрафы
               </Button>
             </form>
           ) : null}
         </CardContent>
       </Card>
-      <section
-        aria-label="Сводка по штрафам"
-        className="order-[-1] grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
-      >
-        <StatCard label="Новые" value={String(summary.newCount)} />
-        <StatCard label="Неоплаченные" value={String(summary.unpaidCount)} />
-        <StatCard label="Сумма" value={money(summary.unpaidAmountMinor)} />
-        <StatCard label="Требуют привязки" value={String(summary.unassignedCount)} />
-        <StatCard
-          label="Скидка заканчивается"
-          value={String(summary.discountEndingSoonCount ?? 0)}
-        />
-        <StatCard label="Риск передачи приставам" value={String(summary.bailiffRiskCount ?? 0)} />
+      <section aria-label="Сроки скидок на ближайшие семь дней" className={styles.week}>
+        {days.map(day => <Link key={day.day} href={filterUrl({ ...effectiveFilters, discountDay: filters.discountDay === day.day ? undefined : day.day }, 1)} className={styles.day} data-active={filters.discountDay === day.day} aria-label={`Срок скидки ${day.day}: ${day.count}, ${money(day.amountMinor)}`}>
+          <small>{new Intl.DateTimeFormat('ru-RU', { weekday: 'short', timeZone: 'Europe/Moscow' }).format(new Date(day.day + 'T12:00:00Z'))}</small>
+          <strong>{new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', timeZone: 'Europe/Moscow' }).format(new Date(day.day + 'T12:00:00Z'))}</strong>
+          <small>Штрафов: {day.count}</small><strong>{money(day.amountMinor)}</strong>
+        </Link>)}
       </section>
-      {canPay && selectedCompanyId && selectedFines.length ? (
-        <FinePaymentPanel companyId={selectedCompanyId} selectedFines={selectedFines} />
-      ) : null}
-      {fines.length === 0 ? (
+      {canPay && selectedCompanyId && selectedFines.length ? <FinePaymentPanel companyId={selectedCompanyId} selectedFines={selectedFines} /> : null}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="text-xs text-[var(--color-text-secondary)]">Не оплачено: {summary.unpaidCount} · {money(summary.unpaidAmountMinor)}{filters.discountDay ? <Link className="ml-3 text-[var(--color-primary)]" href={filterUrl({ ...effectiveFilters, discountDay: undefined }, 1)}>Сбросить дату</Link> : null}</div>
+        <div className="flex flex-wrap items-center gap-1 text-sm">
+          {([
+            ['ALL', `Все ${remainingFines.length}`],
+            ['FINE', `Штрафы ${remainingFineCount}`],
+            ['TOLL', `Платные дороги ${remainingTollCount}`],
+          ] as const).map(([kind, label]) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => setListKind(kind)}
+              data-active={listKind === kind}
+              className="min-h-10 rounded-lg px-3 font-semibold text-[var(--color-text-secondary)] data-[active=true]:bg-[var(--color-primary-soft)] data-[active=true]:text-[var(--color-primary)]"
+            >
+              {label}
+            </button>
+          ))}
+          <label className="ml-2">
+            <span className="sr-only">Сортировка</span>
+            <select
+              value={listOrder}
+              onChange={(event) => setListOrder(event.target.value as 'NEWEST' | 'OLDEST')}
+              className="min-h-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 font-semibold"
+            >
+              <option value="NEWEST">Сначала новые</option>
+              <option value="OLDEST">Сначала старые</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      {remainingFines.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-[var(--color-text-secondary)]">
             Штрафы по этим фильтрам не найдены.
           </CardContent>
         </Card>
       ) : (
-        <section
-          aria-label="Список штрафов"
-          className="grid min-w-0 items-start gap-4 md:grid-cols-2 xl:grid-cols-3"
-        >
-          {orderedFines.map((fine) => {
-            if (fine.kind === 'TOLL')
-              return (
-                <Card key={fine.id} className="min-w-0" data-testid="toll-debt-card">
-                  <CardContent className="space-y-4 !p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone="primary">{fine.roadLabel}</Badge>
-                      <Badge tone="neutral">Платная дорога</Badge>
-                      <Badge tone="warning">Не оплачен</Badge>
-                    </div>
-                    <div>
-                      <h2 className="text-base leading-6 font-semibold">{fine.vehicleLabel}</h2>
-                      <p className="mt-1 line-clamp-2 min-h-10 text-sm text-[var(--color-text-secondary)]">
-                        {fine.description}
-                      </p>
-                    </div>
-                    <strong className="block text-2xl font-semibold tabular-nums">
-                      {money(fine.currentAmountMinor)}
-                    </strong>
-                    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 border-t pt-3 text-xs">
-                      <dt className="text-[var(--color-text-secondary)]">Арендатор</dt>
-                      <dd className="break-words">{fine.clientLabel ?? 'Не определён'}</dd>
-                      <dt className="text-[var(--color-text-secondary)]">Проезд</dt>
-                      <dd>{formatDate(fine.offenseAt)}</dd>
-                      <dt className="text-[var(--color-text-secondary)]">Договор</dt>
-                      <dd>
-                        {fine.rentalId ? (
-                          <Link
-                            className="text-[var(--color-primary)] hover:underline"
-                            href={`/rentals/${fine.rentalId}`}
-                          >
-                            {fine.rentalLabel}
-                          </Link>
-                        ) : (
-                          'Не найден однозначно'
-                        )}
-                      </dd>
-                    </dl>
-                    {fine.checkedAt ? (
-                      <p className="text-xs text-[var(--color-text-tertiary)]">
-                        Проверено {formatDate(fine.checkedAt)}
-                      </p>
-                    ) : null}
-                    {fine.rentalId ? (
-                      <Link
-                        className="flex min-h-11 items-center justify-center rounded-[var(--radius-md)] border px-3 text-sm font-medium text-[var(--color-primary)]"
-                        href={`/rentals/${fine.rentalId}`}
-                      >
-                        Открыть аренду
-                      </Link>
-                    ) : null}
-                  </CardContent>
-                </Card>
-              );
-            return (
-              <FineCard
-                key={fine.id}
-                fine={fine}
-                referenceTime={renderTime}
-                canManage={canManage}
-                canPay={Boolean(canPay && selectedCompanyId)}
-                selected={selectedIds.includes(fine.id)}
-                onToggle={() => toggleFine(fine.id)}
-                onPay={() => setPaymentFine(fine)}
-                onCopy={() => void copyDecree(fine)}
-                copyFeedback={copyFeedback?.id === fine.id ? copyFeedback.text : undefined}
-              />
-            );
-          })}
-        </section>
+        <>
+          <section aria-label="Таблица штрафов и платных дорог" className="hidden min-w-0 lg:block">
+            <DeadlineTable fines={visibleRemainingFines} now={renderTime} onOpen={setActiveFine} selectedIds={selectedIds} onToggle={toggleFine} canSelect={Boolean(canPay && selectedCompanyId)} />
+          </section>
+          <section aria-label="Список штрафов" className="grid min-w-0 items-start gap-4 md:grid-cols-2 lg:hidden">
+            {visibleRemainingFines.map((fine) =>
+              fine.kind === 'TOLL' ? (
+                <TollDebtDetails key={fine.id} fine={fine} />
+              ) : (
+                <FineCard
+                  key={fine.id}
+                  fine={fine}
+                  referenceTime={renderTime}
+                  canManage={canManage}
+                  canPay={Boolean(canPay && selectedCompanyId)}
+                  selected={selectedIds.includes(fine.id)}
+                  onToggle={() => toggleFine(fine.id)}
+                  onPay={() => setPaymentFine(fine)}
+                  onCopy={() => void copyDecree(fine)}
+                  copyFeedback={copyFeedback?.id === fine.id ? copyFeedback.text : undefined}
+                />
+              ),
+            )}
+          </section>
+        </>
       )}
+      {activeFine
+        ? createPortal(
+            <Modal
+              open
+              title={activeFine.kind === 'TOLL' ? 'Платная дорога' : `Штраф № ${activeFine.decreeNumber || '—'}`}
+              onOpenChange={(open) => {
+                if (!open) setActiveFine(null);
+              }}
+              className="max-h-[calc(100dvh-2rem)] !max-w-4xl overflow-y-auto"
+              backdropClassName="!z-[120]"
+              footer={
+                <Button variant="outline" onClick={() => setActiveFine(null)}>
+                  Закрыть
+                </Button>
+              }
+            >
+              <FineDetailModalContent
+                fine={activeFine}
+                referenceTime={renderTime}
+                canPay={Boolean(canPay && selectedCompanyId)}
+                onPay={() => {
+                  setPaymentFine(activeFine);
+                  setActiveFine(null);
+                }}
+              />
+            </Modal>,
+            document.body,
+          )
+        : null}
       {paymentFine && selectedCompanyId && canPay
         ? createPortal(
             <Modal
@@ -446,14 +651,36 @@ export function FinesPage({
             document.body,
           )
         : null}
-      {pagination && pagination.totalPages > 1 ? (
+      {pagination ? (
         <nav
           aria-label="Страницы штрафов"
           className="flex flex-wrap items-center justify-between gap-3"
         >
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            Показано {fines.length} из {pagination.total}
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-[var(--color-text-secondary)]">
+              Показано {fines.length} из {pagination.total}
+            </p>
+            <form action="/fines" method="get">
+              {Object.entries(filters).map(([key, value]) =>
+                value && key !== 'pageSize' ? (
+                  <input key={key} type="hidden" name={key} value={value} />
+                ) : null,
+              )}
+              <label className="flex items-center gap-2 text-sm font-semibold">
+                <span className="text-[var(--color-text-secondary)]">Показывать</span>
+                <select
+                  name="pageSize"
+                  defaultValue={String(pagination.pageSize)}
+                  onChange={(event) => event.currentTarget.form?.requestSubmit()}
+                  className="min-h-11 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3"
+                >
+                  <option value="50">50 на странице</option>
+                  <option value="100">100 на странице</option>
+                  <option value="150">150 на странице</option>
+                </select>
+              </label>
+            </form>
+          </div>
           <div className="flex gap-2">
             {pagination.page > 1 ? (
               <Link

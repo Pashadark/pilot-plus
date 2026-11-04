@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 
 import type { OnlineFleetMapProps } from './OnlineFleetMap';
+import styles from './OnlineFleetMap.module.css';
 
 const OnlineFleetMapCanvas = dynamic(
   () => import('./OnlineFleetMap').then((module) => module.OnlineFleetMap),
@@ -12,7 +13,7 @@ const OnlineFleetMapCanvas = dynamic(
       <div
         role="status"
         aria-label="Карта загружается"
-        className="h-full min-h-96 animate-pulse bg-[var(--color-primary-soft)] motion-reduce:animate-none"
+        className={`${styles.mapLoadingPattern} h-full min-h-96`}
       />
     ),
   },

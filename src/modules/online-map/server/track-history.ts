@@ -9,6 +9,7 @@ import type {
   OnlineMapTrackHistoryDto,
   TrackCoordinates,
   VehicleTrack,
+  VehicleTrackEvent,
   VehicleTrackPoint,
 } from '../track-types';
 
@@ -19,7 +20,10 @@ const FINE_INFERENCE_WINDOW_MS = 30 * 60 * 1_000;
 export type TrackHistoryErrorCode = 'INVALID_INPUT' | 'INVALID_RANGE' | 'FORBIDDEN';
 
 export class TrackHistoryError extends Error {
-  constructor(public readonly code: TrackHistoryErrorCode, message: string) {
+  constructor(
+    public readonly code: TrackHistoryErrorCode,
+    message: string,
+  ) {
     super(message);
     this.name = 'TrackHistoryError';
   }
@@ -63,6 +67,21 @@ interface VehicleHistoryRow {
   id: string;
   positions: PositionRow[];
   fines: FineRow[];
+  events?: VehicleEventRow[];
+}
+
+interface VehicleEventRow {
+  id: string;
+  type: string;
+  title: string;
+  description: string | null;
+  recordedAt: Date;
+  endLatitude: unknown | null;
+  endLongitude: unknown | null;
+  startSpeedKph: number | null;
+  endSpeedKph: number | null;
+  durationMs: number | null;
+  trackPointIds: unknown;
 }
 
 interface ValidPosition extends PositionRow {
@@ -122,6 +141,26 @@ export async function getOnlineMapTrackHistory(
         },
         orderBy: { offenseAt: 'asc' },
       },
+      events: {
+        where: {
+          type: { in: ['HARSH_ACCELERATION', 'HARSH_BRAKING'] },
+          recordedAt: { gte: range.from, lt: range.toExclusive },
+        },
+        select: {
+          id: true,
+          type: true,
+          title: true,
+          description: true,
+          recordedAt: true,
+          endLatitude: true,
+          endLongitude: true,
+          startSpeedKph: true,
+          endSpeedKph: true,
+          durationMs: true,
+          trackPointIds: true,
+        },
+        orderBy: { recordedAt: 'asc' },
+      },
     },
   })) as VehicleHistoryRow | null;
 
@@ -133,13 +172,15 @@ export async function getOnlineMapTrackHistory(
     .map(toValidPosition)
     .filter((position): position is ValidPosition => position !== null)
     .sort((left, right) => left.recordedAt.getTime() - right.recordedAt.getTime());
-  const tracks = buildVehicleTracks(row.id, positions);
+  const tracks = buildVehicleTracks(row.id, positions, row.events ?? []);
 
   return {
     vehicleId: row.id,
     from: input.from,
     to: input.to,
-    availableDates: tracks.map((track) => track.date).sort((left, right) => right.localeCompare(left)),
+    availableDates: tracks
+      .map((track) => track.date)
+      .sort((left, right) => right.localeCompare(left)),
     tracks,
     fines: row.fines.map((fine) => toFineDto(fine, positions)),
   };
@@ -232,7 +273,11 @@ function toValidPosition(position: PositionRow): ValidPosition | null {
   };
 }
 
-function buildVehicleTracks(vehicleId: string, positions: readonly ValidPosition[]): VehicleTrack[] {
+function buildVehicleTracks(
+  vehicleId: string,
+  positions: readonly ValidPosition[],
+  events: readonly VehicleEventRow[],
+): VehicleTrack[] {
   const grouped = new Map<string, ValidPosition[]>();
   for (const position of positions) {
     const group = grouped.get(position.date) ?? [];
@@ -243,20 +288,65 @@ function buildVehicleTracks(vehicleId: string, positions: readonly ValidPosition
   return [...grouped.entries()]
     .filter(([, points]) => points.length >= 2)
     .sort(([left], [right]) => right.localeCompare(left))
-    .map(([date, points]) => ({
-      vehicleId,
-      date,
-      points: points.map(
-        (point): VehicleTrackPoint => ({
+    .map(([date, points]) => {
+      const pointIds = new Set(points.map((point) => point.id));
+      return {
+        vehicleId,
+        date,
+        points: points.map((point): VehicleTrackPoint => ({
           id: point.id,
           coordinates: point.coordinates,
           timestamp: formatMoscowTime(point.recordedAt),
+          recordedAt: point.recordedAt.toISOString(),
           speedKph: Math.max(0, point.speedKph ?? 0),
           address: point.address ?? 'Адрес не определён',
-        }),
-      ),
-      events: [],
-    }));
+        })),
+        events: events
+          .filter((event) => formatMoscowDate(event.recordedAt) === date)
+          .map((event) => toTrackEvent(event, positions))
+          .filter(
+            (event): event is VehicleTrackEvent => event !== null && pointIds.has(event.pointId),
+          ),
+      };
+    });
+}
+
+function toTrackEvent(
+  event: VehicleEventRow,
+  positions: readonly ValidPosition[],
+): VehicleTrackEvent | null {
+  if (event.type !== 'HARSH_ACCELERATION' && event.type !== 'HARSH_BRAKING') return null;
+  const declaredPointIds = Array.isArray(event.trackPointIds)
+    ? event.trackPointIds.filter((value): value is string => typeof value === 'string')
+    : [];
+  const declaredPointId = declaredPointIds.at(-1) ?? null;
+  const declaredPoint = declaredPointId
+    ? (positions.find((position) => position.id === declaredPointId) ?? null)
+    : null;
+  const nearest = declaredPoint ?? findNearestPosition(event.recordedAt, positions);
+  if (!nearest) return null;
+  const latitude = coordinate(event.endLatitude, -90, 90);
+  const longitude = coordinate(event.endLongitude, -180, 180);
+  const startSpeedKph = Math.max(0, Math.round(event.startSpeedKph ?? 0));
+  const endSpeedKph = Math.max(0, Math.round(event.endSpeedKph ?? nearest.speedKph ?? 0));
+  const durationSeconds = Math.max(1, Math.round((event.durationMs ?? 0) / 1_000));
+
+  return {
+    id: event.id,
+    type: event.type === 'HARSH_BRAKING' ? 'harsh-braking' : 'harsh-acceleration',
+    pointId: nearest.id,
+    title: event.title,
+    description:
+      event.type === 'HARSH_BRAKING'
+        ? `Скорость снизилась с ${startSpeedKph} до ${endSpeedKph} км/ч за ${durationSeconds} сек.`
+        : `Скорость выросла с ${startSpeedKph} до ${endSpeedKph} км/ч за ${durationSeconds} сек.`,
+    coordinates:
+      latitude !== null && longitude !== null ? [longitude, latitude] : nearest.coordinates,
+    timestamp: formatMoscowTime(event.recordedAt),
+    speedKph: endSpeedKph,
+    metricLabel: `${startSpeedKph}→${endSpeedKph}`,
+    address: nearest.address ?? 'Адрес не определён',
+  };
 }
 
 function toFineDto(fine: FineRow, positions: readonly ValidPosition[]): OnlineMapTrackFine {

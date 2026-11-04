@@ -66,6 +66,9 @@ describe('notification recipient isolation', () => {
     expect(notificationDestination(customer, null)).toBe('123');
     expect(notificationDestination({ ...customer, chatId: '-123' }, '-123')).toBeNull();
     expect(
+      notificationDestination({ ...customer, template: 'CLIENT_GPS_EVENT' }, null),
+    ).toBe('123');
+    expect(
       notificationDestination(
         { ...customer, identity: { ...customer.identity, companyId: 'b' } },
         null,

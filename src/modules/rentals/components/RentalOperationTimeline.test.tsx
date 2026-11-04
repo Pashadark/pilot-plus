@@ -41,5 +41,9 @@ describe('RentalOperationTimeline', () => {
     );
     expect(screen.getByRole('link', { name: 'Открыть фото приборки' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Кузов спереди' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Фото приборной панели' }).getAttribute('src')).toBe(
+      '/rentals/rental-1/operations/operation-1/media/DASHBOARD_PHOTO',
+    );
+    expect(screen.getByRole('img', { name: 'Кузов спереди' })).toBeTruthy();
   });
 });

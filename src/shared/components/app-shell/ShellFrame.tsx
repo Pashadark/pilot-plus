@@ -11,6 +11,7 @@ import {
 import type { SafeUser } from '@/modules/auth/types';
 import type { SystemHealthSummary } from '@/modules/system-health/types';
 import type { PilotNotification } from '@/modules/notifications/types';
+import type { NotificationMeta } from '@/modules/notifications/pagination';
 import { useGlobalShortcuts } from '@/shared/hooks/useGlobalShortcuts';
 import { useTheme } from '@/shared/providers/ThemeProvider';
 
@@ -21,7 +22,7 @@ import { Sidebar } from './Sidebar';
 
 const storageKey = 'pilot-sidebar-expanded';
 const sidebarStorageEvent = 'pilot-sidebar-storage';
-const wideDesktopQuery = '(min-width: 1280px)';
+const wideDesktopQuery = '(min-width: 1024px)';
 
 function subscribeToSidebarStorage(onStoreChange: () => void) {
   window.addEventListener('storage', onStoreChange);
@@ -67,12 +68,20 @@ export function ShellFrame({
   systemHealthSummary,
   user,
   notifications,
+  notificationMeta,
+  openFineCount = 0,
+  openLeadCount = 0,
+  openDepositCount = 0,
 }: {
   children: ReactNode;
   breadcrumbs: readonly Breadcrumb[];
   systemHealthSummary: SystemHealthSummary;
   user: SafeUser;
   notifications: readonly PilotNotification[];
+  notificationMeta?: NotificationMeta;
+  openFineCount?: number;
+  openLeadCount?: number;
+  openDepositCount?: number;
 }) {
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const { toggleTheme } = useTheme();
@@ -149,6 +158,7 @@ export function ShellFrame({
         onCloseMobileNavigation={closeMobileNavigation}
         systemHealthSummary={systemHealthSummary}
         notifications={notifications}
+        notificationMeta={notificationMeta}
       />
       <aside
         data-testid="desktop-sidebar"
@@ -160,6 +170,9 @@ export function ShellFrame({
           onToggle={wideDesktop ? toggleSidebar : undefined}
           user={user}
           systemHealthSummary={systemHealthSummary}
+          openFineCount={openFineCount}
+          openLeadCount={openLeadCount}
+          openDepositCount={openDepositCount}
         />
       </aside>
       <main

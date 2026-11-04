@@ -33,6 +33,7 @@ const focusable =
 
 let scrollLockCount = 0;
 let savedBodyOverflow = '';
+let savedBodyPaddingRight = '';
 type OverlayEntry = { id: symbol; panel: HTMLDivElement; previousFocus: HTMLElement | null };
 const overlayStack: OverlayEntry[] = [];
 
@@ -43,12 +44,19 @@ function focusOverlay(panel: HTMLDivElement) {
 function lockBodyScroll() {
   if (scrollLockCount === 0) {
     savedBodyOverflow = document.body.style.overflow;
+    savedBodyPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
+    const padding = Number.parseFloat(getComputedStyle(document.body).paddingRight) || 0;
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${padding + scrollbarWidth}px`;
     document.body.style.overflow = 'hidden';
   }
   scrollLockCount += 1;
   return () => {
     scrollLockCount = Math.max(0, scrollLockCount - 1);
-    if (scrollLockCount === 0) document.body.style.overflow = savedBodyOverflow;
+    if (scrollLockCount === 0) {
+      document.body.style.overflow = savedBodyOverflow;
+      document.body.style.paddingRight = savedBodyPaddingRight;
+    }
   };
 }
 

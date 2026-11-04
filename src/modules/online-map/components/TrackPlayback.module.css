@@ -1,0 +1,212 @@
+.player {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(13rem, 1fr) auto;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 2.5rem;
+}
+
+.playButton {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border: 0;
+  border-radius: 0.75rem;
+  background: var(--color-primary);
+  color: #fff;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast),
+    transform var(--motion-fast);
+}
+
+.playButton:hover {
+  background: var(--color-primary-hover);
+}
+.playButton:active {
+  transform: scale(0.96);
+}
+
+.playButton:focus-visible,
+.speedControl button:focus-visible,
+.precisionMarks button:focus-visible,
+.range:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.playButton svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.timelineCluster {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.7rem minmax(7rem, 1fr) 2.7rem;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  min-height: 2.5rem;
+}
+
+.currentTime,
+.finishTime {
+  color: var(--color-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.finishTime {
+  color: var(--color-text-secondary);
+  text-align: right;
+}
+
+.range {
+  width: 100%;
+  height: 4px;
+  min-width: 0;
+  border-radius: 999px;
+  appearance: none;
+  background: linear-gradient(
+    to right,
+    var(--color-primary) 0 var(--playback-progress),
+    var(--color-border-strong) var(--playback-progress) 100%
+  );
+  cursor: pointer;
+}
+
+.range::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  border: 3px solid var(--color-surface);
+  border-radius: 999px;
+  appearance: none;
+  background: var(--color-primary);
+  box-shadow: 0 1px 7px color-mix(in srgb, var(--color-primary) 38%, transparent);
+}
+
+.range::-moz-range-thumb {
+  width: 8px;
+  height: 8px;
+  border: 3px solid var(--color-surface);
+  border-radius: 999px;
+  background: var(--color-primary);
+}
+
+.range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+}
+
+.speedControl {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--color-border);
+  border-radius: 0.7rem;
+  background: var(--color-canvas);
+}
+
+.speedControl button {
+  min-width: 1.85rem;
+  min-height: 1.85rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.speedControl button[aria-pressed='true'] {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.precision {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.7rem);
+  left: 0;
+  z-index: 2;
+  padding: 0.65rem 0.75rem 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.875rem;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-floating);
+  animation: precision-in 150ms ease-out;
+}
+
+.precisionHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.45rem;
+}
+.precisionHeader strong {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.precisionHeader span {
+  color: var(--color-text-secondary);
+  font-size: 0.65rem;
+}
+.precisionMarks {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.precisionMarks button {
+  display: grid;
+  min-width: 1.7rem;
+  justify-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.58rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.precisionMarks i {
+  width: 2px;
+  height: 0.45rem;
+  border-radius: 2px;
+  background: var(--color-border-strong);
+}
+.precisionMarks button:hover,
+.precisionMarks button[data-current='true'] {
+  color: var(--color-text);
+}
+.precisionMarks button:hover i,
+.precisionMarks button[data-current='true'] i {
+  height: 0.7rem;
+  background: var(--color-primary);
+}
+
+@keyframes precision-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .precision {
+    animation: none;
+  }
+  .playButton {
+    transition: none;
+  }
+}

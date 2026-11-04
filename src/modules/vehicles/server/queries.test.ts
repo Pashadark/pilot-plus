@@ -298,6 +298,34 @@ describe('запросы автопарка', () => {
     expect(vehicle?.telemetry.odometerKm).toBe(83273);
   });
 
+  it('считает ручную правку пробега основной даже при большем старом значении операции', async () => {
+    const repository = {
+      async findMany() {
+        return [
+          {
+            ...rawVehicle,
+            odometerKm: { toString: () => '88652' },
+            positions: [{ ...rawVehicle.positions[0], odometerKm: null }],
+            rentalOperations: [
+              {
+                mileageKm: { toString: () => '100250' },
+                fuelLevelPercent: null,
+                occurredAt: new Date('2026-10-03T09:00:00.000Z'),
+              },
+            ],
+          },
+        ];
+      },
+      async findFirst() {
+        return null;
+      },
+    };
+
+    const [vehicle] = await createVehicleQueries(repository).listVehiclesForUser('user-1');
+
+    expect(vehicle?.telemetry.odometerKm).toBe(88652);
+  });
+
   it('подхватывает пробег и топливо из последнего возврата для старых машин', async () => {
     const repository = {
       async findMany() {

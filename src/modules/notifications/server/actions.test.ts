@@ -5,9 +5,13 @@ const mocks = vi.hoisted(() => ({
   auditLogFindFirst: vi.fn(),
   receiptUpsert: vi.fn(),
   markEventReadAction: vi.fn(),
+  markLowFuelNotificationsRead: vi.fn(),
+  getNotificationPage: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
+vi.mock('./queries', () => ({ getNotificationPage: mocks.getNotificationPage }));
+vi.mock('./low-fuel', () => ({ markLowFuelNotificationsRead: mocks.markLowFuelNotificationsRead }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/modules/admin/access', () => ({ getAdminCenterAccess: mocks.getAdminCenterAccess }));
 vi.mock('@/modules/events/actions', () => ({
@@ -21,9 +25,25 @@ vi.mock('@/database/prisma/client', () => ({
   },
 }));
 
-import { markNotificationReadAction } from './actions';
+import {
+  markNotificationReadAction,
+  markAllNotificationsReadAction,
+  markEntireInboxReadAction,
+} from './actions';
 
 describe('markNotificationReadAction', () => {
+  it('marks the complete inbox across server pages, not only visible ids', async () => {
+    mocks.getAdminCenterAccess.mockResolvedValue(null);
+    mocks.markLowFuelNotificationsRead.mockResolvedValue(true);
+    const cursor = { before: '2026-10-18T00:00:00.000Z', beforeKey: 'low-fuel:a' };
+    mocks.getNotificationPage
+      .mockResolvedValueOnce({ items: [{ id: 'low-fuel:a', isRead: false }], nextCursor: cursor })
+      .mockResolvedValueOnce({ items: [{ id: 'low-fuel:b', isRead: false }], nextCursor: null });
+    expect(await markEntireInboxReadAction()).toMatchObject({ status: 'success' });
+    expect(mocks.markLowFuelNotificationsRead).toHaveBeenCalledWith(['low-fuel:a']);
+    expect(mocks.markLowFuelNotificationsRead).toHaveBeenCalledWith(['low-fuel:b']);
+    expect(mocks.getNotificationPage).toHaveBeenLastCalledWith(cursor, false);
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getAdminCenterAccess.mockResolvedValue({
@@ -32,6 +52,24 @@ describe('markNotificationReadAction', () => {
       companyIds: [],
     });
     mocks.receiptUpsert.mockResolvedValue({});
+  });
+
+  it('persists low-fuel receipts without requiring admin-center access', async () => {
+    mocks.getAdminCenterAccess.mockResolvedValue(null);
+    mocks.markLowFuelNotificationsRead.mockResolvedValue(true);
+    expect(await markNotificationReadAction('low-fuel:episode')).toMatchObject({
+      status: 'success',
+    });
+    expect(mocks.markLowFuelNotificationsRead).toHaveBeenCalledWith(['low-fuel:episode']);
+    expect(mocks.markEventReadAction).not.toHaveBeenCalled();
+  });
+
+  it('marks all low-fuel notifications for an ordinary member', async () => {
+    mocks.getAdminCenterAccess.mockResolvedValue(null);
+    mocks.markLowFuelNotificationsRead.mockResolvedValue(true);
+    expect(await markAllNotificationsReadAction(['low-fuel:episode'])).toMatchObject({
+      status: 'success',
+    });
   });
 
   it('сохраняет прочтение доступного audit-уведомления', async () => {

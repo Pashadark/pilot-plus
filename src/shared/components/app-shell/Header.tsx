@@ -2,18 +2,19 @@
 
 import Link from 'next/link';
 import { useSyncExternalStore } from 'react';
-import { FiLogOut, FiMenu } from 'react-icons/fi';
+import { FiLogOut, FiSettings } from 'react-icons/fi';
 import { HeaderSearch } from '@/modules/search/HeaderSearch';
 
 import { logoutAction } from '@/modules/auth/actions';
 import type { SafeUser } from '@/modules/auth/types';
 import { NotificationCenter } from '@/modules/notifications/NotificationCenter';
 import type { PilotNotification } from '@/modules/notifications/types';
+import type { NotificationMeta } from '@/modules/notifications/pagination';
 import type { SystemHealthSummary } from '@/modules/system-health/types';
-import { Avatar, DropdownMenu, IconButton } from '@/shared/ui';
+import { Avatar, DropdownMenu } from '@/shared/ui';
 import type { Breadcrumb } from './AppShell';
 
-import { InterfaceModeMenuItems, ThemeSwitch } from './AppearanceControls';
+import { ThemeSwitch } from './AppearanceControls';
 import { MobileNavigation } from './MobileNavigation';
 
 function subscribeScroll(listener: () => void) {
@@ -30,6 +31,7 @@ export function Header({
   onCloseMobileNavigation,
   systemHealthSummary,
   notifications,
+  notificationMeta,
 }: {
   breadcrumbs: readonly Breadcrumb[];
   user: SafeUser;
@@ -38,6 +40,7 @@ export function Header({
   onCloseMobileNavigation: () => void;
   systemHealthSummary: SystemHealthSummary;
   notifications: readonly PilotNotification[];
+  notificationMeta?: NotificationMeta;
 }) {
   const scrolled = useSyncExternalStore(subscribeScroll, getScrolled, getServerScrolled);
   return (
@@ -55,21 +58,32 @@ export function Header({
       >
         <div className="flex w-full items-center gap-2">
           <div className="flex shrink-0 items-center gap-2 md:hidden">
-            <div className="shrink-0 md:hidden">
-              <IconButton label="Открыть меню" variant="ghost" onClick={onOpenMobileNavigation}>
-                <FiMenu aria-hidden="true" className="size-5" />
-              </IconButton>
-            </div>
+            <Link
+              href="/"
+              aria-label="СУПА ПРО — главная"
+              className="grid size-9 place-items-center rounded-xl bg-[var(--color-primary)] text-sm font-black text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+            >
+              СП
+            </Link>
           </div>
-          <div className="mr-auto min-w-0 flex-1 max-w-[720px]">
+          <div className="mr-auto max-w-[720px] min-w-0 flex-1">
             <HeaderSearch />
           </div>
           <div className="flex items-center justify-end gap-1 md:gap-2">
             <NotificationCenter
+              key={`${notificationMeta?.unreadCount ?? ''}:${notifications[0]?.id ?? ''}`}
               notifications={notifications}
+              notificationMeta={notificationMeta}
               globalScope={user.role === 'SUPER_ADMIN'}
             />
             <ThemeSwitch />
+            <Link
+              href="/profile"
+              aria-label="Настройки"
+              className="hidden size-11 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-elevated)] hover:text-[var(--color-text)] sm:inline-flex"
+            >
+              <FiSettings aria-hidden="true" className="size-5" />
+            </Link>
             <div className="ml-1 border-l pl-2">
               <DropdownMenu
                 ariaLabel="Профиль и компания"
@@ -90,7 +104,6 @@ export function Header({
                 >
                   Открыть профиль
                 </Link>
-                <InterfaceModeMenuItems />
                 <form action={logoutAction}>
                   <button
                     type="submit"
@@ -109,7 +122,8 @@ export function Header({
       <MobileNavigation
         open={mobileNavigationOpen}
         onOpenChange={(open) => {
-          if (!open) onCloseMobileNavigation();
+          if (open) onOpenMobileNavigation();
+          else onCloseMobileNavigation();
         }}
         user={user}
         systemHealthSummary={systemHealthSummary}

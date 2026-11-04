@@ -1,5 +1,5 @@
 import type { FeatureCollection, LineString, Point } from 'geojson';
-import type { ExpressionSpecification, Map, MapLayerMouseEvent } from 'maplibre-gl';
+import type { ExpressionSpecification, GeoJSONSource, Map, MapLayerMouseEvent } from 'maplibre-gl';
 import { buildTrackGradientRuns, trackSpeedColor } from '../track-gradient';
 
 import type {
@@ -7,23 +7,28 @@ import type {
   VehicleTrackEventView,
   VehicleTrackPeriodViewModel,
   VehicleTrackSegment,
+  VehicleTrackPoint,
 } from '../track-types';
+import { MAX_TRACK_POINT_GAP_MS } from '../track-types';
 
 const TRACK_SOURCE_ID = 'vehicle-track';
 const TRACK_EVENTS_SOURCE_ID = 'vehicle-track-events';
 const TRACK_ENDPOINTS_SOURCE_ID = 'vehicle-track-endpoints';
+const TRACK_PLAYBACK_SOURCE_ID = 'vehicle-track-playback';
 
 const TRACK_LAYER_IDS = [
-  'vehicle-track-speed-labels',
   'vehicle-track-event-hitbox',
   'vehicle-track-event-counts',
+  'vehicle-track-event-metrics',
   'vehicle-track-event-icons',
+  'vehicle-track-event-leaders',
   'vehicle-track-events',
   'vehicle-track-endpoint-labels',
   'vehicle-track-endpoints',
   'vehicle-track-directions',
   'vehicle-track-hitbox',
   'vehicle-track-lines',
+  'vehicle-track-playback',
   'vehicle-track-casing',
 ] as const;
 
@@ -31,7 +36,139 @@ const TRACK_SOURCE_IDS = [
   TRACK_ENDPOINTS_SOURCE_ID,
   TRACK_EVENTS_SOURCE_ID,
   TRACK_SOURCE_ID,
+  TRACK_PLAYBACK_SOURCE_ID,
 ] as const;
+
+const EMPTY_PLAYBACK_TRAIL: FeatureCollection<LineString> = {
+  type: 'FeatureCollection',
+  features: [],
+};
+
+export function setVehicleTrackPlaybackTrail(
+  map: Map,
+  trackViewModel: VehicleTrackPeriodViewModel,
+  playbackPoint: VehicleTrackPoint | null,
+  playbackTrail?: readonly VehicleTrackPoint[] | null,
+  playbackActive?: boolean,
+) {
+  if (!hasMapStyle(map)) return;
+
+  let source: GeoJSONSource | undefined;
+  try {
+    source = map.getSource(TRACK_PLAYBACK_SOURCE_ID) as GeoJSONSource | undefined;
+  } catch {
+    return;
+  }
+  if (!source || typeof source.setData !== 'function') return;
+
+  const active = playbackActive ?? playbackPoint !== null;
+  setBaseTrackVisibility(map, !active);
+
+  if (!playbackPoint || !active) {
+    source.setData(EMPTY_PLAYBACK_TRAIL);
+    return;
+  }
+
+  if (playbackTrail) {
+    source.setData({
+      type: 'FeatureCollection',
+      features: playbackTrail.slice(1).flatMap((to, index) => {
+        const from = playbackTrail[index];
+        if (!isConnectedPlaybackPair(from, to)) return [];
+        return [
+          {
+            type: 'Feature' as const,
+            properties: {},
+            geometry: {
+              type: 'LineString' as const,
+              coordinates: [[...from.coordinates], [...to.coordinates]],
+            },
+          },
+        ];
+      }),
+    });
+    return;
+  }
+
+  const trip = trackViewModel.trips.find((candidate) =>
+    candidate.segments.some(
+      (segment) => segment.from.id === playbackPoint.id || segment.to.id === playbackPoint.id,
+    ),
+  );
+  const endIndex = trip?.segments.findIndex((segment) => segment.to.id === playbackPoint.id) ?? -1;
+  const visibleSegments = trip
+    ? endIndex >= 0
+      ? trip.segments.slice(0, endIndex + 1)
+      : playbackPoint.id === trip.finish.id
+        ? trip.segments
+        : []
+    : [];
+
+  source.setData({
+    type: 'FeatureCollection',
+    features: visibleSegments.map((segment) => ({
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'LineString',
+        coordinates: [[...segment.from.coordinates], [...segment.to.coordinates]],
+      },
+    })),
+  });
+}
+
+function setBaseTrackVisibility(map: Map, visible: boolean) {
+  const fixedLayerIds = [
+    'vehicle-track-casing',
+    'vehicle-track-lines',
+    'vehicle-track-directions',
+    'vehicle-track-speed-labels',
+  ];
+  let layerIds = fixedLayerIds;
+
+  try {
+    const gradientLayerIds =
+      map
+        .getStyle()
+        .layers?.map((layer) => layer.id)
+        .filter((id) => id.startsWith('vehicle-track-gradient-')) ?? [];
+    layerIds = [...fixedLayerIds, ...gradientLayerIds];
+  } catch {
+    // The style can be between MapLibre lifecycle states during a theme reload.
+  }
+
+  for (const layerId of layerIds) {
+    try {
+      if (map.getLayer(layerId)) {
+        map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
+      }
+    } catch {
+      // A style reload may remove a layer between getLayer and setLayoutProperty.
+    }
+  }
+}
+
+function isConnectedPlaybackPair(from: VehicleTrackPoint, to: VehicleTrackPoint): boolean {
+  const fromRecordedAt = from.recordedAt ? Date.parse(from.recordedAt) : Number.NaN;
+  const toRecordedAt = to.recordedAt ? Date.parse(to.recordedAt) : Number.NaN;
+  let differenceMs: number;
+
+  if (Number.isFinite(fromRecordedAt) && Number.isFinite(toRecordedAt)) {
+    differenceMs = toRecordedAt - fromRecordedAt;
+  } else {
+    const fromMinutes = timestampMinutes(from.timestamp);
+    let toMinutes = timestampMinutes(to.timestamp);
+    if (toMinutes < fromMinutes) toMinutes += 24 * 60;
+    differenceMs = (toMinutes - fromMinutes) * 60_000;
+  }
+
+  return differenceMs > 0 && differenceMs <= MAX_TRACK_POINT_GAP_MS;
+}
+
+function timestampMinutes(timestamp: string): number {
+  const [hours = 0, minutes = 0, seconds = 0] = timestamp.split(':').map(Number);
+  return hours * 60 + minutes + seconds / 60;
+}
 
 const TRACK_COLORS = {
   green: '#22c55e',
@@ -49,6 +186,8 @@ const TRACK_EVENT_TYPES = [
   'connection-loss',
   'geofence-enter',
   'geofence-exit',
+  'harsh-acceleration',
+  'harsh-braking',
 ] as const satisfies readonly VehicleTrackEventView['type'][];
 
 const TRACK_EVENT_ICON_PATTERNS: Record<VehicleTrackEventView['type'], readonly string[]> = {
@@ -59,6 +198,8 @@ const TRACK_EVENT_ICON_PATTERNS: Record<VehicleTrackEventView['type'], readonly 
   'connection-loss': ['10001', '01010', '00100', '01010', '10001'],
   'geofence-enter': ['00100', '00110', '11111', '00110', '00100'],
   'geofence-exit': ['00100', '01100', '11111', '01100', '00100'],
+  'harsh-acceleration': ['00100', '01110', '10101', '00100', '00100'],
+  'harsh-braking': ['00100', '00100', '10101', '01110', '00100'],
 };
 
 interface TrackSegmentProperties {
@@ -76,6 +217,8 @@ interface TrackSegmentProperties {
 interface TrackEventProperties {
   speedColor: string;
   speedLabel: string;
+  eventColor: string;
+  metricLabel: string;
   id: string;
   type: VehicleTrackEventView['type'];
   title: string;
@@ -211,7 +354,7 @@ function smoothSegmentCoordinates(
     // Centripetal-style Catmull–Rom approximation with a conservative tension.
     const blend = (p0: number, p1: number, p2: number, p3: number) =>
       0.5 *
-      ((2 * p1) +
+      (2 * p1 +
         (-p0 + p2) * t * 0.7 +
         (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 * 0.7 +
         (-p0 + 3 * p1 - 3 * p2 + p3) * t3 * 0.7);
@@ -248,6 +391,13 @@ export function trackEventsToGeoJson(
         icon: getTrackEventIconId(event.type),
         speedColor: trackSpeedColor(event.speedKph),
         speedLabel: `${event.speedKph} км/ч`,
+        eventColor: getTrackEventColor(event.type),
+        metricLabel:
+          event.type === 'harsh-acceleration' || event.type === 'harsh-braking'
+            ? (event.metricLabel ?? '')
+            : event.type === 'speeding'
+              ? String(Math.round(event.speedKph))
+              : '',
       },
     })),
   };
@@ -257,6 +407,8 @@ export function mountVehicleTrackLayers(
   map: Map,
   options: MountVehicleTrackLayersOptions,
 ): () => void {
+  if (!hasMapStyle(map)) return () => {};
+
   const { trackViewModel } = options;
   const segmentsById = new globalThis.Map(
     trackViewModel.segments.map((segment) => [segment.id, segment]),
@@ -325,34 +477,50 @@ export function mountVehicleTrackLayers(
   };
 
   const cleanup = () => {
-    for (const id of gradientLayerIds) if (map.getLayer(id)) map.removeLayer(id);
-    for (const id of gradientSourceIds) if (map.getSource(id)) map.removeSource(id);
     map.off('mousemove', 'vehicle-track-hitbox', handleSegmentMove);
     map.off('mouseleave', 'vehicle-track-hitbox', handleSegmentLeave);
     map.off('mousemove', 'vehicle-track-event-hitbox', handleEventMove);
     map.off('mouseleave', 'vehicle-track-event-hitbox', handleEventLeave);
     map.off('click', 'vehicle-track-event-hitbox', handleEventClick);
 
-    for (const layerId of TRACK_LAYER_IDS) {
-      if (map.getLayer(layerId)) map.removeLayer(layerId);
-    }
+    if (hasMapStyle(map)) {
+      try {
+        for (const id of gradientLayerIds) if (map.getLayer(id)) map.removeLayer(id);
+        for (const id of gradientSourceIds) if (map.getSource(id)) map.removeSource(id);
 
-    for (const imageId of addedImageIds) {
-      map.removeImage(imageId);
+        for (const layerId of TRACK_LAYER_IDS) {
+          if (map.getLayer(layerId)) map.removeLayer(layerId);
+        }
+
+        for (const imageId of addedImageIds) {
+          map.removeImage(imageId);
+        }
+
+        for (const sourceId of TRACK_SOURCE_IDS) {
+          if (map.getSource(sourceId)) map.removeSource(sourceId);
+        }
+      } catch {
+        // MapLibre clears `style` during map removal. Cleanup is best-effort
+        // because the destroyed map owns no reusable layer resources.
+      }
     }
     addedImageIds.length = 0;
 
-    for (const sourceId of TRACK_SOURCE_IDS) {
-      if (map.getSource(sourceId)) map.removeSource(sourceId);
+    try {
+      map.getCanvas().style.cursor = '';
+      const container = map.getContainer();
+      delete container.dataset.trackCasingWidth;
+      delete container.dataset.trackLineOffset;
+    } catch {
+      // The canvas/container may already be detached together with the map.
     }
-
-    map.getCanvas().style.cursor = '';
-    const container = map.getContainer();
-    delete container.dataset.trackCasingWidth;
-    delete container.dataset.trackLineOffset;
   };
 
   try {
+    const markerTheme =
+      typeof document !== 'undefined' && document.documentElement.dataset.theme === 'light'
+        ? 'light'
+        : 'dark';
     const segmentData = trackSegmentsToGeoJson(trackViewModel.segments);
     map.addSource(TRACK_SOURCE_ID, {
       type: 'geojson',
@@ -366,10 +534,20 @@ export function mountVehicleTrackLayers(
       type: 'geojson',
       data: endpointsToGeoJson(trackViewModel),
     });
+    map.addSource(TRACK_PLAYBACK_SOURCE_ID, {
+      type: 'geojson',
+      data: EMPTY_PLAYBACK_TRAIL,
+    });
+
+    for (const kind of ['start', 'finish'] as const) {
+      const imageId = getTrackEndpointIconId(kind);
+      map.addImage(imageId, createTrackEndpointIconImage(kind, markerTheme), { pixelRatio: 2 });
+      addedImageIds.push(imageId);
+    }
 
     for (const type of TRACK_EVENT_TYPES) {
       const imageId = getTrackEventIconId(type);
-      map.addImage(imageId, createTrackEventIconImage(type), { pixelRatio: 2 });
+      map.addImage(imageId, createTrackEventIconImage(type, markerTheme), { pixelRatio: 2 });
       addedImageIds.push(imageId);
     }
 
@@ -385,17 +563,35 @@ export function mountVehicleTrackLayers(
       },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
     });
-    const gradientRuns = buildTrackGradientRuns(trackViewModel.segments,
-      segmentData.features.map(feature => feature.geometry.coordinates));
+    const gradientRuns = buildTrackGradientRuns(
+      trackViewModel.segments,
+      segmentData.features.map((feature) => feature.geometry.coordinates),
+    );
     gradientRuns.forEach((run, index) => {
       const id = `vehicle-track-gradient-${index}`;
-      map.addSource(id, { type: 'geojson', lineMetrics: true, tolerance: 0,
-        data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: run.coordinates } } });
+      map.addSource(id, {
+        type: 'geojson',
+        lineMetrics: true,
+        tolerance: 0,
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: run.coordinates },
+        },
+      });
       gradientSourceIds.push(id);
-      map.addLayer({ id, type: 'line', source: id,
-        paint: { 'line-gradient': run.gradient, 'line-width': 5, 'line-opacity': 0.72,
-          'line-offset': run.tripIndex === 1 ? -5 : run.tripIndex === 2 ? 5 : 0 },
-        layout: { 'line-cap': 'round', 'line-join': 'round' } });
+      map.addLayer({
+        id,
+        type: 'line',
+        source: id,
+        paint: {
+          'line-gradient': run.gradient,
+          'line-width': 5,
+          'line-opacity': 0.72,
+          'line-offset': run.tripIndex === 1 ? -5 : run.tripIndex === 2 ? 5 : 0,
+        },
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+      });
       gradientLayerIds.push(id);
     });
     map.addLayer({
@@ -407,6 +603,17 @@ export function mountVehicleTrackLayers(
         'line-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.2, 0],
         'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 7, 5],
         'line-offset': getTripLineOffsetExpression(),
+      },
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+    });
+    map.addLayer({
+      id: 'vehicle-track-playback',
+      type: 'line',
+      source: TRACK_PLAYBACK_SOURCE_ID,
+      paint: {
+        'line-color': '#0067ff',
+        'line-opacity': 1,
+        'line-width': 6,
       },
       layout: { 'line-cap': 'round', 'line-join': 'round' },
     });
@@ -441,13 +648,16 @@ export function mountVehicleTrackLayers(
     });
     map.addLayer({
       id: 'vehicle-track-endpoints',
-      type: 'circle',
+      type: 'symbol',
       source: TRACK_ENDPOINTS_SOURCE_ID,
+      layout: {
+        'icon-image': ['get', 'icon'],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.62, 13, 0.78, 15, 1],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
       paint: {
-        'circle-radius': 8,
-        'circle-color': ['get', 'color'],
-        'circle-stroke-color': '#ffffff',
-        'circle-stroke-width': 3,
+        'icon-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.58, 13, 0.72, 15, 1],
       },
     });
     map.addLayer({
@@ -456,14 +666,15 @@ export function mountVehicleTrackLayers(
       source: TRACK_ENDPOINTS_SOURCE_ID,
       layout: {
         'text-field': ['get', 'label'],
-        'text-size': 12,
-        'text-offset': [0, 1.7],
+        'text-size': 11,
+        'text-offset': [0, 1.8],
         'text-anchor': 'top',
       },
       paint: {
-        'text-color': '#1f2937',
-        'text-halo-color': '#ffffff',
+        'text-color': '#ffffff',
+        'text-halo-color': '#111318',
         'text-halo-width': 2,
+        'text-opacity': ['interpolate', ['linear'], ['zoom'], 12.5, 0, 14, 0, 15, 1],
       },
     });
     map.addLayer({
@@ -471,51 +682,74 @@ export function mountVehicleTrackLayers(
       type: 'circle',
       source: TRACK_EVENTS_SOURCE_ID,
       paint: {
-        'circle-radius': [
-          'case',
-          [
-            'any',
-            ['boolean', ['feature-state', 'hover'], false],
-            ['boolean', ['feature-state', 'selected'], false],
-          ],
-          10,
-          8,
-        ],
-        'circle-color': [
-          'match',
-          ['get', 'type'],
-          'speeding',
-          ['get', 'speedColor'],
-          'fine',
-          '#7c3aed',
-          'connection-loss',
-          '#64748b',
-          'refuel',
-          '#2563eb',
-          'stop',
-          '#f59e0b',
-          '#8b5cf6',
-        ],
-        'circle-stroke-color': '#ffffff',
-        'circle-stroke-width': 3,
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 2, 15, 3],
+        'circle-color': ['get', 'eventColor'],
+        'circle-stroke-color': markerTheme === 'dark' ? '#343438' : '#f8fafc',
+        'circle-stroke-width': 1,
+        'circle-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.58, 13, 0.72, 15, 1],
       },
     });
     map.addLayer({
-      id: 'vehicle-track-speed-labels', type: 'symbol', source: TRACK_EVENTS_SOURCE_ID,
-      filter: ['==', ['get', 'type'], 'speeding'],
-      layout: { 'text-field': ['get', 'speedLabel'], 'text-size': 13, 'text-offset': [1.1, 0], 'text-anchor': 'left', 'text-allow-overlap': true, 'text-ignore-placement': true },
-      paint: { 'text-color': ['get', 'speedColor'], 'text-halo-color': '#ffffff', 'text-halo-width': 3 },
+      id: 'vehicle-track-event-leaders',
+      type: 'symbol',
+      source: TRACK_EVENTS_SOURCE_ID,
+      filter: [
+        'in',
+        ['get', 'type'],
+        ['literal', ['speeding', 'harsh-acceleration', 'harsh-braking']],
+      ],
+      layout: {
+        'text-field': '│',
+        'text-size': 20,
+        'text-offset': [0, -0.75],
+        'text-anchor': 'center',
+        'text-allow-overlap': true,
+        'text-ignore-placement': true,
+      },
+      paint: {
+        'text-color': ['get', 'eventColor'],
+        'text-halo-color': markerTheme === 'dark' ? '#343438' : '#f8fafc',
+        'text-halo-width': 0.75,
+        'text-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.58, 15, 1],
+      },
     });
     map.addLayer({
       id: 'vehicle-track-event-icons',
-      filter: ['!=', ['get', 'type'], 'speeding'],
       type: 'symbol',
       source: TRACK_EVENTS_SOURCE_ID,
       layout: {
         'icon-image': ['get', 'icon'],
-        'icon-size': 0.75,
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.58, 13, 0.72, 15, 1],
+        'icon-offset': [0, -22],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
+      },
+      paint: {
+        'icon-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.58, 13, 0.72, 15, 1],
+      },
+    });
+    map.addLayer({
+      id: 'vehicle-track-event-metrics',
+      type: 'symbol',
+      source: TRACK_EVENTS_SOURCE_ID,
+      filter: [
+        'in',
+        ['get', 'type'],
+        ['literal', ['speeding', 'harsh-acceleration', 'harsh-braking']],
+      ],
+      layout: {
+        'text-field': ['get', 'metricLabel'],
+        'text-size': 12,
+        'text-offset': [1.55, -1.85],
+        'text-anchor': 'left',
+        'text-allow-overlap': true,
+        'text-ignore-placement': true,
+      },
+      paint: {
+        'text-color': '#ffffff',
+        'text-halo-color': ['get', 'eventColor'],
+        'text-halo-width': 3,
+        'text-opacity': ['interpolate', ['linear'], ['zoom'], 12.5, 0, 14, 0, 15, 1],
       },
     });
     map.addLayer({
@@ -525,6 +759,7 @@ export function mountVehicleTrackLayers(
       layout: {
         'text-field': ['case', ['>', ['get', 'count'], 1], ['to-string', ['get', 'count']], ''],
         'text-size': 11,
+        'text-offset': [0, -2],
         'text-allow-overlap': true,
       },
       paint: {
@@ -536,7 +771,7 @@ export function mountVehicleTrackLayers(
       type: 'circle',
       source: TRACK_EVENTS_SOURCE_ID,
       paint: {
-        'circle-radius': 22,
+        'circle-radius': 28,
         'circle-color': 'rgba(0, 0, 0, 0)',
       },
     });
@@ -569,11 +804,19 @@ export function mountVehicleTrackLayers(
   return cleanup;
 }
 
+function hasMapStyle(map: Map): boolean {
+  try {
+    return typeof map.isStyleLoaded() === 'boolean';
+  } catch {
+    return false;
+  }
+}
+
 function endpointsToGeoJson(
   track: VehicleTrackPeriodViewModel,
 ): FeatureCollection<
   Point,
-  { kind: 'start' | 'finish'; label: string; color: string; tripId: string }
+  { kind: 'start' | 'finish'; label: string; icon: string; tripId: string }
 > {
   const features = track.trips.flatMap((trip) => {
     const dateLabel = trip.date.split('-').reverse().slice(0, 2).join('.');
@@ -585,8 +828,8 @@ function endpointsToGeoJson(
         geometry: { type: 'Point' as const, coordinates: [...trip.start.coordinates] },
         properties: {
           kind: 'start' as const,
-          label: track.trips.length > 1 ? `Старт ${dateLabel}` : 'Старт',
-          color: '#22c55e',
+          label: track.trips.length > 1 ? `СТАРТ ${dateLabel}` : 'СТАРТ',
+          icon: getTrackEndpointIconId('start'),
           tripId: trip.tripId,
         },
       },
@@ -596,8 +839,8 @@ function endpointsToGeoJson(
         geometry: { type: 'Point' as const, coordinates: [...trip.finish.coordinates] },
         properties: {
           kind: 'finish' as const,
-          label: track.trips.length > 1 ? `Финиш ${dateLabel}` : 'Финиш',
-          color: '#2563eb',
+          label: track.trips.length > 1 ? `ФИНИШ ${dateLabel}` : 'ФИНИШ',
+          icon: getTrackEndpointIconId('finish'),
           tripId: trip.tripId,
         },
       },
@@ -615,19 +858,87 @@ export function getTrackEventIconId(type: VehicleTrackEventView['type']): string
   return `vehicle-track-event-${type}`;
 }
 
-export function createTrackEventIconImage(type: VehicleTrackEventView['type']): {
+export function getTrackEndpointIconId(kind: 'start' | 'finish'): string {
+  return `vehicle-track-endpoint-${kind}`;
+}
+
+export function createTrackEndpointIconImage(
+  kind: 'start' | 'finish',
+  theme: 'light' | 'dark' = 'dark',
+): {
   width: number;
   height: number;
   data: Uint8Array;
 } {
-  const width = 24;
-  const height = 24;
+  const width = 64;
+  const height = 64;
   const data = new Uint8Array(width * height * 4);
-  const color = getEventIconColor(type);
+  const center = 31.5;
+  const outline = theme === 'dark' ? ([52, 52, 56, 255] as const) : ([248, 250, 252, 255] as const);
+  const fill = kind === 'start' ? ([22, 163, 74, 255] as const) : ([17, 19, 24, 255] as const);
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      if ((x - 11.5) ** 2 + (y - 11.5) ** 2 <= 11 ** 2) {
+      const distanceSquared = (x - center) ** 2 + (y - center) ** 2;
+      if (distanceSquared <= 31 ** 2) {
+        setIconPixel(data, width, x, y, outline);
+      }
+      if (distanceSquared <= 28.5 ** 2) {
+        setIconPixel(data, width, x, y, fill);
+      }
+    }
+  }
+
+  if (kind === 'start') {
+    for (let y = 19; y <= 44; y += 1) {
+      const tipX = 43 - Math.ceil(Math.abs(31.5 - y) * 1.5);
+      for (let x = 23; x <= tipX; x += 1) {
+        setIconPixel(data, width, x, y, [255, 255, 255, 255]);
+      }
+    }
+  } else {
+    for (let y = 16; y <= 45; y += 1) {
+      for (let x = 17; x <= 19; x += 1) {
+        setIconPixel(data, width, x, y, [255, 255, 255, 255]);
+      }
+    }
+    for (let row = 0; row < 4; row += 1) {
+      for (let column = 0; column < 5; column += 1) {
+        const color =
+          (row + column) % 2 === 0 ? ([255, 255, 255, 255] as const) : ([49, 54, 64, 255] as const);
+        for (let y = 18 + row * 5; y < 23 + row * 5; y += 1) {
+          for (let x = 20 + column * 5; x < 25 + column * 5; x += 1) {
+            setIconPixel(data, width, x, y, color);
+          }
+        }
+      }
+    }
+  }
+
+  return { width, height, data };
+}
+
+export function createTrackEventIconImage(
+  type: VehicleTrackEventView['type'],
+  theme: 'light' | 'dark' = 'dark',
+): {
+  width: number;
+  height: number;
+  data: Uint8Array;
+} {
+  const width = 48;
+  const height = 48;
+  const data = new Uint8Array(width * height * 4);
+  const color = getEventIconColor(type);
+  const outline = theme === 'dark' ? ([52, 52, 56, 255] as const) : ([248, 250, 252, 255] as const);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const distance = (x - 23.5) ** 2 + (y - 23.5) ** 2;
+      if (distance <= 23 ** 2) {
+        setIconPixel(data, width, x, y, outline);
+      }
+      if (distance <= 21.5 ** 2) {
         setIconPixel(data, width, x, y, color);
       }
     }
@@ -636,13 +947,13 @@ export function createTrackEventIconImage(type: VehicleTrackEventView['type']): 
   TRACK_EVENT_ICON_PATTERNS[type].forEach((row, rowIndex) => {
     [...row].forEach((pixel, columnIndex) => {
       if (pixel !== '1') return;
-      for (let offsetY = 0; offsetY < 2; offsetY += 1) {
-        for (let offsetX = 0; offsetX < 2; offsetX += 1) {
+      for (let offsetY = 0; offsetY < 4; offsetY += 1) {
+        for (let offsetX = 0; offsetX < 4; offsetX += 1) {
           setIconPixel(
             data,
             width,
-            7 + columnIndex * 2 + offsetX,
-            7 + rowIndex * 2 + offsetY,
+            14 + columnIndex * 4 + offsetX,
+            14 + rowIndex * 4 + offsetY,
             [255, 255, 255, 255],
           );
         }
@@ -657,12 +968,25 @@ function getEventIconColor(
   type: VehicleTrackEventView['type'],
 ): readonly [number, number, number, number] {
   if (type === 'speeding') return [239, 68, 68, 255];
+  if (type === 'harsh-acceleration') return [245, 158, 11, 255];
+  if (type === 'harsh-braking') return [0, 103, 255, 255];
   if (type === 'fine') return [124, 58, 237, 255];
   if (type === 'connection-loss') return [71, 85, 105, 255];
   if (type === 'refuel') return [37, 99, 235, 255];
   if (type === 'stop') return [245, 158, 11, 255];
   if (type === 'geofence-enter') return [22, 163, 74, 255];
   return [124, 58, 237, 255];
+}
+
+function getTrackEventColor(type: VehicleTrackEventView['type']): string {
+  if (type === 'speeding') return '#ef4444';
+  if (type === 'harsh-acceleration') return '#f59e0b';
+  if (type === 'harsh-braking') return '#0067ff';
+  if (type === 'fine') return '#7c3aed';
+  if (type === 'connection-loss') return '#64748b';
+  if (type === 'refuel') return '#2563eb';
+  if (type === 'stop') return '#f59e0b';
+  return '#8b5cf6';
 }
 
 function setIconPixel(

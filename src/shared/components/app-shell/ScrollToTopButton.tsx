@@ -28,7 +28,7 @@ export function ScrollToTopButton() {
         const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
       }}
-      className="fixed right-4 bottom-4 z-30 shadow-[var(--shadow-floating)] sm:right-6 sm:bottom-6"
+      className="shell-scroll-to-top fixed right-4 bottom-4 z-30 shadow-[var(--shadow-floating)] sm:right-6 sm:bottom-6"
     >
       <FiArrowUp aria-hidden="true" className="size-5" />
     </IconButton>

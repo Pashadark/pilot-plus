@@ -287,6 +287,111 @@ export async function updateClientAction(
   }
 }
 
+export async function applyClientOcrReviewAction(
+  _previousState: ClientActionState,
+  formData: FormData,
+): Promise<ClientActionState> {
+  const access = await getClientAccess('MANAGE_CLIENTS');
+  if (!access) return ACCESS_ERROR;
+
+  const clientId = formString(formData, 'clientId');
+  const companyId = formString(formData, 'companyId');
+  const expectedUpdatedAt = parseExpectedUpdatedAt(formData);
+  if (!clientId || !companyId || !expectedUpdatedAt) return CONFLICT_ERROR;
+  if (!includesCompany(access, companyId)) return COMPANY_ACCESS_ERROR;
+
+  const firstName = formString(formData, 'firstName');
+  const middleName = formString(formData, 'middleName');
+  const lastName = formString(formData, 'lastName');
+  const birthDate = formString(formData, 'birthDate');
+  const passport = formString(formData, 'passport');
+  const driverLicense = formString(formData, 'driverLicense');
+  const driverLicenseIssuedAt = formString(formData, 'driverLicenseIssuedAt');
+  const driverLicenseExpiresAt = formString(formData, 'driverLicenseExpiresAt');
+  const reviewed = new FormData();
+  reviewed.set('companyId', companyId);
+  reviewed.set('firstName', firstName);
+  reviewed.set('middleName', middleName);
+  reviewed.set('lastName', lastName);
+  reviewed.set('birthDate', birthDate);
+  reviewed.set('phone', '');
+  reviewed.set('additionalPhone', '');
+  reviewed.set('email', '');
+  reviewed.set('passport', passport);
+  reviewed.set('registrationAddress', '');
+  reviewed.set('actualAddress', '');
+  reviewed.set('driverLicense', driverLicense);
+  reviewed.set('driverLicenseIssuedAt', driverLicenseIssuedAt);
+  reviewed.set('driverLicenseExpiresAt', driverLicenseExpiresAt);
+  reviewed.set('status', 'VERIFYING');
+  const parsed = parseClientInput(reviewed);
+  if (!parsed.ok) return invalidInputState(parsed.fieldErrors);
+
+  try {
+    const { encryptionKey, searchKey } = keys();
+    const reviewedOcrFields = [
+      'firstName',
+      'middleName',
+      'lastName',
+      'birthDate',
+      'passport',
+      'driverLicense',
+      'driverLicenseIssuedAt',
+      'driverLicenseExpiresAt',
+    ];
+    const updated = await prisma.$transaction(async (transaction) => {
+      const result = await transaction.client.updateMany({
+        where: {
+          id: clientId,
+          ...(scopedCompanyIds(access) ? { companyId: { in: scopedCompanyIds(access) } } : {}),
+          AND: { companyId },
+          updatedAt: expectedUpdatedAt,
+          archivedAt: null,
+        },
+        data: {
+          firstName: parsed.data.firstName,
+          middleName: parsed.data.middleName,
+          lastName: parsed.data.lastName,
+          birthDate: parsed.data.birthDate,
+          passportEncrypted: parsed.data.passport
+            ? encryptField(parsed.data.passport, encryptionKey)
+            : null,
+          passportIndex: parsed.data.passport
+            ? blindIndex(parsed.data.passport, searchKey, normalizedDocument)
+            : null,
+          driverLicenseEncrypted: parsed.data.driverLicense
+            ? encryptField(parsed.data.driverLicense, encryptionKey)
+            : null,
+          driverLicenseIndex: parsed.data.driverLicense
+            ? blindIndex(parsed.data.driverLicense, searchKey, normalizedDocument)
+            : null,
+          driverLicenseIssuedAt: parsed.data.driverLicenseIssuedAt,
+          driverLicenseExpiresAt: parsed.data.driverLicenseExpiresAt,
+        },
+      });
+      if (result.count !== 1) return result;
+      await writeAuditLog(
+        {
+          actor: { id: access.user.id, email: access.user.email },
+          companyId,
+          action: 'UPDATE',
+          entityType: 'CLIENT',
+          entityId: clientId,
+          entityLabel: 'Клиент',
+          changes: { reviewedOcrFields },
+        },
+        transaction,
+      );
+      return result;
+    });
+    if (updated.count !== 1) return CONFLICT_ERROR;
+    revalidateClient(clientId);
+    return { status: 'success', message: 'Распознанные данные сохранены.', clientId };
+  } catch {
+    return SAVE_ERROR;
+  }
+}
+
 export async function archiveClientAction(
   _previousState: ClientActionState,
   formData: FormData,

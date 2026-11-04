@@ -11,18 +11,24 @@ import {
   maxUploadedFileBytes,
 } from '@/modules/client-documents/file-validation';
 import { getClientAccess } from '@/modules/clients/access';
-import { preprocessDriverLicenseForOcr } from '@/modules/clients/client-ocr-image';
+import {
+  extractRussianPassportPortrait,
+  preprocessDriverLicenseForOcr,
+  preprocessRussianPassportForOcr,
+  preprocessRussianPassportSerialForOcr,
+} from '@/modules/clients/client-ocr-image';
 import { isClientOcrDocumentKind, parseClientDocumentOcr } from '@/modules/clients/document-ocr';
 
 export const runtime = 'nodejs';
 
-function recognize(path: string) {
+function recognize(path: string, options?: { psm?: string; whitelist?: string }) {
   return new Promise<string>((resolve, reject) => {
-    const child = spawn(
-      process.env.TESSERACT_BIN?.trim() || 'tesseract',
-      [path, 'stdout', '-l', 'rus+eng', '--psm', '6'],
-      { windowsHide: true, shell: false },
-    );
+    const args = [path, 'stdout', '-l', 'rus+eng', '--psm', options?.psm ?? '6'];
+    if (options?.whitelist) args.push('-c', `tessedit_char_whitelist=${options.whitelist}`);
+    const child = spawn(process.env.TESSERACT_BIN?.trim() || 'tesseract', args, {
+      windowsHide: true,
+      shell: false,
+    });
     let output = '';
     let errorOutput = '';
     const timer = setTimeout(() => child.kill(), 30_000);
@@ -63,16 +69,43 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    const ocrBytes =
-      documentKind === 'DRIVER_LICENSE' ? await preprocessDriverLicenseForOcr(bytes) : bytes;
-    const extension = documentKind === 'DRIVER_LICENSE' ? 'png' : validated.extension;
-    const path = join(tmpdir(), `pilot-client-document-${randomUUID()}.${extension}`);
-    await writeFile(path, ocrBytes, { flag: 'wx' });
+    const isPassport = documentKind === 'PASSPORT_MAIN';
+    const ocrBytes = isPassport
+      ? await preprocessRussianPassportForOcr(bytes)
+      : documentKind === 'DRIVER_LICENSE'
+        ? await preprocessDriverLicenseForOcr(bytes)
+        : bytes;
+    const extension = isPassport || documentKind === 'DRIVER_LICENSE' ? 'png' : validated.extension;
+    const path = join(tmpdir(), `supapro-client-document-${randomUUID()}.${extension}`);
+    const serialPath = isPassport
+      ? join(tmpdir(), `supapro-passport-serial-${randomUUID()}.png`)
+      : null;
     try {
-      const text = await recognize(path);
-      return NextResponse.json({ fields: parseClientDocumentOcr(documentKind, text) });
+      await writeFile(path, ocrBytes, { flag: 'wx' });
+      if (serialPath) {
+        await writeFile(serialPath, await preprocessRussianPassportSerialForOcr(bytes), {
+          flag: 'wx',
+        });
+      }
+      const [text, serialText] = await Promise.all([
+        recognize(path, { psm: isPassport ? '11' : '6' }),
+        serialPath
+          ? recognize(serialPath, { psm: '7', whitelist: '0123456789' })
+          : Promise.resolve(''),
+      ]);
+      const portrait =
+        documentKind === 'PASSPORT_MAIN'
+          ? await extractRussianPassportPortrait(bytes)
+              .then((value) => `data:image/webp;base64,${value.toString('base64')}`)
+              .catch(() => null)
+          : null;
+      return NextResponse.json({
+        fields: parseClientDocumentOcr(documentKind, `${text}\n${serialText}`),
+        portrait,
+      });
     } finally {
       await unlink(path).catch(() => undefined);
+      if (serialPath) await unlink(serialPath).catch(() => undefined);
     }
   } catch {
     return NextResponse.json(

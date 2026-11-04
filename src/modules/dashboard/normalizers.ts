@@ -536,7 +536,16 @@ function attentionItems(
       description: vehicle.label,
       href: `/vehicles/${vehicle.id}`,
     }));
-  return [...overdueItems, ...offlineVehicles].sort((left, right) =>
+  const lowFuel = workItems
+    .filter((item) => item.kind === 'LOW_FUEL')
+    .map((item) => ({
+      id: item.id,
+      tone: 'warning' as const,
+      title: 'Нужна заправка',
+      description: `${item.vehicleLabel}. ${item.clientLabel}`,
+      href: item.href,
+    }));
+  return [...overdueItems, ...lowFuel, ...offlineVehicles].sort((left, right) =>
     left.id.localeCompare(right.id),
   );
 }

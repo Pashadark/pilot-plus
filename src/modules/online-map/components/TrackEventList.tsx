@@ -8,6 +8,8 @@ const eventTypeLabels: Record<VehicleTrackEventView['type'], string> = {
   'connection-loss': 'Потеря связи',
   'geofence-enter': 'Въезд в геозону',
   'geofence-exit': 'Выезд из геозоны',
+  'harsh-acceleration': 'Резкий разгон',
+  'harsh-braking': 'Резкое торможение',
 };
 
 function formatDate(date: string): string {

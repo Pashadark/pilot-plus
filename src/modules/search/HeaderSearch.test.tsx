@@ -7,6 +7,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
+it('reserves scrollbar width while search is open and restores padding', () => {
+  vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(1000);
+  vi.stubGlobal('innerWidth', 1020);
+  document.body.style.paddingRight = '8px';
+  render(<HeaderSearch />);
+  fireEvent.click(screen.getByRole('button', { name: 'Открыть глобальный поиск' }));
+  expect(document.body.style.paddingRight).toBe('28px');
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(document.body.style.paddingRight).toBe('8px');
+  document.body.style.paddingRight = '';
+});
 it('opens centered modal with keyboard shortcut and closes on escape', () => {
   render(<HeaderSearch />);
   expect(screen.queryByRole('dialog')).toBeNull();
@@ -18,13 +29,23 @@ it('opens centered modal with keyboard shortcut and closes on escape', () => {
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 it('shows an inset pill before opening and anchors results to its width', () => {
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({left:280,bottom:60,width:600,top:16,right:880,height:44,x:280,y:16,toJSON:()=>({})});
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    left: 280,
+    bottom: 60,
+    width: 600,
+    top: 16,
+    right: 880,
+    height: 44,
+    x: 280,
+    y: 16,
+    toJSON: () => ({}),
+  });
   render(<HeaderSearch />);
-  const trigger=screen.getByRole('button',{name:'Открыть глобальный поиск'});
+  const trigger = screen.getByRole('button', { name: 'Открыть глобальный поиск' });
   expect(trigger.className).toContain('rounded-full');
   expect(trigger.className).toContain('shadow-[inset_0_1px_2px_rgb(0_0_0/0.06)]');
   fireEvent.click(trigger);
-  const dialog=screen.getByRole('dialog');
+  const dialog = screen.getByRole('dialog');
   expect(dialog.style.left).toBe('280px');
   expect(dialog.style.width).toBe('600px');
   expect(dialog.style.top).toBe('68px');

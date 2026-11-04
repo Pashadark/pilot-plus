@@ -2,6 +2,9 @@ import Link from 'next/link';
 
 import { Card, CardContent, CardHeader } from '@/shared/ui/Card';
 
+// Authenticated media must be requested directly by the browser with its session cookie.
+/* eslint-disable @next/next/no-img-element */
+
 export type RentalOperationTimelineItem = {
   id: string;
   type: 'HANDOVER' | 'EXTENSION' | 'RETURN' | 'DEPOSIT_RETURN' | 'WEEKLY_INSPECTION';
@@ -46,6 +49,15 @@ const evidenceLabels: Record<string, string> = {
 const mediaLabels: Record<RentalOperationTimelineItem['media'][number]['kind'], string> = {
   INSPECTION_VIDEO: 'Открыть видео',
   DASHBOARD_PHOTO: 'Открыть фото приборки',
+  BODY_PHOTO_FRONT: 'Кузов спереди',
+  BODY_PHOTO_REAR: 'Кузов сзади',
+  BODY_PHOTO_LEFT: 'Кузов слева',
+  BODY_PHOTO_RIGHT: 'Кузов справа',
+};
+const mediaImageAlts: Partial<
+  Record<RentalOperationTimelineItem['media'][number]['kind'], string>
+> = {
+  DASHBOARD_PHOTO: 'Фото приборной панели',
   BODY_PHOTO_FRONT: 'Кузов спереди',
   BODY_PHOTO_REAR: 'Кузов сзади',
   BODY_PHOTO_LEFT: 'Кузов слева',
@@ -136,18 +148,43 @@ export function RentalOperationTimeline({
                   </p>
                 ) : null}
                 {operation.media.length ? (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {operation.media.map((media) => (
-                      <Link
-                        key={media.kind}
-                        href={`/rentals/${rentalId}/operations/${operation.id}/media/${media.kind}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex min-h-11 items-center rounded-[var(--radius-md)] border px-3 text-sm font-semibold hover:bg-[var(--color-elevated)]"
-                      >
-                        {mediaLabels[media.kind]}
-                      </Link>
-                    ))}
+                  <div className="grid gap-3 pt-2 sm:grid-cols-2 xl:grid-cols-3">
+                    {operation.media.map((media) => {
+                      const href = `/rentals/${rentalId}/operations/${operation.id}/media/${media.kind}`;
+                      const imageAlt = mediaImageAlts[media.kind];
+                      return imageAlt ? (
+                        <Link
+                          key={media.kind}
+                          href={href}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={mediaLabels[media.kind]}
+                          className="group overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-elevated)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+                        >
+                          <img
+                            src={href}
+                            alt={imageAlt}
+                            width={640}
+                            height={400}
+                            loading="lazy"
+                            className="aspect-[8/5] w-full object-cover transition-opacity group-hover:opacity-90"
+                          />
+                          <span className="block bg-[var(--color-surface)] px-3 py-2 text-sm font-semibold">
+                            {mediaLabels[media.kind]}
+                          </span>
+                        </Link>
+                      ) : (
+                        <Link
+                          key={media.kind}
+                          href={href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-md)] border px-3 text-sm font-semibold hover:bg-[var(--color-elevated)] sm:col-span-2 xl:col-span-3"
+                        >
+                          {mediaLabels[media.kind]}
+                        </Link>
+                      );
+                    })}
                   </div>
                 ) : null}
               </li>

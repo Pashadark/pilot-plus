@@ -356,6 +356,24 @@ enum RentalDepositStatus {
   WITHHELD
 }
 
+enum DepositLedgerEntryKind {
+  DEPOSIT_PAYMENT
+  MANUAL_CREDIT
+  FINE_RESERVATION
+  FINE_RESERVATION_ADJUSTMENT
+  FINE_RESERVATION_RELEASE
+  FINE_WITHHOLDING
+  DEPOSIT_RETURN
+  DEBT_PAYMENT
+  MANUAL_CORRECTION
+}
+
+enum DepositLedgerEntrySource {
+  AUTOMATIC
+  STAFF
+  MIGRATION
+}
+
 enum RentalPaymentMethod {
   CASH
   CARD
@@ -417,6 +435,12 @@ enum BotNotificationStatus {
   CANCELLED
 }
 
+enum GpsNotificationMode {
+  RECORD_ONLY
+  STAFF_ONLY
+  STAFF_AND_CLIENT
+}
+
 enum OperationsTaskStatus {
   OPEN
   COMPLETED
@@ -436,6 +460,18 @@ enum LeadStatus {
   QUALIFIED
   BOOKED
   LOST
+}
+
+enum OwnerProfileStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum OwnerLedgerEntryKind {
+  ACCRUAL
+  REVERSAL
+  ADJUSTMENT
+  PAYOUT
 }
 
 model User {
@@ -479,6 +515,8 @@ model User {
   completedOperationsTasks OperationsTask[]          @relation("OperationsTaskCompletedBy")
   createdLeads             Lead[]                    @relation("LeadCreatedBy")
   assignedLeads            Lead[]                    @relation("LeadAssignedTo")
+  assignedOwnerVehicles    OwnerVehicleAccess[]      @relation("OwnerVehicleAccessAssignedBy")
+  depositLedgerEntries     DepositLedgerEntry[]      @relation("DepositLedgerEntryActor")
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
 }
@@ -503,9 +541,9 @@ model LoginThrottle {
 }
 
 model Company {
-  id                        String                     @id @default(cuid())
+  id                        String                       @id @default(cuid())
   name                      String
-  slug                      String                     @unique
+  slug                      String                       @unique
   inn                       String?
   kpp                       String?
   ogrn                      String?
@@ -516,7 +554,7 @@ model Company {
   email                     String?
   legalName                 String?
   entrepreneurName          String?
-  lessorBirthDate           DateTime?                  @db.Date
+  lessorBirthDate           DateTime?                    @db.Date
   lessorPassportEncrypted   String?
   ogrnip                    String?
   bankName                  String?
@@ -528,7 +566,7 @@ model Company {
   defaultReturnAddress      String?
   signatoryName             String?
   signatoryAuthority        String?
-  isDemo                    Boolean                    @default(false)
+  isDemo                    Boolean                      @default(false)
   members                   CompanyMember[]
   vehicles                  Vehicle[]
   devices                   Device[]
@@ -565,13 +603,22 @@ model Company {
   telegramGroupBinding      TelegramGroupBinding?
   botRentalRequests         BotRentalRequest[]
   botNotificationJobs       BotNotificationJob[]
+  vehicleEvents             VehicleEvent[]
+  gpsSettings               CompanyGpsSettings?
+  vehicleGpsOverrides       VehicleGpsSettingsOverride[]
+  gpsClientWarnings         GpsClientWarning[]
   operationsTasks           OperationsTask[]
   leads                     Lead[]
   avitoInboxEvents          AvitoInboxEvent[]
   avitoDialogues            AvitoDialogue[]
   avitoOutgoing             AvitoOutgoing[]
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
+  ownerProfiles             OwnerProfile[]
+  ownerVehicleAccess        OwnerVehicleAccess[]
+  ownerRevenueRules         OwnerRevenueRule[]
+  ownerLedgerEntries        OwnerLedgerEntry[]
+  depositLedgerEntries      DepositLedgerEntry[]
+  createdAt                 DateTime                     @default(now())
+  updatedAt                 DateTime                     @updatedAt
 }
 
 model Lead {
@@ -641,9 +688,9 @@ model CompanyMember {
 }
 
 model Client {
-  id                           String              @id @default(cuid())
+  id                           String               @id @default(cuid())
   companyId                    String
-  company                      Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company                      Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   firstName                    String
   middleName                   String?
   lastName                     String
@@ -657,7 +704,7 @@ model Client {
   telegramUserId               String?
   maxUserId                    String?
   photoPath                    String?
-  photoBytes                   Int                 @default(0)
+  photoBytes                   Int                  @default(0)
   registrationAddressEncrypted String?
   actualAddressEncrypted       String?
   passportEncrypted            String?
@@ -671,16 +718,16 @@ model Client {
   emergencyContactEncrypted    String?
   source                       String?
   note                         String?
-  status                       ClientStatus        @default(NEW)
+  status                       ClientStatus         @default(NEW)
   createdByUserId              String
-  createdBy                    User                @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
-  createdAt                    DateTime            @default(now())
-  updatedAt                    DateTime            @updatedAt
+  createdBy                    User                 @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt                    DateTime             @default(now())
+  updatedAt                    DateTime             @updatedAt
   archivedAt                   DateTime?
   documents                    ClientDocument[]
   photoUploads                 ClientPhotoUpload[]
-  rentals                      Rental[]            @relation("ClientRentals")
-  rentalDriverLinks            RentalDriver[]      @relation("ClientRentalDriver")
+  rentals                      Rental[]             @relation("ClientRentals")
+  rentalDriverLinks            RentalDriver[]       @relation("ClientRentalDriver")
   comments                     ClientComment[]
   ratingEvents                 ClientRatingEvent[]
   fines                        Fine[]
@@ -688,6 +735,9 @@ model Client {
   botRentalRequests            BotRentalRequest[]
   rentalOperations             RentalOperation[]
   maintenanceRecords           MaintenanceRecord[]
+  depositLedgerEntries         DepositLedgerEntry[]
+  vehicleEvents                VehicleEvent[]
+  gpsClientWarnings            GpsClientWarning[]
 
   @@unique([companyId, phoneIndex])
   @@unique([companyId, id])
@@ -890,10 +940,10 @@ model AuditLog {
 }
 
 model Vehicle {
-  id                            String                  @id @default(cuid())
+  id                            String                      @id @default(cuid())
   companyId                     String
-  company                       Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  sourceKey                     String                  @unique
+  company                       Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceKey                     String                      @unique
   internalNumber                String
   model                         String
   city                          String
@@ -911,14 +961,14 @@ model Vehicle {
   category                      String?
   bodyType                      String?
   transmission                  String
-  engineLiters                  Decimal?                @db.Decimal(3, 1)
+  engineLiters                  Decimal?                    @db.Decimal(3, 1)
   fuelType                      FuelType
   seats                         Int
   dailyPriceMinor               Int
   rangePriceMinor               BigInt?
-  currency                      String                  @db.Char(3)
-  odometerKm                    Decimal?                @db.Decimal(12, 1)
-  engineHours                   Decimal?                @db.Decimal(12, 1)
+  currency                      String                      @db.Char(3)
+  odometerKm                    Decimal?                    @db.Decimal(12, 1)
+  engineHours                   Decimal?                    @db.Decimal(12, 1)
   valueMinor                    BigInt?
   depositMinor                  BigInt?
   includedMileageKm             Int?
@@ -928,24 +978,26 @@ model Vehicle {
   vehiclePassportNumber         String?
   osagoInsurer                  String?
   osagoPolicyNumber             String?
-  osagoStartsAt                 DateTime?               @db.Date
-  osagoEndsAt                   DateTime?               @db.Date
+  osagoStartsAt                 DateTime?                   @db.Date
+  osagoEndsAt                   DateTime?                   @db.Date
   cascoInsurer                  String?
   cascoPolicyNumber             String?
-  cascoStartsAt                 DateTime?               @db.Date
-  cascoEndsAt                   DateTime?               @db.Date
-  isRentalReady                 Boolean                 @default(false)
-  rentalReadyAt                 DateTime?               @db.Timestamptz(3)
-  archivedAt                    DateTime?               @db.Timestamptz(3)
+  cascoStartsAt                 DateTime?                   @db.Date
+  cascoEndsAt                   DateTime?                   @db.Date
+  isRentalReady                 Boolean                     @default(false)
+  rentalReadyAt                 DateTime?                   @db.Timestamptz(3)
+  archivedAt                    DateTime?                   @db.Timestamptz(3)
   archivedByUserId              String?
-  archivedBy                    User?                   @relation("VehicleArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
+  archivedBy                    User?                       @relation("VehicleArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
   originalPrice                 String
-  features                      String[]                @default([])
-  status                        VehicleStatus           @default(UNKNOWN)
-  isDemoImport                  Boolean                 @default(true)
+  features                      String[]                    @default([])
+  status                        VehicleStatus               @default(UNKNOWN)
+  isDemoImport                  Boolean                     @default(true)
   positions                     VehiclePosition[]
   trips                         Trip[]
   events                        VehicleEvent[]
+  gpsSettingsOverride           VehicleGpsSettingsOverride?
+  gpsClientWarnings             GpsClientWarning[]
   fuelRecords                   FuelRecord[]
   maintenanceRecords            MaintenanceRecord[]
   washRecords                   WashRecord[]
@@ -953,7 +1005,7 @@ model Vehicle {
   images                        VehicleImage[]
   device                        Device?
   manualVehicleEvents           ManualVehicleEvent[]
-  rentals                       Rental[]                @relation("VehicleRentals")
+  rentals                       Rental[]                    @relation("VehicleRentals")
   rentalOperations              RentalOperation[]
   botRentalRequests             BotRentalRequest[]
   fuelStationVisits             FuelStationVisit[]
@@ -961,8 +1013,10 @@ model Vehicle {
   telematicsLinks               TelematicsVehicleLink[]
   fines                         Fine[]
   ratingEvents                  ClientRatingEvent[]
-  createdAt                     DateTime                @default(now())
-  updatedAt                     DateTime                @updatedAt
+  ownerAccess                   OwnerVehicleAccess[]
+  ownerLedgerEntries            OwnerLedgerEntry[]
+  createdAt                     DateTime                    @default(now())
+  updatedAt                     DateTime                    @updatedAt
 
   @@unique([companyId, internalNumber])
   @@unique([companyId, id])
@@ -1079,6 +1133,7 @@ model Fine {
   assignmentHistory           FineAssignmentHistory[]
   ratingEvents                ClientRatingEvent[]
   invoiceItems                FineInvoiceItem[]
+  depositLedgerEntries        DepositLedgerEntry[]
   createdAt                   DateTime                @default(now())
   updatedAt                   DateTime                @updatedAt
 
@@ -1220,6 +1275,9 @@ model Rental {
   payments                 RentalPayment[]
   signatures               RentalSignature[]
   maintenanceRecords       MaintenanceRecord[]
+  depositLedgerEntries     DepositLedgerEntry[]
+  vehicleEvents            VehicleEvent[]
+  gpsClientWarnings        GpsClientWarning[]
 
   @@unique([companyId, id])
   @@unique([companyId, clientId, id])
@@ -1231,25 +1289,27 @@ model Rental {
 }
 
 model RentalPayment {
-  id               String              @id @default(cuid())
-  companyId        String
-  company          Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  rentalId         String
-  rental           Rental              @relation(fields: [companyId, rentalId], references: [companyId, id], onDelete: Cascade)
-  kind             RentalPaymentKind
-  status           RentalPaymentStatus @default(CONFIRMED)
-  amountMinor      BigInt
-  currency         String              @default("RUB") @db.Char(3)
-  method           RentalPaymentMethod
-  reference        String?
-  comment          String?
-  idempotencyKey   String
-  recordedAt       DateTime            @default(now()) @db.Timestamptz(3)
-  recordedByUserId String
-  recordedBy       User                @relation("RentalPaymentRecorder", fields: [recordedByUserId], references: [id], onDelete: Restrict)
-  receipts         RentalPaymentReceipt[]
-  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime            @updatedAt @db.Timestamptz(3)
+  id                   String                 @id @default(cuid())
+  companyId            String
+  company              Company                @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  rentalId             String
+  rental               Rental                 @relation(fields: [companyId, rentalId], references: [companyId, id], onDelete: Cascade)
+  kind                 RentalPaymentKind
+  status               RentalPaymentStatus    @default(CONFIRMED)
+  amountMinor          BigInt
+  currency             String                 @default("RUB") @db.Char(3)
+  method               RentalPaymentMethod
+  reference            String?
+  comment              String?
+  idempotencyKey       String
+  recordedAt           DateTime               @default(now()) @db.Timestamptz(3)
+  recordedByUserId     String
+  recordedBy           User                   @relation("RentalPaymentRecorder", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+  receipts             RentalPaymentReceipt[]
+  ownerLedgerEntries   OwnerLedgerEntry[]
+  depositLedgerEntries DepositLedgerEntry[]
+  createdAt            DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime               @updatedAt @db.Timestamptz(3)
 
   @@unique([companyId, rentalId, idempotencyKey])
   @@unique([companyId, id])
@@ -1274,6 +1334,48 @@ model RentalPaymentReceipt {
   createdAt        DateTime      @default(now()) @db.Timestamptz(3)
 
   @@index([companyId, paymentId, createdAt])
+}
+
+model DepositLedgerEntry {
+  id                    String                   @id @default(cuid())
+  companyId             String
+  company               Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  clientId              String
+  client                Client                   @relation(fields: [companyId, clientId], references: [companyId, id], onDelete: Restrict)
+  rentalId              String
+  rental                Rental                   @relation(fields: [companyId, rentalId], references: [companyId, id], onDelete: Restrict)
+  fineId                String?
+  fine                  Fine?                    @relation(fields: [companyId, fineId], references: [companyId, id], onDelete: Restrict)
+  paymentId             String?
+  payment               RentalPayment?           @relation(fields: [companyId, paymentId], references: [companyId, id], onDelete: Restrict)
+  operationId           String?
+  operation             RentalOperation?         @relation(fields: [companyId, operationId], references: [companyId, id], onDelete: Restrict)
+  reversalOfId          String?
+  reversalOf            DepositLedgerEntry?      @relation("DepositLedgerReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversals             DepositLedgerEntry[]     @relation("DepositLedgerReversal")
+  kind                  DepositLedgerEntryKind
+  source                DepositLedgerEntrySource
+  cashDeltaMinor        BigInt                   @default(0)
+  reservedDeltaMinor    BigInt                   @default(0)
+  withheldDeltaMinor    BigInt                   @default(0)
+  debtDeltaMinor        BigInt                   @default(0)
+  commissionBasisPoints Int?
+  reason                String?
+  metadata              Json?
+  idempotencyKey        String
+  actorUserId           String?
+  actor                 User?                    @relation("DepositLedgerEntryActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  occurredAt            DateTime                 @db.Timestamptz(3)
+  createdAt             DateTime                 @default(now()) @db.Timestamptz(3)
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, rentalId, occurredAt])
+  @@index([companyId, clientId, occurredAt])
+  @@index([companyId, fineId, occurredAt])
+  @@index([paymentId])
+  @@index([operationId])
+  @@index([reversalOfId])
+  @@index([actorUserId, occurredAt])
 }
 
 model RentalSignature {
@@ -1426,6 +1528,7 @@ model RentalOperation {
   createdAt               DateTime                 @default(now()) @db.Timestamptz(3)
   committedAt             DateTime?                @db.Timestamptz(3)
   media                   RentalOperationMedia[]
+  DepositLedgerEntry      DepositLedgerEntry[]
 
   @@unique([companyId, idempotencyKey])
   @@unique([companyId, id])
@@ -1680,41 +1783,41 @@ model VehiclePosition {
 }
 
 model FuelStation {
-  id               String             @id @default(cuid())
-  osmType          String
-  osmId            String
-  name             String?
-  brand            String?
-  address          String?
-  latitude         Decimal            @db.Decimal(9, 6)
-  longitude        Decimal            @db.Decimal(9, 6)
-  source           String             @default("OPENSTREETMAP")
-  attribution      String             @default("© OpenStreetMap contributors")
-  sourceUpdatedAt  DateTime?
-  visits           FuelStationVisit[]
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  id              String             @id @default(cuid())
+  osmType         String
+  osmId           String
+  name            String?
+  brand           String?
+  address         String?
+  latitude        Decimal            @db.Decimal(9, 6)
+  longitude       Decimal            @db.Decimal(9, 6)
+  source          String             @default("OPENSTREETMAP")
+  attribution     String             @default("© OpenStreetMap contributors")
+  sourceUpdatedAt DateTime?
+  visits          FuelStationVisit[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   @@unique([osmType, osmId])
   @@index([latitude, longitude])
 }
 
 model FuelStationVisit {
-  id          String      @id @default(cuid())
-  vehicleId   String
-  vehicle     Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  stationId   String
-  station     FuelStation @relation(fields: [stationId], references: [id], onDelete: Cascade)
-  enteredAt   DateTime
-  lastSeenAt  DateTime
-  exitedAt    DateTime?
-  notifiedAt  DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id         String      @id @default(cuid())
+  vehicleId  String
+  vehicle    Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  stationId  String
+  station    FuelStation @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  enteredAt  DateTime
+  lastSeenAt DateTime
+  exitedAt   DateTime?
+  notifiedAt DateTime?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 
+  @@unique([vehicleId, stationId, enteredAt])
   @@index([vehicleId, exitedAt, lastSeenAt])
   @@index([stationId, enteredAt])
-  @@unique([vehicleId, stationId, enteredAt])
 }
 
 model Trip {
@@ -1735,22 +1838,115 @@ model Trip {
 }
 
 model VehicleEvent {
-  id          String            @id @default(cuid())
-  vehicleId   String
-  vehicle     Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  type        String
-  severity    TelemetrySeverity
-  title       String
-  description String?
-  location    String?
-  recordedAt  DateTime
-  provider    String?
-  externalId  String?
-  createdAt   DateTime          @default(now())
+  id                  String            @id @default(cuid())
+  companyId           String?
+  company             Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  vehicleId           String
+  vehicle             Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  rentalId            String?
+  rental              Rental?           @relation(fields: [rentalId], references: [id], onDelete: SetNull)
+  clientId            String?
+  client              Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  type                String
+  severity            TelemetrySeverity
+  title               String
+  description         String?
+  location            String?
+  recordedAt          DateTime
+  startedAt           DateTime?         @db.Timestamptz(3)
+  endedAt             DateTime?         @db.Timestamptz(3)
+  startLatitude       Decimal?          @db.Decimal(9, 6)
+  startLongitude      Decimal?          @db.Decimal(9, 6)
+  endLatitude         Decimal?          @db.Decimal(9, 6)
+  endLongitude        Decimal?          @db.Decimal(9, 6)
+  startSpeedKph       Decimal?          @db.Decimal(8, 3)
+  endSpeedKph         Decimal?          @db.Decimal(8, 3)
+  maxAccelerationMps2 Decimal?          @db.Decimal(8, 3)
+  durationMs          Int?
+  trackPointIds       Json?
+  details             Json?
+  provider            String?
+  externalId          String?
+  createdAt           DateTime          @default(now())
 
   @@unique([vehicleId, provider, externalId])
+  @@index([companyId, recordedAt])
   @@index([vehicleId, recordedAt])
+  @@index([rentalId, recordedAt])
+  @@index([clientId, recordedAt])
+  @@index([type, recordedAt])
   @@index([severity, recordedAt])
+}
+
+model CompanyGpsSettings {
+  companyId                         String              @id
+  company                           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  accelerationDetectionEnabled      Boolean             @default(true)
+  harshAccelerationThresholdMps2    Decimal             @default(3.0) @db.Decimal(5, 2)
+  criticalAccelerationThresholdMps2 Decimal             @default(4.0) @db.Decimal(5, 2)
+  brakingDetectionEnabled           Boolean             @default(true)
+  harshBrakingThresholdMps2         Decimal             @default(3.0) @db.Decimal(5, 2)
+  criticalBrakingThresholdMps2      Decimal             @default(4.0) @db.Decimal(5, 2)
+  confirmationWindowMs              Int                 @default(3000)
+  mergeWindowMs                     Int                 @default(3000)
+  maximumGapMs                      Int                 @default(10000)
+  clientWarningEventCount           Int                 @default(3)
+  clientWarningWindowMinutes        Int                 @default(30)
+  clientWarningCooldownMinutes      Int                 @default(30)
+  notificationMode                  GpsNotificationMode @default(RECORD_ONLY)
+  createdAt                         DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt                         DateTime            @updatedAt @db.Timestamptz(3)
+}
+
+model VehicleGpsSettingsOverride {
+  vehicleId                         String               @id
+  companyId                         String
+  company                           Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vehicle                           Vehicle              @relation(fields: [companyId, vehicleId], references: [companyId, id], onDelete: Cascade)
+  accelerationDetectionEnabled      Boolean?
+  harshAccelerationThresholdMps2    Decimal?             @db.Decimal(5, 2)
+  criticalAccelerationThresholdMps2 Decimal?             @db.Decimal(5, 2)
+  brakingDetectionEnabled           Boolean?
+  harshBrakingThresholdMps2         Decimal?             @db.Decimal(5, 2)
+  criticalBrakingThresholdMps2      Decimal?             @db.Decimal(5, 2)
+  confirmationWindowMs              Int?
+  mergeWindowMs                     Int?
+  maximumGapMs                      Int?
+  clientWarningEventCount           Int?
+  clientWarningWindowMinutes        Int?
+  clientWarningCooldownMinutes      Int?
+  notificationMode                  GpsNotificationMode?
+  createdAt                         DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt                         DateTime             @updatedAt @db.Timestamptz(3)
+
+  @@unique([companyId, vehicleId])
+  @@index([companyId])
+}
+
+model GpsClientWarning {
+  id                String    @id @default(cuid())
+  companyId         String
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vehicleId         String
+  vehicle           Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  rentalId          String
+  rental            Rental    @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  clientId          String
+  client            Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  dedupeKey         String    @unique @db.VarChar(191)
+  eventIds          Json
+  eventCount        Int
+  windowStartedAt   DateTime  @db.Timestamptz(3)
+  windowEndedAt     DateTime  @db.Timestamptz(3)
+  sentAt            DateTime? @db.Timestamptz(3)
+  acknowledgedAt    DateTime? @db.Timestamptz(3)
+  telegramMessageId String?
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([companyId, createdAt])
+  @@index([rentalId, windowEndedAt])
+  @@index([clientId, acknowledgedAt])
 }
 
 model ManualVehicleEvent {
@@ -1930,39 +2126,132 @@ model AvitoInboxEvent {
 }
 
 model AvitoDialogue {
-  id               String   @id
+  id               String    @id
   companyId        String
-  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   accountId        String
   chatId           String
   leadId           String
   contentEncrypted String
   reminderAt       DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@unique([companyId, accountId, chatId])
   @@index([companyId, reminderAt])
 }
 
 model AvitoOutgoing {
-  id               String   @id
-  companyId        String
-  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  accountId        String
-  chatId           String
-  incomingId       String
-  textEncrypted    String
-  state            String   @default("PENDING")
-  providerId       String?
-  sentAt           DateTime?
-  attemptedAt      DateTime?
-  errorCode        String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id            String    @id
+  companyId     String
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  accountId     String
+  chatId        String
+  incomingId    String
+  textEncrypted String
+  state         String    @default("PENDING")
+  providerId    String?
+  sentAt        DateTime?
+  attemptedAt   DateTime?
+  errorCode     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@unique([companyId, accountId, chatId, incomingId])
   @@index([companyId, state, createdAt])
+}
+
+model OwnerProfile {
+  id            String               @id @default(cuid())
+  companyId     String
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  phoneE164     String               @unique
+  displayName   String
+  passwordHash  String
+  status        OwnerProfileStatus   @default(ACTIVE)
+  sessions      OwnerSession[]
+  vehicleAccess OwnerVehicleAccess[]
+  revenueRules  OwnerRevenueRule[]
+  ledgerEntries OwnerLedgerEntry[]
+  createdAt     DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime             @updatedAt @db.Timestamptz(3)
+
+  @@unique([companyId, id])
+  @@index([companyId, status, createdAt])
+}
+
+model OwnerSession {
+  id               String       @id @default(cuid())
+  ownerProfileId   String
+  ownerProfile     OwnerProfile @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade)
+  refreshTokenHash String       @unique
+  deviceName       String?
+  expiresAt        DateTime     @db.Timestamptz(3)
+  revokedAt        DateTime?    @db.Timestamptz(3)
+  lastUsedAt       DateTime?    @db.Timestamptz(3)
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([ownerProfileId, expiresAt])
+  @@index([expiresAt, revokedAt])
+}
+
+model OwnerVehicleAccess {
+  id               String       @id @default(cuid())
+  companyId        String
+  company          Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ownerProfileId   String
+  ownerProfile     OwnerProfile @relation(fields: [companyId, ownerProfileId], references: [companyId, id], onDelete: Cascade)
+  vehicleId        String
+  vehicle          Vehicle      @relation(fields: [companyId, vehicleId], references: [companyId, id], onDelete: Cascade)
+  assignedByUserId String
+  assignedBy       User         @relation("OwnerVehicleAccessAssignedBy", fields: [assignedByUserId], references: [id], onDelete: Restrict)
+  startsAt         DateTime     @default(now()) @db.Timestamptz(3)
+  endsAt           DateTime?    @db.Timestamptz(3)
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@unique([ownerProfileId, vehicleId, startsAt])
+  @@index([ownerProfileId, startsAt, endsAt])
+  @@index([companyId, vehicleId, startsAt, endsAt])
+  @@index([assignedByUserId, createdAt])
+}
+
+model OwnerRevenueRule {
+  id               String       @id @default(cuid())
+  companyId        String
+  company          Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ownerProfileId   String
+  ownerProfile     OwnerProfile @relation(fields: [companyId, ownerProfileId], references: [companyId, id], onDelete: Cascade)
+  shareBasisPoints Int          @default(4000)
+  startsAt         DateTime     @default(now()) @db.Timestamptz(3)
+  endsAt           DateTime?    @db.Timestamptz(3)
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@unique([ownerProfileId, startsAt])
+  @@index([ownerProfileId, startsAt, endsAt])
+}
+
+model OwnerLedgerEntry {
+  id               String               @id @default(cuid())
+  companyId        String
+  company          Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  ownerProfileId   String
+  ownerProfile     OwnerProfile         @relation(fields: [companyId, ownerProfileId], references: [companyId, id], onDelete: Restrict)
+  vehicleId        String
+  vehicle          Vehicle              @relation(fields: [companyId, vehicleId], references: [companyId, id], onDelete: Restrict)
+  rentalPaymentId  String?
+  rentalPayment    RentalPayment?       @relation(fields: [companyId, rentalPaymentId], references: [companyId, id], onDelete: Restrict)
+  kind             OwnerLedgerEntryKind
+  amountMinor      BigInt
+  currency         String               @default("RUB") @db.Char(3)
+  shareBasisPoints Int
+  recognizedOn     DateTime             @db.Date
+  idempotencyKey   String               @unique
+  note             String?
+  createdAt        DateTime             @default(now()) @db.Timestamptz(3)
+
+  @@index([ownerProfileId, recognizedOn, createdAt])
+  @@index([companyId, vehicleId, recognizedOn])
+  @@index([companyId, rentalPaymentId])
 }
 
 model spatial_ref_sys {

@@ -1,6 +1,6 @@
 'use client';
 
-import { FiChevronLeft, FiChevronRight, FiDroplet, FiNavigation, FiSearch } from 'react-icons/fi';
+import { FiChevronLeft, FiChevronRight, FiMap, FiNavigation, FiSearch } from 'react-icons/fi';
 
 import { filterOnlineMapVehicles } from '../filter-vehicles';
 import type { OnlineMapFilter, OnlineMapVehicle } from '../types';
@@ -28,6 +28,8 @@ export interface FleetVehicleRailProps {
   query: string;
   filter: OnlineMapFilter;
   collapsed: boolean;
+  selectedDayDistanceKm?: number | null;
+  selectedDayDistanceLoading?: boolean;
   onSelect: (vehicle: OnlineMapVehicle) => void;
   onQueryChange: (query: string) => void;
   onFilterChange: (filter: OnlineMapFilter) => void;
@@ -41,6 +43,8 @@ export function FleetVehicleRail({
   query,
   filter,
   collapsed,
+  selectedDayDistanceKm = null,
+  selectedDayDistanceLoading = false,
   onSelect,
   onQueryChange,
   onFilterChange,
@@ -113,7 +117,7 @@ export function FleetVehicleRail({
             placeholder="Модель, номер, водитель"
             value={query}
             onChange={(event) => onQueryChange(event.currentTarget.value)}
-            className="min-h-11 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-canvas)] pr-3 pl-10 text-sm outline-none transition focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary-soft)]"
+            className="min-h-11 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-canvas)] pr-3 pl-10 text-sm transition outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary-soft)]"
           />
         </label>
 
@@ -164,7 +168,7 @@ export function FleetVehicleRail({
                         {vehicle.plate}
                       </span>
                     </span>
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold tabular-nums text-[var(--color-text-secondary)]">
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-text-secondary)] tabular-nums">
                       <FiNavigation aria-hidden="true" />
                       {vehicle.gpsStatus.key === 'NO_DATA' || vehicle.gpsStatus.key === 'STALE'
                         ? 'Нет актуальных данных'
@@ -178,9 +182,15 @@ export function FleetVehicleRail({
                       </span>
                       <span className="mt-1 block truncate">{vehicle.lastSeenLabel}</span>
                     </span>
-                    <span className="inline-flex items-center gap-1 self-end text-xs font-medium tabular-nums text-[var(--color-text-secondary)]">
-                      <FiDroplet aria-hidden="true" />
-                      {vehicle.fuelPercent == null ? '—' : `${Math.round(vehicle.fuelPercent)}%`}
+                    <span className="inline-flex items-center gap-1 self-end text-xs font-medium text-[var(--color-text-secondary)] tabular-nums">
+                      <FiMap aria-hidden="true" />
+                      {selected
+                        ? selectedDayDistanceLoading
+                          ? 'Считаем…'
+                          : selectedDayDistanceKm === null
+                            ? 'Нет маршрута'
+                            : `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(selectedDayDistanceKm)} км за день`
+                        : 'Выберите авто'}
                     </span>
                   </button>
                 </li>

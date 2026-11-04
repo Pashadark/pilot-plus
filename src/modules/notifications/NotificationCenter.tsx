@@ -7,7 +7,13 @@ import { FiBell } from 'react-icons/fi';
 import { useToast } from '@/shared/providers/ToastProvider';
 import { AnchoredPopover } from '@/shared/ui';
 import { groupNotifications } from './group-notifications';
-import { markAllNotificationsReadAction, markNotificationReadAction } from './server/actions';
+import {
+  markAllNotificationsReadAction,
+  markNotificationReadAction,
+  loadNotificationPageAction,
+  markEntireInboxReadAction,
+} from './server/actions';
+import type { NotificationMeta } from './pagination';
 import type { NotificationCategory, NotificationTone, PilotNotification } from './types';
 
 type CategoryFilter = 'ALL' | NotificationCategory;
@@ -38,42 +44,94 @@ const toneDots: Record<NotificationTone, string> = {
 export function NotificationCenter({
   notifications,
   globalScope = false,
+  notificationMeta,
 }: {
   notifications: readonly PilotNotification[];
   globalScope?: boolean;
+  notificationMeta?: NotificationMeta;
 }) {
   const { showToast } = useToast();
   const [filter, setFilter] = useState<CategoryFilter>('ALL');
-  const [showAll, setShowAll] = useState(false);
+  const [visibleLimit, setVisibleLimit] = useState(10);
+  const [extra, setExtra] = useState<PilotNotification[]>([]);
+  const [nextCursor, setNextCursor] = useState(notificationMeta?.nextCursor ?? null);
+  const [loading, setLoading] = useState(false);
+  const [marking, setMarking] = useState(false);
+  const [allRead, setAllRead] = useState(false);
+  const allNotifications = useMemo(
+    () => [...new Map([...notifications, ...extra].map((item) => [item.id, item])).values()],
+    [notifications, extra],
+  );
   const [readIds, setReadIds] = useState<Set<string>>(
     () => new Set(notifications.filter(({ isRead }) => isRead).map(({ id }) => id)),
   );
-  const unreadCount = notifications.filter((notification) => !readIds.has(notification.id)).length;
+  const effectiveReadIds = new Set([
+    ...readIds,
+    ...allNotifications.filter((item) => item.isRead || allRead).map((item) => item.id),
+  ]);
+  const localUnreadCount = allNotifications.filter(
+    (notification) => !effectiveReadIds.has(notification.id),
+  ).length;
+  const unreadCount = allRead
+    ? 0
+    : notificationMeta
+      ? Math.max(
+          0,
+          notificationMeta.unreadCount -
+            allNotifications.filter((item) => !item.isRead && readIds.has(item.id)).length,
+        )
+      : localUnreadCount;
   const triggerLabel =
     unreadCount > 0 ? `Уведомления: ${unreadCount} непрочитанных` : 'Уведомления: новых нет';
   const visibleNotifications = useMemo(
     () =>
       filter === 'ALL'
-        ? notifications
-        : notifications.filter(({ category }) => category === filter),
-    [filter, notifications],
+        ? allNotifications
+        : allNotifications.filter(({ category }) => category === filter),
+    [filter, allNotifications],
   );
   const notificationGroups = useMemo(
     () => groupNotifications([...visibleNotifications]),
     [visibleNotifications],
   );
-  const visibleGroups = showAll ? notificationGroups : notificationGroups.slice(0, 10);
+  const visibleGroups = notificationGroups.slice(0, visibleLimit);
 
   const markAllRead = async () => {
+    if (marking) return;
+    setMarking(true);
     const previous = new Set(readIds);
-    setReadIds(new Set(notifications.map(({ id }) => id)));
-    const result = await markAllNotificationsReadAction(notifications.map(({ id }) => id));
-    if (result.status === 'error') {
-      setReadIds(previous);
-      showToast({ tone: 'danger', title: result.message });
-      return;
+    try {
+      const result = notificationMeta
+        ? await markEntireInboxReadAction()
+        : await markAllNotificationsReadAction(allNotifications.map(({ id }) => id));
+      if (result.status === 'error') {
+        setReadIds(previous);
+        showToast({ tone: 'danger', title: result.message });
+        return;
+      }
+      setReadIds(new Set(allNotifications.map(({ id }) => id)));
+      setAllRead(true);
+      showToast({ tone: 'success', title: 'Все уведомления прочитаны.' });
+    } catch {
+      showToast({ tone: 'danger', title: 'Не удалось отметить уведомления. Попробуйте снова.' });
+    } finally {
+      setMarking(false);
     }
-    showToast({ tone: 'success', title: 'Все уведомления прочитаны.' });
+  };
+
+  const loadMore = async () => {
+    if (loading || !nextCursor) return;
+    setLoading(true);
+    try {
+      const page = await loadNotificationPageAction(nextCursor);
+      setExtra((current) => [...current, ...page.items]);
+      setNextCursor(page.nextCursor);
+      setVisibleLimit((current) => current + 20);
+    } catch {
+      showToast({ tone: 'danger', title: 'Не удалось загрузить уведомления. Повторите попытку.' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -90,7 +148,7 @@ export function NotificationCenter({
               data-testid="notification-count"
               className="pointer-events-none absolute top-0.5 right-0.5 grid min-h-4 min-w-4 place-items-center rounded-full bg-[var(--color-danger)] px-1 text-[10px] leading-none font-bold text-white ring-2 ring-[var(--color-surface)]"
             >
-              {unreadCount > 99 ? '99+' : unreadCount}
+              {unreadCount}
             </span>
           ) : null}
         </span>
@@ -108,9 +166,10 @@ export function NotificationCenter({
             <button
               type="button"
               onClick={() => void markAllRead()}
+              disabled={marking}
               className="min-h-10 rounded-[var(--radius-sm)] px-2 text-xs font-semibold text-[var(--color-primary)] hover:bg-[var(--color-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
             >
-              Прочитать все
+              {marking ? 'Отмечаем…' : 'Прочитать все'}
             </button>
           ) : null}
         </div>
@@ -138,7 +197,7 @@ export function NotificationCenter({
           <ul className="divide-y divide-[var(--color-border)]">
             {visibleGroups.map((group) => {
               const notification = group.representative;
-              const unread = group.notificationIds.some((id) => !readIds.has(id));
+              const unread = group.notificationIds.some((id) => !effectiveReadIds.has(id));
               return (
                 <li key={group.key} className="relative">
                   {unread ? (
@@ -205,19 +264,31 @@ export function NotificationCenter({
               );
             })}
           </ul>
-          {notificationGroups.length > 10 ? (
+          {notificationGroups.length > visibleLimit ? (
             <div className="border-t border-[var(--color-border)] p-3">
               <button
                 type="button"
-                onClick={() => setShowAll((current) => !current)}
+                onClick={() => setVisibleLimit((current) => current + 10)}
                 className="min-h-10 w-full rounded-[var(--radius-sm)] text-sm font-semibold text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary-soft)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
               >
-                {showAll ? 'Свернуть' : 'Показать все'}
+                Показать ещё
               </button>
             </div>
           ) : null}
         </>
       )}
+      {nextCursor && notificationGroups.length <= visibleLimit ? (
+        <div className="border-t border-[var(--color-border)] p-3">
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => void loadMore()}
+            className="min-h-11 w-full rounded-[var(--radius-sm)] text-sm font-semibold text-[var(--color-primary)] disabled:opacity-50"
+          >
+            {loading ? 'Загрузка…' : 'Показать ещё'}
+          </button>
+        </div>
+      ) : null}
     </AnchoredPopover>
   );
 }

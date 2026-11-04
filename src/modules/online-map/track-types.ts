@@ -7,7 +7,9 @@ export type TrackEventType =
   | 'fine'
   | 'connection-loss'
   | 'geofence-enter'
-  | 'geofence-exit';
+  | 'geofence-exit'
+  | 'harsh-acceleration'
+  | 'harsh-braking';
 
 export type TrackSpeedColor = 'green' | 'yellow' | 'orange' | 'red' | 'critical';
 export type TrackActivityKind = 'stopped' | 'moving' | 'speeding';
@@ -27,8 +29,19 @@ export interface VehicleTrackPoint {
   id: string;
   coordinates: TrackCoordinates;
   timestamp: string;
+  recordedAt?: string;
   speedKph: number;
   address: string;
+}
+
+export interface PlaybackFrame {
+  cursorMs: number;
+  position: VehicleTrackPoint;
+  headingDegrees: number;
+  connected: boolean;
+  isInterpolated: boolean;
+  previousPointId: string;
+  nextPointId: string | null;
 }
 
 export interface VehicleTrackEvent {
@@ -40,6 +53,7 @@ export interface VehicleTrackEvent {
   coordinates?: TrackCoordinates;
   timestamp?: string;
   speedKph?: number;
+  metricLabel?: string;
   address?: string;
   fine?: OnlineMapTrackFine;
 }

@@ -20,6 +20,9 @@ describe('formatUnpaidFinesReport', () => {
     ]);
 
     expect(message).toContain('Неоплаченные штрафы');
+    expect(message).toContain('📊 <b>Сводка</b>\n├ Дата: 16 сентября 2026 г.\n└ Всего: <b>1</b>');
+    expect(message).toContain('🚨 <b>Штраф 1</b>');
+    expect(message).toContain('├ Клиент: <b>Иванов &lt;script&gt;</b>');
     expect(message).toContain('Иванов &lt;script&gt;');
     expect(message).not.toContain('<script>');
     expect(message).toContain('Превышение скорости &gt; 20 км/ч');
@@ -45,7 +48,7 @@ describe('formatUnpaidFinesReport', () => {
       },
     ]);
 
-    expect(message).toContain('<b>Клиент не назначен</b>');
+    expect(message).toContain('Клиент: <b>Клиент не назначен</b>');
     expect(message).toContain('Срок скидки: <b>не указан</b>');
     expect(message).toContain('Статус: <b>Просрочен</b>');
   });

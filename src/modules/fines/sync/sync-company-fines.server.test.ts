@@ -10,6 +10,8 @@ const findBoundRental = vi.hoisted(() => vi.fn());
 const createRatingEvent = vi.hoisted(() => vi.fn());
 const transaction = vi.hoisted(() => vi.fn());
 const runSync = vi.hoisted(() => vi.fn());
+const reserveFine = vi.hoisted(() => vi.fn());
+const reconcileFine = vi.hoisted(() => vi.fn());
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/services/security/field-encryption', () => ({
@@ -24,6 +26,10 @@ vi.mock('../integrations/driver-helper/client', () => ({
   },
 }));
 vi.mock('./sync-company-fines', () => ({ syncCompanyFinesWithDependencies: runSync }));
+vi.mock('@/modules/deposits/server/fine-reservation', () => ({
+  reserveFineFromDeposit: reserveFine,
+  reconcileFineDepositReservation: reconcileFine,
+}));
 vi.mock('@/database/prisma/client', () => ({
   prisma: {
     fineIntegration: {
@@ -67,6 +73,8 @@ describe('production company fine sync', () => {
     updateIntegration.mockResolvedValue({ id: 'integration-1' });
     upsertFine.mockResolvedValue({ id: 'fine-db-1' });
     createAssignmentHistory.mockResolvedValue({ id: 'history-1' });
+    reserveFine.mockResolvedValue({ id: 'ledger-1' });
+    reconcileFine.mockResolvedValue(null);
     transaction.mockImplementation(async (operation: (database: unknown) => Promise<unknown>) =>
       operation({
         fine: { findUnique: findFine, upsert: upsertFine },
@@ -170,6 +178,64 @@ describe('production company fine sync', () => {
       }),
       select: { id: true },
     });
+  });
+
+  it('reserves a newly imported fine when one exact rental is found', async () => {
+    findFine.mockResolvedValue(null);
+    findRentals.mockResolvedValue([
+      {
+        id: 'exact-rental',
+        clientId: 'exact-client',
+        startsAt: new Date('2026-08-16T09:00:00.000Z'),
+        endsAt: new Date('2026-08-16T10:00:00.000Z'),
+      },
+    ]);
+
+    await syncCompanyFines('company-1');
+
+    expect(reserveFine).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        companyId: 'company-1',
+        clientId: 'exact-client',
+        rentalId: 'exact-rental',
+        fineId: 'fine-db-1',
+        fineAmountMinor: 250_000n,
+      }),
+    );
+  });
+
+  it('reconciles the existing reservation when provider status or amount changes', async () => {
+    findFine.mockResolvedValue({
+      id: 'fine-db-1',
+      vehicleId: 'vehicle-1',
+      rentalId: 'exact-rental',
+      clientId: 'exact-client',
+      assignmentSource: 'AUTO_EXACT',
+      status: 'UNPAID',
+    });
+    findRentals.mockResolvedValue([
+      {
+        id: 'exact-rental',
+        clientId: 'exact-client',
+        startsAt: new Date('2026-08-16T09:00:00.000Z'),
+        endsAt: new Date('2026-08-16T10:00:00.000Z'),
+      },
+    ]);
+
+    await syncCompanyFines('company-1');
+
+    expect(reconcileFine).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        companyId: 'company-1',
+        clientId: 'exact-client',
+        rentalId: 'exact-rental',
+        fineId: 'fine-db-1',
+        fineAmountMinor: 250_000n,
+        status: 'UNPAID',
+      }),
+    );
   });
 
   it('does not replace an existing automatic assignment with an ambiguous result', async () => {

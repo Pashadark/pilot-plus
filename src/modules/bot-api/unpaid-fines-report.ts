@@ -56,40 +56,45 @@ const statusTitles: Record<UnpaidFineReportItem['status'], string> = {
 };
 
 export function formatUnpaidFinesReport(reportDay: string, items: UnpaidFineReportItem[]): string {
-  const heading = [
-    '🚨 <b>Неоплаченные штрафы</b>',
-    `<i>${escapeHtml(reportDate(reportDay))}</i>`,
-  ].join('\n');
-
   if (!items.length) {
-    return `${heading}\n\n✅ <b>Неоплаченных штрафов нет</b>`;
+    return formatTelegramMessage({
+      title: '✅ <b>Неоплаченных штрафов нет</b>',
+      sections: [telegramSection('📊', 'Сводка', [`Дата: ${escapeHtml(reportDate(reportDay))}`])],
+    });
   }
 
-  return [
-    heading,
-    `Всего: <b>${items.length}</b>`,
-    ...items.map((item, index) => {
-      const client = item.clientLastName?.trim() || 'Клиент не назначен';
-      const registrationNumber = item.registrationNumber?.trim() || 'без номера';
-      const amountLines =
-        item.originalAmountMinor === item.currentAmountMinor
-          ? [`Сумма: <b>${escapeHtml(money(item.currentAmountMinor))}</b>`]
-          : [
-              `Полная сумма: <b>${escapeHtml(money(item.originalAmountMinor))}</b>`,
-              `К оплате: <b>${escapeHtml(money(item.currentAmountMinor))}</b>`,
-            ];
-      return [
-        `${index + 1}. <b>${escapeHtml(client)}</b>`,
-        `${escapeHtml(item.vehicle)} · <code>${escapeHtml(registrationNumber)}</code>`,
-        `Постановление № <code>${escapeHtml(item.decreeNumber)}</code>`,
-        `Нарушение: ${escapeHtml(item.violation)}`,
-        ...amountLines,
-        `Дата нарушения: <b>${escapeHtml(date(item.offenseAt))}</b>`,
-        item.discountExpiresAt
-          ? `Скидка до: <b>${escapeHtml(date(item.discountExpiresAt))}</b>`
-          : 'Срок скидки: <b>не указан</b>',
-        `Статус: <b>${escapeHtml(statusTitles[item.status])}</b>`,
-      ].join('\n');
-    }),
-  ].join('\n\n');
+  return formatTelegramMessage({
+    title: '🚨 <b>Неоплаченные штрафы</b>',
+    sections: [
+      telegramSection('📊', 'Сводка', [
+        `Дата: ${escapeHtml(reportDate(reportDay))}`,
+        `Всего: <b>${items.length}</b>`,
+      ]),
+      ...items.map((item, index) => {
+        const client = item.clientLastName?.trim() || 'Клиент не назначен';
+        const registrationNumber = item.registrationNumber?.trim() || 'без номера';
+        const amountLines =
+          item.originalAmountMinor === item.currentAmountMinor
+            ? [`Сумма: <b>${escapeHtml(money(item.currentAmountMinor))}</b>`]
+            : [
+                `Полная сумма: <b>${escapeHtml(money(item.originalAmountMinor))}</b>`,
+                `К оплате: <b>${escapeHtml(money(item.currentAmountMinor))}</b>`,
+              ];
+        return telegramSection('🚨', `Штраф ${index + 1}`, [
+          `Клиент: <b>${escapeHtml(client)}</b>`,
+          `${escapeHtml(item.vehicle)} · <code>${escapeHtml(registrationNumber)}</code>`,
+          `Постановление № <code>${escapeHtml(item.decreeNumber)}</code>`,
+          `Нарушение: ${escapeHtml(item.violation)}`,
+          ...amountLines,
+          `Дата нарушения: <b>${escapeHtml(date(item.offenseAt))}</b>`,
+          item.discountExpiresAt
+            ? `Скидка до: <b>${escapeHtml(date(item.discountExpiresAt))}</b>`
+            : 'Срок скидки: <b>не указан</b>',
+          `Статус: <b>${escapeHtml(statusTitles[item.status])}</b>`,
+        ]);
+      }),
+    ],
+    action: 'Сначала оплатить срочные штрафы и распределить не назначенные',
+  });
 }
+import { formatTelegramMessage, telegramSection } from './telegram-message';

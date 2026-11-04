@@ -11,3 +11,7 @@ node_modules
 test-results
 playwright-report
 coverage
+bot/.venv
+bot/.pytest_cache
+bot/**/__pycache__
+bot/**/*.pyc

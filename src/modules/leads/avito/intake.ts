@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@/database/generated/prisma';
 import { blindIndex, decryptField, encryptField } from '@/services/security/field-encryption';
 import { enqueueWebsiteNotifications } from '../enqueue-website-notifications';
+import { formatTelegramMessage, telegramSection } from '@/modules/bot-api/telegram-message';
 import { avitoId, incomingMessage, summarizeRequest } from './message';
 import { extractRentalRequest, rentalQuestions, type RentalRequest } from './rental-request';
 
@@ -169,7 +170,29 @@ export async function receiveAvitoMessage(
                 eventKey: `avito-ready:${id}`,
                 availableAt: new Date(),
                 payload: {
-                  message: `Заявка Авито: данные собраны. Дальше отвечает менеджер.\nhttps://supapro.ru/leads\nЧат: https://www.avito.ru/profile/messenger/channel/${encodeURIComponent(input.chatId)}`,
+                  message: formatTelegramMessage({
+                    title: '✅ <b>Заявка Авито готова</b>',
+                    sections: [
+                      telegramSection('📋', 'Состояние', [
+                        'Данные клиента собраны',
+                        'Дальше отвечает менеджер',
+                      ]),
+                    ],
+                    action: 'Открыть заявку и продолжить диалог',
+                  }),
+                  parseMode: 'HTML',
+                  actions: [
+                    {
+                      type: 'open_url',
+                      label: 'Открыть чат Авито',
+                      url: `https://www.avito.ru/profile/messenger/channel/${encodeURIComponent(input.chatId)}`,
+                    },
+                    {
+                      type: 'open_url',
+                      label: 'Открыть заявки',
+                      url: 'https://supapro.ru/leads',
+                    },
+                  ],
                 },
               },
             ],

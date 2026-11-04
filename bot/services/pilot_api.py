@@ -93,6 +93,9 @@ class PilotApiClient:
     async def fines(self, telegram_user_id: str, page: int = 0) -> dict[str, Any]:
         return await self._json("GET", f"/api/bot/v1/fines?page={page}", telegram_user_id=telegram_user_id)
 
+    async def deposits(self, telegram_user_id: str) -> dict[str, Any]:
+        return await self._json("GET", "/api/bot/v1/deposits", telegram_user_id=telegram_user_id)
+
     async def support(self, telegram_user_id: str, text: str, key: str, fine_id: str | None = None) -> dict[str, Any]:
         payload = {"text": text, "key": key}
         if fine_id: payload["fineId"] = fine_id
@@ -119,6 +122,30 @@ class PilotApiClient:
         if date:
             path = f"{path}?{httpx.QueryParams({'date': date})}"
         return await self._json("GET", path, telegram_user_id=telegram_user_id)
+
+    async def refresh_operations_digest(self, telegram_user_id: str, date: str) -> dict[str, Any]:
+        return await self._json(
+            "POST",
+            "/api/bot/v1/notifications/refresh-operations",
+            telegram_user_id=telegram_user_id,
+            json={"date": date},
+        )
+
+    async def remind_return(self, telegram_user_id: str, rental_id: str) -> dict[str, Any]:
+        return await self._json(
+            "POST",
+            "/api/bot/v1/notifications/remind",
+            telegram_user_id=telegram_user_id,
+            json={"rentalId": rental_id},
+        )
+
+    async def notify_client_impound(self, telegram_user_id: str, rental_id: str) -> dict[str, Any]:
+        return await self._json(
+            "POST",
+            "/api/bot/v1/notifications/notify-client",
+            telegram_user_id=telegram_user_id,
+            json={"rentalId": rental_id, "reason": "IMPOUND_LOT"},
+        )
 
     async def staff_rentals(self, telegram_user_id: str) -> dict[str, Any]:
         return await self._json("GET", "/api/bot/v1/staff/rentals", telegram_user_id=telegram_user_id)
@@ -159,8 +186,11 @@ class PilotApiClient:
             json=payload,
         )
 
-    async def claim_notifications(self, worker_id: str) -> dict[str, Any]:
-        return await self._json("POST", "/api/bot/v1/notifications/claim", telegram_user_id="", json={"workerId": worker_id})
+    async def claim_notifications(self, worker_id: str, audience: str | None = None) -> dict[str, Any]:
+        payload = {"workerId": worker_id}
+        if audience is not None:
+            payload["audience"] = audience
+        return await self._json("POST", "/api/bot/v1/notifications/claim", telegram_user_id="", json=payload)
 
     async def ack_notification(self, job_id: str, claim_token: str, success: bool, error_code: str | None = None) -> dict[str, Any]:
         payload: dict[str, Any] = {"claimToken": claim_token, "success": success}

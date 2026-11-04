@@ -10,7 +10,7 @@ import { RentalWizard } from './RentalWizard';
 describe('RentalWizard', () => {
   afterEach(cleanup);
 
-  it('starts with an accessible Russian six-step draft and blocks confirmation', () => {
+  it('starts with the accessible approved three-step flow', () => {
     render(
       createElement(
         ToastProvider,
@@ -43,14 +43,11 @@ describe('RentalWizard', () => {
     expect(
       screen.getByText(
         (_, element) =>
-          element?.tagName === 'P' && element.textContent?.includes('Шаг 1 из 6') === true,
+          element?.tagName === 'P' && element.textContent?.includes('Шаг 1 из 3') === true,
       ),
     ).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Подтвердить и занять автомобиль' })).toHaveProperty(
-      'disabled',
-      true,
-    );
-    expect(screen.getByRole('heading', { name: 'Клиент' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Сканируем документы клиента' })).toBeTruthy();
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
     expect(screen.getByRole('radiogroup', { name: 'Тип аренды' })).toBeTruthy();
     expect(screen.getByRole('radio', { name: 'Обычная аренда' })).toHaveProperty('checked', true);
     fireEvent.click(screen.getByRole('radio', { name: 'Аренда с правом выкупа' }));
@@ -207,7 +204,6 @@ describe('RentalWizard', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Автомобиль' }), {
       target: { value: 'vehicle-1' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
     const dateInputs = container.querySelectorAll<HTMLInputElement>('input[type="datetime-local"]');
     fireEvent.change(dateInputs[0]!, {
       target: { value: '2026-09-03T10:00' },
@@ -216,18 +212,17 @@ describe('RentalWizard', () => {
       target: { value: '2026-09-05T10:00' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Далее' }));
 
     expect(
       screen.getByRole('heading', { name: 'Документы и юридическая готовность' }),
     ).toBeTruthy();
     expect(
       screen
-        .getByRole('link', { name: 'Загрузите паспорт и водительское удостоверение.' })
+        .getAllByRole('link', { name: 'Загрузите паспорт и водительское удостоверение.' })[0]
         .getAttribute('href'),
     ).toBe('/clients/client-1?tab=documents');
     expect(
-      screen.getByRole('link', { name: 'Опубликуйте шаблон договора.' }).getAttribute('href'),
+      screen.getAllByRole('link', { name: 'Опубликуйте шаблон договора.' })[0].getAttribute('href'),
     ).toBe('/admin');
   });
 });

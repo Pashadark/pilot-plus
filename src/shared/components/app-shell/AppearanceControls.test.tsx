@@ -6,12 +6,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ThemeProvider } from '@/shared/providers/ThemeProvider';
 
-import { InterfaceModeMenuItems, ThemeSwitch } from './AppearanceControls';
+import { ThemeSwitch } from './AppearanceControls';
 
 beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.dataset.theme = 'light';
-  document.documentElement.dataset.interface = 'obsidian';
+  document.documentElement.dataset.interface = 'graphite';
 });
 
 afterEach(() => {
@@ -38,24 +38,4 @@ describe('appearance controls', () => {
     expect(document.documentElement.dataset.theme).toBe('dark');
   });
 
-  it('switches between the new and classic interfaces without changing the color scheme', async () => {
-    const user = userEvent.setup();
-    render(
-      <ThemeProvider>
-        <InterfaceModeMenuItems />
-      </ThemeProvider>,
-    );
-
-    const obsidian = screen.getByRole('menuitemradio', { name: 'Новый интерфейс' });
-    const classic = screen.getByRole('menuitemradio', { name: 'Классический интерфейс' });
-
-    expect(obsidian.getAttribute('aria-checked')).toBe('true');
-    expect(classic.getAttribute('aria-checked')).toBe('false');
-
-    await user.click(classic);
-
-    expect(document.documentElement.dataset.interface).toBe('classic');
-    expect(document.documentElement.dataset.theme).toBe('light');
-    expect(classic.getAttribute('aria-checked')).toBe('true');
-  });
 });

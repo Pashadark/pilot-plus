@@ -1,8 +1,8 @@
 'use client';
 
-import { FiCheck, FiMoon, FiSun } from 'react-icons/fi';
+import { FiMoon, FiSun } from 'react-icons/fi';
 
-import { useTheme, type InterfaceMode } from '@/shared/providers/ThemeProvider';
+import { useTheme } from '@/shared/providers/ThemeProvider';
 
 export function ThemeSwitch() {
   const { theme, toggleTheme } = useTheme();
@@ -26,68 +26,5 @@ export function ThemeSwitch() {
         {dark ? <FiMoon className="size-3.5" /> : <FiSun className="size-3.5" />}
       </span>
     </button>
-  );
-}
-
-const modes: readonly {
-  mode: InterfaceMode;
-  label: string;
-  description: string;
-}[] = [
-  {
-    mode: 'material',
-    label: 'Material — предпросмотр',
-    description: 'Новые компоненты и формы',
-  },
-  {
-    mode: 'obsidian',
-    label: 'Новый интерфейс',
-    description: 'Основной дизайн',
-  },
-  {
-    mode: 'classic',
-    label: 'Классический интерфейс',
-    description: 'Прежний дизайн',
-  },
-];
-
-export function InterfaceModeMenuItems() {
-  const { interfaceMode, setInterfaceMode } = useTheme();
-
-  return (
-    <div className="border-y border-[var(--color-border)] py-1">
-      {modes.map(({ mode, label, description }) => {
-        const active = interfaceMode === mode;
-
-        return (
-          <button
-            key={mode}
-            type="button"
-            role="menuitemradio"
-            aria-label={label}
-            aria-checked={active}
-            onClick={() => setInterfaceMode(mode)}
-            className="flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-[var(--radius-sm)] px-3 text-left transition-colors duration-[var(--motion-fast)] hover:bg-[var(--color-elevated)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
-          >
-            <span
-              aria-hidden="true"
-              className={`grid size-5 shrink-0 place-items-center rounded-full border ${
-                active
-                  ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
-                  : 'border-[var(--color-border-strong)] text-transparent'
-              }`}
-            >
-              <FiCheck className="size-3" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold text-[var(--color-text)]">{label}</span>
-              <span className="block text-xs text-[var(--color-text-secondary)]">
-                {description}
-              </span>
-            </span>
-          </button>
-        );
-      })}
-    </div>
   );
 }

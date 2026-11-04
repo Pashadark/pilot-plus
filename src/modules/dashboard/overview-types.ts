@@ -68,9 +68,19 @@ export type DashboardAttentionItemDto = {
 };
 
 export type DashboardOverviewDto = {
+  fleet?: DashboardFleetVehicle[];
   generatedAt?: string;
   period: { key: DashboardPeriod | 'custom'; label: string; from: string; toExclusive: string };
   kpis: DashboardKpiDto;
   workItems: DashboardWorkItemDto[];
   attentionItems: DashboardAttentionItemDto[];
+};
+
+export type DashboardFleetVehicle = {
+  id: string;
+  name: string;
+  plate: string;
+  image: { localPath: string; alt: string } | null;
+  position: { latitude: number; longitude: number; recordedAt: string } | null;
+  rentals: { id: string; startsAt: string; endsAt: string; clientName: string; status: string }[];
 };

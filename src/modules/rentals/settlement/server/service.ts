@@ -1,12 +1,20 @@
 import 'server-only';
 
+import { appendDepositEntry } from '@/modules/deposits/server/ledger';
+
 import type { PaymentCommand, SignatureCommand } from '../validation';
 
 type Actor = { id: string; email: string };
-type RentalRow = { id: string; companyId: string; status: string; contractNumber: string | null };
+type RentalRow = {
+  id: string;
+  companyId: string;
+  clientId: string;
+  status: string;
+  contractNumber: string | null;
+};
 type PaymentRow = { id: string };
 
-type SettlementTransaction = {
+type SettlementTransaction = Parameters<typeof appendDepositEntry>[0] & {
   rental: {
     findFirst(args: { where: { companyId: string; id: string } }): Promise<RentalRow | null>;
   };
@@ -89,6 +97,7 @@ export function createRentalSettlementService(
         });
         if (existing) return { id: existing.id, reused: true as const };
 
+        const recordedAt = now();
         const payment = await transaction.rentalPayment.create({
           data: {
             ...key,
@@ -98,9 +107,28 @@ export function createRentalSettlementService(
             method: input.command.method,
             reference: input.command.reference,
             comment: input.command.comment,
+            recordedAt,
             recordedByUserId: input.actor.id,
           },
         });
+        if (input.command.kind === 'DEPOSIT' && input.command.status === 'CONFIRMED') {
+          await appendDepositEntry(transaction, {
+            companyId: input.companyId,
+            clientId: rental.clientId,
+            rentalId: rental.id,
+            paymentId: payment.id,
+            kind: 'DEPOSIT_PAYMENT',
+            source: 'STAFF',
+            cashDeltaMinor: input.command.amountMinor,
+            reservedDeltaMinor: 0n,
+            withheldDeltaMinor: 0n,
+            debtDeltaMinor: 0n,
+            reason: 'Внесение залога сотрудником',
+            idempotencyKey: `deposit-payment:${payment.id}`,
+            actorUserId: input.actor.id,
+            occurredAt: recordedAt,
+          });
+        }
         await transaction.auditLog.create({
           data: auditData({
             companyId: input.companyId,

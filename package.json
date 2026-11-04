@@ -36,6 +36,7 @@
     "@meteocons/svg": "^0.1.0",
     "@prisma/client": "6.16.2",
     "docx": "^9.7.1",
+    "exceljs": "^4.4.0",
     "framer-motion": "^12.42.2",
     "maplibre-gl": "^5.24.0",
     "next": "16.2.10",

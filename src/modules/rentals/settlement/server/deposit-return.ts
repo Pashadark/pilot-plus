@@ -29,3 +29,32 @@ export function parseDepositReturnInput(input: {
     reason,
   };
 }
+
+export function planDepositReturnLedger(input: {
+  cashMinor: bigint;
+  reservedMinor: bigint;
+  withheldMinor: bigint;
+  returnedMinor: bigint;
+}) {
+  const cashAfterReturn = input.cashMinor - input.returnedMinor;
+  if (cashAfterReturn < 0n) {
+    throw new Error('Возвращённая сумма больше фактического остатка залога.');
+  }
+
+  const securedBeforeReturn = input.reservedMinor + input.withheldMinor;
+  const overAllocated =
+    securedBeforeReturn > cashAfterReturn ? securedBeforeReturn - cashAfterReturn : 0n;
+  const reservationDebtMinor =
+    overAllocated < input.reservedMinor ? overAllocated : input.reservedMinor;
+  const remainingReservedMinor = input.reservedMinor - reservationDebtMinor;
+  const additionalWithheldMinor =
+    cashAfterReturn - input.withheldMinor - remainingReservedMinor;
+
+  if (additionalWithheldMinor < 0n) {
+    throw new Error(
+      'Часть залога уже удержана. Сначала исправьте удержания перед возвратом клиенту.',
+    );
+  }
+
+  return { reservationDebtMinor, additionalWithheldMinor };
+}

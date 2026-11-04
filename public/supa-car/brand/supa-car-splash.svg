@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" role="img" aria-labelledby="title description">
+  <title id="title">SUPA CAR</title>
+  <desc id="description">Заставка мобильного приложения SUPA CAR</desc>
+  <defs>
+    <linearGradient id="supa-car-gradient" x1="300" y1="700" x2="780" y2="1220" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF7A00"/>
+      <stop offset="0.52" stop-color="#FF5200"/>
+      <stop offset="1" stop-color="#FF3024"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1920" fill="#101014"/>
+  <g fill="url(#supa-car-gradient)" font-family="Arial Black, Arial, sans-serif" font-weight="900" text-anchor="middle">
+    <text x="540" y="910" font-size="220" letter-spacing="-12">SUPA</text>
+    <text x="540" y="1150" font-size="228" letter-spacing="-11">CAR</text>
+  </g>
+</svg>

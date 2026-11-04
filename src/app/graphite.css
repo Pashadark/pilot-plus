@@ -1,0 +1,201 @@
+/* Graphite is scoped so all previous appearances remain available. */
+:root[data-interface='graphite'] {
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-panel: 20px;
+  --sidebar-width-expanded: 240px;
+  --sidebar-width-collapsed: 72px;
+  --header-height: 76px;
+  --shell-gutter: 0px;
+  --shadow-card: none;
+  --shadow-floating: 0 12px 40px rgb(0 0 0 / 0.24);
+  --motion-fast: 160ms;
+  --motion-normal: 220ms;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+:root[data-interface='graphite'][data-theme='dark'] {
+  color-scheme: dark;
+  --app-bg: #101014;
+  --app-surface: #252529;
+  --app-surface-2: #343438;
+  --app-surface-3: #434347;
+  --app-surface-4: #525257;
+  --text-primary: #fff;
+  --text-secondary: rgb(255 255 255 / 0.5);
+  --text-tertiary: rgb(255 255 255 / 0.25);
+  --border-1: #343438;
+  --accent-blue: #0067ff;
+  --accent-blue-hover: #4da6ff;
+  --accent-green: #00aa00;
+  --accent-green-hover: #00ba00;
+  --accent-red: #ff5050;
+  --accent-red-hover: #ff5c5c;
+  --accent-orange: #ff8c00;
+  --accent-orange-hover: #c06500;
+  --color-canvas: var(--app-bg);
+  --color-navigation: var(--app-bg);
+  --color-surface: var(--app-surface);
+  --color-elevated: var(--app-surface-2);
+  --color-text: var(--text-primary);
+  /* Slightly brighter for small operational labels and readable contrast. */
+  --color-text-secondary: #aaaab2;
+  --color-text-muted: #92929c;
+  --color-navigation-muted: #b1b1ba;
+  --color-primary: var(--accent-blue);
+  --color-primary-hover: var(--accent-blue-hover);
+  --color-primary-soft: #17324c;
+  --color-success: #57ce83;
+  --color-success-soft: #19372a;
+  --color-warning: #ffb15b;
+  --color-warning-soft: #44301d;
+  --color-danger: var(--accent-red);
+  --color-danger-soft: #45272c;
+  --color-border: var(--border-1);
+  --color-border-strong: var(--app-surface-4);
+  --color-ice: var(--app-surface-2);
+  --color-ice-text: #fff;
+}
+
+:root[data-interface='graphite'][data-theme='light'] {
+  --color-canvas: #f4f4f6;
+  --color-navigation: #f4f4f6;
+  --color-surface: #fff;
+  --color-elevated: #eeeeef;
+  --color-primary: #0067ff;
+  --color-primary-hover: #0066ca;
+  --color-primary-soft: #e0efff;
+  --color-border: #e3e3e8;
+  --color-text: #17171d;
+}
+
+:root[data-interface='graphite'] [data-interface-shell='sidebar'] {
+  border: 0;
+}
+:root[data-interface='graphite'] [data-interface-shell='header'] {
+  background-color: var(--color-canvas) !important;
+  box-shadow: none !important;
+}
+:root[data-interface='graphite'] [data-ui-card] {
+  border-color: transparent;
+}
+:root[data-interface='graphite'] .sidebar-navigation-group + .sidebar-navigation-group {
+  margin-top: 20px;
+}
+:root[data-interface='graphite'] nav[aria-label='Основная навигация'] a[aria-current='page'] {
+  background: var(--color-elevated);
+  color: var(--color-text);
+}
+:root[data-interface='graphite'] .graphite-sidebar-brand,
+:root[data-interface='graphite'] .graphite-sidebar-footer {
+  border: 0;
+}
+:root[data-interface='graphite'] .graphite-dashboard {
+  gap: 24px;
+}
+:root[data-interface='graphite']
+  .graphite-dashboard
+  [aria-label='Быстрые действия']
+  a[href='/rentals/new'] {
+  background: var(--color-primary);
+  border-color: transparent;
+  color: #fff;
+}
+
+.cookie-bar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-sizing: border-box;
+  width: min(740px, 100%);
+  padding: 12px;
+  border-radius: 24px 0 0 0;
+  background: var(--color-elevated);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.4);
+  animation: cookie-appear 0.3s ease both;
+}
+.cookie-bar__info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.cookie-bar__icon {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+.cookie-bar__text {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+.cookie-bar__details {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.cookie-bar__actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.cookie-bar__btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+.cookie-bar__btn--accept {
+  background: var(--color-primary);
+  color: #fff;
+}
+.cookie-bar__btn--accept:hover {
+  background: var(--color-primary-hover);
+}
+.cookie-bar__btn--decline {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.cookie-bar__btn--decline:hover {
+  background: var(--color-border-strong);
+}
+@keyframes cookie-appear {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 767px) {
+  :root[data-interface='graphite'] {
+    --header-height: 64px;
+  }
+  .cookie-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 16px 16px calc(12px + env(safe-area-inset-bottom));
+    border-radius: 20px 20px 0 0;
+  }
+  .cookie-bar__actions {
+    justify-content: flex-end;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cookie-bar {
+    animation: none;
+  }
+}

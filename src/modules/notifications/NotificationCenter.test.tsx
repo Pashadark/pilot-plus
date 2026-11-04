@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const actionMocks = vi.hoisted(() => ({
   markNotificationReadAction: vi.fn().mockResolvedValue({ status: 'success' }),
   markAllNotificationsReadAction: vi.fn().mockResolvedValue({ status: 'success' }),
+  loadNotificationPageAction: vi.fn(),
+  markEntireInboxReadAction: vi.fn().mockResolvedValue({ status: 'success' }),
 }));
 
 vi.mock('@/modules/notifications/server/actions', () => actionMocks);
@@ -51,7 +53,44 @@ const notifications: readonly PilotNotification[] = [
 ];
 
 afterEach(cleanup);
+it('shows full count and loads another server page', async () => {
+  const user = userEvent.setup();
+  actionMocks.loadNotificationPageAction.mockResolvedValue({
+    items: [
+      {
+        ...notifications[0],
+        id: 'older',
+        title: 'Старое уведомление',
+        occurredAt: '2020-01-01T00:00:00.000Z',
+      },
+    ],
+    nextCursor: null,
+  });
+  render(
+    <NotificationCenter
+      notifications={notifications}
+      notificationMeta={{
+        unreadCount: 145,
+        nextCursor: { before: '2026-09-13T15:20:00.000Z', beforeKey: 'notification-3' },
+      }}
+    />,
+  );
+  expect(screen.getByTestId('notification-count').textContent).toBe('145');
+  await user.click(screen.getByRole('button', { name: 'Уведомления: 145 непрочитанных' }));
+  await user.click(screen.getByRole('button', { name: 'Показать ещё' }));
+  expect(await screen.findByText('Старое уведомление')).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'Прочитать все' }));
+  expect(actionMocks.markEntireInboxReadAction).toHaveBeenCalled();
+});
 beforeEach(() => vi.clearAllMocks());
+it('respects read receipts received on a server refresh', () => {
+  const view = render(<NotificationCenter notifications={notifications} />);
+  expect(screen.getByTestId('notification-count').textContent).toBe('3');
+  view.rerender(
+    <NotificationCenter notifications={notifications.map((item) => ({ ...item, isRead: true }))} />,
+  );
+  expect(screen.queryByTestId('notification-count')).toBeNull();
+});
 
 describe('центр уведомлений', () => {
   it('открывает список и отмечает все уведомления прочитанными', async () => {
@@ -171,7 +210,7 @@ describe('центр уведомлений', () => {
     await user.click(screen.getByRole('button', { name: /Уведомления:/ }));
 
     expect(screen.getAllByRole('link')).toHaveLength(10);
-    await user.click(screen.getByRole('button', { name: 'Показать все' }));
+    await user.click(screen.getByRole('button', { name: 'Показать ещё' }));
     expect(screen.getAllByRole('link')).toHaveLength(12);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseOpenMeteoWeather } from './get-moscow-weather';
+import { getMoscowWeather, parseOpenMeteoWeather } from './get-moscow-weather';
 
 describe('parseOpenMeteoWeather', () => {
   it('normalizes current Moscow weather', () => {
@@ -32,5 +32,17 @@ describe('parseOpenMeteoWeather', () => {
 
   it('rejects incomplete provider data', () => {
     expect(parseOpenMeteoWeather({ current: { temperature_2m: 17 } })).toBeNull();
+  });
+});
+
+describe('getMoscowWeather', () => {
+  it('does not hold the dashboard open when the weather provider stalls', async () => {
+    const stalledFetch = () => new Promise<Response>(() => undefined);
+    const startedAt = performance.now();
+
+    const weather = await getMoscowWeather({ fetcher: stalledFetch, timeoutMs: 20 });
+
+    expect(weather).toBeNull();
+    expect(performance.now() - startedAt).toBeLessThan(200);
   });
 });

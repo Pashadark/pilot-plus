@@ -9,5 +9,5 @@ COPY bot /app/bot
 RUN pip install . && chown -R pilotbot:pilotbot /app
 
 USER pilotbot
-HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD python -c "from pathlib import Path; raise SystemExit(0 if 'bot.main' in Path('/proc/1/cmdline').read_text() else 1)"
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD python -c "from pathlib import Path; value=Path('/proc/1/cmdline').read_text(); raise SystemExit(0 if 'bot.main' in value or 'bot.client_main' in value else 1)"
 CMD ["python", "-m", "bot.main"]

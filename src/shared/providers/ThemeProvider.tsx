@@ -3,7 +3,7 @@
 import { createContext, useContext, useMemo, useSyncExternalStore } from 'react';
 
 export type Theme = 'light' | 'dark';
-export type InterfaceMode = 'classic' | 'obsidian' | 'material';
+export type InterfaceMode = 'graphite';
 
 interface ThemeContextValue {
   theme: Theme;
@@ -27,12 +27,11 @@ function getThemeServerSnapshot(): Theme {
 }
 
 function getInterfaceSnapshot(): InterfaceMode {
-  const mode = document.documentElement.dataset.interface;
-  return mode === 'classic' || mode === 'material' ? mode : 'obsidian';
+  return 'graphite';
 }
 
 function getInterfaceServerSnapshot(): InterfaceMode {
-  return 'obsidian';
+  return 'graphite';
 }
 
 function subscribeToAppearance(onStoreChange: () => void) {
@@ -40,11 +39,10 @@ function subscribeToAppearance(onStoreChange: () => void) {
     if (event.key === themeStorageKey) {
       document.documentElement.dataset.theme = event.newValue === 'dark' ? 'dark' : 'light';
     } else if (event.key === interfaceStorageKey) {
-      document.documentElement.dataset.interface =
-        event.newValue === 'classic' || event.newValue === 'material' ? event.newValue : 'obsidian';
+      document.documentElement.dataset.interface = 'graphite';
     } else if (event.key === null) {
       document.documentElement.dataset.theme = 'light';
-      document.documentElement.dataset.interface = 'obsidian';
+      document.documentElement.dataset.interface = 'graphite';
     } else {
       return;
     }
@@ -70,10 +68,10 @@ function persistTheme(theme: Theme) {
   window.dispatchEvent(new Event(appearanceStorageEvent));
 }
 
-function persistInterface(mode: InterfaceMode) {
-  document.documentElement.dataset.interface = mode;
+function persistInterface() {
+  document.documentElement.dataset.interface = 'graphite';
   try {
-    window.localStorage.setItem(interfaceStorageKey, mode);
+    window.localStorage.setItem(interfaceStorageKey, 'graphite');
   } catch {
     // Интерфейс продолжает работать, даже если браузер запретил постоянное хранилище.
   }

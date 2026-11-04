@@ -1,11 +1,19 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { FiAlertCircle, FiDroplet, FiFileText, FiTool, FiUsers } from 'react-icons/fi';
+import {
+  FiAlertCircle,
+  FiCreditCard,
+  FiDroplet,
+  FiFileText,
+  FiTool,
+  FiUsers,
+} from 'react-icons/fi';
 import { describe, expect, it, vi } from 'vitest';
 
 const route = vi.hoisted(() => ({ pathname: '/' }));
 
 vi.mock('next/navigation', () => ({ usePathname: () => route.pathname }));
+vi.mock('@/modules/auth/actions', () => ({ logoutAction: vi.fn() }));
 
 import { Sidebar } from './Sidebar';
 import { navigation } from './navigation';
@@ -26,6 +34,13 @@ const summary = {
 const member = { ...user, role: 'MEMBER' as const, canAccessAdmin: false };
 
 describe('Sidebar health summary', () => {
+  it('keeps profile in the header and provides logout at the bottom', () => {
+    const markup = renderToStaticMarkup(
+      createElement(Sidebar, { expanded: true, user, systemHealthSummary: summary }),
+    );
+    expect(markup).not.toContain('href="/profile"');
+    expect(markup).toContain('Выйти');
+  });
   it('показывает ТО и мойку в единой навигации с доменными иконками', () => {
     expect(navigation.map(({ href }) => href)).toEqual([
       '/',
@@ -34,7 +49,9 @@ describe('Sidebar health summary', () => {
       '/clients',
       '/leads',
       '/rentals',
+      '/statistics',
       '/fines',
+      '/deposits',
       '/maintenance',
       '/wash',
       '/devices',
@@ -50,6 +67,7 @@ describe('Sidebar health summary', () => {
         { label: 'Клиенты', href: '/clients', icon: FiUsers, requiredCapability: 'CLIENTS' },
         { label: 'Аренда', href: '/rentals', icon: FiFileText, requiredCapability: 'RENTALS' },
         { label: 'Штрафы', href: '/fines', icon: FiAlertCircle, requiredCapability: 'FINES' },
+        { label: 'Залоги', href: '/deposits', icon: FiCreditCard, requiredCapability: 'RENTALS' },
       ]),
     );
   });
@@ -127,6 +145,8 @@ describe('Sidebar health summary', () => {
     expect(denied).not.toContain('href="/rentals"');
     expect(permitted).toContain('href="/rentals"');
     expect(permitted).toContain('Аренда');
+    expect(permitted).toContain('href="/deposits"');
+    expect(permitted).toContain('Залоги');
   });
 
   it('показывает штрафы только при server-derived fines capability', () => {
@@ -136,13 +156,37 @@ describe('Sidebar health summary', () => {
     const permitted = renderToStaticMarkup(
       createElement(Sidebar, {
         expanded: true,
-        user: { ...member, capabilities: ['FINES'] },
+        user: { ...member, capabilities: ['CLIENTS', 'FINES'] },
         systemHealthSummary: summary,
       }),
     );
     expect(denied).not.toContain('href="/fines"');
     expect(permitted).toContain('href="/fines"');
     expect(permitted).toContain('Штрафы');
+  });
+
+  it('показывает отдельные синие овальные счётчики с полными числами рядом со штрафами, залогами и заявками', () => {
+    const markup = renderToStaticMarkup(
+      createElement(Sidebar, {
+        expanded: true,
+        user: { ...member, capabilities: ['CLIENTS', 'RENTALS', 'FINES'] },
+        systemHealthSummary: summary,
+        openFineCount: 64,
+        openLeadCount: 128,
+        openDepositCount: 7,
+      }),
+    );
+
+    expect(markup).toContain('data-fines-count="64"');
+    expect(markup).toContain('data-leads-count="128"');
+    expect(markup).toContain('data-deposits-count="7"');
+    expect(markup).toContain('rounded-full');
+    expect(markup).toContain('bg-[#0067ff]');
+    expect(markup).toContain('ml-1.5');
+    expect(markup).toContain('min-w-8');
+    expect(markup).toContain('>128</span>');
+    expect(markup).not.toContain('99+');
+    expect(markup).not.toContain('shadow');
   });
 
   it('даёт раскрытым подписям доступную ширину и перенос строк', () => {
@@ -165,6 +209,7 @@ describe('Sidebar health summary', () => {
     );
 
     expect(markup).toContain('href="/system"');
+    expect(markup.indexOf('href="/system"')).toBeLessThan(markup.indexOf('</nav>'));
     expect(markup).toContain('Состояние системы');
     expect(markup).toContain('Требуется внимание');
     expect(markup).toContain('1/4');
@@ -173,13 +218,12 @@ describe('Sidebar health summary', () => {
     expect(markup).not.toContain('internal');
   });
 
-  it('показывает общий Avatar с фактическим именем пользователя', () => {
+  it('не дублирует аватар и данные профиля в боковом меню', () => {
     const markup = renderToStaticMarkup(
       createElement(Sidebar, { expanded: true, user, systemHealthSummary: summary }),
     );
 
-    expect(markup).toContain('role="img"');
-    expect(markup).toContain('aria-label="Администратор"');
-    expect(markup).toContain('size-9');
+    expect(markup).not.toContain('role="img"');
+    expect(markup).not.toContain(user.email);
   });
 });

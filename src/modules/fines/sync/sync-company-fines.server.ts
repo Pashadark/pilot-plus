@@ -6,6 +6,10 @@ import {
   createFineRatingInput,
   recordAutomaticRatingEvent,
 } from '@/modules/client-rating/automatic-events';
+import {
+  reconcileFineDepositReservation,
+  reserveFineFromDeposit,
+} from '@/modules/deposits/server/fine-reservation';
 import { normalizeRegistrationNumber } from '@/modules/vehicles/manage/validation';
 import { blindIndex, decryptField } from '@/services/security/field-encryption';
 
@@ -259,6 +263,31 @@ export async function syncCompanyFines(companyId: string) {
                   actorUserId: null,
                 },
                 select: { id: true },
+              });
+            }
+            if (
+              !existing &&
+              attribution.kind === 'MATCHED' &&
+              ['NEW', 'UNPAID', 'OVERDUE'].includes(persistedStatus)
+            ) {
+              await reserveFineFromDeposit(transaction, {
+                companyId: tenantId,
+                clientId: attribution.clientId,
+                rentalId: attribution.rentalId,
+                fineId: saved.id,
+                fineAmountMinor: fine.currentAmountMinor,
+                occurredAt: now,
+              });
+            }
+            if (existing && !exactChanged && assignment.rentalId && assignment.clientId) {
+              await reconcileFineDepositReservation(transaction, {
+                companyId: tenantId,
+                clientId: assignment.clientId,
+                rentalId: assignment.rentalId,
+                fineId: saved.id,
+                fineAmountMinor: fine.currentAmountMinor,
+                status: persistedStatus,
+                occurredAt: now,
               });
             }
             return { created: !existing };

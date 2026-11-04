@@ -85,3 +85,72 @@ async def test_staff_operation_uses_bounded_multipart_with_exact_rental_path():
     body = captured.read()
     assert b'inspectionVideo' in body
     assert b'dashboardPhoto' in body
+
+
+@pytest.mark.asyncio
+async def test_client_deposits_use_the_scoped_bot_endpoint():
+    captured = None
+
+    def handler(request: httpx.Request):
+        nonlocal captured
+        captured = request
+        return httpx.Response(200, json={"items": []})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        client = PilotApiClient("https://supapro.example.com", "service-secret", http=http)
+        await client.deposits("123")
+
+    assert captured.url.path == "/api/bot/v1/deposits"
+    assert captured.headers["X-Telegram-User-Id"] == "123"
+
+
+@pytest.mark.asyncio
+async def test_client_notification_worker_declares_its_audience():
+    captured = None
+
+    def handler(request: httpx.Request):
+        nonlocal captured
+        captured = request
+        return httpx.Response(200, json={"items": []})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        client = PilotApiClient("https://supapro.example.com", "service-secret", http=http)
+        await client.claim_notifications("supa-client-bot", "CLIENT")
+
+    assert captured.read().decode() == '{"workerId":"supa-client-bot","audience":"CLIENT"}'
+
+
+@pytest.mark.asyncio
+async def test_staff_return_reminder_uses_the_scoped_notification_endpoint():
+    captured = None
+
+    def handler(request: httpx.Request):
+        nonlocal captured
+        captured = request
+        return httpx.Response(202, json={"ok": True, "queued": True})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        client = PilotApiClient("https://supapro.example.com", "service-secret", http=http)
+        await client.remind_return("185185047", "rental-1")
+
+    assert captured.url.path == "/api/bot/v1/notifications/remind"
+    assert captured.headers["X-Telegram-User-Id"] == "185185047"
+    assert captured.read().decode() == '{"rentalId":"rental-1"}'
+
+
+@pytest.mark.asyncio
+async def test_staff_impound_warning_uses_the_scoped_notification_endpoint():
+    captured = None
+
+    def handler(request: httpx.Request):
+        nonlocal captured
+        captured = request
+        return httpx.Response(202, json={"ok": True, "queued": True})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        client = PilotApiClient("https://supapro.example.com", "service-secret", http=http)
+        await client.notify_client_impound("185185047", "rental-1")
+
+    assert captured.url.path == "/api/bot/v1/notifications/notify-client"
+    assert captured.headers["X-Telegram-User-Id"] == "185185047"
+    assert captured.read().decode() == '{"rentalId":"rental-1","reason":"IMPOUND_LOT"}'

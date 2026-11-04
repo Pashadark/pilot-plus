@@ -2,6 +2,7 @@ import type { PrismaClient } from '@/database/generated/prisma';
 import { decryptField, encryptField } from '@/services/security/field-encryption';
 import { reminderDue } from './dialogue-policy';
 import type { AssistantState } from './assistant-store';
+import { formatTelegramMessage, telegramSection } from '@/modules/bot-api/telegram-message';
 
 /** Call only after fresh authoritative chat history has been reconciled. */
 export async function queueAvitoReminder(
@@ -33,7 +34,27 @@ export async function queueAvitoReminder(
             eventKey: `avito-wait:${id}:${state.clock.episode}`,
             availableAt: now,
             payload: {
-              message: `Клиент Авито ждёт ответа менеджера · ${elapsed} мин.\nАвтоответ не заменяет ответ менеджера.\nЧат: https://www.avito.ru/profile/messenger/channel/${encodeURIComponent(row.chatId)}\nЗаявки: https://supapro.ru/leads`,
+              message: formatTelegramMessage({
+                title: '🟠 <b>Клиент Авито ждёт ответа</b>',
+                sections: [
+                  telegramSection('🕒', 'Ожидание', [`${elapsed} мин.`]),
+                  telegramSection('💬', 'Состояние', ['Автоответ не заменяет ответ менеджера']),
+                ],
+                action: 'Открыть чат и ответить клиенту',
+              }),
+              parseMode: 'HTML',
+              actions: [
+                {
+                  type: 'open_url',
+                  label: 'Открыть чат Авито',
+                  url: `https://www.avito.ru/profile/messenger/channel/${encodeURIComponent(row.chatId)}`,
+                },
+                {
+                  type: 'open_url',
+                  label: 'Открыть заявки',
+                  url: 'https://supapro.ru/leads',
+                },
+              ],
             },
           },
         ],

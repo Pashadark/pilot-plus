@@ -8,10 +8,11 @@ import { revalidatePath } from 'next/cache';
 
 import { prisma } from '@/database/prisma/client';
 import { formatDepositReturnedMessage } from '@/modules/bot-api/deposit-notifications';
+import { appendDepositEntry, getRentalDepositBalance } from '@/modules/deposits/server/ledger';
 import { requireRentalAccess, RentalAccessDeniedError } from '@/modules/rentals/server/access';
 
 import { paymentCommandSchema, signatureCommandSchema } from '../validation';
-import { parseDepositReturnInput } from './deposit-return';
+import { parseDepositReturnInput, planDepositReturnLedger } from './deposit-return';
 import { createRentalSettlementService } from './service';
 
 export type SettlementActionResult = { ok: true; message: string } | { ok: false; message: string };
@@ -142,6 +143,13 @@ export async function returnRentalDepositAction(
         returnedRubles: String(formData.get('returnedRubles') ?? ''),
         reason: String(formData.get('reason') ?? ''),
       });
+      const depositBalance = await getRentalDepositBalance(transaction, companyId, rental.id);
+      const ledgerPlan = planDepositReturnLedger({
+        cashMinor: depositBalance.cashMinor,
+        reservedMinor: depositBalance.reservedMinor,
+        withheldMinor: depositBalance.withheldMinor,
+        returnedMinor: resolution.returnedMinor,
+      });
       const operation = await transaction.rentalOperation.create({
         data: {
           companyId,
@@ -162,6 +170,63 @@ export async function returnRentalDepositAction(
           depositResolutionReason: resolution.reason || null,
         },
         select: { id: true },
+      });
+      if (ledgerPlan.reservationDebtMinor > 0n) {
+        const fineEntries = await transaction.depositLedgerEntry.findMany({
+          where: { companyId, rentalId: rental.id, fineId: { not: null } },
+          select: { fineId: true, reservedDeltaMinor: true, occurredAt: true },
+          orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+        });
+        const reservations = new Map<string, bigint>();
+        for (const entry of fineEntries) {
+          if (!entry.fineId) continue;
+          reservations.set(
+            entry.fineId,
+            (reservations.get(entry.fineId) ?? 0n) + entry.reservedDeltaMinor,
+          );
+        }
+        let remainingToDebt = ledgerPlan.reservationDebtMinor;
+        for (const [fineId, reservedMinor] of reservations) {
+          if (remainingToDebt === 0n) break;
+          if (reservedMinor <= 0n) continue;
+          const movedMinor = reservedMinor < remainingToDebt ? reservedMinor : remainingToDebt;
+          await appendDepositEntry(transaction, {
+            companyId,
+            clientId: rental.clientId,
+            rentalId: rental.id,
+            fineId,
+            operationId: operation.id,
+            kind: 'FINE_RESERVATION_ADJUSTMENT',
+            source: 'STAFF',
+            cashDeltaMinor: 0n,
+            reservedDeltaMinor: -movedMinor,
+            withheldDeltaMinor: 0n,
+            debtDeltaMinor: movedMinor,
+            reason: 'Залог возвращён клиенту: резерв штрафа переведён в задолженность',
+            metadata: { depositReturnOperationId: operation.id },
+            idempotencyKey: `deposit-return-reservation-debt:${operation.id}:${fineId}`,
+            actorUserId: access.user.id,
+            occurredAt,
+          });
+          remainingToDebt -= movedMinor;
+        }
+        if (remainingToDebt > 0n) throw new Error('INVALID_DEPOSIT_LEDGER');
+      }
+      await appendDepositEntry(transaction, {
+        companyId,
+        clientId: rental.clientId,
+        rentalId: rental.id,
+        operationId: operation.id,
+        kind: 'DEPOSIT_RETURN',
+        source: 'STAFF',
+        cashDeltaMinor: -resolution.returnedMinor,
+        reservedDeltaMinor: 0n,
+        withheldDeltaMinor: ledgerPlan.additionalWithheldMinor,
+        debtDeltaMinor: 0n,
+        reason: resolution.reason || 'Возврат залога сотрудником',
+        idempotencyKey: `deposit-return:${operation.id}`,
+        actorUserId: access.user.id,
+        occurredAt,
       });
       await transaction.auditLog.create({
         data: {
@@ -215,7 +280,17 @@ export async function returnRentalDepositAction(
             chatId: binding.telegramChatId,
             eventKey: `deposit-return:${operation.id}:group`,
             template: 'DEPOSIT_RETURNED',
-            payload: { message: messageText, parseMode: 'HTML' },
+            payload: {
+              message: messageText,
+              parseMode: 'HTML',
+              actions: [
+                {
+                  type: 'contract_url',
+                  label: '📄 Договор',
+                  url: `https://supapro.ru/rentals/${encodeURIComponent(rentalId)}`,
+                },
+              ],
+            },
             availableAt: occurredAt,
           },
         ],

@@ -1,12 +1,12 @@
 import type { Metadata } from 'next';
 
 import { ThemeProvider } from '@/shared/providers/ThemeProvider';
+import { appearanceBootstrap } from '@/shared/providers/appearance-bootstrap';
+import { CookieConsent } from '@/shared/components/CookieConsent';
 
 import './globals.css';
-import './material.css';
-
-const themeInitializer =
-  '(function(){try{var savedTheme=localStorage.getItem("pilot-theme");var savedInterface=localStorage.getItem("pilot-interface");document.documentElement.dataset.theme=savedTheme==="dark"?"dark":"light";document.documentElement.dataset.interface=savedInterface==="classic"||savedInterface==="material"?savedInterface:"obsidian"}catch(_){document.documentElement.dataset.theme="light";document.documentElement.dataset.interface="obsidian"}})()';
+import './graphite.css';
+import './workday.css';
 
 export const metadata: Metadata = {
   title: 'СУПА ПРО',
@@ -15,12 +15,15 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ru" suppressHydrationWarning>
+    <html lang="ru" data-interface="graphite" data-theme="dark" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitializer }} />
+        <script dangerouslySetInnerHTML={{ __html: appearanceBootstrap }} />
       </head>
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          <CookieConsent />
+        </ThemeProvider>
       </body>
     </html>
   );

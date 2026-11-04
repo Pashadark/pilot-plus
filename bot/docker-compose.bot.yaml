@@ -14,6 +14,22 @@ services:
       redis:
         condition: service_healthy
 
+  telegram-client-bot:
+    build:
+      context: ..
+      dockerfile: bot/Dockerfile
+    command: ["python", "-m", "bot.client_main"]
+    env_file: ${SUPAPRO_CLIENT_BOT_ENV_FILE:-/etc/supapro-client-bot.env}
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    depends_on:
+      redis:
+        condition: service_healthy
+
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]

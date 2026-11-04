@@ -39,7 +39,13 @@ it('queues one staff message and marks the waiting episode in the same transacti
     template: 'AVITO_WAITING',
     chatId: '-123',
     eventKey: 'avito-wait:d:m1',
-    payload: { message: expect.stringContaining('Клиент Авито ждёт ответа менеджера') },
+    payload: {
+      message: expect.stringContaining('Клиент Авито ждёт ответа'),
+      parseMode: 'HTML',
+      actions: expect.arrayContaining([
+        expect.objectContaining({ type: 'open_url', label: 'Открыть чат Авито' }),
+      ]),
+    },
   });
   expect(tx.avitoDialogue.update).toHaveBeenCalled();
   tx.avitoDialogue.findUnique.mockResolvedValueOnce({

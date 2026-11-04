@@ -7,7 +7,9 @@ import { prisma } from '@/database/prisma/client';
 import { FineAccessDeniedError, getFineAccess } from '../access';
 import { selectFineAttribution } from '../sync/attribute-fine';
 import { loadTollDebts } from './toll-queries';
+import { buildFineSearchWhere, matchesTollSearch } from './search';
 import type { FineItem } from '../components/FinesPage';
+import { deadlineDay, deadlineWeek } from '../deadline-queue';
 
 const statuses = new Set<FineStatus>(['NEW', 'UNPAID', 'PAID', 'CANCELLED', 'OVERDUE']);
 const candidateWindowMs = 72 * 60 * 60 * 1000;
@@ -21,9 +23,16 @@ export interface FineListFilters {
   vehicleId?: string;
   clientId?: string;
   page?: string;
+  pageSize?: string;
+  discountDay?: string;
 }
 
-const pageSize = 24;
+const allowedPageSizes = new Set([50, 100, 150]);
+
+function parsePageSize(value: string | undefined) {
+  const parsed = Number.parseInt(value ?? '50', 10);
+  return allowedPageSizes.has(parsed) ? parsed : 50;
+}
 
 function parseDay(value: string | undefined, endOfDay = false) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) return undefined;
@@ -89,7 +98,8 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
   const offenseFrom = parseDay(filters.offenseFrom);
   const offenseTo = parseDay(filters.offenseTo, true);
   const parsedPage = Number.parseInt(filters.page ?? '1', 10);
-  const page = Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const requestedPage = Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const pageSize = parsePageSize(filters.pageSize);
   const companyWhere = selectedCompanyId
     ? { companyId: selectedCompanyId }
     : { companyId: { in: companyIds } };
@@ -106,16 +116,7 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
           },
         }
       : {}),
-    ...(query
-      ? {
-          OR: [
-            { decreeNumber: { contains: query, mode: 'insensitive' } },
-            { vehicle: { registrationNumberNormalized: { contains: query } } },
-            { client: { lastName: { contains: query, mode: 'insensitive' } } },
-            { rental: { contractNumber: { contains: query, mode: 'insensitive' } } },
-          ],
-        }
-      : {}),
+    ...(buildFineSearchWhere(query) ?? {}),
   };
   const now = new Date();
   const tollResult = await loadTollDebts(scopedCompanyIds);
@@ -126,14 +127,10 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
       (!clientId || item.clientId === clientId) &&
       (!offenseFrom || new Date(item.offenseAt) >= offenseFrom) &&
       (!offenseTo || new Date(item.offenseAt) <= offenseTo) &&
-      (!query ||
-        [item.vehicleLabel, item.clientLabel, item.rentalLabel, item.roadLabel, item.description]
-          .filter(Boolean)
-          .join(' ')
-          .toLocaleLowerCase('ru')
-          .includes(query.toLocaleLowerCase('ru'))),
+      matchesTollSearch(item, query),
   );
   const discountSoon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const urgentDiscountDeadline = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
   const withinFilteredScope = (constraint: Prisma.FineWhereInput): Prisma.FineWhereInput => ({
     AND: [where, constraint],
   });
@@ -175,7 +172,12 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
       b.offenseAt.getTime() - a.offenseAt.getTime() ||
       b.id.localeCompare(a.id),
   );
-  const allPageIds = allPriorities
+  const deadlineDays = deadlineWeek(priorities.map(fine => ({ ...fine, discountExpiresAt: fine.discountExpiresAt?.toISOString(), currentAmountMinor: fine.currentAmountMinor.toString(), originalAmountMinor: fine.originalAmountMinor.toString() })), now.toISOString());
+  const selectedDiscountDay = deadlineDays.some(day => day.day === filters.discountDay) ? filters.discountDay : undefined;
+  const filteredPriorities = selectedDiscountDay ? allPriorities.filter(fine => Number.isFinite(deadline(fine)) && deadlineDay(fine.discountExpiresAt!.toISOString()) === selectedDiscountDay) : allPriorities;
+  const availablePages = Math.max(1, Math.ceil(filteredPriorities.length / pageSize));
+  const page = Math.min(requestedPage, availablePages);
+  const allPageIds = filteredPriorities
     .slice((page - 1) * pageSize, page * pageSize)
     .map((fine) => fine.id);
   const pageIds = allPageIds.filter((id) => !id.startsWith('toll:'));
@@ -184,8 +186,11 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
     records,
     total,
     newCount,
+    newMetrics,
     unpaidMetrics,
     unassignedCount,
+    unassignedMetrics,
+    urgentMetrics,
     discountEndingSoonCount,
     bailiffRiskCount,
   ] = await Promise.all([
@@ -223,12 +228,34 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
     prisma.fine.count({ where }),
     prisma.fine.count({ where: withinFilteredScope({ status: 'NEW' }) }),
     prisma.fine.aggregate({
+      where: withinFilteredScope({ status: 'NEW' }),
+      _count: { _all: true },
+      _sum: { currentAmountMinor: true },
+    }),
+    prisma.fine.aggregate({
       where: withinFilteredScope({ status: { in: ['NEW', 'UNPAID', 'OVERDUE'] } }),
       _count: { _all: true },
       _sum: { currentAmountMinor: true },
     }),
     prisma.fine.count({
       where: withinFilteredScope({ OR: [{ vehicleId: null }, { clientId: null }] }),
+    }),
+    prisma.fine.aggregate({
+      where: withinFilteredScope({ OR: [{ vehicleId: null }, { clientId: null }] }),
+      _count: { _all: true },
+      _sum: { currentAmountMinor: true },
+    }),
+    prisma.fine.aggregate({
+      where: withinFilteredScope({
+        status: { in: ['NEW', 'UNPAID', 'OVERDUE'] },
+        OR: [
+          { status: 'OVERDUE' },
+          { toBailiff: true },
+          { discountExpiresAt: { gte: now, lte: urgentDiscountDeadline } },
+        ],
+      }),
+      _count: { _all: true },
+      _sum: { currentAmountMinor: true },
     }),
     prisma.fine.count({
       where: withinFilteredScope({ discountExpiresAt: { gte: now, lte: discountSoon } }),
@@ -297,6 +324,7 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
     return {
       id: fine.id,
       companyId: fine.companyId,
+      vehicleId: fine.vehicleId,
       decreeNumber: fine.decreeNumber,
       decreeAt: fine.decreeAt?.toISOString() ?? null,
       assignmentConfirmedAt: fine.assignmentConfirmedAt?.toISOString() ?? null,
@@ -338,6 +366,7 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
   );
   return {
     companies,
+    deadlineDays,
     selectedCompanyId,
     vehicles: vehicles.map((vehicle) => ({
       id: vehicle.id,
@@ -355,12 +384,14 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
       offenseTo: filters.offenseTo,
       vehicleId,
       clientId,
+      pageSize: String(pageSize),
+      discountDay: selectedDiscountDay,
     },
     pagination: {
       page,
       pageSize,
-      total: total + tolls.length,
-      totalPages: Math.max(1, Math.ceil((total + tolls.length) / pageSize)),
+      total: selectedDiscountDay ? filteredPriorities.length : total + tolls.length,
+      totalPages: availablePages,
     },
     tollsUnavailable: tollResult.unavailable,
     canSync: canManage,
@@ -372,14 +403,27 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
     fines,
     summary: {
       newCount,
+      newAmountMinor: BigInt(newMetrics._sum.currentAmountMinor ?? 0).toString(),
       unpaidCount: unpaidMetrics._count._all + tolls.length,
       unpaidAmountMinor: (
         BigInt(unpaidMetrics._sum.currentAmountMinor ?? 0) +
         tolls.reduce((sum, t) => sum + BigInt(t.currentAmountMinor), BigInt(0))
       ).toString(),
       unassignedCount: unassignedCount + tolls.filter((t) => !t.assigned).length,
+      unassignedAmountMinor: (
+        BigInt(unassignedMetrics._sum.currentAmountMinor ?? 0) +
+        tolls
+          .filter((t) => !t.assigned)
+          .reduce((sum, t) => sum + BigInt(t.currentAmountMinor), BigInt(0))
+      ).toString(),
+      urgentCount: urgentMetrics._count._all,
+      urgentAmountMinor: BigInt(urgentMetrics._sum.currentAmountMinor ?? 0).toString(),
       discountEndingSoonCount,
       bailiffRiskCount,
+      tollCount: tolls.length,
+      tollAmountMinor: tolls
+        .reduce((sum, toll) => sum + BigInt(toll.currentAmountMinor), BigInt(0))
+        .toString(),
     },
   };
 }

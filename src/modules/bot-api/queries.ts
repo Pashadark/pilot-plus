@@ -1,4 +1,5 @@
 import { prisma } from '@/database/prisma/client';
+import { projectDepositBalance } from '@/modules/deposits/domain/balance';
 
 import { BotApiError } from './auth';
 import { signRentalDocumentGrant } from './document-grants';
@@ -25,8 +26,45 @@ export interface BotRentalSummary {
   documentsReady: boolean;
 }
 
+export interface BotDepositSummary {
+  rentalId: string;
+  contractNumber: string | null;
+  status: string;
+  vehicle: { make: string; model: string; registrationNumber: string };
+  currency: string;
+  initialMinor: string;
+  cashMinor: string;
+  reservedMinor: string;
+  withheldMinor: string;
+  availableMinor: string;
+  debtMinor: string;
+  returnDueOn: string;
+  history: Array<{
+    id: string;
+    kind: string;
+    reason: string | null;
+    cashDeltaMinor: string;
+    reservedDeltaMinor: string;
+    withheldDeltaMinor: string;
+    debtDeltaMinor: string;
+    occurredAt: string;
+  }>;
+}
+
 type IdentityDb = Pick<typeof prisma, 'telegramIdentity' | 'companyMember'>;
 type RentalDb = Pick<typeof prisma, 'rental'>;
+
+function addBusinessDays(value: Date, numberOfDays: number): string {
+  const date = new Date(
+    Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate(), 12),
+  );
+  let added = 0;
+  while (added < numberOfDays) {
+    date.setUTCDate(date.getUTCDate() + 1);
+    if (date.getUTCDay() !== 0 && date.getUTCDay() !== 6) added += 1;
+  }
+  return date.toISOString().slice(0, 10);
+}
 
 export async function resolveBotIdentity(
   telegramUserId: string,
@@ -123,6 +161,73 @@ export async function listClientRentals(
     depositMinor: rental.depositMinor?.toString() ?? null,
     documentsReady: rental.documentGenerations.length > 0,
   }));
+}
+
+export async function listClientDepositBalances(
+  identity: BotIdentityContext,
+  database: RentalDb = prisma,
+): Promise<BotDepositSummary[]> {
+  const clientId = requireClient(identity);
+  const rentals = await database.rental.findMany({
+    where: { companyId: identity.companyId, clientId },
+    orderBy: [{ startsAt: 'desc' }, { id: 'desc' }],
+    take: 50,
+    select: {
+      id: true,
+      contractNumber: true,
+      status: true,
+      endsAt: true,
+      completedAt: true,
+      depositMinor: true,
+      currency: true,
+      vehicle: { select: { make: true, modelName: true, model: true, registrationNumber: true } },
+      depositLedgerEntries: {
+        orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+        select: {
+          id: true,
+          kind: true,
+          reason: true,
+          cashDeltaMinor: true,
+          reservedDeltaMinor: true,
+          withheldDeltaMinor: true,
+          debtDeltaMinor: true,
+          occurredAt: true,
+        },
+      },
+    },
+  });
+
+  return rentals.map((rental) => {
+    const balance = projectDepositBalance(rental.depositLedgerEntries);
+    return {
+      rentalId: rental.id,
+      contractNumber: rental.contractNumber,
+      status: rental.status,
+      vehicle: {
+        make: rental.vehicle.make ?? '',
+        model: rental.vehicle.modelName ?? rental.vehicle.model,
+        registrationNumber: rental.vehicle.registrationNumber ?? '',
+      },
+      currency: rental.currency,
+      initialMinor: (rental.depositMinor ?? 0n).toString(),
+      cashMinor: balance.cashMinor.toString(),
+      reservedMinor: balance.reservedMinor.toString(),
+      withheldMinor: balance.withheldMinor.toString(),
+      availableMinor: balance.availableMinor.toString(),
+      debtMinor: balance.debtMinor.toString(),
+      returnDueOn: addBusinessDays(rental.completedAt ?? rental.endsAt, 21),
+      history: rental.depositLedgerEntries.map((entry) => ({
+        id: entry.id,
+        kind: entry.kind,
+        reason: entry.reason,
+        cashDeltaMinor: entry.cashDeltaMinor.toString(),
+        reservedDeltaMinor: entry.reservedDeltaMinor.toString(),
+        withheldDeltaMinor: entry.withheldDeltaMinor.toString(),
+        debtDeltaMinor: entry.debtDeltaMinor.toString(),
+        occurredAt: entry.occurredAt.toISOString(),
+      })),
+    };
+  });
 }
 
 export async function createRentalDocumentGrant(

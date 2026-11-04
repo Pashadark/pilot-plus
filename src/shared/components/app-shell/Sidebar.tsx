@@ -2,14 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FiActivity, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { useState } from 'react';
+import { FiChevronDown, FiChevronLeft, FiChevronRight, FiLogOut } from 'react-icons/fi';
 
 import type { SafeUser } from '@/modules/auth/types';
 import type { SystemHealthSummary } from '@/modules/system-health/types';
-import { Avatar } from '@/shared/ui';
+import { logoutAction } from '@/modules/auth/actions';
 import { IconButton } from '@/shared/ui/IconButton';
 
-import { navigation } from './navigation';
+import { getVisibleNavigation } from './navigation';
 
 interface SidebarProps {
   expanded?: boolean;
@@ -17,6 +18,9 @@ interface SidebarProps {
   onToggle?: () => void;
   systemHealthSummary: SystemHealthSummary;
   user: SafeUser;
+  openFineCount?: number;
+  openLeadCount?: number;
+  openDepositCount?: number;
 }
 
 const healthPresentation: Record<SystemHealthSummary['state'], { label: string; color: string }> = {
@@ -31,14 +35,13 @@ export function Sidebar({
   onToggle,
   systemHealthSummary,
   user,
+  openFineCount = 0,
+  openLeadCount = 0,
+  openDepositCount = 0,
 }: SidebarProps) {
   const pathname = usePathname();
-  const visibleNavigation = navigation.filter(
-    (item) =>
-      (item.href !== '/system' || user.role === 'SUPER_ADMIN') &&
-      (!item.adminOnly || user.canAccessAdmin) &&
-      (!item.requiredCapability || user.capabilities?.includes(item.requiredCapability)),
-  );
+  const [closedGroups, setClosedGroups] = useState<string[]>([]);
+  const visibleNavigation = getVisibleNavigation(user);
   const navigationGroups = [
     {
       label: 'Работа',
@@ -49,18 +52,28 @@ export function Sidebar({
     {
       label: 'Операции',
       items: visibleNavigation.filter((item) =>
-        ['/fines', '/maintenance', '/wash', '/devices', '/events'].includes(item.href),
+        [
+          '/statistics',
+          '/fines',
+          '/deposits',
+          '/maintenance',
+          '/wash',
+          '/devices',
+          '/events',
+        ].includes(item.href),
       ),
     },
     {
       label: 'Система',
-      items: visibleNavigation.filter((item) => ['/admin', '/ui-kit'].includes(item.href)),
+      items: visibleNavigation.filter((item) =>
+        ['/admin', '/system', '/ui-kit'].includes(item.href),
+      ),
     },
   ].filter((group) => group.items.length > 0);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-20 shrink-0 items-center overflow-hidden border-b px-4">
+      <div className="graphite-sidebar-brand flex h-20 shrink-0 items-center overflow-hidden border-b px-4">
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--color-primary)] text-base font-black text-white">
             СП
@@ -78,23 +91,44 @@ export function Sidebar({
       <nav aria-label="Основная навигация" className="flex-1 overflow-y-auto px-3 py-3">
         {navigationGroups.map((group) => (
           <section key={group.label} className="sidebar-navigation-group">
-            <p
+            <button
+              type="button"
+              aria-label={`${group.label}: разделы меню`}
+              aria-expanded={!closedGroups.includes(group.label)}
+              onClick={() =>
+                setClosedGroups((current) =>
+                  current.includes(group.label)
+                    ? current.filter((label) => label !== group.label)
+                    : [...current, group.label],
+                )
+              }
               data-navigation-label="true"
-              className={`sidebar-navigation-group-label overflow-hidden px-3 text-[10px] font-semibold tracking-[0.12em] text-[var(--color-text-muted)] uppercase transition-[height,opacity,padding] duration-200 ${expanded ? 'h-5 pb-1 opacity-100' : 'h-0 p-0 opacity-0'}`}
+              tabIndex={expanded ? 0 : -1}
+              className={`sidebar-navigation-group-label flex w-full cursor-pointer items-center justify-between overflow-hidden px-3 text-[10px] font-semibold tracking-[0.12em] text-[var(--color-text-muted)] uppercase transition-[height,opacity,padding] duration-200 ${expanded ? 'h-8 pb-1 opacity-100' : 'h-0 p-0 opacity-0'}`}
             >
               {group.label}
-            </p>
-            <div className="space-y-1">
+              <FiChevronDown
+                aria-hidden="true"
+                className={`size-3 transition-transform ${closedGroups.includes(group.label) ? '-rotate-90' : ''}`}
+              />
+            </button>
+            <div className="space-y-1" hidden={expanded && closedGroups.includes(group.label)}>
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const isCurrent = pathname === item.href;
+                const isCurrent =
+                  pathname === item.href ||
+                  (item.href !== '/' && pathname.startsWith(`${item.href}/`));
 
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     aria-current={isCurrent ? 'page' : undefined}
-                    aria-label={item.label}
+                    aria-label={
+                      item.href === '/system'
+                        ? `Состояние системы: ${healthPresentation[systemHealthSummary.state].label}, ${systemHealthSummary.count} из ${systemHealthSummary.total}`
+                        : item.label
+                    }
                     onClick={onNavigate}
                     className={`relative flex min-h-11 items-center gap-3 overflow-hidden rounded-[var(--radius-md)] px-3 text-[13px] font-medium transition-colors duration-[var(--motion-fast)] ${
                       isCurrent
@@ -112,6 +146,36 @@ export function Sidebar({
                       }`}
                     >
                       {item.label}
+                      {item.href === '/fines' && openFineCount > 0 ? (
+                        <span
+                          data-fines-count={openFineCount}
+                          className="ml-1.5 inline-flex h-5 min-w-8 items-center justify-center rounded-full bg-[#0067ff] px-2 align-middle text-[10px] leading-none font-bold text-white tabular-nums"
+                        >
+                          {openFineCount}
+                        </span>
+                      ) : null}
+                      {item.href === '/leads' && openLeadCount > 0 ? (
+                        <span
+                          data-leads-count={openLeadCount}
+                          className="ml-1.5 inline-flex h-5 min-w-8 items-center justify-center rounded-full bg-[#0067ff] px-2 align-middle text-[10px] leading-none font-bold text-white tabular-nums"
+                        >
+                          {openLeadCount}
+                        </span>
+                      ) : null}
+                      {item.href === '/deposits' && openDepositCount > 0 ? (
+                        <span
+                          data-deposits-count={openDepositCount}
+                          className="ml-1.5 inline-flex h-5 min-w-8 items-center justify-center rounded-full bg-[#0067ff] px-2 align-middle text-[10px] leading-none font-bold text-white tabular-nums"
+                        >
+                          {openDepositCount}
+                        </span>
+                      ) : null}
+                      {item.href === '/system' && (
+                        <small className="mt-1 block text-[10px] text-[var(--color-text-secondary)]">
+                          {healthPresentation[systemHealthSummary.state].label}{' '}
+                          {systemHealthSummary.count}/{systemHealthSummary.total}
+                        </small>
+                      )}
                     </span>
                   </Link>
                 );
@@ -120,48 +184,17 @@ export function Sidebar({
           </section>
         ))}
       </nav>
-      <div className="border-t p-3">
-        {user.role === 'SUPER_ADMIN' && (
-          <Link
-            href="/system"
-            aria-current={pathname === '/system' ? 'page' : undefined}
-            aria-label={`Состояние системы: ${healthPresentation[systemHealthSummary.state].label}, ${systemHealthSummary.count} из ${systemHealthSummary.total}`}
-            onClick={onNavigate}
-            className="mb-1 flex min-h-12 items-center gap-3 overflow-hidden rounded-[var(--radius-md)] px-2 transition-colors hover:bg-[var(--color-elevated)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+      <div className="graphite-sidebar-footer border-t p-3">
+        <form action={logoutAction}>
+          <button
+            type="submit"
+            aria-label="Выйти"
+            className="flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-[var(--radius-md)] px-3 text-sm text-[var(--color-navigation-muted)] transition-colors hover:bg-[var(--color-elevated)] hover:text-[var(--color-text)]"
           >
-            <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-[var(--color-elevated)] text-[var(--color-navigation-muted)]">
-              <FiActivity aria-hidden="true" />
-              <span
-                aria-hidden="true"
-                className={`absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-[var(--color-navigation)] ${healthPresentation[systemHealthSummary.state].color}`}
-              />
-            </span>
-            <div
-              className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap transition-all ${expanded ? 'w-28 opacity-100' : 'w-0 opacity-0'}`}
-            >
-              <p className="truncate text-xs font-semibold">Состояние системы</p>
-              <p className="truncate text-[10px] text-[var(--color-text-secondary)]">
-                {healthPresentation[systemHealthSummary.state].label} · {systemHealthSummary.count}/
-                {systemHealthSummary.total}
-              </p>
-            </div>
-          </Link>
-        )}
-        <Link
-          href="/profile"
-          aria-current={pathname === '/profile' ? 'page' : undefined}
-          aria-label="Открыть профиль"
-          onClick={onNavigate}
-          className="flex min-h-12 items-center gap-3 overflow-hidden rounded-[var(--radius-md)] px-2 transition-colors hover:bg-[var(--color-elevated)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
-        >
-          <Avatar name={user.name} src={user.avatarUrl} size="sm" />
-          <div
-            className={`min-w-0 flex-1 overflow-hidden whitespace-nowrap transition-all ${expanded ? 'w-28 opacity-100' : 'w-0 opacity-0'}`}
-          >
-            <p className="truncate text-xs font-semibold">{user.name}</p>
-            <p className="truncate text-[10px] text-[var(--color-text-secondary)]">{user.email}</p>
-          </div>
-        </Link>
+            <FiLogOut aria-hidden="true" className="size-5 shrink-0" />
+            {expanded && <span>Выйти</span>}
+          </button>
+        </form>
         {onToggle ? (
           <div className="mt-1 flex justify-center">
             <IconButton

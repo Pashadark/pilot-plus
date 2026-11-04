@@ -1,6 +1,7 @@
 import { prisma } from '@/database/prisma/client';
 import { BotApiError } from './auth';
 import type { BotIdentityContext } from './queries';
+import { formatTelegramMessage, telegramSection } from './telegram-message';
 const escape = (value: string) =>
   value
     .replaceAll('&', '&amp;')
@@ -50,8 +51,27 @@ export async function sendClientSupport(
             eventKey: prefix + input.key,
             template: 'CLIENT_SUPPORT_REQUEST',
             payload: {
-              message: `💬 <b>Вопрос клиента</b>\n👤 ${escape(identity.displayName)}${fine ? `\nПостановление № ${escape(fine.decreeNumber)}` : ''}\n\n${escape(input.text)}\n\n<a href="https://supapro.ru/clients/${encodeURIComponent(identity.clientId!)}">Карточка клиента</a>`,
+              message: formatTelegramMessage({
+                title: '💬 <b>Новый вопрос клиента</b>',
+                sections: [
+                  telegramSection('👤', 'Клиент', [escape(identity.displayName)]),
+                  telegramSection(
+                    '📄',
+                    'По вопросу',
+                    fine ? [`Штраф № <code>${escape(fine.decreeNumber)}</code>`] : [],
+                  ),
+                  telegramSection('💬', 'Сообщение', [escape(input.text)]),
+                ],
+                action: 'Проверить информацию и ответить клиенту',
+              }),
               parseMode: 'HTML',
+              actions: [
+                {
+                  type: 'open_url',
+                  label: 'Открыть клиента',
+                  url: `https://supapro.ru/clients/${encodeURIComponent(identity.clientId!)}`,
+                },
+              ],
             },
             availableAt: new Date(),
           },

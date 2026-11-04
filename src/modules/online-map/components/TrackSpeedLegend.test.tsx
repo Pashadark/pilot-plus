@@ -16,3 +16,16 @@ it('объясняет все четыре диапазона скорости �
   expect(screen.getByText('70–99')).toBeTruthy();
   expect(screen.getByText('100+ км/ч')).toBeTruthy();
 });
+
+it('объясняет поинты превышения, резкого разгона и торможения', () => {
+  render(<TrackSpeedLegend />);
+
+  expect(screen.getByText('Превышение')).toBeTruthy();
+  expect(screen.getByText('Резкий разгон')).toBeTruthy();
+  expect(screen.getByText('Резкое торможение')).toBeTruthy();
+  expect(
+    screen.getByText(
+      'Красный участок показывает высокую скорость. Красный поинт отмечает превышение, оранжевый — резкий разгон, синий — резкое торможение. Это GPS-события, а не подтверждённые штрафы.',
+    ),
+  ).toBeTruthy();
+});

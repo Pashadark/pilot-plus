@@ -29,4 +29,11 @@ describe('parseRussianPassportOcr', () => {
   it('оставляет отсутствующие поля пустыми', () => {
     expect(parseRussianPassportOcr('неразборчивое изображение')).toEqual({});
   });
+
+  it('собирает серию и номер, когда OCR разделил каждую цифру пробелами', () => {
+    expect(parseRussianPassportOcr('45 18 6 2 1 4 3 1')).toMatchObject({
+      passportSeries: '4518',
+      passportNumber: '621431',
+    });
+  });
 });

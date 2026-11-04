@@ -1,4 +1,3 @@
-from html import escape
 from time import time
 
 from aiogram import F, Router
@@ -6,8 +5,9 @@ from aiogram.filters import CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, ReplyKeyboardRemove
 
-from bot.keyboards.client import client_main_menu, contact_keyboard
+from bot.keyboards.client import contact_keyboard
 from bot.keyboards.staff import staff_main_menu
+from bot.messages.client_states import send_unresolved_rental
 from bot.services.errors import PilotApiError
 from bot.states.authorization import ClientAuthorization
 from bot.handlers.customer import show_client_home
@@ -36,12 +36,13 @@ async def start(message: Message, command: CommandObject, pilot_api, state: FSMC
             return
         await message.answer("Бот ещё не привязан. Попросите персональную ссылку у сотрудника СУПА ПРО.")
         return
-    name = escape(str(profile.get("displayName") or "клиент"))
     if profile.get('kind') == 'CLIENT':
         await show_client_home(message, pilot_api, telegram_id)
         return
-    markup = client_main_menu() if profile.get("kind") == "CLIENT" else staff_main_menu()
-    await message.answer(f"Здравствуйте, {name}! Выберите действие:", reply_markup=markup)
+    await message.answer(
+        f"Здравствуйте, {profile.get('displayName') or 'сотрудник'}! Выберите рабочий раздел СУПА ПРО:",
+        reply_markup=staff_main_menu(),
+    )
 
 
 @router.message(ClientAuthorization.contact, F.contact)
@@ -63,7 +64,7 @@ async def verify_contact(message: Message, state: FSMContext, pilot_api) -> None
         if error.code == "CONTACT_MISMATCH":
             await message.answer("Телефон не совпал с данными клиента. Попросите менеджера проверить номер в СУПА ПРО. Доступ не открыт.")
         elif error.code == "MANAGER_REVIEW_REQUIRED":
-            await message.answer("Не удалось однозначно определить вашу аренду. Попросите менеджера проверить данные и прислать персональную ссылку. Доступ пока закрыт.")
+            await send_unresolved_rental(message)
         else:
             await message.answer("Не удалось подтвердить доступ. Попробуйте позже или обратитесь к менеджеру.")
         return

@@ -28,7 +28,7 @@ beforeEach(() => {
     configurable: true,
     value: vi.fn().mockReturnValue({
       matches: false,
-      media: '(min-width: 1280px)',
+      media: '(min-width: 1024px)',
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     }),
@@ -38,7 +38,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ShellFrame', () => {
-  it('keeps the sidebar compact below the wide desktop breakpoint', () => {
+  it('keeps the sidebar compact below the desktop breakpoint', () => {
     render(
       <ThemeProvider>
         <ShellFrame
@@ -67,12 +67,12 @@ describe('ShellFrame', () => {
     expect(screen.getByTestId('desktop-sidebar').dataset.expanded).not.toBe('true');
   });
 
-  it('honours the saved expanded preference on a wide desktop', () => {
+  it('uses the standard desktop breakpoint so ordinary office windows can expand it', () => {
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       value: vi.fn().mockReturnValue({
         matches: true,
-        media: '(min-width: 1280px)',
+        media: '(min-width: 1024px)',
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
       }),
@@ -97,5 +97,6 @@ describe('ShellFrame', () => {
     );
 
     expect(screen.getByTestId('app-shell').dataset.sidebarExpanded).toBe('true');
+    expect(window.matchMedia).toHaveBeenCalledWith('(min-width: 1024px)');
   });
 });

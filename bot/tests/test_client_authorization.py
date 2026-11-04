@@ -2,7 +2,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-
 from bot.handlers.start import start, verify_contact
 from bot.services.errors import PilotApiError
 
@@ -27,6 +26,27 @@ async def test_first_visit_without_invite_requests_own_contact():
     api = SimpleNamespace(profile=AsyncMock(side_effect=PilotApiError("IDENTITY_REQUIRED", 401)))
     await start(msg, SimpleNamespace(args=None), api, state)
     assert msg.answer.call_args.kwargs["reply_markup"].keyboard[0][0].request_contact is True
+
+
+@pytest.mark.asyncio
+async def test_single_bot_shows_staff_menu_to_existing_staff_identity():
+    msg = message()
+    state = AsyncMock()
+    api = SimpleNamespace(
+        profile=AsyncMock(return_value={"kind": "STAFF", "displayName": "Павел Седов"})
+    )
+
+    await start(msg, SimpleNamespace(args=None), api, state)
+
+    msg.answer.assert_awaited_once()
+    assert "рабочий раздел" in msg.answer.call_args.args[0].lower()
+    labels = [
+        button.text
+        for row in msg.answer.call_args.kwargs["reply_markup"].keyboard
+        for button in row
+    ]
+    assert "Аренды" in labels
+    assert "Штрафы" in labels
 
 
 @pytest.mark.asyncio

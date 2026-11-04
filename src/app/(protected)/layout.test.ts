@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   getRentalAccessForUser: vi.fn(),
   getFineAccessForUser: vi.fn(),
   listNotificationsForCurrentUser: vi.fn(),
+  getUrgentDepositSidebarCount: vi.fn(),
   requireAdmin: vi.fn(),
 }));
 
@@ -18,8 +19,17 @@ vi.mock('@/modules/rentals/server/access', () => ({
   getRentalAccessForUser: mocks.getRentalAccessForUser,
 }));
 vi.mock('@/modules/fines/access', () => ({ getFineAccessForUser: mocks.getFineAccessForUser }));
+vi.mock('@/modules/fines/server/sidebar-count', () => ({
+  getOpenFineSidebarCount: vi.fn().mockResolvedValue(0),
+}));
+vi.mock('@/modules/leads/sidebar-count', () => ({
+  getOpenLeadSidebarCount: vi.fn().mockResolvedValue(0),
+}));
+vi.mock('@/modules/deposits/server/sidebar-count', () => ({
+  getUrgentDepositSidebarCount: mocks.getUrgentDepositSidebarCount,
+}));
 vi.mock('@/modules/notifications/server/queries', () => ({
-  listNotificationsForCurrentUser: mocks.listNotificationsForCurrentUser,
+  getNotificationPage: mocks.listNotificationsForCurrentUser,
 }));
 
 import ProtectedLayout from './layout';
@@ -27,6 +37,7 @@ import ProtectedLayout from './layout';
 describe('ProtectedLayout', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getUrgentDepositSidebarCount.mockResolvedValue(7);
   });
 
   it('получает cached health summary только после проверки администратора', async () => {
@@ -40,7 +51,11 @@ describe('ProtectedLayout', () => {
     mocks.getClientAccess.mockResolvedValue({ scope: 'SYSTEM' });
     mocks.getRentalAccessForUser.mockResolvedValue({ scope: 'SYSTEM' });
     mocks.getFineAccessForUser.mockResolvedValue({ scope: 'SYSTEM' });
-    mocks.listNotificationsForCurrentUser.mockResolvedValue([]);
+    mocks.listNotificationsForCurrentUser.mockResolvedValue({
+      items: [],
+      unreadCount: 0,
+      nextCursor: null,
+    });
     mocks.getCachedSystemHealthSummary.mockResolvedValue({
       state: 'healthy',
       count: 3,
@@ -73,6 +88,7 @@ describe('ProtectedLayout', () => {
         canAccessAdmin: true,
         capabilities: ['CLIENTS', 'RENTALS', 'FINES'],
       }),
+      openDepositCount: 7,
     });
   });
 

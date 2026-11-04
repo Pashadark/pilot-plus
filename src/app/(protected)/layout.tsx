@@ -5,7 +5,10 @@ import { getFineAccessForUser } from '@/modules/fines/access';
 import { getCachedSystemHealthSummary } from '@/modules/system-health/get-system-health-summary';
 import { AppShellUserProvider } from '@/shared/components/app-shell/AppShell';
 import { ToastProvider } from '@/shared/providers/ToastProvider';
-import { listNotificationsForCurrentUser } from '@/modules/notifications/server/queries';
+import { getNotificationPage } from '@/modules/notifications/server/queries';
+import { getOpenFineSidebarCount } from '@/modules/fines/server/sidebar-count';
+import { getOpenLeadSidebarCount } from '@/modules/leads/sidebar-count';
+import { getUrgentDepositSidebarCount } from '@/modules/deposits/server/sidebar-count';
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const user = await requireAdmin();
@@ -17,8 +20,13 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       getClientAccess('VIEW_CLIENTS'),
       getRentalAccessForUser(user),
       getFineAccessForUser(user),
-      listNotificationsForCurrentUser(),
+      getNotificationPage(),
     ]);
+  const [openFineCount, openLeadCount, openDepositCount] = await Promise.all([
+    getOpenFineSidebarCount(fineAccess),
+    getOpenLeadSidebarCount(clientAccess),
+    getUrgentDepositSidebarCount(rentalAccess),
+  ]);
   const shellUser = {
     ...user,
     capabilities: [
@@ -32,7 +40,14 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       <AppShellUserProvider
         user={shellUser}
         systemHealthSummary={systemHealthSummary}
-        notifications={notifications}
+        notifications={notifications.items}
+        notificationMeta={{
+          unreadCount: notifications.unreadCount,
+          nextCursor: notifications.nextCursor,
+        }}
+        openFineCount={openFineCount}
+        openLeadCount={openLeadCount}
+        openDepositCount={openDepositCount}
       >
         {children}
       </AppShellUserProvider>

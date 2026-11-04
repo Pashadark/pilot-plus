@@ -137,10 +137,30 @@ it('сразу выбирает автомобиль, переданный из 
     <OnlineMapWorkspace mapComponent={FakeMap} initialSelectedVehicleId="lada-vesta-a123mr77" />,
   );
 
-  expect(screen.getByRole('button', { name: 'Выбрать Lada Vesta А 123 МР 77' }).getAttribute('aria-current')).toBe(
-    'true',
-  );
+  expect(
+    screen
+      .getByRole('button', { name: 'Выбрать Lada Vesta А 123 МР 77' })
+      .getAttribute('aria-current'),
+  ).toBe('true');
   expect(screen.getByRole('complementary', { name: 'Выбранный автомобиль' })).toBeTruthy();
+});
+
+it('открывает дату и точное событие из безопасной глубокой ссылки', () => {
+  const vehicleId = 'lada-vesta-a123mr77';
+  const date = getVehicleTrackDates(vehicleId)[0];
+  const eventId = `${vehicleId}-${date}-refuel`;
+
+  render(
+    <OnlineMapWorkspace
+      mapComponent={FakeMap}
+      initialSelectedVehicleId={vehicleId}
+      initialTrackDate={date}
+      initialSelectedEventId={eventId}
+    />,
+  );
+
+  expect(getMapTrackState().trackDate).toBe(date);
+  expect(getMapTrackState().selectedEvent).toBe(eventId);
 });
 
 it('ищет по модели и сбрасывает скрытый выбор без автоматического выбора первой машины', async () => {
@@ -153,9 +173,11 @@ it('ищет по модели и сбрасывает скрытый выбор
   expect(screen.getByPlaceholderText('Модель, номер, водитель')).toBeTruthy();
 
   await user.click(screen.getByRole('button', { name: 'Выбрать Kia K5 К 111 МР 199' }));
-  expect(screen.getByRole('button', { name: 'Выбрать Kia K5 К 111 МР 199' }).getAttribute('aria-current')).toBe(
-    'true',
-  );
+  expect(
+    screen
+      .getByRole('button', { name: 'Выбрать Kia K5 К 111 МР 199' })
+      .getAttribute('aria-current'),
+  ).toBe('true');
 
   await user.type(screen.getByRole('searchbox', { name: 'Поиск автомобиля' }), 'Lada Vesta');
 
@@ -196,7 +218,7 @@ it('закрывает мобильную панель в null и не выби�
 
   render(<OnlineMapWorkspace mapComponent={FakeMap} />);
 
-  expect(screen.getByRole('link', { name: '© OpenStreetMap' })).toBeTruthy();
+  expect(screen.queryByRole('link', { name: '© OpenStreetMap' })).toBeNull();
   expect(screen.queryByRole('complementary', { name: 'Выбранный автомобиль' })).toBeNull();
 
   await user.click(screen.getByRole('button', { name: 'Выбрать Haval Jolion В 456 КХ 178' }));
@@ -212,7 +234,7 @@ it('закрывает мобильную панель в null и не выби�
       .getByRole('button', { name: 'Выбрать Haval Jolion В 456 КХ 178' })
       .getAttribute('aria-current'),
   ).toBeNull();
-  expect(screen.getByRole('link', { name: '© OpenStreetMap' })).toBeTruthy();
+  expect(screen.queryByRole('link', { name: '© OpenStreetMap' })).toBeNull();
 
   await user.click(screen.getByRole('button', { name: 'Выбрать Geely Atlas Е 789 НО 77' }));
   expect(
@@ -293,7 +315,7 @@ it('без перезагрузки переводит свежий сигнал
   expect(panel.textContent).toContain('Давно не обновлялся');
 });
 
-it('использует container responsive layout и сохраняет атрибуцию отдельно от панели', () => {
+it('использует container responsive layout и не дублирует атрибуцию MapLibre', () => {
   render(<OnlineMapWorkspace mapComponent={FakeMap} />);
 
   const workspace = screen.getByRole('region', { name: 'Онлайн-карта транспорта' });
@@ -302,9 +324,7 @@ it('использует container responsive layout и сохраняет ат�
     '[@media(max-height:42rem)]:[&_.maplibregl-ctrl-group]:hidden',
   );
 
-  const attribution = screen.getByRole('link', { name: '© OpenStreetMap' });
-  expect(attribution.getAttribute('href')).toBe('https://www.openstreetmap.org/copyright');
-  expect(attribution.closest('aside')).toBeNull();
+  expect(screen.queryByRole('link', { name: '© OpenStreetMap' })).toBeNull();
 });
 
 it('выносит playback в самостоятельную панель над картой', () => {
@@ -316,7 +336,9 @@ it('выносит playback в самостоятельную панель на�
   expect(playbackDock.contains(slider)).toBe(true);
   expect(slider.closest('aside')).toBeNull();
   expect(playbackDock.className).toContain('z-40');
-  expect(playbackDock.className).toContain('@min-[48rem]:right-[26rem]');
+  expect(playbackDock.className).toContain('w-[min(34rem,calc(100%-2rem))]');
+  expect(playbackDock.className).toContain('left-1/2');
+  expect(playbackDock.className).not.toContain('right-[26rem]');
 });
 
 it('резервирует непересекающиеся desktop-зоны списка и карточки', () => {
@@ -358,7 +380,9 @@ it('меняет день кнопками дат, сохраняя однодн
   await user.click(screen.getByRole('button', { name: '28.07.2026' }));
   expect(dateControl.value).toBe('2026-07-28');
 
-  expect(screen.getByRole('button', { name: '28.07.2026' }).getAttribute('aria-pressed')).toBe('true');
+  expect(screen.getByRole('button', { name: '28.07.2026' }).getAttribute('aria-pressed')).toBe(
+    'true',
+  );
   expect(screen.queryByRole('button', { name: '7 дней' })).toBeNull();
   await user.click(screen.getByRole('button', { name: '27.07.2026' }));
   expect(getMapTrackState().trackPeriod).toBe('day');
@@ -407,10 +431,14 @@ it('не останавливает autoplay при preview события', () 
   });
   fireEvent.mouseEnter(eventButton);
 
-  expect((screen.getByRole('slider') as HTMLInputElement).value).toBe('2');
+  const progressAfterFirstFrame = Number((screen.getByRole('slider') as HTMLInputElement).value);
+  expect(progressAfterFirstFrame).toBeGreaterThan(0);
+  expect(progressAfterFirstFrame).toBeLessThan(1);
   expect(getMapTrackState().selectedEvent).toBe('');
   act(() => vi.advanceTimersByTime(250));
-  expect((screen.getByRole('slider') as HTMLInputElement).value).toBe('4');
+  expect(Number((screen.getByRole('slider') as HTMLInputElement).value)).toBeGreaterThan(
+    progressAfterFirstFrame,
+  );
 });
 
 it('показывает объединённые участки с focus-preview только выбранного дня', async () => {
@@ -497,7 +525,7 @@ it('переключает playback на старую поездку через 
   expect(getMapTrackState().playbackPoint).toContain('2026-07-28-p0');
 
   fireEvent.change(slider, { target: { value: '50' } });
-  expect(getMapTrackState().playbackPoint).toContain('2026-07-28-p4');
+  expect(getMapTrackState().playbackPoint).toContain('playback');
 
   fireEvent.click(olderFinish);
   expect(slider.value).toBe('100');
@@ -505,8 +533,9 @@ it('переключает playback на старую поездку через 
 
   fireEvent.click(screen.getByRole('button', { name: 'Воспроизвести маршрут' }));
   act(() => vi.advanceTimersByTime(1_000));
-  expect(Number(slider.value)).toBe(8);
-  expect(getMapTrackState().playbackPoint).toContain('2026-07-28-p1');
+  expect(Number(slider.value)).toBeGreaterThan(0);
+  expect(Number(slider.value)).toBeLessThan(1);
+  expect(getMapTrackState().playbackPoint).toContain('playback');
 
   fireEvent.click(screen.getByRole('button', { name: '29.07.2026' }));
   expect(slider.value).toBe('0');
@@ -577,13 +606,17 @@ it('обновляет положение вручную и автоматиче
 
   fireEvent.change(slider, { target: { value: '50' } });
   expect(slider.value).toBe('50');
-  expect(getMapTrackState().playbackPoint).toContain('-p4');
+  expect(getMapTrackState().playbackPoint).toContain('playback');
 
   fireEvent.click(screen.getByRole('button', { name: 'Воспроизвести маршрут' }));
   act(() => vi.advanceTimersByTime(250));
-  expect(Number(slider.value)).toBe(52);
+  expect(Number(slider.value)).toBeGreaterThan(50);
+  expect(Number(slider.value)).toBeLessThan(51);
 
-  act(() => vi.advanceTimersByTime(6_000));
+  fireEvent.change(slider, { target: { value: '99.9' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Скорость 30x' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Воспроизвести маршрут' }));
+  act(() => vi.advanceTimersByTime(1_000));
   expect(slider.value).toBe('100');
   expect(screen.getByRole('button', { name: 'Воспроизвести маршрут' })).toBeTruthy();
   act(() => vi.advanceTimersByTime(500));
@@ -609,7 +642,9 @@ it('сбрасывает воспроизведение при смене дат
   expect(getMapTrackState().selectedEvent).toContain('-refuel');
   fireEvent.click(screen.getByRole('button', { name: 'Выбрать автомобиль В 456 КХ 178' }));
   expect((screen.getByRole('slider') as HTMLInputElement).value).toBe('0');
-  expect((screen.getByLabelText('Выбрать любую дату') as HTMLInputElement).value).toBe('2026-07-29');
+  expect((screen.getByLabelText('Выбрать любую дату') as HTMLInputElement).value).toBe(
+    '2026-07-29',
+  );
   expect(getMapTrackState().selectedEvent).toBe('');
 
   fireEvent.click(screen.getByRole('button', { name: 'Закрыть карточку автомобиля' }));

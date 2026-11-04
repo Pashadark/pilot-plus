@@ -1,4 +1,5 @@
 import type { LeadStatus } from '@/database/generated/prisma';
+import { formatTelegramMessage, telegramSection } from './telegram-message';
 
 export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
   NEW: 'Новая',
@@ -46,31 +47,41 @@ function fullName(input: LeadMessageBase) {
   return [input.name, input.lastName].filter(Boolean).join(' ');
 }
 
-function leadDetails(input: LeadMessageBase) {
-  return [
-    `👤 <b>${escapeHtml(fullName(input))}</b>`,
-    `📞 <code>${escapeHtml(input.phone?.trim() || 'Телефон не указан')}</code>`,
-    `📍 Источник: <b>${escapeHtml(input.source ?? 'Не указан')}</b>`,
-    `🕒 Следующий контакт: <b>${input.nextContactAt ? escapeHtml(displayDate(input.nextContactAt)) : 'Время не назначено'}</b>`,
-  ];
-}
-
 export function formatLeadCreatedMessage(input: LeadMessageBase) {
-  return [
-    '📥 <b>Новая заявка</b>',
-    ...leadDetails(input),
-    `👨‍💼 Ответственный: <b>${escapeHtml(input.assignedToName ?? 'Не назначен')}</b>`,
-    `🗓 Создана: <b>${escapeHtml(displayDate(input.createdAt))}</b>`,
-    `🔗 <a href="${escapeHtml(input.leadsUrl)}">Открыть заявки</a>`,
-  ].join('\n');
+  return formatTelegramMessage({
+    title: '📥 <b>Новая заявка</b>',
+    sections: [
+      telegramSection('👤', 'Клиент', [
+        escapeHtml(fullName(input)),
+        `📞 <code>${escapeHtml(input.phone?.trim() || 'Телефон не указан')}</code>`,
+      ]),
+      telegramSection('📍', 'Источник', [escapeHtml(input.source ?? 'Не указан')]),
+      telegramSection('🗓', 'Следующий контакт', [
+        `${input.nextContactAt ? escapeHtml(displayDate(input.nextContactAt)) : 'Время не назначено'} МСК`,
+      ]),
+      telegramSection('👨‍💼', 'Ответственный', [escapeHtml(input.assignedToName ?? 'Не назначен')]),
+      telegramSection('🕒', 'Создана', [`${escapeHtml(displayDate(input.createdAt))} МСК`]),
+    ],
+    action: 'Обработать заявку и связаться с клиентом',
+  });
 }
 
 export function formatLeadStatusChangedMessage(input: LeadStatusMessage) {
-  return [
-    '🔄 <b>Статус заявки изменён</b>',
-    ...leadDetails(input),
-    `📌 <b>${LEAD_STATUS_LABELS[input.previousStatus]} → ${LEAD_STATUS_LABELS[input.status]}</b>`,
-    `👨‍💼 Изменил: <b>${escapeHtml(input.actorName ?? 'Сотрудник')}</b>`,
-    `🔗 <a href="${escapeHtml(input.leadsUrl)}">Открыть заявки</a>`,
-  ].join('\n');
+  return formatTelegramMessage({
+    title: '🔄 <b>Статус заявки изменён</b>',
+    sections: [
+      telegramSection('👤', 'Клиент', [
+        escapeHtml(fullName(input)),
+        `📞 <code>${escapeHtml(input.phone?.trim() || 'Телефон не указан')}</code>`,
+      ]),
+      telegramSection('📌', 'Статус', [
+        `Было: ${LEAD_STATUS_LABELS[input.previousStatus]}`,
+        `Стало: ${LEAD_STATUS_LABELS[input.status]}`,
+      ]),
+      telegramSection('👨‍💼', 'Изменил', [escapeHtml(input.actorName ?? 'Сотрудник')]),
+      telegramSection('🗓', 'Следующий контакт', [
+        `${input.nextContactAt ? escapeHtml(displayDate(input.nextContactAt)) : 'Время не назначено'} МСК`,
+      ]),
+    ],
+  });
 }

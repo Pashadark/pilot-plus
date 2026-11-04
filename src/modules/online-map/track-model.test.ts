@@ -4,8 +4,12 @@ import {
   buildTrackActivitySections,
   buildTrackPeriodViewModel,
   buildTrackViewModel,
+  getPlaybackFrame,
   getSpeedColor,
   getPlaybackPosition,
+  getPlaybackTrail,
+  getTrackPointCursorMs,
+  getTrackBounds,
 } from './track-model';
 import { getVehicleTrack, getVehicleTrackDates, getVehicleTracks } from './track-fixture-model';
 import { vehicleTrackFixtures } from './track-fixtures';
@@ -112,6 +116,76 @@ describe('buildTrackViewModel', () => {
     expect(buildTrackViewModel(track).events[0].coordinates).toEqual([92.82, 56.02]);
   });
 
+  it('показывает резкий разгон прямо по GPS-точкам даже без серверного события', () => {
+    const model = buildTrackViewModel({
+      ...track,
+      points: [
+        { ...track.points[0], timestamp: '08:00:00', speedKph: 0 },
+        {
+          ...track.points[1],
+          timestamp: '08:00:03',
+          speedKph: 40,
+          coordinates: [92.8001, 56.0001],
+        },
+        {
+          ...track.points[2],
+          timestamp: '08:00:06',
+          speedKph: 80,
+          coordinates: [92.8002, 56.0002],
+        },
+      ],
+      events: [],
+    });
+
+    expect(model.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'harsh-acceleration',
+          pointId: 'p2',
+          metricLabel: '0→80',
+        }),
+      ]),
+    );
+  });
+
+  it('показывает резкое торможение прямо по GPS-точкам даже без серверного события', () => {
+    const model = buildTrackViewModel({
+      ...track,
+      points: [
+        { ...track.points[0], timestamp: '08:00:00', speedKph: 92 },
+        {
+          ...track.points[1],
+          timestamp: '08:00:01',
+          speedKph: 70,
+          coordinates: [92.8001, 56.0001],
+        },
+        {
+          ...track.points[2],
+          timestamp: '08:00:02',
+          speedKph: 48,
+          coordinates: [92.8002, 56.0002],
+        },
+        {
+          ...track.points[3],
+          timestamp: '08:00:03',
+          speedKph: 26,
+          coordinates: [92.8003, 56.0003],
+        },
+      ],
+      events: [],
+    });
+
+    expect(model.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'harsh-braking',
+          pointId: 'p3',
+          metricLabel: '92→26',
+        }),
+      ]),
+    );
+  });
+
   it('группирует события в одинаковых координатах', () => {
     const model = buildTrackViewModel({
       ...track,
@@ -148,6 +222,20 @@ describe('buildTrackViewModel', () => {
     expect(getPlaybackPosition(track, 120).id).toBe('p3');
   });
 
+  it('выбирает позицию по времени поездки, а не по порядковому номеру GPS-точки', () => {
+    const irregularTrack: VehicleTrack = {
+      ...track,
+      points: [
+        { ...track.points[0], timestamp: '08:00' },
+        { ...track.points[1], timestamp: '08:01' },
+        { ...track.points[2], timestamp: '08:02' },
+        { ...track.points[3], timestamp: '09:00' },
+      ],
+    };
+
+    expect(getPlaybackPosition(irregularTrack, 10).id).toBe('p2');
+  });
+
   it('отклоняет маршрут короче двух точек', () => {
     expect(() => buildTrackViewModel({ ...track, points: [track.points[0]] })).toThrow(
       'Маршрут должен содержать минимум две точки',
@@ -172,19 +260,141 @@ describe('buildTrackViewModel', () => {
   });
 });
 
+describe('воспроизведение по реальному времени GPS', () => {
+  const timedTrack: VehicleTrack = {
+    ...track,
+    points: [
+      {
+        ...track.points[0],
+        recordedAt: '2026-07-29T10:00:00.000Z',
+        coordinates: [37.6, 55.7],
+        speedKph: 0,
+      },
+      {
+        ...track.points[1],
+        recordedAt: '2026-07-29T10:00:10.000Z',
+        coordinates: [37.7, 55.8],
+        speedKph: 36,
+      },
+      {
+        ...track.points[2],
+        recordedAt: '2026-07-29T10:01:00.000Z',
+        coordinates: [37.8, 55.9],
+        speedKph: 72,
+      },
+    ],
+    events: [],
+  };
+
+  it('возвращает точные границы реального времени', () => {
+    expect(getTrackBounds(timedTrack)).toEqual({
+      startMs: Date.parse('2026-07-29T10:00:00.000Z'),
+      endMs: Date.parse('2026-07-29T10:01:00.000Z'),
+    });
+    expect(getTrackPointCursorMs(timedTrack, 'p1')).toBe(Date.parse('2026-07-29T10:00:10.000Z'));
+    expect(getTrackPointCursorMs(timedTrack, 'missing')).toBeNull();
+  });
+
+  it('интерполирует координаты и скорость между соседними GPS-точками', () => {
+    const frame = getPlaybackFrame(timedTrack, Date.parse('2026-07-29T10:00:05.000Z'));
+
+    expect(frame.connected).toBe(true);
+    expect(frame.isInterpolated).toBe(true);
+    expect(frame.position.coordinates[0]).toBeCloseTo(37.65, 6);
+    expect(frame.position.coordinates[1]).toBeCloseTo(55.75, 6);
+    expect(frame.position.speedKph).toBeCloseTo(18, 6);
+    expect(frame.previousPointId).toBe('p0');
+    expect(frame.nextPointId).toBe('p1');
+  });
+
+  it('ограничивает курсор фактическим началом и концом', () => {
+    expect(getPlaybackFrame(timedTrack, 0).position.id).toBe('p0');
+    expect(getPlaybackFrame(timedTrack, Number.MAX_SAFE_INTEGER).position.id).toBe('p2');
+  });
+
+  it('не выдумывает движение через большой разрыв телеметрии', () => {
+    const gapTrack: VehicleTrack = {
+      ...timedTrack,
+      points: [
+        timedTrack.points[0],
+        {
+          ...timedTrack.points[1],
+          recordedAt: '2026-07-29T10:30:00.000Z',
+        },
+      ],
+    };
+    const frame = getPlaybackFrame(gapTrack, Date.parse('2026-07-29T10:15:00.000Z'));
+
+    expect(frame.connected).toBe(false);
+    expect(frame.isInterpolated).toBe(false);
+    expect(['p0', 'p1']).toContain(frame.position.id);
+  });
+
+  it('возвращает только пройденную часть маршрута и текущую плавную точку', () => {
+    const trail = getPlaybackTrail(timedTrack, Date.parse('2026-07-29T10:00:05.000Z'));
+
+    expect(trail).toHaveLength(2);
+    expect(trail[0]?.id).toBe('p0');
+    expect(trail[1]?.id).toContain('playback');
+    expect(trail.some((point) => point.id === 'p1' || point.id === 'p2')).toBe(false);
+  });
+});
+
 describe('buildTrackActivitySections', () => {
   it('объединяет непрерывную стоянку и разделяет движение и превышение', () => {
     const model = buildTrackViewModel({
       vehicleId: 'vehicle-activity',
       date: '2026-10-04',
       points: [
-        { id: 'a0', coordinates: [37.6, 55.7], timestamp: '00:00', speedKph: 0, address: 'Стоянка' },
-        { id: 'a1', coordinates: [37.6, 55.7], timestamp: '00:05', speedKph: 0, address: 'Стоянка' },
-        { id: 'a2', coordinates: [37.6, 55.7], timestamp: '00:10', speedKph: 0, address: 'Стоянка' },
-        { id: 'a3', coordinates: [37.61, 55.71], timestamp: '00:15', speedKph: 35, address: 'Москва' },
-        { id: 'a4', coordinates: [37.62, 55.72], timestamp: '00:20', speedKph: 45, address: 'Москва' },
-        { id: 'a5', coordinates: [37.63, 55.73], timestamp: '00:25', speedKph: 151, address: 'МКАД' },
-        { id: 'a6', coordinates: [37.64, 55.74], timestamp: '00:30', speedKph: 42, address: 'Москва' },
+        {
+          id: 'a0',
+          coordinates: [37.6, 55.7],
+          timestamp: '00:00',
+          speedKph: 0,
+          address: 'Стоянка',
+        },
+        {
+          id: 'a1',
+          coordinates: [37.6, 55.7],
+          timestamp: '00:05',
+          speedKph: 0,
+          address: 'Стоянка',
+        },
+        {
+          id: 'a2',
+          coordinates: [37.6, 55.7],
+          timestamp: '00:10',
+          speedKph: 0,
+          address: 'Стоянка',
+        },
+        {
+          id: 'a3',
+          coordinates: [37.61, 55.71],
+          timestamp: '00:15',
+          speedKph: 35,
+          address: 'Москва',
+        },
+        {
+          id: 'a4',
+          coordinates: [37.62, 55.72],
+          timestamp: '00:20',
+          speedKph: 45,
+          address: 'Москва',
+        },
+        {
+          id: 'a5',
+          coordinates: [37.63, 55.73],
+          timestamp: '00:25',
+          speedKph: 151,
+          address: 'МКАД',
+        },
+        {
+          id: 'a6',
+          coordinates: [37.64, 55.74],
+          timestamp: '00:30',
+          speedKph: 42,
+          address: 'Москва',
+        },
       ],
       events: [],
     });

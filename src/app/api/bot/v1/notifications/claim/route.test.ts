@@ -65,4 +65,17 @@ describe('POST /api/bot/v1/notifications/claim', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ items: [{ id: 'job-1' }] });
   });
+
+  it('passes an explicit client audience to the isolated worker', async () => {
+    const response = await POST(
+      new Request('http://localhost/api/bot/v1/notifications/claim', {
+        method: 'POST',
+        headers: { authorization: 'Bearer service', 'content-type': 'application/json' },
+        body: JSON.stringify({ workerId: 'supa-client-bot', audience: 'CLIENT' }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(claim).toHaveBeenCalledWith(expect.any(Date), 'supa-client-bot', undefined, 'CLIENT');
+  });
 });

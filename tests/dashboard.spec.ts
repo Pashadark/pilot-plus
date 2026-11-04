@@ -100,17 +100,20 @@ test('быстрые действия ведут в рабочие раздел�
   );
 });
 
-test('кнопка мобильного меню имеет область не меньше 44 пикселей', async ({ page }) => {
-  const menuButton = page.getByRole('button', { name: 'Открыть меню' });
-  const box = await menuButton.boundingBox();
-  expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
-  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+test('пункты мобильного дока имеют область не меньше 44 пикселей', async ({ page }) => {
+  const dock = page.getByRole('navigation', { name: 'Мобильная навигация' });
+  await expect(dock).toBeVisible();
+  for (const item of await dock.locator('.mobile-dock__item').all()) {
+    const box = await item.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
 });
 
-test('мобильный drawer удерживает фокус и возвращает его кнопке', async ({ page }) => {
-  const menuButton = page.getByRole('button', { name: 'Открыть меню' });
+test('панель Ещё удерживает фокус и возвращает его кнопке', async ({ page }) => {
+  const menuButton = page.getByRole('button', { name: 'Ещё', exact: true });
   await menuButton.press('Enter');
-  const dialog = page.getByRole('dialog', { name: 'Мобильная навигация' });
+  const dialog = page.getByRole('dialog', { name: 'Все разделы' });
   const closeButton = dialog.getByRole('button', { name: 'Закрыть меню' });
 
   await expect(dialog).toBeVisible();

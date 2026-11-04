@@ -143,6 +143,7 @@ const tripSelect = {
 
 const vehicleEventSelect = {
   id: true,
+  type: true,
   title: true,
   description: true,
   location: true,
@@ -799,8 +800,7 @@ async function attachRentalAssignments(
       ...event,
       assignment: {
         rentalId: String(rental.id),
-        contractNumber:
-          typeof rental.contractNumber === 'string' ? rental.contractNumber : null,
+        contractNumber: typeof rental.contractNumber === 'string' ? rental.contractNumber : null,
         people,
       },
     };
@@ -907,16 +907,24 @@ export function createEventTimelineQueries(
   getNow: () => Date = () => new Date(),
 ) {
   return {
-    async getEventTimeline(filters: TimelineFilters): Promise<TimelineResult> {
+    async getEventTimeline(
+      filters: TimelineFilters,
+      options: { allHistory?: boolean; includeStats?: boolean } = {},
+    ): Promise<TimelineResult> {
       const normalizedFilters = normalizeFilters(filters, getNow());
+      if (options.allHistory) normalizedFilters.from = new Date(0);
       const context = await getContext();
       if (!context) return emptyResult();
 
       const specs = createSourceSpecs(repository, context, normalizedFilters, true);
       const pageEvents = await loadPage(repository, context, normalizedFilters, specs);
       const events = await attachRentalAssignments(repository, context, pageEvents);
-      const stats = await loadStats(repository, context, normalizedFilters);
-      const vehicles = await listVehicles(repository, context);
+      const stats =
+        options.includeStats === false
+          ? emptyResult().stats
+          : await loadStats(repository, context, normalizedFilters);
+      const vehicles =
+        options.includeStats === false ? [] : await listVehicles(repository, context);
       const lastEvent = events.at(-1);
 
       return {

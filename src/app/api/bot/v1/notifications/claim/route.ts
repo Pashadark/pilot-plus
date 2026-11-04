@@ -9,7 +9,10 @@ import {
 } from '@/modules/bot-api/notifications';
 import { syncDueCompanyFines } from '@/modules/bot-api/scheduled-fine-sync';
 
-const schema = z.object({ workerId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/u) });
+const schema = z.object({
+  workerId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/u),
+  audience: z.enum(['CLIENT', 'STAFF']).optional(),
+});
 
 export async function POST(request: Request): Promise<Response> {
   try {
@@ -24,7 +27,16 @@ export async function POST(request: Request): Promise<Response> {
       syncDueCompanyFines(now),
     ]);
     return Response.json(
-      { items: await claimNotificationJobs(new Date(), parsed.data.workerId) },
+      {
+        items: parsed.data.audience
+          ? await claimNotificationJobs(
+              new Date(),
+              parsed.data.workerId,
+              undefined,
+              parsed.data.audience,
+            )
+          : await claimNotificationJobs(new Date(), parsed.data.workerId),
+      },
       { headers: { 'Cache-Control': 'private, no-store' } },
     );
   } catch (error) {

@@ -6,6 +6,28 @@ import { prisma } from '@/database/prisma/client';
 import { getAdminCenterAccess } from '@/modules/admin/access';
 import { markEventReadAction, markEventsReadAction } from '@/modules/events/actions';
 import { parseEventKey } from '@/modules/events/event-key';
+import { markLowFuelNotificationsRead } from './low-fuel';
+import { getNotificationPage } from './queries';
+import type { NotificationCursor } from '../pagination';
+
+export async function loadNotificationPageAction(cursor: NotificationCursor) {
+  return getNotificationPage(cursor, false);
+}
+
+export async function markEntireInboxReadAction(): Promise<NotificationActionState> {
+  let cursor: NotificationCursor | null = null;
+  do {
+    const page = await getNotificationPage(cursor, false);
+    const ids = page.items.filter((item) => !item.isRead).map((item) => item.id);
+    if (ids.length) {
+      const result = await markAllNotificationsReadAction(ids);
+      if (result.status === 'error') return result;
+    }
+    cursor = page.nextCursor;
+  } while (cursor);
+  revalidatePath('/', 'layout');
+  return { status: 'success', message: 'Все уведомления прочитаны.' };
+}
 
 type NotificationActionState = { status: 'idle' | 'success' | 'error'; message: string };
 
@@ -19,6 +41,11 @@ export async function markNotificationReadAction(
 ): Promise<NotificationActionState> {
   const parsed = parseEventKey(notificationId);
   if (!parsed) return INVALID_NOTIFICATION;
+  if (parsed.source === 'low-fuel') {
+    if (!(await markLowFuelNotificationsRead([notificationId]))) return INVALID_NOTIFICATION;
+    revalidatePath('/', 'layout');
+    return { status: 'success', message: 'Уведомление отмечено прочитанным.' };
+  }
   if (parsed.source !== 'audit') return markEventReadAction(notificationId);
 
   const access = await getAdminCenterAccess();
@@ -50,11 +77,17 @@ export async function markAllNotificationsReadAction(
   if (parsed.some(({ parsed: value }) => !value)) return INVALID_NOTIFICATION;
 
   const auditIds = parsed.filter(({ parsed: value }) => value?.source === 'audit');
-  const eventIds = parsed.filter(({ parsed: value }) => value?.source !== 'audit').map(({ id }) => id);
-  const access = await getAdminCenterAccess();
-  if (!access) return INVALID_NOTIFICATION;
+  const fuelIds = parsed
+    .filter(({ parsed: value }) => value?.source === 'low-fuel')
+    .map(({ id }) => id);
+  const eventIds = parsed
+    .filter(({ parsed: value }) => value?.source !== 'audit' && value?.source !== 'low-fuel')
+    .map(({ id }) => id);
+  if (fuelIds.length && !(await markLowFuelNotificationsRead(fuelIds))) return INVALID_NOTIFICATION;
+  const access = auditIds.length ? await getAdminCenterAccess() : null;
+  if (auditIds.length && !access) return INVALID_NOTIFICATION;
 
-  if (auditIds.length) {
+  if (auditIds.length && access) {
     const sourceIds = auditIds.map(({ parsed: value }) => value!.id);
     const rows = await prisma.auditLog.findMany({
       where: {

@@ -11,6 +11,13 @@ export type MoscowWeather = {
   sunset?: string;
 };
 
+type WeatherRequestOptions = {
+  fetcher?: typeof fetch;
+  timeoutMs?: number;
+};
+
+const WEATHER_REQUEST_TIMEOUT_MS = 500;
+
 export function parseOpenMeteoWeather(value: unknown): MoscowWeather | null {
   if (!value || typeof value !== 'object') return null;
   const current = (value as { current?: unknown }).current;
@@ -41,7 +48,10 @@ export function parseOpenMeteoWeather(value: unknown): MoscowWeather | null {
   };
 }
 
-export async function getMoscowWeather(): Promise<MoscowWeather | null> {
+export async function getMoscowWeather({
+  fetcher = fetch,
+  timeoutMs = WEATHER_REQUEST_TIMEOUT_MS,
+}: WeatherRequestOptions = {}): Promise<MoscowWeather | null> {
   const url = new URL('https://api.open-meteo.com/v1/forecast');
   url.searchParams.set('latitude', '55.7558');
   url.searchParams.set('longitude', '37.6176');
@@ -52,14 +62,27 @@ export async function getMoscowWeather(): Promise<MoscowWeather | null> {
     'temperature_2m,apparent_temperature,weather_code,wind_speed_10m,precipitation',
   );
   url.searchParams.set('daily', 'sunrise,sunset');
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
-    const response = await fetch(url, {
-      next: { revalidate: 900 },
-      signal: AbortSignal.timeout(4000),
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        controller.abort();
+        reject(new Error('Weather provider timeout'));
+      }, timeoutMs);
     });
+    const response = await Promise.race([
+      fetcher(url, {
+        next: { revalidate: 900 },
+        signal: controller.signal,
+      }),
+      timeout,
+    ]);
     if (!response.ok) return null;
     return parseOpenMeteoWeather(await response.json());
   } catch {
     return null;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 }

@@ -748,9 +748,12 @@ describe('buildDashboardOverview', () => {
     expect(result.workItems.some((item) => item.id === 'fine:paid')).toBe(false);
   });
 
-  it('adds a refuel action for a vehicle at or below 20 percent', () => {
+  it('adds a refuel action and attention card below25 percent', () => {
     const result = buildDashboardOverview(
       source({ vehicles: [vehicle({ fuelLevelPercent: 20 })] }),
+    );
+    expect(result.attentionItems).toContainEqual(
+      expect.objectContaining({ id: 'low-fuel:vehicle-1', title: 'Нужна заправка' }),
     );
 
     expect(result.workItems).toContainEqual(

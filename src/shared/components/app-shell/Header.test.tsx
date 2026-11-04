@@ -49,11 +49,13 @@ describe('шапка приложения', () => {
     expect(screen.queryByText('СУПА ПРО')).toBeNull();
     expect(screen.queryByText('Командный центр')).toBeNull();
     expect(screen.queryByTestId('mobile-breadcrumbs')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Открыть меню' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'СУПА ПРО — главная' })).toBeTruthy();
     expect(screen.getByTestId('app-header').dataset.scrolled).toBe('false');
-    Object.defineProperty(window, 'scrollY', {configurable:true,value:120});
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 120 });
     fireEvent.scroll(window);
     expect(screen.getByTestId('app-header').dataset.scrolled).toBe('true');
-    Object.defineProperty(window, 'scrollY', {configurable:true,value:0});
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 });
     fireEvent.scroll(window);
     expect(screen.getByTestId('app-header').dataset.scrolled).toBe('false');
   });
@@ -89,14 +91,7 @@ describe('шапка приложения', () => {
     const profileLink = screen.getByRole('menuitem', { name: 'Открыть профиль' });
     expect(profileLink.tagName).toBe('A');
     expect(profileLink.getAttribute('href')).toBe('/profile');
-    expect(screen.getByRole('menuitemradio', { name: 'Новый интерфейс' })).toBeTruthy();
-    const classicInterface = screen.getByRole('menuitemradio', {
-      name: 'Классический интерфейс',
-    });
-    expect(classicInterface).toBeTruthy();
-    await browserUser.click(classicInterface);
-    expect(screen.queryByRole('menuitemradio', { name: 'Новый интерфейс' })).toBeNull();
-    expect(screen.queryByText(/Obsidian/i)).toBeNull();
+    expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0);
     expect(screen.getByRole('img', { name: user.name })).toBeTruthy();
     expect(mobileNavigationMock).toHaveBeenCalledWith(
       expect.objectContaining({ user: expect.objectContaining({ canAccessAdmin: true }) }),

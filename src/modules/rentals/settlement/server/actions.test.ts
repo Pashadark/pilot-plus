@@ -18,11 +18,26 @@ function fixture(status = 'CONFIRMED') {
     rental: {
       findFirst: vi.fn(async ({ where }: { where: { companyId: string; id: string } }) =>
         where.companyId === 'company-1' && where.id === 'rental-1'
-          ? { id: 'rental-1', companyId: 'company-1', status, contractNumber: '021' }
+          ? {
+              id: 'rental-1',
+              companyId: 'company-1',
+              clientId: 'client-1',
+              status,
+              contractNumber: '021',
+            }
           : null,
       ),
     },
     rentalPayment: { findUnique: existing, create: paymentCreate },
+    depositLedgerEntry: {
+      findUnique: vi.fn(async () => null),
+      findMany: vi.fn(async () => []),
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'ledger-1',
+        ...data,
+      })),
+    },
+    $queryRaw: vi.fn(async () => [{ locked: true }]),
     rentalSignature: { upsert: signatureUpsert },
     auditLog: { create: vi.fn(async () => ({ id: 'audit-1' })) },
   };
@@ -84,6 +99,38 @@ describe('rental settlement service', () => {
 
     expect(result).toEqual({ id: 'payment-existing', reused: true });
     expect(paymentCreate).not.toHaveBeenCalled();
+  });
+
+  it('adds a confirmed deposit payment to the immutable deposit ledger', async () => {
+    const { database, tx } = fixture();
+    const service = createRentalSettlementService(database as never);
+
+    await service.recordPayment({
+      companyId: 'company-1',
+      actor,
+      command: {
+        rentalId: 'rental-1',
+        kind: 'DEPOSIT',
+        status: 'CONFIRMED',
+        amountMinor: 1_000_000n,
+        method: 'CASH',
+        idempotencyKey: 'payment-rental-1-deposit',
+      },
+    });
+
+    expect(tx.depositLedgerEntry.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        companyId: 'company-1',
+        clientId: 'client-1',
+        rentalId: 'rental-1',
+        paymentId: 'payment-1',
+        kind: 'DEPOSIT_PAYMENT',
+        source: 'STAFF',
+        cashDeltaMinor: 1_000_000n,
+        actorUserId: 'user-1',
+        reason: 'Внесение залога сотрудником',
+      }),
+    });
   });
 
   it('rejects a rental from another tenant', async () => {

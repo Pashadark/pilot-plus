@@ -9,6 +9,7 @@ from bot.handlers.customer import router as customer_router
 from bot.handlers.rentals import router as rentals_router
 from bot.handlers.staff import router as staff_router
 from bot.handlers.staff_operations import router as staff_operations_router
+from bot.handlers.notification_actions import router as notification_actions_router
 from bot.services.pilot_api import PilotApiClient
 from bot.services.notifications import notification_worker
 
@@ -22,10 +23,11 @@ async def main() -> None:
     dispatcher.include_router(customer_router)
     dispatcher.include_router(rentals_router)
     dispatcher.include_router(staff_operations_router)
+    dispatcher.include_router(notification_actions_router)
     dispatcher.include_router(staff_router)
     api = PilotApiClient(str(settings.pilot_api_base_url), settings.pilot_bot_service_token.get_secret_value(), timeout=settings.request_timeout_seconds)
     stop_event = asyncio.Event()
-    worker = asyncio.create_task(notification_worker(bot, api, stop_event, settings.pilot_staff_chat_id))
+    worker = asyncio.create_task(notification_worker(bot, api, stop_event, settings.pilot_staff_chat_id, audience="STAFF"))
     try:
         await dispatcher.start_polling(bot, pilot_api=api)
     finally:

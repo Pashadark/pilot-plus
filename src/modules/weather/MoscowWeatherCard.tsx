@@ -54,7 +54,7 @@ const backgrounds: Record<DayPhase, string> = {
   sunset: 'from-indigo-800 via-fuchsia-600 to-orange-400',
 };
 
-function weatherIcon(phase: DayPhase, effect: WeatherEffect) {
+export function weatherIcon(phase: DayPhase, effect: WeatherEffect) {
   const light = phase !== 'night';
   if (effect === 'clear') return light ? 'clear-day' : 'clear-night';
   if (effect === 'clouds') return light ? 'partly-cloudy-day' : 'partly-cloudy-night';
@@ -63,7 +63,7 @@ function weatherIcon(phase: DayPhase, effect: WeatherEffect) {
   return effect;
 }
 
-function description(code: number) {
+export function weatherDescription(code: number) {
   if (code === 0) return 'Ясно';
   if (code <= 3) return 'Облачно';
   if (code >= 51 && code <= 67) return 'Дождь';
@@ -73,7 +73,7 @@ function description(code: number) {
   return 'Переменная облачность';
 }
 
-function degrees(value: number) {
+export function weatherDegrees(value: number) {
   const rounded = Math.round(value);
   return `${rounded > 0 ? '+' : ''}${rounded}°`;
 }
@@ -107,10 +107,10 @@ export function MoscowWeatherCard({ weather }: { weather: MoscowWeather | null }
       {weather ? (
         <>
           <p className="relative z-10 mt-3 truncate text-2xl font-bold tracking-tight drop-shadow-sm">
-            {degrees(weather.temperatureC)}
+            {weatherDegrees(weather.temperatureC)}
           </p>
           <p className="relative z-10 mt-1 truncate text-[11px] text-white/85">
-            {description(weather.weatherCode)} · {weather.windSpeedMs.toFixed(1)} м/с
+            {weatherDescription(weather.weatherCode)} · {weather.windSpeedMs.toFixed(1)} м/с
           </p>
         </>
       ) : (

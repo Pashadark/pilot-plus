@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseDepositReturnInput } from './deposit-return';
+import { parseDepositReturnInput, planDepositReturnLedger } from './deposit-return';
 
 describe('parseDepositReturnInput', () => {
   it('calculates the withheld amount for a partial return', () => {
@@ -36,5 +36,29 @@ describe('parseDepositReturnInput', () => {
         reason: '',
       }),
     ).toThrow('Укажите причину удержания');
+  });
+});
+
+describe('planDepositReturnLedger', () => {
+  it('moves an active fine reservation to debt when the full deposit was returned', () => {
+    expect(
+      planDepositReturnLedger({
+        cashMinor: 2_000_000n,
+        reservedMinor: 64_688n,
+        withheldMinor: 0n,
+        returnedMinor: 2_000_000n,
+      }),
+    ).toEqual({ reservationDebtMinor: 64_688n, additionalWithheldMinor: 0n });
+  });
+
+  it('does not count a fine reservation twice when part of the deposit was retained', () => {
+    expect(
+      planDepositReturnLedger({
+        cashMinor: 2_000_000n,
+        reservedMinor: 64_688n,
+        withheldMinor: 0n,
+        returnedMinor: 1_900_000n,
+      }),
+    ).toEqual({ reservationDebtMinor: 0n, additionalWithheldMinor: 35_312n });
   });
 });

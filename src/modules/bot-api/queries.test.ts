@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createRentalDocumentGrant, listClientRentals, resolveBotIdentity } from './queries';
+import {
+  createRentalDocumentGrant,
+  listClientDepositBalances,
+  listClientRentals,
+  resolveBotIdentity,
+} from './queries';
 
 describe('bot client queries', () => {
   it('rejects a staff identity after company membership is removed', async () => {
@@ -113,5 +118,70 @@ describe('bot client queries', () => {
         database as never,
       ),
     ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('returns deposit balances and immutable history only for the linked client', async () => {
+    const database = {
+      rental: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'rental-1',
+            contractNumber: 'ME-1',
+            status: 'COMPLETED',
+            endsAt: new Date('2026-10-01T12:00:00Z'),
+            completedAt: new Date('2026-10-02T12:00:00Z'),
+            depositMinor: 1_000_000n,
+            currency: 'RUB',
+            vehicle: { make: 'Kia', modelName: 'K5', model: 'K5', registrationNumber: 'А001АА777' },
+            depositLedgerEntries: [
+              {
+                id: 'entry-1',
+                kind: 'DEPOSIT_PAYMENT',
+                reason: 'Залог внесён',
+                cashDeltaMinor: 1_000_000n,
+                reservedDeltaMinor: 0n,
+                withheldDeltaMinor: 0n,
+                debtDeltaMinor: 0n,
+                occurredAt: new Date('2026-10-01T12:00:00Z'),
+              },
+              {
+                id: 'entry-2',
+                kind: 'FINE_RESERVATION',
+                reason: 'Штраф',
+                cashDeltaMinor: 0n,
+                reservedDeltaMinor: 115_000n,
+                withheldDeltaMinor: 0n,
+                debtDeltaMinor: 0n,
+                occurredAt: new Date('2026-10-03T12:00:00Z'),
+              },
+            ],
+          },
+        ]),
+      },
+    };
+    const result = await listClientDepositBalances(
+      {
+        identityId: 'identity-1',
+        telegramUserId: '12345',
+        kind: 'CLIENT',
+        companyId: 'company-1',
+        clientId: 'client-1',
+        userId: null,
+        displayName: 'Иван',
+      },
+      database as never,
+    );
+    expect(database.rental.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { companyId: 'company-1', clientId: 'client-1' } }),
+    );
+    expect(result[0]).toMatchObject({
+      rentalId: 'rental-1',
+      cashMinor: '1000000',
+      reservedMinor: '115000',
+      availableMinor: '885000',
+      debtMinor: '0',
+      returnDueOn: '2026-11-02',
+    });
+    expect(result[0]?.history).toHaveLength(2);
   });
 });

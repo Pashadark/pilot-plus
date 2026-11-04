@@ -1,0 +1,30 @@
+[Unit]
+Description=Supa Pro web application (%i slot)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=pilot-plus
+Group=pilot-plus
+WorkingDirectory=/opt/pilot-plus/slots/%i
+Environment=NODE_ENV=production
+Environment=MALLOC_ARENA_MAX=2
+EnvironmentFile=/etc/pilot-plus.env
+EnvironmentFile=/etc/supapro-web-%i.env
+ExecStart=/usr/local/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p ${PORT}
+Restart=always
+RestartSec=2
+KillSignal=SIGTERM
+SuccessExitStatus=143 SIGTERM
+KillMode=mixed
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/pilot-plus/releases /opt/pilot-plus/shared /opt/pilot-plus/slots
+
+[Install]
+WantedBy=multi-user.target

@@ -7,6 +7,8 @@ from bot.keyboards.client import client_main_menu, customer_back, fine_actions, 
 from bot.keyboards.rentals import rental_documents
 from bot.formatters.rentals import rental_card
 from bot.formatters.fines import fine_card
+from bot.formatters.deposits import deposit_card
+from bot.messages.client_states import send_unresolved_rental
 from bot.services.errors import PilotApiError
 
 router = Router(name='customer')
@@ -26,7 +28,7 @@ async def show_client_home(message: Message, pilot_api, telegram_id: str):
         return
     active = [r for r in items if r.get('status') in {'ACTIVE','CONFIRMED'}]
     if not active:
-        await message.answer('Сейчас у вас нет действующей аренды.', reply_markup=client_main_menu())
+        await send_unresolved_rental(message)
         return
     for item in active:
         await message.answer(rental_card(item), parse_mode='HTML', reply_markup=client_main_menu())
@@ -57,6 +59,23 @@ async def fines(callback: CallbackQuery, state: FSMContext, pilot_api):
     await callback.message.answer('🧾 Ваши штрафы' if items else 'Подтверждённых менеджером штрафов пока нет.', reply_markup=fines_navigation(page,result.get('hasMore',False)))
     for item in items:
         await callback.message.answer(fine_card(item), parse_mode='HTML', reply_markup=fine_actions(item['id'],item.get('status') in {'PAID','CANCELLED'}))
+
+@router.callback_query(F.data == 'client:deposits')
+async def deposits(callback: CallbackQuery, state: FSMContext, pilot_api):
+    await state.clear()
+    try:
+        items = (await pilot_api.deposits(str(callback.from_user.id))).get('items', [])
+    except PilotApiError:
+        await callback.answer('Не удалось загрузить залог. Попробуйте позже.', show_alert=True)
+        return
+    await callback.answer()
+    if not callback.message:
+        return
+    if not items:
+        await callback.message.answer('По вашим договорам пока нет операций залога.', reply_markup=customer_back())
+        return
+    for item in items:
+        await callback.message.answer(deposit_card(item), parse_mode='HTML', reply_markup=customer_back())
 
 @router.callback_query(F.data == 'client:documents')
 async def contracts(callback: CallbackQuery, state: FSMContext, pilot_api):

@@ -1,0 +1,921 @@
+.workday-dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 24px;
+  padding-bottom: 24px;
+}
+.workday-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  min-width: 0;
+  align-content: start;
+}
+.workday-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  min-height: 48px;
+}
+.workday-title {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+.workday-title h1 {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.workday-title p {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  text-transform: capitalize;
+}
+.workday-weather {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+}
+.workday-weather img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  filter: drop-shadow(0 5px 8px rgb(0 0 0 / 18%));
+}
+.workday-weather small {
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+.workday-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.workday-actions > a,
+.workday-actions > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  min-height: 44px;
+  border-radius: 12px;
+  background: var(--color-surface);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+  white-space: nowrap;
+}
+.workday-actions > a:hover,
+.workday-actions > button:hover {
+  background: var(--color-border-strong);
+}
+.workday-actions > a:focus-visible,
+.workday-actions > button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+.workday-tasks-backdrop {
+  padding: 0;
+  z-index: 70;
+}
+.workday-tasks-panel {
+  position: relative;
+  margin: 0 0 0 auto;
+  height: 100dvh;
+  max-width: 560px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 24px 0 0 24px;
+  padding: 24px;
+  animation: workday-tasks-in 180ms ease-out;
+}
+.workday-tasks-panel > header {
+  padding-right: 44px;
+}
+@keyframes workday-tasks-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 767px) {
+  .workday-tasks-panel {
+    align-self: end;
+    height: auto;
+    max-height: 90dvh;
+    max-width: none;
+    margin: 0;
+    border-radius: 24px 24px 0 0;
+    padding: 24px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workday-tasks-panel {
+    animation: none;
+  }
+}
+.workday-actions .workday-new-rental {
+  background: var(--color-primary);
+  color: white;
+}
+.workday-actions .workday-new-rental:hover {
+  background: var(--color-primary-hover);
+}
+.workday-fleet-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  background: var(--color-surface);
+  border-radius: 16px;
+  padding: 18px 4px;
+}
+.workday-fleet-stats a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  border-right: 1px solid var(--color-border);
+}
+.workday-fleet-stats a:last-child {
+  border: 0;
+}
+.workday-fleet-stats svg {
+  width: 24px;
+  height: 24px;
+  color: var(--color-text-secondary);
+}
+.workday-fleet-stats strong {
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 600;
+}
+.workday-fleet-stats small {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.workday-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.workday-section-heading h2 {
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.workday-day-controls {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+.workday-dates {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  min-width: 0;
+}
+.workday-dates-scroll {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.workday-dates a {
+  min-width: 49px;
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+.workday-dates small {
+  text-transform: capitalize;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.workday-dates a[aria-current] {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+.workday-dates a[aria-current] small {
+  color: white;
+}
+.workday-dates button,
+.workday-calendar-tools button {
+  display: grid;
+  place-items: center;
+  min-width: 36px;
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.workday-carousel {
+  position: relative;
+  min-width: 0;
+  isolation: isolate;
+}
+.workday-event-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - 28px) / 3);
+  gap: 14px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  outline: none;
+}
+.workday-event-grid::-webkit-scrollbar {
+  display: none;
+}
+.workday-event-grid:focus-visible {
+  border-radius: 20px;
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+.workday-event-card {
+  position: relative;
+  min-height: 196px;
+  padding: 12px;
+  min-width: 0;
+  background: var(--color-surface);
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: 16px;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 3%) inset,
+    0 12px 32px rgb(0 0 0 / 16%);
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.workday-event-card:hover {
+  border-color: var(--color-border-strong);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 5%) inset,
+    0 18px 42px rgb(0 0 0 / 22%);
+}
+.workday-carousel-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-elevated) 92%, transparent);
+  color: var(--color-text-primary);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 32%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) scale(0.9);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    background-color 160ms ease;
+  backdrop-filter: blur(14px);
+  cursor: pointer;
+}
+.workday-carousel-arrow svg {
+  width: 22px;
+  height: 22px;
+}
+.workday-carousel-arrow--back {
+  left: -12px;
+}
+.workday-carousel-arrow--forward {
+  right: -12px;
+}
+.workday-carousel:hover .workday-carousel-arrow,
+.workday-carousel:focus-within .workday-carousel-arrow {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) scale(1);
+}
+.workday-carousel-arrow:hover {
+  background: var(--color-primary);
+  color: #fff;
+}
+.workday-event-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.workday-event-top time {
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 600;
+}
+.workday-event-status {
+  font-size: 11px;
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+  padding: 4px 7px;
+  border-radius: 8px;
+}
+.workday-event-status[data-outgoing='true'] {
+  color: var(--color-success);
+  background: var(--color-success-soft);
+}
+.workday-event-status[data-tone='danger'] {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+.workday-event-vehicle {
+  display: grid;
+  grid-template-columns: 48% 1fr;
+  align-items: center;
+  text-align: left;
+  gap: 6px;
+  min-height: 64px;
+  width: 100%;
+  cursor: pointer;
+  font-size: 12px;
+}
+.workday-event-vehicle img {
+  width: 100%;
+  height: 60px;
+  object-fit: contain;
+  border-radius: 10px;
+}
+.workday-event-vehicle small {
+  display: block;
+  margin-top: 5px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.workday-event-client {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  min-width: 0;
+  min-height: 22px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.workday-event-client svg {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+}
+.workday-event-no-photo {
+  display: grid;
+  min-height: 92px;
+  place-items: center;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 12px;
+  color: var(--color-text-muted);
+}
+.workday-event-amount {
+  margin: -2px 0 4px 22px;
+  color: var(--color-text-primary);
+  font-size: 16px;
+}
+.workday-event-card--attention .workday-event-top > svg {
+  width: 24px;
+  height: 24px;
+  color: var(--color-warning);
+}
+.workday-event-card--attention[data-tone='danger'] .workday-event-top > svg {
+  color: var(--color-danger);
+}
+.workday-attention-card-copy {
+  display: grid;
+  flex: 1;
+  align-content: center;
+  gap: 8px;
+  min-height: 140px;
+}
+.workday-attention-card-copy strong {
+  font-size: 19px;
+  line-height: 1.25;
+}
+.workday-attention-card-copy p {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.workday-event-action {
+  margin-top: auto;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  min-height: 34px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 9px;
+  font-size: 12px;
+  padding: 6px;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+}
+.workday-event-action:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.workday-event-action[data-primary='true'] {
+  background: var(--color-primary);
+  color: white;
+  border-color: transparent;
+}
+.workday-event-action[data-primary='true']:hover {
+  color: white;
+  background: var(--color-primary-hover, #2680ff);
+}
+.workday-empty {
+  padding: 24px;
+  background: var(--color-surface);
+  border-radius: 14px;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+.workday-empty a {
+  display: block;
+  color: var(--color-primary);
+  margin-top: 12px;
+}
+.workday-calendar-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.workday-calendar-tools select {
+  min-height: 40px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 12px;
+  background: var(--color-canvas);
+}
+.workday-calendar-scroll {
+  overflow-x: auto;
+  border-radius: 14px;
+  background: var(--color-surface);
+  scrollbar-width: thin;
+}
+.workday-calendar-row {
+  display: grid;
+  border-bottom: 1px solid var(--color-border);
+  min-height: 65px;
+}
+.workday-calendar-row:last-child {
+  border-bottom: 0;
+}
+.workday-calendar-head {
+  min-height: 48px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.workday-calendar-head > span {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border-right: 1px solid var(--color-border);
+}
+.workday-calendar-head > span:first-child {
+  align-items: flex-start;
+  padding-left: 16px;
+}
+.workday-calendar-head small {
+  text-transform: capitalize;
+}
+.workday-calendar-car {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.workday-calendar-car img {
+  width: 68px;
+  height: 44px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+.workday-calendar-car small {
+  display: block;
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+  font-size: 11px;
+}
+.workday-calendar-track {
+  position: relative;
+  display: grid;
+  min-height: 64px;
+}
+.workday-calendar-cell {
+  grid-row: 1;
+  border-left: 1px solid var(--color-border);
+}
+.workday-calendar-cell[data-selected='true'],
+.workday-calendar-head span[data-selected='true'] {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+.workday-calendar-bookings {
+  position: relative;
+  grid-column: 1/-1;
+  grid-row: 1;
+  display: grid;
+  align-content: center;
+  gap: 4px 0;
+  padding: 9px 4px;
+}
+.workday-rental-bar {
+  min-width: 0;
+  background: var(--color-elevated);
+  margin: 0 3px;
+  padding: 7px 8px;
+  line-height: 16px;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 6px;
+  text-align: center;
+}
+.workday-rental-bar[data-active='true'] {
+  background: var(--color-primary);
+  color: #fff;
+}
+.workday-calendar-empty {
+  text-align: center;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+.workday-show-all {
+  display: block;
+  margin: 10px auto 0;
+  min-height: 36px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.workday-base {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  background: var(--color-surface);
+  padding: 18px 24px;
+  border-radius: 16px;
+}
+.workday-base h2 {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 20px;
+  font-weight: 600;
+}
+.workday-base a {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-left: 1px solid var(--color-border);
+  padding-left: 32px;
+}
+.workday-base svg {
+  width: 24px;
+  height: 24px;
+  color: var(--color-text-secondary);
+}
+.workday-base small {
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.workday-base strong {
+  font-size: 24px;
+  font-weight: 600;
+}
+.workday-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+.workday-attention,
+.workday-finance,
+.workday-map-card {
+  background: var(--color-surface);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.workday-attention {
+  padding: 18px;
+}
+.workday-attention h2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 15px;
+  font-weight: 600;
+  gap: 8px;
+}
+.workday-attention h2 > span {
+  border-radius: 50%;
+  background: var(--color-elevated);
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.workday-attention-list {
+  max-height: 252px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.workday-attention-list a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 0;
+  border-top: 1px solid var(--color-border);
+  font-size: 12px;
+}
+.workday-attention-list a:first-child {
+  margin-top: 14px;
+}
+.workday-attention-list a > svg:first-child {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  color: var(--color-warning);
+}
+.workday-attention-list a > svg[data-tone='danger'] {
+  color: var(--color-danger);
+}
+.workday-attention-list a > span {
+  flex: 1;
+}
+.workday-attention-list small {
+  display: block;
+  margin-top: 5px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+.workday-attention-note {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin-top: 10px;
+}
+.workday-finance {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 22px 18px;
+}
+.workday-finance > svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+.workday-finance h2 {
+  font-size: 12px;
+}
+.workday-finance strong {
+  display: block;
+  font-size: 26px;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+  font-weight: 600;
+  margin: 8px 0 3px;
+}
+.workday-finance p {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.workday-map-card h2 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.workday-mini-map {
+  position: relative;
+  height: 270px;
+}
+.workday-mini-map > .maplibregl-map {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+}
+.workday-all-tasks summary {
+  cursor: pointer;
+  min-height: 44px;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+.workday-all-tasks summary span {
+  margin-left: 10px;
+}
+@media (max-width: 1250px) {
+  .workday-dashboard {
+    grid-template-columns: minmax(0, 1fr) 230px;
+    gap: 18px;
+  }
+  .workday-finance {
+    padding: 18px 12px;
+    gap: 8px;
+  }
+  .workday-finance strong {
+    font-size: 23px;
+  }
+  .workday-event-grid {
+    grid-auto-columns: calc((100% - 14px) / 2);
+  }
+  .workday-events-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .workday-titlebar {
+    gap: 12px;
+  }
+  .workday-weather {
+    margin-left: auto;
+  }
+}
+@media (max-width: 1000px) {
+  .workday-dashboard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workday-aside {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workday-events-heading {
+    flex-direction: row;
+    align-items: center;
+  }
+  .workday-dates a {
+    min-width: 43px;
+  }
+  .workday-day-controls {
+    max-width: 80%;
+  }
+}
+@media (max-width: 600px) {
+  .workday-main {
+    gap: 20px;
+  }
+  .workday-title {
+    display: block;
+  }
+  .workday-title h1 {
+    font-size: 26px;
+  }
+  .workday-title p {
+    font-size: 11px;
+    margin-top: 6px;
+  }
+  .workday-weather {
+    font-size: 11px;
+  }
+  .workday-weather img {
+    width: 30px;
+    height: 30px;
+  }
+  .workday-actions {
+    width: 100%;
+  }
+  .workday-actions > a,
+  .workday-actions > button {
+    flex: 1 1 calc(50% - 5px);
+    justify-content: center;
+    padding: 0 8px;
+    font-size: 13px;
+  }
+  .workday-fleet-stats {
+    padding: 16px 2px;
+  }
+  .workday-fleet-stats a {
+    gap: 4px;
+    flex-direction: column;
+  }
+  .workday-fleet-stats svg {
+    width: 18px;
+    height: 18px;
+  }
+  .workday-fleet-stats strong {
+    font-size: 21px;
+    display: block;
+    text-align: center;
+  }
+  .workday-fleet-stats small {
+    font-size: 10px;
+  }
+  .workday-events-heading {
+    display: block;
+  }
+  .workday-section-heading h2 {
+    font-size: 20px;
+  }
+  .workday-day-controls {
+    max-width: 100%;
+    margin-top: 12px;
+  }
+  .workday-dates {
+    width: 100%;
+  }
+  .workday-dates a {
+    min-width: 45px;
+  }
+  .workday-event-grid {
+    grid-auto-columns: 88%;
+  }
+  .workday-carousel-arrow {
+    display: none;
+  }
+  .workday-event-vehicle {
+    min-height: 125px;
+  }
+  .workday-base {
+    gap: 14px;
+    padding: 18px 12px;
+  }
+  .workday-base h2 {
+    font-size: 16px;
+    gap: 6px;
+  }
+  .workday-base a {
+    gap: 8px;
+    padding-left: 12px;
+  }
+  .workday-base svg {
+    width: 18px;
+    height: 18px;
+  }
+  .workday-base strong {
+    font-size: 22px;
+  }
+  .workday-aside {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workday-titlebar {
+    gap: 12px;
+  }
+  .workday-calendar-tools select {
+    max-width: 100px;
+    padding: 0 8px;
+  }
+  .workday-calendar-tools button {
+    min-width: 30px;
+  }
+  .workday-calendar-tools {
+    gap: 4px;
+  }
+  .workday-finance strong {
+    font-size: 28px;
+  }
+}
+@media (pointer: coarse) {
+  .workday-carousel-arrow {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workday-event-grid {
+    scroll-behavior: auto;
+  }
+  .workday-event-card,
+  .workday-carousel-arrow,
+  .workday-event-action {
+    transition: none;
+  }
+}

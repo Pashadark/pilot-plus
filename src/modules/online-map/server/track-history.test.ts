@@ -47,6 +47,34 @@ describe('getOnlineMapTrackHistory', () => {
           client: { id: 'client-1', lastName: 'Иванов', firstName: 'Иван', middleName: null },
         },
       ],
+      events: [
+        {
+          id: 'event-acceleration-1',
+          type: 'HARSH_ACCELERATION',
+          title: 'Резкий разгон',
+          description: 'Ускорение до 3,6 м/с².',
+          recordedAt: new Date('2026-09-15T07:10:00.000Z'),
+          endLatitude: '55.760000',
+          endLongitude: '37.630000',
+          startSpeedKph: 20,
+          endSpeedKph: 74,
+          durationMs: 4_000,
+          trackPointIds: ['position-1', 'position-2'],
+        },
+        {
+          id: 'event-braking-1',
+          type: 'HARSH_BRAKING',
+          title: 'Резкое торможение',
+          description: 'Замедление до −3,8 м/с².',
+          recordedAt: new Date('2026-09-15T07:10:00.000Z'),
+          endLatitude: '55.760000',
+          endLongitude: '37.630000',
+          startSpeedKph: 92,
+          endSpeedKph: 48,
+          durationMs: 3_000,
+          trackPointIds: ['position-1', 'position-2'],
+        },
+      ],
     });
 
     const result = await getOnlineMapTrackHistory(
@@ -71,8 +99,36 @@ describe('getOnlineMapTrackHistory', () => {
           expect.objectContaining({
             date: '2026-09-15',
             points: [
-              expect.objectContaining({ id: 'position-1', coordinates: [37.62, 55.75] }),
-              expect.objectContaining({ id: 'position-2', coordinates: [37.63, 55.76] }),
+              expect.objectContaining({
+                id: 'position-1',
+                coordinates: [37.62, 55.75],
+                recordedAt: '2026-09-15T07:00:00.000Z',
+              }),
+              expect.objectContaining({
+                id: 'position-2',
+                coordinates: [37.63, 55.76],
+                recordedAt: '2026-09-15T07:10:00.000Z',
+              }),
+            ],
+            events: [
+              expect.objectContaining({
+                id: 'event-acceleration-1',
+                type: 'harsh-acceleration',
+                pointId: 'position-2',
+                coordinates: [37.63, 55.76],
+                speedKph: 74,
+                metricLabel: '20→74',
+                description: 'Скорость выросла с 20 до 74 км/ч за 4 сек.',
+              }),
+              expect.objectContaining({
+                id: 'event-braking-1',
+                type: 'harsh-braking',
+                pointId: 'position-2',
+                coordinates: [37.63, 55.76],
+                speedKph: 48,
+                metricLabel: '92→48',
+                description: 'Скорость снизилась с 92 до 48 км/ч за 3 сек.',
+              }),
             ],
           }),
         ],

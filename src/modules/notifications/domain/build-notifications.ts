@@ -6,6 +6,9 @@ const tones = { INFO: 'info', WARNING: 'warning', DANGER: 'danger' } as const;
 export function buildEventNotifications(events: readonly TimelineEventDto[]): PilotNotification[] {
   const seen = new Set<string>();
   return events.flatMap((event) => {
+    // Routine telemetry belongs in vehicle history, not the actionable inbox.
+    if (event.severity === 'INFO' && ['MOVEMENT', 'STOP', 'TRIP'].includes(event.category))
+      return [];
     if (seen.has(event.key)) return [];
     seen.add(event.key);
     return [

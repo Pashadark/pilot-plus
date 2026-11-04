@@ -88,10 +88,10 @@ describe('Timeweb monitor model', () => {
   it('formats a concise Russian group alert', () => {
     const snapshot = buildTimewebSnapshot(finances(167), servers, null, checkedAt);
 
-    expect(formatTimewebAlert(snapshot)).toContain('Timeweb: заканчиваются средства');
-    expect(formatTimewebAlert(snapshot)).toContain('Баланс: 2 450,13 ₽');
-    expect(formatTimewebAlert(snapshot)).toContain('Осталось: 6 дн. 23 ч.');
-    expect(formatTimewebAlert(snapshot)).toContain('Расход: 350 ₽ в сутки');
-    expect(formatTimewebAlert(snapshot)).toContain('Пополнить примерно до: 14.10.2026, 11:00');
+    expect(formatTimewebAlert(snapshot)).toContain('🔴 <b>Требуется пополнить сервер</b>');
+    expect(formatTimewebAlert(snapshot)).toContain('💰 <b>Баланс</b>\n├ 2 450,13 ₽');
+    expect(formatTimewebAlert(snapshot)).toContain('└ Осталось: 6 дн. 23 ч.');
+    expect(formatTimewebAlert(snapshot)).toContain('⚙️ <b>Сервис</b>\n└ Timeweb');
+    expect(formatTimewebAlert(snapshot)).toContain('⚡ <b>Действие</b>');
   });
 });

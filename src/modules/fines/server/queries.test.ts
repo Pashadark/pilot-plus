@@ -49,7 +49,7 @@ describe('fine queries', () => {
     });
     companyFindManyMock.mockResolvedValue([{ id: 'company-a', name: 'A' }]);
     findManyMock.mockResolvedValue([]);
-    const items = Array.from({ length: 25 }, (_, i) => ({
+    const items = Array.from({ length: 75 }, (_, i) => ({
       id: `toll:company-a:${i}`,
       companyId: 'company-a',
       kind: 'TOLL',
@@ -63,11 +63,11 @@ describe('fine queries', () => {
     }));
     tollLoadMock.mockResolvedValue({ items, unavailable: false });
     const first = await listFinesForCurrentUser({ status: 'UNPAID' });
-    expect(first.fines).toHaveLength(24);
-    expect(first.pagination.total).toBe(25);
-    expect(first.summary.unpaidAmountMinor).toBe('250000');
+    expect(first.fines).toHaveLength(50);
+    expect(first.pagination.total).toBe(75);
+    expect(first.summary.unpaidAmountMinor).toBe('750000');
     const second = await listFinesForCurrentUser({ status: 'UNPAID', page: '2' });
-    expect(second.fines).toHaveLength(1);
+    expect(second.fines).toHaveLength(25);
     const paid = await listFinesForCurrentUser({ status: 'PAID' });
     expect(paid.fines).toHaveLength(0);
     expect(paid.summary.unpaidAmountMinor).toBe('0');
@@ -257,22 +257,32 @@ describe('fine queries', () => {
       _sum: { currentAmountMinor: BigInt(345600) },
     });
 
-    const result = await listFinesForCurrentUser({ companyId: 'company-a', page: '2' });
+    const result = await listFinesForCurrentUser({
+      companyId: 'company-a',
+      page: '2',
+      pageSize: '100',
+    });
 
-    expect(result.pagination).toEqual({ page: 2, pageSize: 24, total: 49, totalPages: 3 });
+    expect(result.pagination).toEqual({ page: 1, pageSize: 100, total: 49, totalPages: 1 });
     expect(result.fines).toHaveLength(1);
     expect(result.summary).toEqual({
       newCount: 4,
+      newAmountMinor: '345600',
       unpaidCount: 17,
       unpaidAmountMinor: '345600',
       unassignedCount: 5,
+      unassignedAmountMinor: '345600',
+      urgentCount: 17,
+      urgentAmountMinor: '345600',
+      tollCount: 0,
+      tollAmountMinor: '0',
       discountEndingSoonCount: 3,
       bailiffRiskCount: 2,
     });
     expect(findManyMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        take: 24,
-        where: { AND: [{ companyId: 'company-a' }, { id: { in: [] } }] },
+        take: 100,
+        where: { AND: [{ companyId: 'company-a' }, { id: { in: ['fine-page-two'] } }] },
       }),
     );
     expect(fineAggregateMock).toHaveBeenCalledWith(

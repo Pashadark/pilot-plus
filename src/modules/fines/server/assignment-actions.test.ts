@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const requireFineManageAccess = vi.hoisted(() => vi.fn());
 const transaction = vi.hoisted(() => vi.fn());
 const revalidatePath = vi.hoisted(() => vi.fn());
+const reserveFine = vi.hoisted(() => vi.fn());
+const reconcileFine = vi.hoisted(() => vi.fn());
 
 vi.mock('server-only', () => ({}));
 vi.mock('next/cache', () => ({ revalidatePath }));
@@ -11,6 +13,10 @@ vi.mock('../access', () => ({
   FineAccessDeniedError: class FineAccessDeniedError extends Error {},
 }));
 vi.mock('@/database/prisma/client', () => ({ prisma: { $transaction: transaction } }));
+vi.mock('@/modules/deposits/server/fine-reservation', () => ({
+  reserveFineFromDeposit: reserveFine,
+  reconcileFineDepositReservation: reconcileFine,
+}));
 
 import { assignFineAction } from './assignment-actions';
 
@@ -33,6 +39,7 @@ function transactionDatabase() {
         assignmentSource: null,
         assignmentConfirmedAt: null,
         status: 'UNPAID',
+        currentAmountMinor: 250_000n,
       }),
       update: vi.fn().mockResolvedValue({ id: 'fine-1' }),
     },
@@ -115,6 +122,16 @@ describe('fine assignment action', () => {
       select: { id: true },
     });
     expect(JSON.stringify(database.auditLog.create.mock.calls)).not.toContain('client-1');
+    expect(reserveFine).toHaveBeenCalledWith(
+      database,
+      expect.objectContaining({
+        companyId: 'company-1',
+        clientId: 'client-1',
+        rentalId: 'rental-1',
+        fineId: 'fine-1',
+        fineAmountMinor: 250_000n,
+      }),
+    );
   });
 
   it('rejects a foreign or wrong-vehicle rental without changing the fine', async () => {
@@ -181,6 +198,16 @@ describe('fine assignment action', () => {
         data: expect.objectContaining({
           changes: { assigned: false, assignmentSource: 'MANUAL' },
         }),
+      }),
+    );
+    expect(reconcileFine).toHaveBeenCalledWith(
+      database,
+      expect.objectContaining({
+        companyId: 'company-1',
+        clientId: 'client-1',
+        rentalId: 'rental-1',
+        fineId: 'fine-1',
+        status: 'CANCELLED',
       }),
     );
   });

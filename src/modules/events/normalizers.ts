@@ -1,5 +1,6 @@
 import { createEventKey } from './event-key';
 import type { TimelineEventDto, TimelineSeverity } from './types';
+import { getPilotBusinessDateParts } from '@/shared/business-time';
 
 type NumericValue = number | string | { toNumber(): number };
 type DateValue = Date | string;
@@ -37,6 +38,7 @@ export interface TripSource extends BaseSource {
 }
 
 export interface VehicleEventSource extends BaseSource {
+  type?: string;
   title: string;
   description: string | null;
   location: string | null;
@@ -178,22 +180,32 @@ export function normalizeTrip(source: TripSource): TimelineEventDto {
 }
 
 export function normalizeVehicleEvent(source: VehicleEventSource): TimelineEventDto {
+  const recordedAt = toIso(source.recordedAt);
+  const sourceHref =
+    source.type === 'HARSH_ACCELERATION' || source.type === 'HARSH_BRAKING'
+      ? `/map?vehicleId=${encodeURIComponent(source.vehicle.id)}&date=${formatBusinessDate(recordedAt)}&eventId=${encodeURIComponent(source.id)}`
+      : `/vehicles/${source.vehicle.id}?tab=events`;
   return createTimelineEvent(source, {
     key: createEventKey('vehicle-event', source.id),
     category: 'ALERT',
     severity: source.severity,
     title: source.title,
     description: source.description,
-    recordedAt: toIso(source.recordedAt),
+    recordedAt,
     location: source.location,
     coordinates: null,
     telemetry: emptyTelemetry(),
     source: {
       type: 'vehicle-event',
       id: source.id,
-      href: `/vehicles/${source.vehicle.id}?tab=events`,
+      href: sourceHref,
     },
   });
+}
+
+function formatBusinessDate(value: string): string {
+  const parts = getPilotBusinessDateParts(new Date(value));
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
 }
 
 export function normalizeFuelRecord(source: FuelRecordSource): TimelineEventDto {

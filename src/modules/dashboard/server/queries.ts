@@ -6,9 +6,16 @@ import { hasCompanyPermission } from '@/modules/admin/access/permissions';
 import { decryptField } from '@/services/security/field-encryption';
 import { getAuthenticatedSession } from '@/services/auth/session';
 
-import { getDashboardWindow, type DashboardPeriod, type DashboardWindow } from '../date-window';
+import {
+  getDashboardWindow,
+  parseDashboardSelection,
+  type DashboardPeriod,
+  type DashboardWindow,
+} from '../date-window';
 import { buildDashboardOverview } from '../normalizers';
 import type { DashboardOverviewDto } from '../overview-types';
+import { getVehiclePromo } from '../vehicle-promo';
+import { selectFreshFuelReading } from '@/modules/vehicles/fuel-level';
 
 type DashboardSession = {
   companyId: string;
@@ -37,7 +44,14 @@ type RawVehicle = {
   registrationNumber: string | null;
   archivedAt: Date | null;
   isDemoImport: boolean;
-  positions: Array<{ id: string; recordedAt: Date; fuelLevelPercent: unknown | null }>;
+  images?: Array<{ localPath: string; alt: string }>;
+  positions: Array<{
+    id: string;
+    recordedAt: Date;
+    fuelLevelPercent: unknown | null;
+    latitude?: unknown;
+    longitude?: unknown;
+  }>;
   rentalOperations: Array<{
     id: string;
     occurredAt: Date;
@@ -161,9 +175,14 @@ const vehicleSelect = {
   registrationNumber: true,
   archivedAt: true,
   isDemoImport: true,
+  images: {
+    select: { localPath: true, alt: true },
+    orderBy: [{ isPrimary: 'desc' }, { position: 'asc' }],
+    take: 1,
+  },
   positions: {
     where: { provider: 'GLONASSSOFT' },
-    select: { id: true, recordedAt: true, fuelLevelPercent: true },
+    select: { id: true, recordedAt: true, fuelLevelPercent: true, latitude: true, longitude: true },
     orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
     take: 1,
   },
@@ -267,6 +286,69 @@ export function createDashboardQueries(
   dependencies: DashboardQueryDependencies,
 ) {
   return {
+    async getDayEvents(day: string, now: Date = new Date()) {
+      const session = await getSession();
+      if (!session) throw new Error('Доступ к панели управления запрещён.');
+      const period = parseDashboardSelection({ from: day }, now);
+      if (period.key !== 'custom') throw new Error('Неверная дата.');
+      const rentals = (await repository.rentalFindMany({
+        where: {
+          companyId: session.companyId,
+          vehicle: { archivedAt: null, isDemoImport: false },
+          OR: [
+            {
+              status: 'ACTIVE',
+              startsAt: { lt: period.toExclusive },
+            },
+            {
+              status: { in: ['CONFIRMED', 'ACTIVE'] },
+              OR: [
+                { startsAt: { gte: period.from, lt: period.toExclusive } },
+                { endsAt: { gte: period.from, lt: period.toExclusive } },
+              ],
+            },
+            {
+              status: 'COMPLETED',
+              depositMinor: { gt: 0 },
+            },
+          ],
+        },
+        select: rentalSelect(session.canViewClientPhone),
+        orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
+      })) as RawRental[];
+      const overview = buildDashboardOverview({
+        period,
+        now,
+        clientCount: 0,
+        maintenanceRecords: [],
+        washRecords: [],
+        vehicles: rentals.map((rental) => ({
+          id: rental.vehicleId,
+          label: vehicleLabel(rental.vehicle),
+          position: null,
+          fuelLevelPercent: null,
+        })),
+        rentals: rentals.map((rental) => ({
+          ...rental,
+          vehicleLabel: vehicleLabel(rental.vehicle),
+          client: {
+            ...rental.client,
+            phone:
+              session.canViewClientPhone && rental.client.phoneEncrypted
+                ? decryptField(rental.client.phoneEncrypted, dependencies.encryptionKey)
+                : null,
+          },
+        })),
+      });
+      const isCurrentDay = now >= period.from && now < period.toExclusive;
+      return overview.workItems.filter(
+        (item) =>
+          ['HANDOVER', 'DELIVERY', 'RETURN', 'RENTAL_END', 'DEPOSIT_RETURN'].includes(item.kind) &&
+          ((new Date(item.scheduledAt) >= period.from &&
+            new Date(item.scheduledAt) < period.toExclusive) ||
+            (isCurrentDay && item.overdue)),
+      );
+    },
     async getOverview(
       period: DashboardPeriod | DashboardWindow,
       now: Date = new Date(),
@@ -305,6 +387,7 @@ export function createDashboardQueries(
 
       const [
         vehicles,
+        fuelVehicles,
         rentals,
         financeRentals,
         clientCount,
@@ -321,6 +404,29 @@ export function createDashboardQueries(
             rentals: { where: activeRentalWhere, select: { id: true } },
             maintenanceRecords: { where: activeMaintenanceWhere, select: { id: true } },
             washRecords: { where: activeWashWhere, select: { id: true } },
+          },
+          orderBy: { id: 'asc' },
+        }),
+        repository.vehicleFindMany({
+          where: { companyId, archivedAt: null, isDemoImport: false },
+          select: {
+            id: true,
+            positions: {
+              ...vehicleSelect.positions,
+              where: {
+                provider: 'GLONASSSOFT',
+                fuelLevelPercent: { not: null },
+                recordedAt: { lte: now },
+              },
+            },
+            rentalOperations: {
+              ...vehicleSelect.rentalOperations,
+              where: {
+                status: 'COMMITTED',
+                fuelLevelPercent: { not: null },
+                occurredAt: { lte: now },
+              },
+            },
           },
           orderBy: { id: 'asc' },
         }),
@@ -451,7 +557,25 @@ export function createDashboardQueries(
         }),
       ]);
 
-      return buildDashboardOverview({
+      const fuelByVehicle = new Map(
+        (fuelVehicles as RawVehicle[]).map((vehicle) => [
+          vehicle.id,
+          selectFreshFuelReading(
+            [
+              ...vehicle.positions.map((p) => ({
+                fuelLevelPercent: optionalNumber(p.fuelLevelPercent),
+                observedAt: p.recordedAt,
+              })),
+              ...vehicle.rentalOperations.map((p) => ({
+                fuelLevelPercent: optionalNumber(p.fuelLevelPercent),
+                observedAt: p.occurredAt,
+              })),
+            ],
+            now,
+          ),
+        ]),
+      );
+      const overview = buildDashboardOverview({
         period: { key: periodKey, ...window },
         workPeriod: { key: periodKey, ...queueWindow },
         now,
@@ -460,9 +584,7 @@ export function createDashboardQueries(
           id: vehicle.id,
           label: vehicleLabel(vehicle),
           position: vehicle.positions[0] ?? null,
-          fuelLevelPercent:
-            optionalNumber(vehicle.positions[0]?.fuelLevelPercent) ??
-            optionalNumber(vehicle.rentalOperations[0]?.fuelLevelPercent),
+          fuelLevelPercent: fuelByVehicle.get(vehicle.id)?.fuelLevelPercent ?? null,
           archivedAt: vehicle.archivedAt,
           isDemoImport: vehicle.isDemoImport,
         })),
@@ -520,6 +642,39 @@ export function createDashboardQueries(
           contractNumber: fine.rental?.contractNumber ?? null,
         })),
       });
+      const fleet = (vehicles as RawVehicle[])
+        .filter((v) => !v.archivedAt && !v.isDemoImport)
+        .map((v) => {
+          const pos = v.positions[0];
+          const latitude = optionalNumber(pos?.latitude);
+          const longitude = optionalNumber(pos?.longitude);
+          return {
+            id: v.id,
+            name: vehicleLabel({ ...v, registrationNumber: null }),
+            plate: v.registrationNumber ?? '',
+            image:
+              getVehiclePromo(v.id, vehicleLabel({ ...v, registrationNumber: null })) ??
+              v.images?.[0] ??
+              null,
+            position:
+              pos && latitude !== null && longitude !== null
+                ? { latitude, longitude, recordedAt: pos.recordedAt.toISOString() }
+                : null,
+            rentals: (financeRentals as RawRental[])
+              .filter(
+                (r) =>
+                  r.vehicleId === v.id && ['CONFIRMED', 'ACTIVE', 'COMPLETED'].includes(r.status),
+              )
+              .map((r) => ({
+                id: r.id,
+                startsAt: r.startsAt.toISOString(),
+                endsAt: (r.completedAt ?? r.endsAt).toISOString(),
+                status: r.status,
+                clientName: [r.client.lastName, r.client.firstName].filter(Boolean).join(' '),
+              })),
+          };
+        });
+      return { ...overview, fleet };
     },
   };
 }
@@ -576,3 +731,4 @@ const queries = createDashboardQueries(
 );
 
 export const getDashboardOverviewForCurrentUser = queries.getOverview;
+export const getWorkdayEventsForCurrentUser = queries.getDayEvents;

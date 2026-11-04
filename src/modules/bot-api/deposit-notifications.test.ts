@@ -1,23 +1,28 @@
 import { expect, it } from 'vitest';
+
 import { formatDepositReturnedMessage } from './deposit-notifications';
 
-it('formats the deposit like lifecycle notifications and escapes customer data', () => {
+it('formats a returned deposit with the shared Supa Pro block layout', () => {
   const message = formatDepositReturnedMessage({
-    contract: 'ME-62',
-    client: 'Имя <test>',
-    vehicle: 'Kia Rio',
+    contract: 'SP-3251',
+    client: 'Иванов Иван Иванович',
+    vehicle: 'Kia K5 · М022АН997',
     collected: '20 000 ₽',
-    returned: '18 000 ₽',
-    withheld: '2 000 ₽',
-    reason: '<мойка>',
-    at: '24.09.2026, 14:00',
-    actor: 'Павел',
+    returned: '12 957,40 ₽',
+    withheld: '7 042,60 ₽',
+    reason: 'Неоплаченные штрафы',
+    at: '24.10.2026, 16:10',
+    actor: 'Павел Седов',
     rentalId: 'rental-1',
   });
-  expect(message).toContain('💳 <b>Залог по договору оформлен</b>');
-  expect(message).toContain('Возвращено: <b>18 000 ₽</b>');
-  expect(message).toContain('Имя &lt;test&gt;');
-  expect(message).toContain('Причина: &lt;мойка&gt;');
-  expect(message).toContain('https://supapro.ru/rentals/rental-1');
-  expect(message).not.toContain('\n\n');
+
+  expect(message).toContain('✅ <b>Залог возвращён</b>');
+  expect(message).toContain('🚗 <b>Авто</b>\n└ Kia K5 · М022АН997');
+  expect(message).toContain('👤 <b>Клиент</b>\n└ Иванов Иван Иванович');
+  expect(message).toContain('💰 <b>Расчёт</b>');
+  expect(message).toContain('├ Получено: <b>20 000 ₽</b>');
+  expect(message).toContain('└ Возвращено: <b>12 957,40 ₽</b>');
+  expect(message).toContain('📝 <b>Причина удержания</b>\n└ Неоплаченные штрафы');
+  expect(message).toContain('🕒 <b>Операция</b>\n├ 24.10.2026, 16:10 МСК\n└ Павел Седов');
+  expect(message).not.toContain('https://supapro.ru');
 });

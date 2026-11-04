@@ -1,3 +1,5 @@
+import { formatTelegramMessage, telegramSection } from '@/modules/bot-api/telegram-message';
+
 export const TIMEWEB_LOW_BALANCE_HOURS = 7 * 24;
 
 export interface TimewebServerSummary {
@@ -132,12 +134,17 @@ export function formatTimewebAlert(snapshot: TimewebMonitorSnapshot) {
   const hours = Math.max(0, Math.floor(snapshot.hoursLeft ?? 0));
   const daily =
     snapshot.dailyCost === null ? 'Нет данных' : `${rubles(snapshot.dailyCost)} в сутки`;
-  return [
-    '⚠️ Timeweb: заканчиваются средства',
-    `Баланс: ${rubles(snapshot.balance)}`,
-    `Пополнить примерно до: ${atMoscow(snapshot.depletesAt)}`,
-    `Осталось: ${Math.floor(hours / 24)} дн. ${hours % 24} ч.`,
-    `Расход: ${daily}`,
-    'Пополните баланс, чтобы сервер не остановился.',
-  ].join('\n');
+  return formatTelegramMessage({
+    title: '🔴 <b>Требуется пополнить сервер</b>',
+    sections: [
+      telegramSection('⚙️', 'Сервис', ['Timeweb']),
+      telegramSection('💰', 'Баланс', [
+        rubles(snapshot.balance),
+        `Расход: ${daily}`,
+        `Осталось: ${Math.floor(hours / 24)} дн. ${hours % 24} ч.`,
+      ]),
+      telegramSection('🗓', 'Прогноз отключения', [`${atMoscow(snapshot.depletesAt)} МСК`]),
+    ],
+    action: 'Пополнить баланс, чтобы сервер не остановился',
+  });
 }

@@ -6,13 +6,52 @@ import {
   ackNotificationJob,
   claimNotificationJobs,
   enqueueDailyOperationsDigests,
+  enqueueManualClientImpoundAlert,
+  enqueueManualReturnReminder,
+  enqueueOperationsDigestRefresh,
   enqueueOperationalAlerts,
   enqueueReturnReminders,
 } from './notifications';
 
 describe('bot notification leases', () => {
-  it('enqueues separate idempotent daily operations and unpaid-fines messages at 08:00 Moscow', async () => {
-    const createMany = vi.fn().mockResolvedValue({ count: 2 });
+  it('queues a fresh three-part group digest for an authorized staff identity', async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 3 });
+    const database = {
+      telegramGroupBinding: {
+        findFirst: vi.fn().mockResolvedValue({ telegramChatId: '-100777' }),
+      },
+      botNotificationJob: { createMany },
+    };
+    const identity = {
+      identityId: 'identity-1',
+      telegramUserId: '123',
+      kind: 'STAFF' as const,
+      companyId: 'company-1',
+      clientId: null,
+      userId: 'user-1',
+      displayName: 'Павел',
+    };
+
+    await expect(
+      enqueueOperationsDigestRefresh(
+        identity,
+        '2026-10-23',
+        new Date('2026-10-23T06:12:45.000Z'),
+        database as never,
+      ),
+    ).resolves.toBe(3);
+
+    const rows = createMany.mock.calls[0][0].data as Array<Record<string, unknown>>;
+    expect(rows.map((row) => row.payload)).toEqual([
+      { date: '2026-10-23', part: 'critical' },
+      { date: '2026-10-23', part: 'trackers' },
+      { date: '2026-10-23', part: 'totals' },
+    ]);
+    expect(rows.every((row) => row.chatId === '-100777')).toBe(true);
+  });
+
+  it('enqueues three idempotent daily operations parts and unpaid fines at 08:00 Moscow', async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 4 });
     const database = {
       telegramGroupBinding: {
         findMany: vi
@@ -26,14 +65,27 @@ describe('bot notification leases', () => {
     };
     await expect(
       enqueueDailyOperationsDigests(new Date('2026-08-20T05:05:00Z'), database as never),
-    ).resolves.toBe(2);
+    ).resolves.toBe(4);
     expect(createMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.arrayContaining([
           expect.objectContaining({
-            eventKey: 'daily-operations:company-1:2026-08-20:group',
+            eventKey: 'daily-operations:company-1:2026-08-20:group:critical',
             chatId: '-100777',
             template: 'DAILY_OPERATIONS_DIGEST',
+            payload: { date: '2026-08-20', part: 'critical' },
+          }),
+          expect.objectContaining({
+            eventKey: 'daily-operations:company-1:2026-08-20:group:trackers',
+            chatId: '-100777',
+            template: 'DAILY_OPERATIONS_DIGEST',
+            payload: { date: '2026-08-20', part: 'trackers' },
+          }),
+          expect.objectContaining({
+            eventKey: 'daily-operations:company-1:2026-08-20:group:totals',
+            chatId: '-100777',
+            template: 'DAILY_OPERATIONS_DIGEST',
+            payload: { date: '2026-08-20', part: 'totals' },
           }),
           expect.objectContaining({
             eventKey: 'daily-unpaid-fines:company-1:2026-08-20:group',
@@ -101,9 +153,20 @@ describe('bot notification leases', () => {
     expect(
       rows.some((row) => row.template === 'LEASE_TO_OWN_WEEKLY_INSPECTION' && 'identityId' in row),
     ).toBe(false);
+    const inspection = rows.find((row) => row.template === 'LEASE_TO_OWN_WEEKLY_INSPECTION') as {
+      payload: { message: string; parseMode: string; actions: unknown[] };
+    };
+    expect(inspection.payload.message).toContain('🟠 <b>Не пройден еженедельный осмотр</b>');
+    expect(inspection.payload.message).toContain('🚗 <b>Авто</b>');
+    expect(inspection.payload.message).toContain('👤 <b>Клиент</b>');
+    expect(inspection.payload.message).toContain('⚡ <b>Действие</b>');
+    expect(inspection.payload.parseMode).toBe('HTML');
+    expect(inspection.payload.actions).toEqual([
+      expect.objectContaining({ type: 'contract_url', label: 'Открыть осмотр' }),
+    ]);
   });
 
-  it('enqueues independent nightly jobs for the group and the binding staff identity', async () => {
+  it('enqueues the three group parts in critical-first delivery order without duplicate staff copies', async () => {
     const createMany = vi.fn().mockResolvedValue({ count: 4 });
     const database = {
       telegramGroupBinding: {
@@ -127,19 +190,24 @@ describe('bot notification leases', () => {
       enqueueDailyOperationsDigests(new Date('2026-08-20T05:05:00Z'), database as never),
     ).resolves.toBe(4);
 
-    expect(createMany).toHaveBeenCalledWith({
-      data: expect.arrayContaining([
-        expect.objectContaining({
-          eventKey: 'daily-operations:company-1:2026-08-20:group',
-          chatId: '-100777',
-        }),
-        expect.objectContaining({
-          eventKey: 'daily-unpaid-fines:company-1:2026-08-20:group',
-          chatId: '-100777',
-        }),
-      ]),
-      skipDuplicates: true,
-    });
+    const rows = createMany.mock.calls[0][0].data as Array<{
+      eventKey: string;
+      availableAt: Date;
+      identityId?: string;
+    }>;
+    expect(rows.map((row) => row.eventKey)).toEqual([
+      'daily-operations:company-1:2026-08-20:group:critical',
+      'daily-operations:company-1:2026-08-20:group:trackers',
+      'daily-operations:company-1:2026-08-20:group:totals',
+      'daily-unpaid-fines:company-1:2026-08-20:group',
+    ]);
+    expect(rows.map((row) => row.availableAt.toISOString())).toEqual([
+      '2026-08-20T05:05:00.000Z',
+      '2026-08-20T05:05:01.000Z',
+      '2026-08-20T05:05:02.000Z',
+      '2026-08-20T05:05:03.000Z',
+    ]);
+    expect(rows.some((row) => row.identityId)).toBe(false);
   });
 
   it('enqueues id-only GPS and return alerts for the group and responsible staff', async () => {
@@ -183,7 +251,7 @@ describe('bot notification leases', () => {
     };
 
     await expect(
-      enqueueOperationalAlerts(new Date('2026-09-07T09:00:00Z'), database as never),
+      enqueueOperationalAlerts(new Date('2026-09-07T09:00:44Z'), database as never),
     ).resolves.toBe(4);
 
     const rows = createMany.mock.calls[0][0].data;
@@ -229,7 +297,7 @@ describe('bot notification leases', () => {
     expect(database.telegramGroupBinding.findMany).not.toHaveBeenCalled();
   });
 
-  it('enqueues one low-fuel alert per episode when the current level is 20 percent or less', async () => {
+  it.each([20, 24, 25, NaN])('enqueues only fresh fuel below25, level=%s', async (fuelLevel) => {
     const createMany = vi.fn().mockResolvedValue({ count: 1 });
     const database = {
       telegramGroupBinding: {
@@ -249,7 +317,7 @@ describe('bot notification leases', () => {
               {
                 id: 'position-low',
                 recordedAt: new Date('2026-09-07T08:59:00Z'),
-                fuelLevelPercent: 20,
+                fuelLevelPercent: fuelLevel,
               },
             ],
             rentalOperations: [],
@@ -258,7 +326,10 @@ describe('bot notification leases', () => {
         ]),
       },
       vehiclePosition: {
-        findFirst: vi.fn().mockResolvedValue({ id: 'position-last-full' }),
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'position-last-full',
+          recordedAt: new Date('2026-09-07T08:00:00Z'),
+        }),
       },
       rentalOperation: { findFirst: vi.fn().mockResolvedValue(null) },
       rental: { findMany: vi.fn().mockResolvedValue([]) },
@@ -269,7 +340,17 @@ describe('bot notification leases', () => {
 
     await expect(
       enqueueOperationalAlerts(new Date('2026-09-07T09:00:00Z'), database as never),
-    ).resolves.toBe(1);
+    ).resolves.toBe(Number(Number.isFinite(fuelLevel) && fuelLevel < 25));
+
+    if (!Number.isFinite(fuelLevel) || fuelLevel >= 25) {
+      expect(createMany).not.toHaveBeenCalled();
+      return;
+    }
+    expect(database.vehiclePosition.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ fuelLevelPercent: { gte: 30, lte: 100 } }),
+      }),
+    );
 
     expect(createMany).toHaveBeenCalledWith({
       data: [
@@ -278,7 +359,7 @@ describe('bot notification leases', () => {
           payload: {
             kind: 'LOW_FUEL',
             vehicleId: 'vehicle-1',
-            fuelLevelPercent: 20,
+            fuelLevelPercent: fuelLevel,
           },
         }),
       ],
@@ -314,9 +395,33 @@ describe('bot notification leases', () => {
       database as never,
     );
     expect(jobs.map((job) => job.id)).toEqual(['job-1']);
+    expect(database.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      timeout: 30_000,
+    });
   });
 
-  it('hydrates the nightly job with safe HTML for rentals, deposits, service and stale GPS', async () => {
+  it('scopes a client worker to active client identities', async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const tx = { botNotificationJob: { findMany } };
+    const database = { $transaction: vi.fn(async (callback) => callback(tx)) };
+
+    await claimNotificationJobs(
+      new Date('2026-08-19T10:00:00Z'),
+      'client-worker',
+      database as never,
+      'CLIENT',
+    );
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([{ identity: { is: { kind: 'CLIENT', isActive: true } } }]),
+        }),
+      }),
+    );
+  });
+
+  it('hydrates the requested nightly digest part with safe HTML and one navigation action', async () => {
     const tx = {
       telegramGroupBinding: {
         findUnique: vi.fn().mockResolvedValue({ telegramChatId: '-100777' }),
@@ -333,7 +438,7 @@ describe('bot notification leases', () => {
           companyId: 'company-1',
           claimToken: 'worker:daily-1',
           template: 'DAILY_OPERATIONS_DIGEST',
-          payload: { date: '2026-08-27' },
+          payload: { date: '2026-08-27', part: 'totals' },
           identity: null,
           chatId: '-100777',
         }),
@@ -445,16 +550,21 @@ describe('bot notification leases', () => {
       database as never,
     );
 
-    expect(job.payload).toMatchObject({ parseMode: 'HTML' });
+    expect(job.payload).toMatchObject({
+      parseMode: 'HTML',
+      digestDate: '2026-08-27',
+      digestParts: {
+        critical: { message: expect.stringContaining('Статус парка') },
+        trackers: { message: expect.stringContaining('GPS-связи') },
+        totals: { message: expect.stringContaining('Итоги вчера') },
+      },
+      actions: [{ type: 'summary_refresh', label: '🔄 Обновить сводку', date: '2026-08-27' }],
+    });
     expect((job.payload as { message: string }).message).toContain(
-      '<code>20:30</code>  <b>Принять возврат автомобиля</b>',
+      '<code>20:30</code> · <code>ME-2026-0020-KS</code>',
     );
-    expect((job.payload as { message: string }).message).toContain('💰 <b>Возврат депозитов</b>');
-    expect((job.payload as { message: string }).message).toContain('🧼 <b>Мойки</b>');
-    expect((job.payload as { message: string }).message).toContain(
-      '🔧 <b>Техническое обслуживание</b>',
-    );
-    expect((job.payload as { message: string }).message).toContain('📡 <b>Нет GPS-связи</b>');
+    expect((job.payload as { message: string }).message).toContain('🔄 <b>Возвраты автомобилей');
+    expect((job.payload as { message: string }).message).toContain('✅ <b>Свободные автомобили');
     expect((job.payload as { message: string }).message).not.toContain('Штрафы');
   });
 
@@ -584,13 +694,76 @@ describe('bot notification leases', () => {
       expect.objectContaining({ where: { id: 'audit-1', companyId: 'company-1' } }),
     );
     expect(job.payload).toMatchObject({ parseMode: 'HTML' });
-    expect((job.payload as { message: string }).message).toContain('Новая → Связались');
+    expect((job.payload as { message: string }).message).toContain(
+      '📌 <b>Статус</b>\n├ Было: Новая\n└ Стало: Связались',
+    );
     expect((job.payload as { message: string }).message).toContain('+7 999 123-45-67');
   });
 
+  it('hydrates a bot rental request with client and vehicle details', async () => {
+    const encryptionKey = Buffer.alloc(32, 24).toString('base64');
+    process.env.CLIENT_DATA_ENCRYPTION_KEY = encryptionKey;
+    const tx = {
+      telegramGroupBinding: {
+        findUnique: vi.fn().mockResolvedValue({ telegramChatId: '-100777' }),
+      },
+      botNotificationJob: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ id: 'request-job-1', claimToken: null, status: 'PENDING' }]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'request-job-1',
+          companyId: 'company-1',
+          claimToken: 'worker:request-job-1',
+          template: 'BOT_RENTAL_REQUEST_CREATED',
+          payload: { requestId: 'request-1' },
+          identity: null,
+          chatId: '-100777',
+        }),
+      },
+      botRentalRequest: {
+        findFirst: vi.fn().mockResolvedValue({
+          startsAt: new Date('2026-10-26T11:00:00Z'),
+          endsAt: new Date('2026-10-30T11:00:00Z'),
+          fulfillmentMode: 'DELIVERY',
+          client: {
+            firstName: 'Иван',
+            middleName: 'Иванович',
+            lastName: 'Иванов',
+            phoneEncrypted: encryptField('+7 900 000-00-00', encryptionKey),
+          },
+          preferredVehicle: {
+            make: 'Toyota',
+            modelName: 'Camry',
+            model: 'Camry',
+            registrationNumber: 'У899АВ997',
+          },
+        }),
+      },
+    };
+    const database = { $transaction: vi.fn(async (callback) => callback(tx)) };
+
+    const [job] = await claimNotificationJobs(
+      new Date('2026-10-24T08:00:00Z'),
+      'worker',
+      database as never,
+    );
+
+    expect((job.payload as { message: string }).message).toContain(
+      '📥 <b>Новая заявка на аренду</b>',
+    );
+    expect((job.payload as { message: string }).message).toContain('Иванов Иван Иванович');
+    expect((job.payload as { message: string }).message).toContain('Toyota Camry');
+    expect(job.payload).toMatchObject({
+      parseMode: 'HTML',
+      actions: [expect.objectContaining({ type: 'open_url', label: 'Открыть аренды' })],
+    });
+  });
+
   it.each([
-    ['HANDOVER', '🚗 <b>Аренда началась</b>', 'Пробег при выдаче: <b>85 000 км</b>'],
-    ['RETURN', '🏁 <b>Аренда завершена</b>', 'Пробег за аренду: <b>746 км</b>'],
+    ['HANDOVER', '🚗 <b>Аренда началась</b>', 'Пробег: <b>85 000 км</b>'],
+    ['RETURN', '🏁 <b>Аренда завершена</b>', 'За аренду: <b>746 км</b>'],
   ] as const)(
     'hydrates a %s lifecycle job with mileage and fuel readings',
     async (kind, title, mileageLine) => {
@@ -653,7 +826,7 @@ describe('bot notification leases', () => {
       expect(message).toContain(title);
       expect(message.replaceAll('\u00a0', ' ')).toContain(mileageLine);
       expect(message).toContain(
-        kind === 'HANDOVER' ? 'Топливо при выдаче: <b>80%</b>' : 'Топливо: <b>80% → 55%</b>',
+        kind === 'HANDOVER' ? 'Топливо: <b>80%</b>' : 'Топливо: <b>80% → 55%</b>',
       );
       expect(message).toContain('Kia Cerato · <code>С886АУ997</code>');
       expect(message).toContain('Иванов Иван Иванович');
@@ -720,8 +893,162 @@ describe('bot notification leases', () => {
     expect((job.payload as { message: string }).message).toContain(
       'Возврат просрочен более чем на 2 часа',
     );
+    expect(job.payload).toMatchObject({
+      actions: expect.arrayContaining([
+        { type: 'phone_url', label: '📞 Позвонить', url: 'tel:+79000000000' },
+        expect.objectContaining({ type: 'remind', label: '🔔 Напомнить' }),
+      ]),
+    });
     expect((job.payload as { message: string }).message).toContain('Петров Иван');
     expect((job.payload as { message: string }).message).toContain('+7 900 000-00-00');
+  });
+
+  it('hydrates harsh acceleration with an exact event deep link', async () => {
+    const tx = {
+      telegramGroupBinding: {
+        findUnique: vi.fn().mockResolvedValue({ telegramChatId: '-100777' }),
+      },
+      botNotificationJob: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ id: 'acceleration-1', claimToken: null, status: 'PENDING' }]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'acceleration-1',
+          companyId: 'company-1',
+          claimToken: 'worker:acceleration-1',
+          template: 'OPERATIONAL_ALERT',
+          payload: {
+            kind: 'HARSH_ACCELERATION',
+            vehicleId: 'vehicle-1',
+            eventId: 'event-1',
+            rentalId: 'rental-1',
+            recordedAt: '2026-10-25T12:00:00.000Z',
+            mapHref: '/map?vehicleId=vehicle-1&date=2026-10-25&eventId=event-1',
+          },
+          identity: null,
+          chatId: '-100777',
+        }),
+      },
+      vehicle: {
+        findFirst: vi.fn().mockResolvedValue({
+          make: 'Kia',
+          modelName: 'K5',
+          model: 'K5',
+          registrationNumber: 'М022АН997',
+          positions: [{ recordedAt: new Date('2026-10-25T12:00:00.000Z') }],
+        }),
+      },
+      rental: {
+        findFirst: vi.fn().mockResolvedValue({
+          endsAt: new Date('2026-10-26T12:00:00.000Z'),
+          client: {
+            firstName: 'Иван',
+            middleName: 'Иванович',
+            lastName: 'Иванов',
+            phoneEncrypted: null,
+          },
+        }),
+      },
+      vehicleEvent: {
+        findFirst: vi.fn().mockResolvedValue({
+          title: 'Резкий разгон · 3,6 м/с²',
+          description: 'Скорость выросла с 12 до 52 км/ч за 3 секунды.',
+          recordedAt: new Date('2026-10-25T12:00:00.000Z'),
+        }),
+      },
+    };
+    const database = { $transaction: vi.fn(async (callback) => callback(tx)) };
+
+    const [job] = await claimNotificationJobs(
+      new Date('2026-10-25T12:00:01.000Z'),
+      'worker',
+      database as never,
+    );
+
+    expect((job.payload as { message: string }).message).toContain('Резкий разгон');
+    expect(job.payload).toMatchObject({
+      actions: expect.arrayContaining([
+        {
+          type: 'map_url',
+          label: '🗺 Карта',
+          url: 'https://supapro.ru/map?vehicleId=vehicle-1&date=2026-10-25&eventId=event-1',
+        },
+      ]),
+    });
+  });
+
+  it('hydrates an impound alert with trusted lot data and client actions', async () => {
+    const encryptionKey = Buffer.alloc(32, 32).toString('base64');
+    process.env.CLIENT_DATA_ENCRYPTION_KEY = encryptionKey;
+    const tx = {
+      telegramGroupBinding: {
+        findUnique: vi.fn().mockResolvedValue({ telegramChatId: '-100777' }),
+      },
+      botNotificationJob: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ id: 'impound-1', claimToken: null, status: 'PENDING' }]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'impound-1',
+          companyId: 'company-1',
+          claimToken: 'worker:impound-1',
+          template: 'OPERATIONAL_ALERT',
+          payload: {
+            kind: 'IMPOUND_LOT_ENTRY',
+            vehicleId: 'vehicle-1',
+            rentalId: 'rental-1',
+            impoundLotId: 'moscow-podolskikh-kursantov-7a',
+            recordedAt: '2026-10-23T13:00:00Z',
+          },
+          identity: null,
+          chatId: '-100777',
+        }),
+      },
+      vehicle: {
+        findFirst: vi.fn().mockResolvedValue({
+          make: 'Toyota',
+          modelName: 'Camry',
+          model: 'Camry',
+          registrationNumber: 'У899АВ997',
+          positions: [{ recordedAt: new Date('2026-10-23T13:00:00Z') }],
+        }),
+      },
+      rental: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'rental-1',
+          endsAt: new Date('2026-10-25T13:00:00Z'),
+          client: {
+            firstName: 'Михаил',
+            middleName: 'Дмитриевич',
+            lastName: 'Гончаров',
+            phoneEncrypted: encryptField('+7 900 000-00-00', encryptionKey),
+          },
+        }),
+      },
+      vehicleEvent: { findFirst: vi.fn().mockResolvedValue(null) },
+    };
+    const database = { $transaction: vi.fn(async (callback) => callback(tx)) };
+
+    const [job] = await claimNotificationJobs(
+      new Date('2026-10-23T13:01:00Z'),
+      'worker',
+      database as never,
+    );
+
+    expect((job.payload as { message: string }).message).toContain(
+      'Автомобиль на территории штрафстоянки',
+    );
+    expect((job.payload as { message: string }).message).toContain(
+      'улица Подольских Курсантов, вл. 7а',
+    );
+    expect(job.payload).toMatchObject({
+      actions: expect.arrayContaining([
+        { type: 'notify_client', label: '✉️ Сообщить', actionId: 'rental-1' },
+        { type: 'phone_url', label: '📞 Позвонить', url: 'tel:+79000000000' },
+      ]),
+    });
   });
 
   it('hydrates a new-fine alert with the full decree number', async () => {
@@ -781,8 +1108,97 @@ describe('bot notification leases', () => {
       }),
     );
     expect((job.payload as { message: string }).message).toContain(
-      'Постановление № <code>18810550260831038048</code>',
+      '№ <code>18810550260831038048</code>',
     );
+    expect(job.payload).toMatchObject({
+      actions: expect.arrayContaining([
+        expect.objectContaining({ type: 'decree_url', label: '📥 Скачать постановление' }),
+        expect.objectContaining({ type: 'payment_url', label: '💳 Оплатить 5 000 ₽' }),
+      ]),
+    });
+  });
+
+  it('queues a manual client return reminder once per minute', async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 1 });
+    const database = {
+      rental: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'rental-1',
+          companyId: 'company-1',
+          client: { telegramIdentity: { id: 'client-identity-1', isActive: true } },
+        }),
+      },
+      botNotificationJob: { createMany },
+    };
+    const queued = await enqueueManualReturnReminder(
+      {
+        identityId: 'staff-identity-1',
+        telegramUserId: '123',
+        kind: 'STAFF',
+        companyId: 'company-1',
+        clientId: null,
+        userId: 'user-1',
+        displayName: 'Павел',
+      },
+      'rental-1',
+      new Date('2026-10-23T09:17:45Z'),
+      database as never,
+    );
+    expect(queued).toBe(true);
+    expect(createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          identityId: 'client-identity-1',
+          eventKey: 'manual-return-reminder:rental-1:2026-10-23T09:17',
+          template: 'RENTAL_RETURN_CLIENT',
+          payload: { rentalId: 'rental-1', manual: true },
+        }),
+      ],
+      skipDuplicates: true,
+    });
+  });
+
+  it('queues an id-only impound warning for the linked rental client', async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 1 });
+    const database = {
+      rental: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'rental-1',
+          companyId: 'company-1',
+          client: { telegramIdentity: { id: 'client-identity-1', isActive: true } },
+        }),
+      },
+      botNotificationJob: { createMany },
+    };
+
+    await expect(
+      enqueueManualClientImpoundAlert(
+        {
+          identityId: 'staff-identity-1',
+          telegramUserId: '123',
+          kind: 'STAFF',
+          companyId: 'company-1',
+          clientId: null,
+          userId: 'user-1',
+          displayName: 'Павел',
+        },
+        'rental-1',
+        new Date('2026-10-23T09:17:45Z'),
+        database as never,
+      ),
+    ).resolves.toBe(true);
+
+    expect(createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          identityId: 'client-identity-1',
+          eventKey: 'manual-impound-alert:rental-1:2026-10-23T09:17',
+          template: 'CLIENT_IMPOUND_ALERT',
+          payload: { rentalId: 'rental-1' },
+        }),
+      ],
+      skipDuplicates: true,
+    });
   });
 
   it('acks only the exact live claim token', async () => {

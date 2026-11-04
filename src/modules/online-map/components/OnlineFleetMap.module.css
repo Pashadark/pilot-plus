@@ -1,0 +1,104 @@
+.mapLoadingPattern {
+  --map-loading-background: #e0efff;
+  --map-loading-dot: #9fb5cc;
+  --map-loading-accent: #0067ff;
+  background-color: var(--map-loading-background);
+  background-image:
+    radial-gradient(circle, var(--map-loading-accent) 0 1.8px, transparent 2px),
+    radial-gradient(circle, var(--map-loading-dot) 0 1.35px, transparent 1.55px),
+    radial-gradient(circle, var(--map-loading-dot) 0 1px, transparent 1.2px);
+  background-position:
+    140px 56px,
+    0 0,
+    24px 18px;
+  background-size:
+    192px 180px,
+    48px 36px,
+    48px 36px;
+}
+
+:global(:root[data-theme='dark']) .mapLoadingPattern {
+  --map-loading-background: #343438;
+  --map-loading-dot: #686870;
+}
+
+.mapShell :global(.maplibregl-ctrl-bottom-right) {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.mapShell :global(.maplibregl-ctrl-group) {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+  box-shadow: var(--shadow-floating);
+  backdrop-filter: blur(16px);
+}
+
+.mapShell :global(.maplibregl-ctrl-group button) {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  transition:
+    color var(--motion-fast),
+    background-color var(--motion-fast);
+}
+
+.mapShell :global(.maplibregl-ctrl-group button:last-child) {
+  border-bottom: 0;
+}
+
+.mapShell :global(.maplibregl-ctrl-group button:hover) {
+  background: var(--color-elevated);
+  color: var(--color-primary);
+}
+
+.mapShell :global(.maplibregl-ctrl-group button:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -3px;
+}
+
+.mapShell :global(.maplibregl-ctrl-icon) {
+  opacity: 0.88;
+}
+
+:global(:root[data-theme='dark']) .mapShell :global(.maplibregl-ctrl-icon) {
+  filter: invert(1) brightness(1.15);
+}
+
+.mapShell :global(.maplibregl-ctrl-attrib) {
+  max-width: min(72vw, 420px);
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  color: var(--color-text-secondary);
+  box-shadow: var(--shadow-card);
+  font-size: 9px;
+  line-height: 1.35;
+  backdrop-filter: blur(14px);
+}
+
+.mapShell :global(.maplibregl-ctrl-attrib a) {
+  color: inherit;
+  text-decoration-color: color-mix(in srgb, var(--color-text-secondary) 45%, transparent);
+  text-underline-offset: 2px;
+}
+
+.mapShell :global(.maplibregl-ctrl-attrib a:hover) {
+  color: var(--color-text);
+}
+
+@media (max-width: 767px) {
+  .mapShell :global(.maplibregl-ctrl-attrib) {
+    max-width: 62vw;
+    font-size: 8px;
+  }
+}

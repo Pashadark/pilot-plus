@@ -60,16 +60,43 @@ function renderRail(overrides: Partial<Parameters<typeof FleetVehicleRail>[0]> =
 }
 
 it('показывает удобный список машин и честный статус водителя', () => {
-  renderRail();
+  renderRail({ selectedDayDistanceKm: 18.6, selectedDayDistanceLoading: false });
 
   expect(screen.getByRole('searchbox', { name: 'Поиск автомобиля' })).toBeTruthy();
   expect(
-    screen
-      .getByRole('button', { name: 'Выбрать Kia K5 В342НР797' })
-      .getAttribute('aria-current'),
+    screen.getByRole('button', { name: 'Выбрать Kia K5 В342НР797' }).getAttribute('aria-current'),
   ).toBe('true');
   expect(screen.getByText('Нет активного водителя')).toBeTruthy();
   expect(screen.getByText('Горбунов Артём Денисович')).toBeTruthy();
+  expect(screen.getByText('18,6 км за день')).toBeTruthy();
+  expect(screen.queryByText('52%')).toBeNull();
+});
+
+it('честно показывает загрузку и отсутствие маршрута выбранного дня', () => {
+  const { rerender } = renderRail({
+    selectedDayDistanceKm: null,
+    selectedDayDistanceLoading: true,
+  });
+
+  expect(screen.getByText('Считаем…')).toBeTruthy();
+
+  rerender(
+    <FleetVehicleRail
+      vehicles={vehicles}
+      selectedVehicleId="vehicle-1"
+      query=""
+      filter="all"
+      collapsed={false}
+      selectedDayDistanceKm={null}
+      selectedDayDistanceLoading={false}
+      onSelect={vi.fn()}
+      onQueryChange={vi.fn()}
+      onFilterChange={vi.fn()}
+      onCollapsedChange={vi.fn()}
+    />,
+  );
+
+  expect(screen.getByText('Нет маршрута')).toBeTruthy();
 });
 
 it('передаёт поиск, фильтр и выбор машины без координат', async () => {

@@ -33,8 +33,10 @@ const mapMocks = vi.hoisted(() => {
     mapRemove: vi.fn(),
     mapResize: vi.fn(),
     mapLoaded: vi.fn(() => true),
+    mapIsStyleLoaded: vi.fn<() => boolean | undefined>(() => true),
     mapGetLayer: vi.fn(),
     mapGetSource: vi.fn(),
+    playbackSourceSetData: vi.fn(),
     mapAddLayer: vi.fn(),
     mapAddSource: vi.fn(),
     mapAddImage: vi.fn(),
@@ -92,6 +94,7 @@ vi.mock('maplibre-gl', () => {
     on = mapMocks.mapOn;
     off = mapMocks.mapOff;
     loaded = mapMocks.mapLoaded;
+    isStyleLoaded = mapMocks.mapIsStyleLoaded;
     resize = mapMocks.mapResize;
     remove = mapMocks.mapRemove;
     getLayer = mapMocks.mapGetLayer;
@@ -210,6 +213,7 @@ beforeEach(() => {
     }
   });
   mapMocks.mapLoaded.mockReturnValue(true);
+  mapMocks.mapIsStyleLoaded.mockReturnValue(true);
   mapMocks.mapGetLayer.mockReturnValue({});
   mapMocks.mapGetSource.mockReturnValue({});
   vi.stubGlobal(
@@ -419,6 +423,37 @@ it('удаляет обработчики, popup, источники и слои
   expect(mapMocks.popupRemove).toHaveBeenCalled();
 });
 
+it('не обращается к слоям после уничтожения style карты', async () => {
+  const track = getTrackViewModel('lada-vesta-a123mr77');
+  const { unmount } = render(
+    createElement(OnlineFleetMap, {
+      vehicles,
+      selectedVehicleId: vehicles[0].id,
+      trackViewModel: track,
+      playbackPoint: track.start,
+      selectedEventId: null,
+      previewedEventId: null,
+      previewedSegmentId: null,
+      onVehicleSelect: vi.fn(),
+      onEventPreview: vi.fn(),
+      onEventActivate: vi.fn(),
+      onSegmentPreview: vi.fn(),
+    }),
+  );
+
+  act(() => mapMocks.fireLoad());
+  await waitFor(() => expect(mapMocks.mapAddSource).toHaveBeenCalled());
+
+  mapMocks.mapGetLayer.mockClear();
+  mapMocks.mapIsStyleLoaded.mockReturnValue(undefined);
+  mapMocks.mapGetLayer.mockImplementation(() => {
+    throw new TypeError("Cannot read properties of null (reading 'getLayer')");
+  });
+
+  expect(() => unmount()).not.toThrow();
+  expect(mapMocks.mapGetLayer).not.toHaveBeenCalled();
+});
+
 it('монтирует новый маршрут сразу после первого load, даже если loaded временно false', async () => {
   const firstTrack = getTrackViewModel('lada-vesta-a123mr77');
   const secondTrack = getTrackViewModel('haval-jolion-v456kh178');
@@ -440,7 +475,7 @@ it('монтирует новый маршрут сразу после перв�
   );
 
   act(() => mapMocks.fireLoad());
-  await waitFor(() => expect(mapMocks.mapAddSource).toHaveBeenCalledTimes(4));
+  await waitFor(() => expect(mapMocks.mapAddSource).toHaveBeenCalledTimes(5));
   mapMocks.mapAddSource.mockClear();
 
   rerender(
@@ -451,7 +486,33 @@ it('монтирует новый маршрут сразу после перв�
     }),
   );
 
-  await waitFor(() => expect(mapMocks.mapAddSource).toHaveBeenCalledTimes(4));
+  await waitFor(() => expect(mapMocks.mapAddSource).toHaveBeenCalledTimes(5));
+});
+
+it('монтирует маршрут сразу, если карта уже успела загрузиться до эффекта трека', async () => {
+  const track = getTrackViewModel('lada-vesta-a123mr77');
+  mapMocks.mapLoaded.mockReturnValue(true);
+  mapMocks.mapGetLayer.mockReturnValue(undefined);
+  mapMocks.mapGetSource.mockReturnValue(undefined);
+
+  render(
+    createElement(OnlineFleetMap, {
+      vehicles,
+      selectedVehicleId: vehicles[0].id,
+      trackViewModel: track,
+      playbackPoint: track.start,
+      selectedEventId: null,
+      previewedEventId: null,
+      previewedSegmentId: null,
+      onVehicleSelect: vi.fn(),
+      onEventPreview: vi.fn(),
+      onEventActivate: vi.fn(),
+      onSegmentPreview: vi.fn(),
+    }),
+  );
+
+  await waitFor(() => expect(mapMocks.mapAddSource).toHaveBeenCalled());
+  expect(screen.getByTestId('vehicle-track-a11y').getAttribute('data-track-ready')).toBe('true');
 });
 
 it('сериализует сегменты и события в GeoJSON без потери координат маршрута', async () => {
@@ -489,9 +550,41 @@ it('сериализует сегменты и события в GeoJSON без 
       icon: 'vehicle-track-event-stop',
     },
   });
+  const acceleration = trackEventsToGeoJson([
+    {
+      ...track.events[0],
+      id: 'acceleration-1',
+      type: 'harsh-acceleration',
+      metricLabel: '20→65',
+    },
+  ]);
+  expect(acceleration.features[0]).toMatchObject({
+    geometry: { coordinates: track.events[0].coordinates },
+    properties: {
+      eventColor: '#f59e0b',
+      metricLabel: '20→65',
+      icon: 'vehicle-track-event-harsh-acceleration',
+    },
+  });
+  const braking = trackEventsToGeoJson([
+    {
+      ...track.events[0],
+      id: 'braking-1',
+      type: 'harsh-braking',
+      metricLabel: '92→48',
+    },
+  ]);
+  expect(braking.features[0]).toMatchObject({
+    geometry: { coordinates: track.events[0].coordinates },
+    properties: {
+      eventColor: '#0067ff',
+      metricLabel: '92→48',
+      icon: 'vehicle-track-event-harsh-braking',
+    },
+  });
 });
 
-it('создаёт семь различных raster-иконок событий, включая штраф', async () => {
+it('создаёт девять различных raster-иконок событий, включая разгон и торможение', async () => {
   const { createTrackEventIconImage, getTrackEventIconId } = await import('./VehicleTrackLayers');
   const types = [
     'stop',
@@ -501,13 +594,52 @@ it('создаёт семь различных raster-иконок событи�
     'connection-loss',
     'geofence-enter',
     'geofence-exit',
+    'harsh-acceleration',
+    'harsh-braking',
   ] as const;
   const ids = types.map(getTrackEventIconId);
-  const images = types.map(createTrackEventIconImage);
+  const images = types.map((type) => createTrackEventIconImage(type));
 
-  expect(new Set(ids).size).toBe(7);
-  expect(images.every((image) => image.width === 24 && image.height === 24)).toBe(true);
-  expect(new Set(images.map((image) => Array.from(image.data).join(','))).size).toBe(7);
+  expect(new Set(ids).size).toBe(9);
+  expect(images.every((image) => image.width === 48 && image.height === 48)).toBe(true);
+  expect(new Set(images.map((image) => Array.from(image.data).join(','))).size).toBe(9);
+});
+
+it('рисует тонкий контур поинта под светлую и тёмную тему', async () => {
+  const { createTrackEventIconImage } = await import('./VehicleTrackLayers');
+  const dark = createTrackEventIconImage('harsh-braking', 'dark');
+  const light = createTrackEventIconImage('harsh-braking', 'light');
+  const topPixelOffset = (1 * dark.width + 24) * 4;
+
+  expect(Array.from(dark.data.slice(topPixelOffset, topPixelOffset + 4))).toEqual([
+    52, 52, 56, 255,
+  ]);
+  expect(Array.from(light.data.slice(topPixelOffset, topPixelOffset + 4))).toEqual([
+    248, 250, 252, 255,
+  ]);
+});
+
+it('создаёт компактные разные маркеры старта и финиша с клетчатым флагом', async () => {
+  const { createTrackEndpointIconImage, getTrackEndpointIconId } =
+    await import('./VehicleTrackLayers');
+  const start = createTrackEndpointIconImage('start');
+  const finish = createTrackEndpointIconImage('finish');
+
+  expect(getTrackEndpointIconId('start')).toBe('vehicle-track-endpoint-start');
+  expect(getTrackEndpointIconId('finish')).toBe('vehicle-track-endpoint-finish');
+  expect(start).toMatchObject({ width: 64, height: 64 });
+  expect(finish).toMatchObject({ width: 64, height: 64 });
+  expect(Array.from(start.data)).not.toEqual(Array.from(finish.data));
+  const whiteCheckerCells = Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 5 }, (_, column) => ({ row, column })),
+  )
+    .flat()
+    .filter(({ row, column }) => (row + column) % 2 === 0)
+    .filter(({ row, column }) => {
+      const offset = ((20 + row * 5) * finish.width + (22 + column * 5)) * 4;
+      return finish.data.slice(offset, offset + 4).every((value) => value === 255);
+    });
+  expect(whiteCheckerCells).toHaveLength(10);
 });
 
 it('вычисляет fit padding по ширине контейнера карты, а не окна', async () => {
@@ -598,6 +730,7 @@ it('регистрирует видимую линию, hitbox, события, 
     getCanvas: () => mapMocks.canvas,
     getLayer: mapMocks.mapGetLayer,
     getSource: mapMocks.mapGetSource,
+    isStyleLoaded: mapMocks.mapIsStyleLoaded,
     off: mapMocks.mapOff,
     on: mapMocks.mapOn,
     removeLayer: mapMocks.mapRemoveLayer,
@@ -637,21 +770,60 @@ it('регистрирует видимую линию, hitbox, события, 
       paint: expect.objectContaining({ 'line-width': 16 }),
     }),
   );
-  expect(mapMocks.mapAddSource).toHaveBeenCalledWith('vehicle-track-gradient-0',
-    expect.objectContaining({lineMetrics: true}));
-  expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(expect.objectContaining({
-    id: 'vehicle-track-gradient-0', paint: expect.objectContaining({
-      'line-gradient': expect.arrayContaining([['line-progress']]),
-    }),
-  }));
+  expect(mapMocks.mapAddSource).toHaveBeenCalledWith(
+    'vehicle-track-gradient-0',
+    expect.objectContaining({ lineMetrics: true }),
+  );
+  expect(mapMocks.mapAddSource).toHaveBeenCalledWith(
+    'vehicle-track-playback',
+    expect.objectContaining({ type: 'geojson' }),
+  );
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
-    expect.objectContaining({ id: 'vehicle-track-events', type: 'circle' }),
+    expect.objectContaining({
+      id: 'vehicle-track-playback',
+      type: 'line',
+      paint: expect.objectContaining({ 'line-color': '#0067ff' }),
+    }),
+  );
+  expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'vehicle-track-gradient-0',
+      paint: expect.objectContaining({
+        'line-gradient': expect.arrayContaining([['line-progress']]),
+      }),
+    }),
+  );
+  expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'vehicle-track-events',
+      type: 'circle',
+      paint: expect.objectContaining({
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 2, 15, 3],
+        'circle-stroke-color': '#343438',
+        'circle-stroke-width': 1,
+      }),
+    }),
+  );
+  expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'vehicle-track-event-leaders',
+      type: 'symbol',
+    }),
+  );
+  expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'vehicle-track-event-metrics',
+      type: 'symbol',
+      layout: expect.objectContaining({
+        'text-field': ['get', 'metricLabel'],
+      }),
+    }),
   );
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
     expect.objectContaining({
       id: 'vehicle-track-event-hitbox',
       type: 'circle',
-      paint: expect.objectContaining({ 'circle-radius': 22 }),
+      paint: expect.objectContaining({ 'circle-radius': 28 }),
     }),
   );
   expect(mapMocks.mapOn).toHaveBeenCalledWith(
@@ -686,16 +858,27 @@ it('регистрирует видимую линию, hitbox, события, 
   expect(eventClickHandler).toBeTypeOf('function');
   eventClickHandler?.({ features: [{ id: track.eventGroups[0].id }] });
   expect(onEventActivate).toHaveBeenCalledExactlyOnceWith(track.eventGroups[0]);
-  expect(mapMocks.mapAddImage).toHaveBeenCalledTimes(7);
+  expect(mapMocks.mapAddImage).toHaveBeenCalledTimes(11);
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
     expect.objectContaining({
       id: 'vehicle-track-event-icons',
       type: 'symbol',
-      layout: expect.objectContaining({ 'icon-image': ['get', 'icon'] }),
+      layout: expect.objectContaining({
+        'icon-image': ['get', 'icon'],
+        'icon-offset': [0, -22],
+      }),
     }),
   );
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
-    expect.objectContaining({ id: 'vehicle-track-endpoints', type: 'circle' }),
+    expect.objectContaining({
+      id: 'vehicle-track-endpoints',
+      type: 'symbol',
+      layout: expect.objectContaining({
+        'icon-image': ['get', 'icon'],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.62, 13, 0.78, 15, 1],
+        'icon-allow-overlap': true,
+      }),
+    }),
   );
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
     expect.objectContaining({ id: 'vehicle-track-directions', type: 'symbol' }),
@@ -714,7 +897,7 @@ it('регистрирует видимую линию, hitbox, события, 
     'vehicle-track-event-hitbox',
     expect.any(Function),
   );
-  expect(mapMocks.mapRemoveImage).toHaveBeenCalledTimes(7);
+  expect(mapMocks.mapRemoveImage).toHaveBeenCalledTimes(11);
   expect(mapMocks.mapContainer.dataset.trackCasingWidth).toBeUndefined();
   expect(mapMocks.mapContainer.dataset.trackLineOffset).toBeUndefined();
 });

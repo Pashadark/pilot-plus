@@ -46,6 +46,81 @@ function repositoryFixture() {
 }
 
 describe('dashboard server queries', () => {
+  it('loads a day with one tenant-scoped rental query and no finance/weather queries', async () => {
+    const repository = repositoryFixture();
+    const queries = createDashboardQueries(
+      repository,
+      async () => ({ companyId: 'company-1', canViewClientPhone: false }),
+      { encryptionKey: ENCRYPTION_KEY },
+    );
+    expect(await queries.getDayEvents('2026-10-09', NOW)).toEqual([]);
+    expect(repository.rentalFindMany).toHaveBeenCalledTimes(1);
+    expect(repository.rentalFindMany.mock.calls[0][0].where.companyId).toBe('company-1');
+    expect(repository.vehicleFindMany).not.toHaveBeenCalled();
+    expect(repository.clientCount).not.toHaveBeenCalled();
+    await expect(queries.getDayEvents('2026-02-31', NOW)).rejects.toThrow();
+  });
+  it('loads completed deposits when a selected day can contain their return reminder', async () => {
+    const repository = repositoryFixture();
+    const queries = createDashboardQueries(
+      repository,
+      async () => ({ companyId: 'company-1', canViewClientPhone: false }),
+      { encryptionKey: ENCRYPTION_KEY },
+    );
+
+    await queries.getDayEvents('2026-10-09', NOW);
+
+    expect(repository.rentalFindMany.mock.calls[0]?.[0]?.where).toMatchObject({
+      companyId: 'company-1',
+      vehicle: { archivedAt: null, isDemoImport: false },
+      OR: expect.arrayContaining([
+        {
+          status: 'COMPLETED',
+          depositMinor: { gt: 0 },
+        },
+      ]),
+    });
+  });
+  it('keeps an overdue active rental visible on the current day until its return is completed', async () => {
+    const repository = repositoryFixture();
+    repository.rentalFindMany.mockResolvedValueOnce([
+      {
+        id: 'rental-overdue',
+        clientId: 'client-1',
+        vehicleId: 'vehicle-1',
+        status: 'ACTIVE',
+        startsAt: new Date('2026-08-20T09:00:00.000Z'),
+        endsAt: new Date('2026-08-23T09:00:00.000Z'),
+        completedAt: null,
+        totalPriceMinor: 600000n,
+        depositMinor: 1000000n,
+        contractNumber: 'ME-2026-0093-BI',
+        client: { firstName: 'Иван', middleName: 'Дмитриевич', lastName: 'Божко' },
+        vehicle: { make: 'Kia', model: 'Ceed', registrationNumber: 'А429АУ997' },
+        payments: [],
+        operations: [],
+      },
+    ]);
+
+    const items = await createDashboardQueries(
+      repository,
+      async () => ({ companyId: 'company-1', canViewClientPhone: false }),
+      { encryptionKey: ENCRYPTION_KEY },
+    ).getDayEvents('2026-08-24', NOW);
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        id: 'rental-return:rental-overdue',
+        kind: 'RETURN',
+        overdue: true,
+        clientLabel: 'Божко Иван Дмитриевич',
+      }),
+    ]);
+    expect(repository.rentalFindMany.mock.calls[0]?.[0]?.where.OR).toContainEqual({
+      status: 'ACTIVE',
+      startsAt: { lt: new Date('2026-08-24T21:00:00.000Z') },
+    });
+  });
   it('loads tomorrow and later tasks for today without widening the KPI period', async () => {
     const repository = repositoryFixture();
     const overview = await createDashboardQueries(
@@ -388,6 +463,10 @@ describe('dashboard server queries', () => {
     expect(repository.vehicleFindMany.mock.calls[0]?.[0]).toHaveProperty(
       'select.positions.select.fuelLevelPercent',
       true,
+    );
+    expect(repository.vehicleFindMany.mock.calls[1]?.[0]).toHaveProperty(
+      'select.positions.where.fuelLevelPercent',
+      { not: null },
     );
     expect(repository.vehicleFindMany.mock.calls[0]?.[0]).toHaveProperty(
       'select.rentalOperations.select.fuelLevelPercent',

@@ -17,3 +17,7 @@ def test_customer_requires_active_same_company_identity():
     for change in [{'isActive': False}, {'companyId': 'other'}, {'kind': 'STAFF'}]:
         with pytest.raises(ValueError):
             notification_target({**job, 'identity': {**job['identity'], **change}})
+
+def test_impound_customer_alert_uses_the_same_strict_identity_scope():
+    job = {'companyId': 'c', 'template': 'CLIENT_IMPOUND_ALERT', 'identity': {'kind': 'CLIENT', 'companyId': 'c', 'clientId': 'cl', 'isActive': True, 'telegramUserId': '123'}}
+    assert notification_target(job) == 123

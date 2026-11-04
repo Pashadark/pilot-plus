@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ComponentType } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { useReducedMotion } from 'framer-motion';
 
 import { Button } from '@/shared/ui';
@@ -11,8 +11,11 @@ import { filterOnlineMapVehicles } from '../filter-vehicles';
 import { attachFinesToTracks } from '../track-history-model';
 import {
   buildTrackPeriodViewModel,
-  getPlaybackHeading,
-  getPlaybackPosition,
+  buildTrackViewModel,
+  getPlaybackFrame,
+  getPlaybackTrail,
+  getTrackBounds,
+  getTrackPointCursorMs,
 } from '../track-model';
 import type {
   OnlineMapTrackHistoryDto,
@@ -39,6 +42,8 @@ export interface OnlineMapWorkspaceProps {
   mapComponent?: ComponentType<OnlineFleetMapProps>;
   vehicles?: readonly OnlineMapVehicle[];
   initialSelectedVehicleId?: string | null;
+  initialTrackDate?: string | null;
+  initialSelectedEventId?: string | null;
   historyProvider?: (vehicleId: string) => OnlineMapTrackHistoryDto;
 }
 
@@ -46,6 +51,8 @@ export function OnlineMapWorkspace({
   mapComponent: MapComponent = OnlineFleetMapClient,
   vehicles = [],
   initialSelectedVehicleId = null,
+  initialTrackDate = null,
+  initialSelectedEventId = null,
   historyProvider,
 }: OnlineMapWorkspaceProps) {
   const [snapshotVehicles, setSnapshotVehicles] = useState<readonly OnlineMapVehicle[]>(vehicles);
@@ -56,19 +63,20 @@ export function OnlineMapWorkspace({
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
     initialSelectedVehicleId,
   );
-  const [trackDate, setTrackDate] = useState(() => getMoscowDate(new Date()));
+  const [trackDate, setTrackDate] = useState(() => initialTrackDate ?? getMoscowDate(new Date()));
   const [trackPeriod, setTrackPeriod] = useState<TrackPeriodMode>('day');
   const [playbackTripId, setPlaybackTripId] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
+  const [playbackCursorMs, setPlaybackCursorMs] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState<1 | 2 | 3>(1);
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [playbackSpeed, setPlaybackSpeed] = useState<1 | 5 | 10 | 30>(1);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(initialSelectedEventId);
   const [previewedEventId, setPreviewedEventId] = useState<string | null>(null);
   const [previewedSegmentId, setPreviewedSegmentId] = useState<string | null>(null);
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [mobilePanelCollapsed, setMobilePanelCollapsed] = useState(false);
   const reducedMotion = useReducedMotion() ?? false;
   const minuteNow = useMinuteNow();
+  const previousAnimationTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (typeof EventSource === 'undefined') return;
@@ -137,13 +145,14 @@ export function OnlineMapWorkspace({
   );
   const history = providedHistory ?? remoteHistory.data;
   const trackDates = useMemo(() => history?.availableDates ?? [], [history]);
-  const historyTracks = useMemo(
-    () => (history ? attachFinesToTracks(history) : []),
-    [history],
-  );
+  const historyTracks = useMemo(() => (history ? attachFinesToTracks(history) : []), [history]);
   const dayTrack = useMemo(
     () => historyTracks.find((track) => track.date === trackDate) ?? null,
     [historyTracks, trackDate],
+  );
+  const selectedDayDistanceKm = useMemo(
+    () => (dayTrack ? buildTrackViewModel(dayTrack).distanceKm : null),
+    [dayTrack],
   );
   const periodTracks = useMemo(() => {
     if (!effectiveSelectedVehicleId) return [];
@@ -156,39 +165,76 @@ export function OnlineMapWorkspace({
   );
   const playbackTrack =
     periodTracks.find((track) => track.date === playbackTripId) ?? periodTracks[0] ?? null;
-  const playbackPoint = useMemo(
-    () => (playbackTrack ? getPlaybackPosition(playbackTrack, progress) : null),
-    [playbackTrack, progress],
+  const playbackBounds = useMemo(
+    () => (playbackTrack ? getTrackBounds(playbackTrack) : null),
+    [playbackTrack],
   );
-  const playbackHeading = useMemo(
-    () => (playbackTrack ? getPlaybackHeading(playbackTrack, progress) : 0),
-    [playbackTrack, progress],
+  const effectivePlaybackCursorMs = playbackBounds
+    ? Math.min(
+        playbackBounds.endMs,
+        Math.max(playbackBounds.startMs, playbackCursorMs ?? playbackBounds.startMs),
+      )
+    : null;
+  const playbackFrame = useMemo(
+    () =>
+      playbackTrack && effectivePlaybackCursorMs !== null
+        ? getPlaybackFrame(playbackTrack, effectivePlaybackCursorMs)
+        : null,
+    [effectivePlaybackCursorMs, playbackTrack],
   );
+  const playbackPoint = playbackFrame?.position ?? null;
+  const playbackHeading = playbackFrame?.headingDegrees ?? 0;
+  const playbackActive = playbackCursorMs !== null;
+  const playbackTrail = useMemo(
+    () =>
+      playbackActive && playbackTrack && effectivePlaybackCursorMs !== null
+        ? getPlaybackTrail(playbackTrack, effectivePlaybackCursorMs)
+        : null,
+    [effectivePlaybackCursorMs, playbackActive, playbackTrack],
+  );
+  const progress =
+    playbackBounds && effectivePlaybackCursorMs !== null
+      ? ((effectivePlaybackCursorMs - playbackBounds.startMs) /
+          Math.max(1, playbackBounds.endMs - playbackBounds.startMs)) *
+        100
+      : 0;
 
   useEffect(() => {
-    if (!playing || reducedMotion || !playbackTrack) return;
+    if (!playing || reducedMotion || !playbackBounds) {
+      previousAnimationTimeRef.current = null;
+      return;
+    }
 
-    const timer = window.setInterval(() => {
-      setProgress((currentProgress) => {
-        const nextProgress = Math.min(100, currentProgress + 2 * playbackSpeed);
+    let animationFrameId = 0;
+    const animate = (animationTime: number) => {
+      const previousAnimationTime = previousAnimationTimeRef.current ?? animationTime;
+      previousAnimationTimeRef.current = animationTime;
+      const elapsedMs = Math.max(0, animationTime - previousAnimationTime);
 
-        if (nextProgress === 100) {
-          window.clearInterval(timer);
-          setPlaying(false);
-        }
-
-        return nextProgress;
+      setPlaybackCursorMs((currentCursorMs) => {
+        const nextCursorMs = Math.min(
+          playbackBounds.endMs,
+          (currentCursorMs ?? playbackBounds.startMs) + elapsedMs * playbackSpeed,
+        );
+        if (nextCursorMs >= playbackBounds.endMs) setPlaying(false);
+        return nextCursorMs;
       });
-    }, 250);
 
-    return () => window.clearInterval(timer);
-  }, [playbackSpeed, playbackTrack, playing, reducedMotion]);
+      animationFrameId = window.requestAnimationFrame(animate);
+    };
+
+    animationFrameId = window.requestAnimationFrame(animate);
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+      previousAnimationTimeRef.current = null;
+    };
+  }, [playbackBounds, playbackSpeed, playing, reducedMotion]);
 
   const resetTrackState = () => {
     setTrackDate('');
     setTrackPeriod('day');
     setPlaybackTripId(null);
-    setProgress(0);
+    setPlaybackCursorMs(null);
     setPlaying(false);
     setSelectedEventId(null);
     setPreviewedEventId(null);
@@ -227,7 +273,7 @@ export function OnlineMapWorkspace({
     setTrackPeriod('day');
     setMobileFleetOpen(false);
     setPlaybackTripId(null);
-    setProgress(0);
+    setPlaybackCursorMs(null);
     setPlaying(false);
     setSelectedEventId(null);
     setPreviewedEventId(null);
@@ -239,7 +285,7 @@ export function OnlineMapWorkspace({
   const handleTrackDateChange = (date: string) => {
     setTrackDate(date);
     setPlaybackTripId(null);
-    setProgress(0);
+    setPlaybackCursorMs(null);
     setPlaying(false);
     setSelectedEventId(null);
     setPreviewedEventId(null);
@@ -251,7 +297,7 @@ export function OnlineMapWorkspace({
     setTrackPeriod(period);
     if (period === 'seven-days') setTrackDate(trackDates[0] ?? '');
     setPlaybackTripId(null);
-    setProgress(0);
+    setPlaybackCursorMs(null);
     setPlaying(false);
     setSelectedEventId(null);
     setPreviewedEventId(null);
@@ -260,7 +306,13 @@ export function OnlineMapWorkspace({
   };
 
   const handleProgressChange = (nextProgress: number) => {
-    setProgress(Math.min(100, Math.max(0, nextProgress)));
+    if (playbackBounds) {
+      const boundedProgress = Math.min(100, Math.max(0, nextProgress));
+      setPlaybackCursorMs(
+        playbackBounds.startMs +
+          ((playbackBounds.endMs - playbackBounds.startMs) * boundedProgress) / 100,
+      );
+    }
     setPlaying(false);
     setSelectedEventId(null);
     setSelectedActivityId(null);
@@ -268,7 +320,9 @@ export function OnlineMapWorkspace({
 
   const handlePlayingChange = (nextPlaying: boolean) => {
     if (reducedMotion) return;
-    if (nextPlaying && progress >= 100) setProgress(0);
+    if (nextPlaying && playbackBounds && progress >= 100) {
+      setPlaybackCursorMs(playbackBounds.startMs);
+    }
     setPlaying(nextPlaying);
   };
 
@@ -282,11 +336,8 @@ export function OnlineMapWorkspace({
     if (!eventTrack) return;
     setPlaybackTripId(event.tripId);
 
-    const pointIndex = eventTrack.points.findIndex((point) => point.id === event.pointId);
-    if (pointIndex < 0) return;
-
-    const lastPointIndex = eventTrack.points.length - 1;
-    setProgress(lastPointIndex > 0 ? (pointIndex / lastPointIndex) * 100 : 0);
+    const eventCursorMs = getTrackPointCursorMs(eventTrack, event.pointId);
+    if (eventCursorMs !== null) setPlaybackCursorMs(eventCursorMs);
   };
 
   const handleTrackEventPreview = (event: VehicleTrackEventView | null) => {
@@ -310,25 +361,28 @@ export function OnlineMapWorkspace({
       return;
     }
 
-    const representative = activity.kind === 'speeding'
-      ? activity.segments.reduce((fastest, segment) =>
-          segment.speedKph > fastest.speedKph ? segment : fastest,
-        )
-      : activity.segments[0];
+    const representative =
+      activity.kind === 'speeding'
+        ? activity.segments.reduce((fastest, segment) =>
+            segment.speedKph > fastest.speedKph ? segment : fastest,
+          )
+        : activity.segments[0];
     setPreviewedSegmentId(representative.id);
     setPlaybackTripId(activity.tripId);
 
     const activityTrack = periodTracks.find((track) => track.date === activity.tripId);
     if (!activityTrack) return;
-    const pointIndex = activityTrack.points.findIndex((point) => point.id === activity.from.id);
-    const lastPointIndex = activityTrack.points.length - 1;
-    if (pointIndex >= 0) setProgress(lastPointIndex > 0 ? (pointIndex / lastPointIndex) * 100 : 0);
+    const activityCursorMs = getTrackPointCursorMs(activityTrack, activity.from.id);
+    if (activityCursorMs !== null) setPlaybackCursorMs(activityCursorMs);
   };
 
   const handleEndpointActivate = (tripId: string, endpoint: 'start' | 'finish') => {
     if (!periodTracks.some((track) => track.date === tripId)) return;
+    const endpointTrack = periodTracks.find((track) => track.date === tripId);
+    if (!endpointTrack) return;
     setPlaybackTripId(tripId);
-    setProgress(endpoint === 'start' ? 0 : 100);
+    const endpointBounds = getTrackBounds(endpointTrack);
+    setPlaybackCursorMs(endpoint === 'start' ? endpointBounds.startMs : endpointBounds.endMs);
     setPlaying(false);
     setSelectedEventId(null);
     setPreviewedEventId(null);
@@ -345,7 +399,7 @@ export function OnlineMapWorkspace({
   return (
     <section
       aria-label="Онлайн-карта транспорта"
-      className="@container relative h-[calc(100dvh-var(--header-height))] min-h-0 overflow-hidden bg-[var(--color-canvas)] [@media(max-height:42rem)]:[&_.maplibregl-ctrl-group]:hidden"
+      className="@container relative h-[calc(100dvh-var(--header-height)-var(--mobile-dock-space,0px)-var(--mobile-shell-extra,0px))] min-h-0 overflow-hidden bg-[var(--color-canvas)] [@media(max-height:42rem)]:[&_.maplibregl-ctrl-group]:hidden"
     >
       <FleetVehicleRail
         vehicles={liveVehicles}
@@ -353,6 +407,8 @@ export function OnlineMapWorkspace({
         query={query}
         filter={activeFilter}
         collapsed={railCollapsed}
+        selectedDayDistanceKm={selectedDayDistanceKm}
+        selectedDayDistanceLoading={!historyProvider && remoteHistory.loading}
         onSelect={handleVehicleSelect}
         onQueryChange={handleQueryChange}
         onFilterChange={handleFilterChange}
@@ -384,6 +440,8 @@ export function OnlineMapWorkspace({
             query={query}
             filter={activeFilter}
             collapsed={false}
+            selectedDayDistanceKm={selectedDayDistanceKm}
+            selectedDayDistanceLoading={!historyProvider && remoteHistory.loading}
             onSelect={handleVehicleSelect}
             onQueryChange={handleQueryChange}
             onFilterChange={handleFilterChange}
@@ -410,6 +468,8 @@ export function OnlineMapWorkspace({
             trackViewModel={trackViewModel}
             playbackPoint={playbackPoint}
             playbackHeading={playbackHeading}
+            playbackTrail={playbackTrail}
+            playbackActive={playbackActive}
             selectedEventId={selectedEventId}
             previewedEventId={previewedEventId}
             previewedSegmentId={previewedSegmentId}
@@ -490,10 +550,10 @@ export function OnlineMapWorkspace({
       {selectedVehicle && trackViewModel ? (
         <div
           data-testid="track-playback-dock"
-          className={`absolute right-3 bottom-[calc(38dvh+0.75rem)] left-3 z-40 hidden rounded-[var(--radius-panel)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-[var(--color-text)] shadow-[var(--shadow-floating)] @min-[48rem]:block @min-[48rem]:right-[26rem] @min-[48rem]:bottom-4 ${railCollapsed ? '@min-[48rem]:left-[6.5rem]' : '@min-[48rem]:left-[24rem]'}`}
+          className="absolute bottom-4 left-1/2 z-40 hidden w-[min(34rem,calc(100%-2rem))] -translate-x-1/2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-surface)_96%,transparent)] px-2.5 py-2 text-[var(--color-text)] shadow-[var(--shadow-floating)] backdrop-blur-xl @min-[48rem]:block"
         >
           {trackPeriod === 'seven-days' ? (
-            <p className="mb-1 text-xs font-medium text-[var(--color-text-secondary)]">
+            <p className="px-2 pb-1 text-xs font-medium text-[var(--color-text-secondary)]">
               Воспроизводится поездка:{' '}
               {(playbackTrack?.date ?? trackViewModel.activeTrip.date)
                 .split('-')
@@ -505,6 +565,8 @@ export function OnlineMapWorkspace({
             progress={progress}
             playing={playing && !reducedMotion}
             reducedMotion={reducedMotion}
+            startTimestamp={playbackTrack?.points[0]?.timestamp}
+            finishTimestamp={playbackTrack?.points.at(-1)?.timestamp}
             onProgressChange={handleProgressChange}
             onPlayingChange={handlePlayingChange}
             playbackSpeed={playbackSpeed}
@@ -512,21 +574,6 @@ export function OnlineMapWorkspace({
           />
         </div>
       ) : null}
-
-      <a
-        href="https://www.openstreetmap.org/copyright"
-        target="_blank"
-        rel="noreferrer"
-        className={`absolute left-3 z-30 inline-flex min-h-11 items-center rounded-[var(--radius-sm)] bg-[var(--color-surface)] px-2 text-xs font-medium text-[var(--color-text-secondary)] underline-offset-4 shadow-[var(--shadow-card)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] @min-[48rem]:bottom-2 ${
-          selectedVehicle
-            ? mobilePanelCollapsed
-              ? 'bottom-[calc(5.5rem+0.5rem)]'
-              : 'bottom-[calc(38dvh+0.5rem)]'
-            : 'bottom-[max(0.5rem,env(safe-area-inset-bottom))]'
-        }`}
-      >
-        © OpenStreetMap
-      </a>
     </section>
   );
 }

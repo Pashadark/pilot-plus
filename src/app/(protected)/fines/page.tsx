@@ -15,7 +15,9 @@ export default async function FinesRoute({
     vehicleId?: string;
     clientId?: string;
     page?: string;
+    pageSize?: string;
     payment?: string;
+    discountDay?: string;
   }>;
 }) {
   const filters = await searchParams;
@@ -25,6 +27,7 @@ export default async function FinesRoute({
       <FinesPage
         referenceTime={new Date().toISOString()}
         summary={data.summary}
+        deadlineDays={data.deadlineDays}
         fines={data.fines}
         tollsUnavailable={data.tollsUnavailable}
         companies={data.companies}

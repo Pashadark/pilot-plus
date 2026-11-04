@@ -2,12 +2,17 @@ import { randomUUID } from 'node:crypto';
 
 import type { Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
+import { IMPOUND_LOTS } from '@/modules/geography/impound-lots';
 import {
   isCompleteWeeklyInspection,
   moscowWeekRange,
   weeklyInspectionRequiredMedia,
 } from '@/modules/rentals/lease-to-own/weekly-inspection';
-import { isLowFuelLevel, LOW_FUEL_THRESHOLD_PERCENT } from '@/modules/vehicles/fuel-level';
+import {
+  isLowFuelLevel,
+  FUEL_RECOVERY_PERCENT,
+  selectFreshFuelReading,
+} from '@/modules/vehicles/fuel-level';
 import { OFFLINE_AFTER_MS } from '@/modules/vehicles/gps-status';
 import { decryptField } from '@/services/security/field-encryption';
 
@@ -17,16 +22,22 @@ import { formatLeadCreatedMessage, formatLeadStatusChangedMessage } from './lead
 import {
   classifyGpsSilence,
   classifyRentalDeadline,
-  formatOperationalAlert,
+  formatClientGpsEvent,
+  formatOperationalAlertForAudience,
 } from './operational-alerts';
-import { formatOperationsDigest } from './operations-digest';
+import { formatOperationsDigestParts } from './operations-digest';
+import { formatRentalRequestMessage } from './rental-request-notifications';
 import {
+  formatClientReturnReminderMessage,
   formatRentalLifecycleMessage,
   formatRentalExtensionMessage,
+  formatTomorrowReturnMessage,
 } from './rental-lifecycle-notifications';
 import { formatUnpaidFinesReport } from './unpaid-fines-report';
+import { formatTelegramMessage, telegramSection } from './telegram-message';
 import { returnReminderStage } from './client-return-reminders';
 import { notificationDestination } from './notification-routing';
+import type { BotIdentityContext } from './queries';
 
 type ClaimDb = Pick<typeof prisma, '$transaction'>;
 type UpdateDb = Pick<typeof prisma, 'botNotificationJob'>;
@@ -38,6 +49,15 @@ function vehicleTitle(vehicle: { make: string | null; modelName: string | null; 
 
 function personName(person: { firstName: string; middleName: string | null; lastName: string }) {
   return [person.lastName, person.firstName, person.middleName].filter(Boolean).join(' ');
+}
+
+function escapeHtml(value: string | number) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function decryptedPhone(value: string | null | undefined): string | null {
@@ -93,6 +113,26 @@ function publicLeadsUrl() {
   }
 }
 
+function publicAppUrl(path: string) {
+  const configured = process.env.PILOT_PUBLIC_APP_URL?.trim() || 'https://supapro.ru';
+  try {
+    const url = new URL(path, configured);
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function phoneAction(phone: string | null) {
+  if (!phone) return null;
+  let digits = phone.replace(/\D/gu, '');
+  if (digits.length === 11 && digits.startsWith('8')) digits = `7${digits.slice(1)}`;
+  if (digits.length === 10) digits = `7${digits}`;
+  return /^7\d{10}$/u.test(digits)
+    ? { type: 'phone_url', label: '📞 Позвонить', url: `tel:+${digits}` }
+    : null;
+}
+
 export async function enqueueDailyOperationsDigests(now: Date, database = prisma) {
   const moscow = new Date(now.getTime() + 3 * 60 * 60 * 1000);
   if (moscow.getUTCHours() !== 8 || moscow.getUTCMinutes() >= 15) return 0;
@@ -102,61 +142,28 @@ export async function enqueueDailyOperationsDigests(now: Date, database = prisma
     take: 500,
   });
   if (!bindings.length) return 0;
-  const identities = await database.telegramIdentity.findMany({
-    where: {
-      kind: 'STAFF',
-      isActive: true,
-      OR: bindings.map((binding) => ({
-        companyId: binding.companyId,
-        userId: binding.boundByUserId,
-      })),
-    },
-    select: { id: true, companyId: true, userId: true },
-    take: 500,
-  });
-  const identityByBinding = new Map(
-    identities.map((identity) => [`${identity.companyId}:${identity.userId}`, identity.id]),
-  );
+  const digestParts = ['critical', 'trackers', 'totals'] as const;
   const rows: Prisma.BotNotificationJobCreateManyInput[] = bindings.flatMap((binding) => {
-    const operationsCommon = {
-      companyId: binding.companyId,
-      template: 'DAILY_OPERATIONS_DIGEST',
-      payload: { date },
-      availableAt: now,
-    };
     const finesCommon = {
       companyId: binding.companyId,
       template: 'DAILY_UNPAID_FINES',
       payload: { date },
-      availableAt: now,
+      availableAt: new Date(now.getTime() + 3_000),
     };
-    const operationsGroup = {
-      ...operationsCommon,
+    const operationsGroup = digestParts.map((part, index) => ({
+      companyId: binding.companyId,
+      template: 'DAILY_OPERATIONS_DIGEST',
+      payload: { date, part },
+      availableAt: new Date(now.getTime() + index * 1_000),
       chatId: binding.telegramChatId,
-      eventKey: `daily-operations:${binding.companyId}:${date}:group`,
-    };
+      eventKey: `daily-operations:${binding.companyId}:${date}:group:${part}`,
+    }));
     const finesGroup = {
       ...finesCommon,
       chatId: binding.telegramChatId,
       eventKey: `daily-unpaid-fines:${binding.companyId}:${date}:group`,
     };
-    const identityId = identityByBinding.get(`${binding.companyId}:${binding.boundByUserId}`);
-    return identityId
-      ? [
-          operationsGroup,
-          {
-            ...operationsCommon,
-            identityId,
-            eventKey: `daily-operations:${binding.companyId}:${date}:staff:${identityId}`,
-          },
-          finesGroup,
-          {
-            ...finesCommon,
-            identityId,
-            eventKey: `daily-unpaid-fines:${binding.companyId}:${date}:staff:${identityId}`,
-          },
-        ]
-      : [operationsGroup, finesGroup];
+    return [...operationsGroup, finesGroup];
   });
   if (moscow.getUTCDay() === 5) {
     const week = moscowWeekRange(now);
@@ -198,11 +205,7 @@ export async function enqueueDailyOperationsDigests(now: Date, database = prisma
       }
       const binding = bindingByCompany.get(rental.companyId);
       if (!binding) continue;
-      const vehicle = [
-        rental.vehicle.make,
-        rental.vehicle.modelName ?? rental.vehicle.model,
-        rental.vehicle.registrationNumber,
-      ]
+      const vehicle = [rental.vehicle.make, rental.vehicle.modelName ?? rental.vehicle.model]
         .filter(Boolean)
         .join(' ');
       const client = [rental.client.lastName, rental.client.firstName, rental.client.middleName]
@@ -215,27 +218,73 @@ export async function enqueueDailyOperationsDigests(now: Date, database = prisma
         eventKey: `lease-to-own-inspection:${rental.companyId}:${rental.id}:${week.weekKey}:group`,
         availableAt: now,
         payload: {
-          message: [
-            '📸 Аренда с правом выкупа — еженедельный контроль',
-            `${client} · ${vehicle}`,
-            `Договор: ${rental.contractNumber ?? 'без номера'}`,
-            `Нужно загрузить: фото приборки, кузов с 4 сторон и видео.`,
-            `https://supapro.ru/rentals/${rental.id}?action=weekly-inspection#rental-actions`,
-          ].join('\n'),
+          message: formatTelegramMessage({
+            title: '🟠 <b>Не пройден еженедельный осмотр</b>',
+            sections: [
+              telegramSection('🚗', 'Авто', [
+                `${escapeHtml(vehicle)} · <code>${escapeHtml(rental.vehicle.registrationNumber ?? 'без номера')}</code>`,
+                `📄 Договор: <code>${escapeHtml(rental.contractNumber ?? 'без номера')}</code>`,
+              ]),
+              telegramSection('👤', 'Клиент', [escapeHtml(client)]),
+              telegramSection('📷', 'Не хватает', [
+                'Фото приборной панели',
+                'Фото кузова с четырёх сторон',
+                'Видео автомобиля',
+              ]),
+            ],
+            action: 'Связаться с клиентом и запросить материалы',
+          }),
+          parseMode: 'HTML',
+          actions: [
+            {
+              type: 'contract_url',
+              label: 'Открыть осмотр',
+              url: `https://supapro.ru/rentals/${encodeURIComponent(rental.id)}?action=weekly-inspection#rental-actions`,
+            },
+          ],
           requiredMedia: [...weeklyInspectionRequiredMedia],
         },
       });
     }
   }
   const result = await database.botNotificationJob.createMany({
-    data: rows.filter((row) => !row.identityId),
+    data: rows,
+    skipDuplicates: true,
+  });
+  return result.count;
+}
+
+export async function enqueueOperationsDigestRefresh(
+  identity: BotIdentityContext,
+  date: string,
+  now: Date,
+  database = prisma,
+) {
+  if (identity.kind !== 'STAFF' || !identity.userId) throw new BotApiError('FORBIDDEN', 403);
+  const range = moscowDayRange(date);
+  const binding = await database.telegramGroupBinding.findFirst({
+    where: { companyId: identity.companyId },
+    select: { telegramChatId: true },
+  });
+  if (!binding) throw new BotApiError('GROUP_NOT_CONFIGURED', 409);
+  const minuteBucket = Math.floor(now.getTime() / 60_000);
+  const parts = ['critical', 'trackers', 'totals'] as const;
+  const result = await database.botNotificationJob.createMany({
+    data: parts.map((part, index) => ({
+      companyId: identity.companyId,
+      chatId: binding.telegramChatId,
+      template: 'DAILY_OPERATIONS_DIGEST',
+      payload: { date: range.date, part },
+      availableAt: new Date(now.getTime() + index * 1_000),
+      eventKey: `daily-operations-refresh:${identity.companyId}:${identity.identityId}:${range.date}:${minuteBucket}:${part}`,
+    })),
     skipDuplicates: true,
   });
   return result.count;
 }
 
 export async function enqueueOperationalAlerts(now: Date, database = prisma) {
-  if (now.getUTCMinutes() % 15 !== 0 || now.getUTCSeconds() >= 10) return 0;
+  if (now.getUTCMinutes() % 15 !== 0 || now.getUTCSeconds() >= 45) return 0;
   const bindings = await database.telegramGroupBinding.findMany({
     select: { companyId: true, telegramChatId: true, boundByUserId: true },
     take: 500,
@@ -334,51 +383,92 @@ export async function enqueueOperationalAlerts(now: Date, database = prisma) {
   };
   const alerts: Alert[] = [];
 
+  // Fuel observations have their own selection: a newer GPS-only sample must not erase valid fuel.
+  const fuelVehicles = await database.vehicle.findMany({
+    where: { companyId: { in: companyIds }, archivedAt: null, isDemoImport: false },
+    select: {
+      id: true,
+      positions: {
+        where: {
+          provider: 'GLONASSSOFT',
+          fuelLevelPercent: { not: null },
+          recordedAt: { lte: now },
+        },
+        select: { id: true, recordedAt: true, fuelLevelPercent: true },
+        orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+        take: 1,
+      },
+      rentalOperations: {
+        where: { status: 'COMMITTED', fuelLevelPercent: { not: null }, occurredAt: { lte: now } },
+        select: { id: true, occurredAt: true, fuelLevelPercent: true },
+        orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+        take: 1,
+      },
+    },
+  });
+  const fuelByVehicle = new Map(fuelVehicles.map((vehicle) => [vehicle.id, vehicle]));
   const lowFuelAlerts = await Promise.all(
     vehicles.map(async (vehicle): Promise<Alert | null> => {
-      const currentPosition = vehicle.positions[0] ?? null;
-      const currentOperation = vehicle.rentalOperations?.[0] ?? null;
-      const positionFuel = numberOrNull(currentPosition?.fuelLevelPercent);
-      const operationFuel = numberOrNull(currentOperation?.fuelLevelPercent);
-      const fuelLevelPercent = positionFuel ?? operationFuel;
+      const fuelVehicle = fuelByVehicle.get(vehicle.id);
+      const currentPosition = fuelVehicle?.positions[0] ?? null;
+      const currentOperation = fuelVehicle?.rentalOperations?.[0] ?? null;
+      const reading = selectFreshFuelReading(
+        [
+          ...(currentPosition
+            ? [
+                {
+                  fuelLevelPercent: numberOrNull(currentPosition.fuelLevelPercent),
+                  observedAt: currentPosition.recordedAt,
+                },
+              ]
+            : []),
+          ...(currentOperation
+            ? [
+                {
+                  fuelLevelPercent: numberOrNull(currentOperation.fuelLevelPercent),
+                  observedAt: currentOperation.occurredAt,
+                },
+              ]
+            : []),
+        ],
+        now,
+      );
+      const fuelLevelPercent = reading?.fuelLevelPercent ?? null;
       if (!isLowFuelLevel(fuelLevelPercent)) return null;
-
-      if (positionFuel !== null && currentPosition) {
-        const lastRecoveredPosition = await database.vehiclePosition.findFirst({
+      const [lastRecoveredPosition, lastRecoveredOperation] = await Promise.all([
+        database.vehiclePosition.findFirst({
           where: {
             vehicleId: vehicle.id,
             provider: 'GLONASSSOFT',
-            fuelLevelPercent: { gt: LOW_FUEL_THRESHOLD_PERCENT },
-            recordedAt: { lt: currentPosition.recordedAt },
+            fuelLevelPercent: { gte: FUEL_RECOVERY_PERCENT, lte: 100 },
+            recordedAt: { lt: reading!.observedAt },
           },
-          select: { id: true },
+          select: { id: true, recordedAt: true },
           orderBy: [{ recordedAt: 'desc' as const }, { id: 'desc' as const }],
-        });
-        return {
-          companyId: vehicle.companyId,
-          eventKey: `fuel:${vehicle.id}:position:${lastRecoveredPosition?.id ?? 'initial'}`,
-          payload: {
-            kind: 'LOW_FUEL',
+        }),
+        database.rentalOperation.findFirst({
+          where: {
+            companyId: vehicle.companyId,
             vehicleId: vehicle.id,
-            fuelLevelPercent: Math.round(fuelLevelPercent as number),
+            status: 'COMMITTED',
+            fuelLevelPercent: { gte: FUEL_RECOVERY_PERCENT, lte: 100 },
+            occurredAt: { lt: reading!.observedAt },
           },
-        };
-      }
-
-      const lastRecoveredOperation = await database.rentalOperation.findFirst({
-        where: {
-          companyId: vehicle.companyId,
-          vehicleId: vehicle.id,
-          status: 'COMMITTED',
-          fuelLevelPercent: { gt: LOW_FUEL_THRESHOLD_PERCENT },
-          occurredAt: { lt: currentOperation?.occurredAt ?? now },
-        },
-        select: { id: true },
-        orderBy: [{ occurredAt: 'desc' as const }, { id: 'desc' as const }],
-      });
+          select: { id: true, occurredAt: true },
+          orderBy: [{ occurredAt: 'desc' as const }, { id: 'desc' as const }],
+        }),
+      ]);
+      const recovery =
+        lastRecoveredOperation &&
+        (!lastRecoveredPosition ||
+          lastRecoveredOperation.occurredAt > lastRecoveredPosition.recordedAt)
+          ? `operation:${lastRecoveredOperation.id}`
+          : lastRecoveredPosition
+            ? `position:${lastRecoveredPosition.id}`
+            : 'initial';
       return {
         companyId: vehicle.companyId,
-        eventKey: `fuel:${vehicle.id}:operation:${lastRecoveredOperation?.id ?? 'initial'}`,
+        eventKey: `fuel:${vehicle.id}:${recovery}`,
         payload: {
           kind: 'LOW_FUEL',
           vehicleId: vehicle.id,
@@ -518,6 +608,86 @@ export async function enqueueReturnReminders(now: Date, database = prisma) {
   return rows.length;
 }
 
+export async function enqueueManualReturnReminder(
+  identity: BotIdentityContext,
+  rentalId: string,
+  now: Date,
+  database = prisma,
+) {
+  if (identity.kind !== 'STAFF') throw new BotApiError('FORBIDDEN', 403);
+  const rental = await database.rental.findFirst({
+    where: {
+      id: rentalId,
+      companyId: identity.companyId,
+      status: { in: ['CONFIRMED', 'ACTIVE'] },
+    },
+    select: {
+      id: true,
+      companyId: true,
+      client: { select: { telegramIdentity: { select: { id: true, isActive: true } } } },
+    },
+  });
+  if (!rental) throw new BotApiError('RENTAL_NOT_FOUND', 404);
+  if (!rental.client.telegramIdentity?.isActive) {
+    throw new BotApiError('CLIENT_TELEGRAM_NOT_LINKED', 409);
+  }
+  const minute = now.toISOString().slice(0, 16);
+  const result = await database.botNotificationJob.createMany({
+    data: [
+      {
+        companyId: rental.companyId,
+        identityId: rental.client.telegramIdentity.id,
+        eventKey: `manual-return-reminder:${rental.id}:${minute}`,
+        template: 'RENTAL_RETURN_CLIENT',
+        payload: { rentalId: rental.id, manual: true },
+        availableAt: now,
+      },
+    ],
+    skipDuplicates: true,
+  });
+  return result.count > 0;
+}
+
+export async function enqueueManualClientImpoundAlert(
+  identity: BotIdentityContext,
+  rentalId: string,
+  now: Date,
+  database = prisma,
+) {
+  if (identity.kind !== 'STAFF') throw new BotApiError('FORBIDDEN', 403);
+  const rental = await database.rental.findFirst({
+    where: {
+      id: rentalId,
+      companyId: identity.companyId,
+      status: { in: ['CONFIRMED', 'ACTIVE'] },
+    },
+    select: {
+      id: true,
+      companyId: true,
+      client: { select: { telegramIdentity: { select: { id: true, isActive: true } } } },
+    },
+  });
+  if (!rental) throw new BotApiError('RENTAL_NOT_FOUND', 404);
+  if (!rental.client.telegramIdentity?.isActive) {
+    throw new BotApiError('CLIENT_TELEGRAM_NOT_LINKED', 409);
+  }
+  const minute = now.toISOString().slice(0, 16);
+  const result = await database.botNotificationJob.createMany({
+    data: [
+      {
+        companyId: rental.companyId,
+        identityId: rental.client.telegramIdentity.id,
+        eventKey: `manual-impound-alert:${rental.id}:${minute}`,
+        template: 'CLIENT_IMPOUND_ALERT',
+        payload: { rentalId: rental.id },
+        availableAt: now,
+      },
+    ],
+    skipDuplicates: true,
+  });
+  return result.count > 0;
+}
+
 async function hydrateJob(
   tx: Parameters<Parameters<ClaimDb['$transaction']>[0]>[0],
   now: Date,
@@ -537,6 +707,176 @@ async function hydrateJob(
     } | null;
   },
 ) {
+  if (job.template === 'BOT_RENTAL_REQUEST_CREATED') {
+    const payload =
+      typeof job.payload === 'object' && job.payload !== null
+        ? (job.payload as Record<string, unknown>)
+        : {};
+    const requestId = String(payload.requestId ?? '');
+    const request = requestId
+      ? await tx.botRentalRequest.findFirst({
+          where: { id: requestId, companyId: job.companyId },
+          select: {
+            startsAt: true,
+            endsAt: true,
+            fulfillmentMode: true,
+            client: {
+              select: {
+                firstName: true,
+                middleName: true,
+                lastName: true,
+                phoneEncrypted: true,
+              },
+            },
+            preferredVehicle: {
+              select: { make: true, modelName: true, model: true, registrationNumber: true },
+            },
+          },
+        })
+      : null;
+    if (!request) return { ...job, payload: { message: 'Заявка уже недоступна.' } };
+    return {
+      ...job,
+      payload: {
+        message: formatRentalRequestMessage({
+          clientName: personName(request.client),
+          clientPhone: decryptedPhone(request.client.phoneEncrypted),
+          vehicle: request.preferredVehicle ? vehicleTitle(request.preferredVehicle) : null,
+          registrationNumber: request.preferredVehicle?.registrationNumber ?? null,
+          startsAt: request.startsAt,
+          endsAt: request.endsAt,
+          fulfillment:
+            request.fulfillmentMode === 'DELIVERY' ? 'Подача по адресу' : 'Получение в офисе',
+        }),
+        parseMode: 'HTML',
+        actions: [
+          {
+            type: 'open_url',
+            label: 'Открыть аренды',
+            url: 'https://supapro.ru/rentals',
+          },
+        ],
+      },
+    };
+  }
+  if (job.template === 'CLIENT_IMPOUND_ALERT') {
+    const payload =
+      typeof job.payload === 'object' && job.payload !== null
+        ? (job.payload as Record<string, unknown>)
+        : {};
+    const rentalId = String(payload.rentalId ?? '');
+    const clientId = job.identity?.clientId ?? '';
+    const rental =
+      rentalId && clientId
+        ? await tx.rental.findFirst({
+            where: {
+              id: rentalId,
+              companyId: job.companyId,
+              clientId,
+              status: { in: ['CONFIRMED', 'ACTIVE'] },
+            },
+            select: {
+              vehicle: {
+                select: {
+                  make: true,
+                  modelName: true,
+                  model: true,
+                  registrationNumber: true,
+                },
+              },
+            },
+          })
+        : null;
+    if (!rental) {
+      return { ...job, payload: { message: 'Уведомление уже недоступно.' } };
+    }
+    const registration = rental.vehicle.registrationNumber
+      ? ` · ${escapeHtml(rental.vehicle.registrationNumber)}`
+      : '';
+    return {
+      ...job,
+      payload: {
+        message: [
+          '🚨 <b>Важное уведомление по автомобилю</b>',
+          '',
+          '🚗 <b>Авто</b>',
+          `└ ${escapeHtml(vehicleTitle(rental.vehicle))}${registration}`,
+          '',
+          '📍 <b>Событие</b>',
+          '└ Автомобиль зафиксирован на территории специализированной стоянки',
+          '',
+          '⚡ <b>Действие</b>',
+          '└ Срочно свяжитесь с офисом СУПА ПРО',
+        ].join('\n'),
+        parseMode: 'HTML',
+        clientMenu: true,
+      },
+    };
+  }
+  if (job.template === 'CLIENT_GPS_EVENT') {
+    const payload =
+      typeof job.payload === 'object' && job.payload !== null
+        ? (job.payload as Record<string, unknown>)
+        : {};
+    const kind = String(payload.kind ?? '');
+    const vehicleId = String(payload.vehicleId ?? '');
+    const eventId = String(payload.eventId ?? '');
+    const rentalId = String(payload.rentalId ?? '');
+    const clientId = job.identity?.clientId ?? '';
+    if (
+      !vehicleId ||
+      !eventId ||
+      !rentalId ||
+      !clientId ||
+      (kind !== 'SPEEDING' && kind !== 'HARSH_ACCELERATION' && kind !== 'HARSH_BRAKING')
+    ) {
+      return { ...job, payload: { message: 'Уведомление уже недоступно.' } };
+    }
+    const [rental, event] = await Promise.all([
+      tx.rental.findFirst({
+        where: {
+          id: rentalId,
+          companyId: job.companyId,
+          clientId,
+          vehicleId,
+          status: { in: ['CONFIRMED', 'ACTIVE'] },
+        },
+        select: {
+          vehicle: {
+            select: { make: true, modelName: true, model: true, registrationNumber: true },
+          },
+        },
+      }),
+      tx.vehicleEvent.findFirst({
+        where: { id: eventId, vehicleId },
+        select: { title: true, description: true, recordedAt: true },
+      }),
+    ]);
+    if (!rental || !event) {
+      return { ...job, payload: { message: 'Уведомление уже недоступно.' } };
+    }
+    const mapHref =
+      typeof payload.mapHref === 'string' && payload.mapHref.startsWith('/map?')
+        ? payload.mapHref
+        : `/map?vehicleId=${encodeURIComponent(vehicleId)}&eventId=${encodeURIComponent(eventId)}`;
+    const mapUrl = publicAppUrl(mapHref);
+    return {
+      ...job,
+      payload: {
+        message: formatClientGpsEvent({
+          kind: kind as 'SPEEDING' | 'HARSH_ACCELERATION' | 'HARSH_BRAKING',
+          vehicle: vehicleTitle(rental.vehicle),
+          registrationNumber: rental.vehicle.registrationNumber,
+          eventTitle: event.title,
+          eventDescription: event.description,
+          eventRecordedAt: event.recordedAt,
+        }),
+        parseMode: 'HTML',
+        clientMenu: true,
+        actions: mapUrl ? [{ type: 'map_url', label: '🗺 Карта', url: mapUrl }] : [],
+      },
+    };
+  }
   if (job.template === 'LEAD_CREATED' || job.template === 'LEAD_STATUS_CHANGED') {
     const leadId = leadPayloadId(job.payload, 'leadId');
     const auditId = leadPayloadId(job.payload, 'auditId');
@@ -582,7 +922,14 @@ async function hydrateJob(
             actorName: audit?.actorUser?.name ?? null,
             ...leadStatusTransition(audit?.changes, lead.status),
           });
-    return { ...job, payload: { message, parseMode: 'HTML' } };
+    return {
+      ...job,
+      payload: {
+        message,
+        parseMode: 'HTML',
+        actions: [{ type: 'open_url', label: 'Открыть заявки', url: publicLeadsUrl() }],
+      },
+    };
   }
   if (job.template === 'RENTAL_LIFECYCLE' || job.template === 'CLIENT_RENTAL_LIFECYCLE') {
     const customer = job.template === 'CLIENT_RENTAL_LIFECYCLE';
@@ -638,7 +985,14 @@ async function hydrateJob(
           select: {
             contractNumber: true,
             endsAt: true,
-            client: { select: { firstName: true, middleName: true, lastName: true } },
+            client: {
+              select: {
+                firstName: true,
+                middleName: true,
+                lastName: true,
+                phoneEncrypted: true,
+              },
+            },
             vehicle: {
               select: { make: true, modelName: true, model: true, registrationNumber: true },
             },
@@ -662,10 +1016,25 @@ async function hydrateJob(
         payload: {
           parseMode: 'HTML',
           ...(customer ? { clientMenu: true } : {}),
+          ...(!customer
+            ? {
+                actions: [
+                  phoneAction(decryptedPhone(operation.rental.client.phoneEncrypted)),
+                  publicAppUrl(`/rentals/${encodeURIComponent(rentalId)}`)
+                    ? {
+                        type: 'contract_url',
+                        label: '📄 Договор',
+                        url: publicAppUrl(`/rentals/${encodeURIComponent(rentalId)}`),
+                      }
+                    : null,
+                ].filter(Boolean),
+              }
+            : {}),
           message: formatRentalExtensionMessage({
             vehicle: vehicleTitle(operation.rental.vehicle),
             registrationNumber: operation.rental.vehicle.registrationNumber,
             clientName: personName(operation.rental.client),
+            clientPhone: decryptedPhone(operation.rental.client.phoneEncrypted),
             contractNumber: operation.rental.contractNumber,
             actorName: operation.actor.name,
             occurredAt: operation.occurredAt,
@@ -708,6 +1077,7 @@ async function hydrateJob(
             vehicle: vehicleTitle(operation.rental.vehicle),
             registrationNumber: operation.rental.vehicle.registrationNumber,
             clientName: personName(operation.rental.client),
+            clientPhone: decryptedPhone(operation.rental.client.phoneEncrypted),
             actorName: operation.actor.name,
             mileageKm: operation.mileageKm,
             fuelLevelPercent: operation.fuelLevelPercent,
@@ -719,6 +1089,20 @@ async function hydrateJob(
             : ''),
         parseMode: 'HTML',
         ...(customer ? { clientMenu: true } : {}),
+        ...(!customer
+          ? {
+              actions: [
+                phoneAction(decryptedPhone(operation.rental.client.phoneEncrypted)),
+                publicAppUrl(`/rentals/${encodeURIComponent(rentalId)}`)
+                  ? {
+                      type: 'contract_url',
+                      label: '📄 Договор',
+                      url: publicAppUrl(`/rentals/${encodeURIComponent(rentalId)}`),
+                    }
+                  : null,
+              ].filter(Boolean),
+            }
+          : {}),
       },
     };
   }
@@ -732,6 +1116,8 @@ async function hydrateJob(
     const rentalId = payload.rentalId ? String(payload.rentalId) : null;
     const eventId = payload.eventId ? String(payload.eventId) : null;
     const fineId = payload.fineId ? String(payload.fineId) : null;
+    const impoundLotId = payload.impoundLotId ? String(payload.impoundLotId) : null;
+    const impoundLot = IMPOUND_LOTS.find((lot) => lot.id === impoundLotId) ?? null;
     const allowedKinds = new Set([
       'RENTED_GPS_WARNING',
       'RENTED_GPS_CRITICAL',
@@ -745,6 +1131,9 @@ async function hydrateJob(
       'LOW_FUEL',
       'BORDER_APPROACH',
       'FUEL_STATION_VISIT',
+      'IMPOUND_LOT_ENTRY',
+      'HARSH_ACCELERATION',
+      'HARSH_BRAKING',
     ]);
     if (!vehicleId || !allowedKinds.has(kind)) {
       return { ...job, payload: { message: 'Оперативное событие уже недоступно.' } };
@@ -833,43 +1222,92 @@ async function hydrateJob(
       return { ...job, payload: { message: 'Автомобиль уже недоступен.' } };
     }
     const lastSignalAt = vehicle.positions[0]?.recordedAt ?? null;
+    const clientPhone = rental
+      ? decryptedPhone(rental.client.phoneEncrypted)
+      : fine?.client
+        ? decryptedPhone(fine.client.phoneEncrypted)
+        : null;
+    const mapHref =
+      typeof payload.mapHref === 'string' && payload.mapHref.startsWith('/map?')
+        ? payload.mapHref
+        : `/map?vehicleId=${encodeURIComponent(vehicleId)}`;
+    const mapUrl = publicAppUrl(mapHref);
+    const fineUrl = fineId ? publicAppUrl(`/fines?fineId=${encodeURIComponent(fineId)}`) : null;
+    const rentalUrl = rentalId ? publicAppUrl(`/rentals/${encodeURIComponent(rentalId)}`) : null;
+    const fineAmountLabel = fine
+      ? new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(
+          Number(fine.currentAmountMinor) / 100,
+        )
+      : null;
+    const actions = (
+      kind === 'NEW_FINE'
+        ? [
+            phoneAction(clientPhone),
+            fineUrl
+              ? { type: 'decree_url', label: '📥 Скачать постановление', url: fineUrl }
+              : null,
+            fineUrl && fineAmountLabel
+              ? { type: 'payment_url', label: `💳 Оплатить ${fineAmountLabel} ₽`, url: fineUrl }
+              : null,
+          ]
+        : kind === 'RETURN_SOON' || kind === 'RETURN_OVERDUE'
+          ? [
+              phoneAction(clientPhone),
+              rentalId ? { type: 'remind', label: '🔔 Напомнить', actionId: rentalId } : null,
+            ]
+          : kind === 'IMPOUND_LOT_ENTRY'
+            ? [
+                rentalId
+                  ? { type: 'notify_client', label: '✉️ Сообщить', actionId: rentalId }
+                  : null,
+                phoneAction(clientPhone),
+                mapUrl ? { type: 'map_url', label: '🗺 Карта', url: mapUrl } : null,
+              ]
+            : [
+                phoneAction(clientPhone),
+                mapUrl ? { type: 'map_url', label: '🗺 Карта', url: mapUrl } : null,
+                rentalUrl ? { type: 'contract_url', label: '📄 Договор', url: rentalUrl } : null,
+              ]
+    ).filter(Boolean);
     return {
       ...job,
       payload: {
-        message: formatOperationalAlert({
-          kind: kind as Parameters<typeof formatOperationalAlert>[0]['kind'],
-          vehicle: vehicleTitle(vehicle),
-          registrationNumber: vehicle.registrationNumber,
-          silentForMs: lastSignalAt ? now.getTime() - lastSignalAt.getTime() : null,
-          clientName: rental
-            ? personName(rental.client)
-            : fine?.client
-              ? personName(fine.client)
-              : null,
-          clientPhone: rental
-            ? decryptedPhone(rental.client.phoneEncrypted)
-            : fine?.client
-              ? decryptedPhone(fine.client.phoneEncrypted)
-              : null,
-          rentalEndsAt: rental?.endsAt ?? null,
-          eventTitle: event?.title ?? null,
-          eventDescription: event?.description ?? null,
-          eventRecordedAt:
-            typeof payload.recordedAt === 'string'
-              ? new Date(payload.recordedAt)
-              : (event?.recordedAt ?? null),
-          fineAmountMinor: fine?.currentAmountMinor.toString() ?? null,
-          fineDecreeNumber: fine?.decreeNumber ?? null,
-          fineArticle: fine?.articleCode ?? null,
-          fineDescription: fine?.description ?? null,
-          fineOffenseAt: fine?.offenseAt ?? null,
-          fineAttributedToClient: Boolean(fine?.clientId),
-          fuelLevelPercent: numberOrNull(payload.fuelLevelPercent),
-          borderCountry: typeof payload.borderCountry === 'string' ? payload.borderCountry : null,
-          borderDistanceKm: numberOrNull(payload.borderDistanceKm),
-          stationLabel: typeof payload.stationLabel === 'string' ? payload.stationLabel : null,
-        }),
+        message: formatOperationalAlertForAudience(
+          {
+            kind: kind as Parameters<typeof formatOperationalAlertForAudience>[0]['kind'],
+            vehicle: vehicleTitle(vehicle),
+            registrationNumber: vehicle.registrationNumber,
+            silentForMs: lastSignalAt ? now.getTime() - lastSignalAt.getTime() : null,
+            clientName: rental
+              ? personName(rental.client)
+              : fine?.client
+                ? personName(fine.client)
+                : null,
+            clientPhone,
+            rentalEndsAt: rental?.endsAt ?? null,
+            eventTitle: event?.title ?? null,
+            eventDescription: event?.description ?? null,
+            eventRecordedAt:
+              typeof payload.recordedAt === 'string'
+                ? new Date(payload.recordedAt)
+                : (event?.recordedAt ?? null),
+            fineAmountMinor: fine?.currentAmountMinor.toString() ?? null,
+            fineDecreeNumber: fine?.decreeNumber ?? null,
+            fineArticle: fine?.articleCode ?? null,
+            fineDescription: fine?.description ?? null,
+            fineOffenseAt: fine?.offenseAt ?? null,
+            fineAttributedToClient: Boolean(fine?.clientId),
+            fuelLevelPercent: numberOrNull(payload.fuelLevelPercent),
+            borderCountry: typeof payload.borderCountry === 'string' ? payload.borderCountry : null,
+            borderDistanceKm: numberOrNull(payload.borderDistanceKm),
+            stationLabel: typeof payload.stationLabel === 'string' ? payload.stationLabel : null,
+            impoundCity: impoundLot?.city ?? null,
+            impoundAddress: impoundLot?.address ?? null,
+          },
+          'MANAGER',
+        ),
         parseMode: 'HTML',
+        actions,
       },
     };
   }
@@ -937,6 +1375,13 @@ async function hydrateJob(
         ? String(job.payload.date)
         : undefined;
     const range = moscowDayRange(date);
+    const requestedPart =
+      typeof job.payload === 'object' &&
+      job.payload !== null &&
+      'part' in job.payload &&
+      ['critical', 'trackers', 'totals'].includes(String(job.payload.part))
+        ? (String(job.payload.part) as 'critical' | 'trackers' | 'totals')
+        : 'critical';
     const previousRange = {
       start: new Date(range.start.getTime() - 24 * 60 * 60_000),
       end: range.start,
@@ -1210,126 +1655,183 @@ async function hydrateJob(
         ? ['Закрыть просроченное техническое обслуживание.']
         : []),
     ];
+    const digestParts = formatOperationsDigestParts({
+      date: range.date,
+      requests,
+      activeRentals: rentals,
+      yesterday: {
+        revenueMinor: previousRevenueMinor.toString(),
+        completedRentals: yesterdayRentals.length,
+        incidents: yesterdayIncidents,
+        loadPercent: fleetLoad,
+      },
+      fleet: {
+        rented: rentedVehicles.length,
+        free: freeVehicles.length,
+        booked: bookedVehicles.length,
+        maintenance: maintenanceVehicles.length,
+        unknown: unknownVehicles.length,
+        total: vehicles.length,
+      },
+      criticalProblems: problemRows.filter(
+        (problem) =>
+          problem.kind === 'RENTED_GPS_CRITICAL' || problem.kind === 'RENTED_GPS_THEFT_RISK',
+      ),
+      trackerProblems: problemRows.filter(
+        (problem) =>
+          problem.kind === 'RENTED_GPS_WARNING' || problem.kind === 'FREE_GPS_TRACKER_PROBLEM',
+      ),
+      leads: leads.map((lead) => ({
+        at: lead.nextContactAt,
+        name: [lead.lastName, lead.name].filter(Boolean).join(' '),
+        source: lead.source,
+        phone: decryptedPhone(lead.phoneEncrypted),
+        overdue: Boolean(lead.nextContactAt && lead.nextContactAt < now),
+      })),
+      recommendations,
+      weekly:
+        isMonday && weeklyRentals.length
+          ? {
+              startDate: weekRange.start.toISOString().slice(0, 10),
+              endDate: new Date(weekRange.end.getTime() - 1).toISOString().slice(0, 10),
+              revenueMinor: weeklyRentals
+                .reduce((total, rental) => total + rental.totalPriceMinor, BigInt(0))
+                .toString(),
+              rentals: weeklyRentals.length,
+              averageDurationDays: Number(
+                (
+                  weeklyRentals.reduce(
+                    (total, rental) =>
+                      total +
+                      (rental.endsAt.getTime() - rental.startsAt.getTime()) / (24 * 60 * 60_000),
+                    0,
+                  ) / weeklyRentals.length
+                ).toFixed(1),
+              ),
+              loadPercent: fleetLoad,
+            }
+          : undefined,
+      handovers: dayRentals
+        .filter((rental) => rental.startsAt >= range.start && rental.startsAt < range.end)
+        .map((rental) => rentalItem(rental, rental.startsAt, 'Выдать автомобиль')),
+      returns: dayRentals
+        .filter((rental) => rental.endsAt >= range.start && rental.endsAt < range.end)
+        .map((rental) => rentalItem(rental, rental.endsAt, 'Принять возврат автомобиля')),
+      deposits: depositReturns.map((operation) => ({
+        at: operation.occurredAt,
+        title: 'Вернуть депозит',
+        contractNumber: operation.rental.contractNumber,
+        vehicle: vehicleTitle(operation.rental.vehicle),
+        registrationNumber: operation.rental.vehicle.registrationNumber,
+        client: personName(operation.rental.client),
+        phone: decryptedPhone(operation.rental.client.phoneEncrypted),
+        amountMinor:
+          (operation.depositAmountMinor ?? operation.rental.depositMinor)?.toString() ?? null,
+      })),
+      washes: washes.flatMap((wash) =>
+        wash.scheduledAt
+          ? [
+              {
+                at: wash.scheduledAt,
+                title: washTitles[wash.kind] ?? 'Мойка автомобиля',
+                vehicle: vehicleTitle(wash.vehicle),
+                registrationNumber: wash.vehicle.registrationNumber,
+              },
+            ]
+          : [],
+      ),
+      maintenance: maintenance.flatMap((record) =>
+        record.scheduledAt
+          ? [
+              {
+                at: record.scheduledAt,
+                title: record.title,
+                vehicle: vehicleTitle(record.vehicle),
+                registrationNumber: record.vehicle.registrationNumber,
+                overdue: record.status === 'OVERDUE' || record.scheduledAt < now,
+              },
+            ]
+          : [],
+      ),
+      offlineVehicles: vehicles.flatMap((vehicle) => {
+        const lastSignalAt = vehicle.positions[0]?.recordedAt ?? null;
+        return !lastSignalAt || now.getTime() - lastSignalAt.getTime() > OFFLINE_AFTER_MS
+          ? [
+              {
+                vehicle: vehicleTitle(vehicle),
+                registrationNumber: vehicle.registrationNumber,
+                lastSignalAt,
+              },
+            ]
+          : [];
+      }),
+      freeVehicles: freeVehicles.map((vehicle) => ({
+        vehicle: vehicleTitle(vehicle),
+        registrationNumber: vehicle.registrationNumber,
+      })),
+    });
+    const selected = digestParts.find((part) => part.key === requestedPart) ?? digestParts[0];
+    const actions =
+      selected.key === 'critical'
+        ? [
+            {
+              type: 'summary_section',
+              label: '🟠 Трекеры и GPS',
+              section: 'trackers',
+              date: range.date,
+            },
+          ]
+        : selected.key === 'trackers'
+          ? [
+              {
+                type: 'summary_section',
+                label: '📊 Итоги и возвраты',
+                section: 'totals',
+                date: range.date,
+              },
+            ]
+          : [{ type: 'summary_refresh', label: '🔄 Обновить сводку', date: range.date }];
     return {
       ...job,
       payload: {
-        message: formatOperationsDigest({
-          date: range.date,
-          requests,
-          activeRentals: rentals,
-          yesterday: {
-            revenueMinor: previousRevenueMinor.toString(),
-            completedRentals: yesterdayRentals.length,
-            incidents: yesterdayIncidents,
-            loadPercent: fleetLoad,
-          },
-          fleet: {
-            rented: rentedVehicles.length,
-            free: freeVehicles.length,
-            booked: bookedVehicles.length,
-            maintenance: maintenanceVehicles.length,
-            unknown: unknownVehicles.length,
-            total: vehicles.length,
-          },
-          criticalProblems: problemRows.filter(
-            (problem) =>
-              problem.kind === 'RENTED_GPS_CRITICAL' || problem.kind === 'RENTED_GPS_THEFT_RISK',
-          ),
-          trackerProblems: problemRows.filter(
-            (problem) =>
-              problem.kind === 'RENTED_GPS_WARNING' || problem.kind === 'FREE_GPS_TRACKER_PROBLEM',
-          ),
-          leads: leads.map((lead) => ({
-            at: lead.nextContactAt,
-            name: [lead.lastName, lead.name].filter(Boolean).join(' '),
-            source: lead.source,
-            phone: decryptedPhone(lead.phoneEncrypted),
-            overdue: Boolean(lead.nextContactAt && lead.nextContactAt < now),
-          })),
-          recommendations,
-          weekly:
-            isMonday && weeklyRentals.length
-              ? {
-                  startDate: weekRange.start.toISOString().slice(0, 10),
-                  endDate: new Date(weekRange.end.getTime() - 1).toISOString().slice(0, 10),
-                  revenueMinor: weeklyRentals
-                    .reduce((total, rental) => total + rental.totalPriceMinor, BigInt(0))
-                    .toString(),
-                  rentals: weeklyRentals.length,
-                  averageDurationDays: Number(
-                    (
-                      weeklyRentals.reduce(
-                        (total, rental) =>
-                          total +
-                          (rental.endsAt.getTime() - rental.startsAt.getTime()) /
-                            (24 * 60 * 60_000),
-                        0,
-                      ) / weeklyRentals.length
-                    ).toFixed(1),
-                  ),
-                  loadPercent: fleetLoad,
-                }
-              : undefined,
-          handovers: dayRentals
-            .filter((rental) => rental.startsAt >= range.start && rental.startsAt < range.end)
-            .map((rental) => rentalItem(rental, rental.startsAt, 'Выдать автомобиль')),
-          returns: dayRentals
-            .filter((rental) => rental.endsAt >= range.start && rental.endsAt < range.end)
-            .map((rental) => rentalItem(rental, rental.endsAt, 'Принять возврат автомобиля')),
-          deposits: depositReturns.map((operation) => ({
-            at: operation.occurredAt,
-            title: 'Вернуть депозит',
-            contractNumber: operation.rental.contractNumber,
-            vehicle: vehicleTitle(operation.rental.vehicle),
-            registrationNumber: operation.rental.vehicle.registrationNumber,
-            client: personName(operation.rental.client),
-            phone: decryptedPhone(operation.rental.client.phoneEncrypted),
-            amountMinor:
-              (operation.depositAmountMinor ?? operation.rental.depositMinor)?.toString() ?? null,
-          })),
-          washes: washes.flatMap((wash) =>
-            wash.scheduledAt
-              ? [
-                  {
-                    at: wash.scheduledAt,
-                    title: washTitles[wash.kind] ?? 'Мойка автомобиля',
-                    vehicle: vehicleTitle(wash.vehicle),
-                    registrationNumber: wash.vehicle.registrationNumber,
-                  },
-                ]
-              : [],
-          ),
-          maintenance: maintenance.flatMap((record) =>
-            record.scheduledAt
-              ? [
-                  {
-                    at: record.scheduledAt,
-                    title: record.title,
-                    vehicle: vehicleTitle(record.vehicle),
-                    registrationNumber: record.vehicle.registrationNumber,
-                    overdue: record.status === 'OVERDUE' || record.scheduledAt < now,
-                  },
-                ]
-              : [],
-          ),
-          offlineVehicles: vehicles.flatMap((vehicle) => {
-            const lastSignalAt = vehicle.positions[0]?.recordedAt ?? null;
-            return !lastSignalAt || now.getTime() - lastSignalAt.getTime() > OFFLINE_AFTER_MS
-              ? [
-                  {
-                    vehicle: vehicleTitle(vehicle),
-                    registrationNumber: vehicle.registrationNumber,
-                    lastSignalAt,
-                  },
-                ]
-              : [];
-          }),
-          freeVehicles: freeVehicles.map((vehicle) => ({
-            vehicle: vehicleTitle(vehicle),
-            registrationNumber: vehicle.registrationNumber,
-          })),
-        }),
+        message: selected.message,
         parseMode: 'HTML',
+        actions,
+        digestDate: range.date,
+        digestParts: Object.fromEntries(
+          digestParts.map((part) => [
+            part.key,
+            {
+              message: part.message,
+              actions:
+                part.key === 'critical'
+                  ? [
+                      {
+                        type: 'summary_section',
+                        label: '🟠 Трекеры и GPS',
+                        section: 'trackers',
+                        date: range.date,
+                      },
+                    ]
+                  : part.key === 'trackers'
+                    ? [
+                        {
+                          type: 'summary_section',
+                          label: '📊 Итоги и возвраты',
+                          section: 'totals',
+                          date: range.date,
+                        },
+                      ]
+                    : [
+                        {
+                          type: 'summary_refresh',
+                          label: '🔄 Обновить сводку',
+                          date: range.date,
+                        },
+                      ],
+            },
+          ]),
+        ),
       },
     };
   }
@@ -1347,6 +1849,7 @@ async function hydrateJob(
     typeof job.payload === 'object' && job.payload !== null
       ? (job.payload as Record<string, unknown>)
       : {};
+  const manualReminder = reminderPayload.manual === true;
   const rentalId =
     typeof job.payload === 'object' && job.payload !== null && 'rentalId' in job.payload
       ? String(job.payload.rentalId)
@@ -1374,6 +1877,7 @@ async function hydrateJob(
   const stage = returnReminderStage(now, rental.endsAt);
   if (
     clientReminder &&
+    !manualReminder &&
     (!stage ||
       reminderPayload.endsAt !== rental.endsAt.toISOString() ||
       reminderPayload.stage !== stage)
@@ -1390,17 +1894,15 @@ async function hydrateJob(
     return {
       ...job,
       payload: {
-        message: [
-          stage === '24h'
-            ? 'Скоро заканчивается аренда. Если хотите продлить — отправьте запрос менеджеру.'
-            : stage === '3h'
-              ? 'До возврата осталось не больше 3 часов. Проверьте условия по мойке и топливу в договоре.'
-              : 'До возврата осталось не больше 30 минут. Если опаздываете, свяжитесь с менеджером.',
-          vehicle,
-          `Возврат: ${at} (МСК).`,
-          `Договор ${rental.contractNumber ?? 'без номера'}.`,
-          'Запрос на продление не меняет срок аренды до подтверждения менеджером.',
-        ].join('\n'),
+        message: formatClientReturnReminderMessage({
+          stage,
+          manual: manualReminder,
+          vehicle: vehicleTitle(rental.vehicle),
+          registrationNumber: rental.vehicle.registrationNumber,
+          contractNumber: rental.contractNumber,
+          endsAt: rental.endsAt,
+        }),
+        parseMode: 'HTML',
         clientMenu: true,
       },
     };
@@ -1413,7 +1915,16 @@ async function hydrateJob(
   return {
     ...job,
     payload: {
-      message: `Завтра возврат: ${vehicle}. ${name}, ${phone}. Договор ${rental.contractNumber ?? 'без номера'}, возврат ${at}.`,
+      message: formatTomorrowReturnMessage({
+        vehicle: vehicleTitle(rental.vehicle),
+        registrationNumber: rental.vehicle.registrationNumber,
+        clientName: name,
+        clientPhone: phone === 'нет телефона' ? null : phone,
+        contractNumber: rental.contractNumber,
+        endsAt: rental.endsAt,
+      }),
+      parseMode: 'HTML',
+      actions: [{ type: 'remind', label: '🔔 Напомнить', actionId: rentalId }],
     },
   };
 }
@@ -1422,91 +1933,111 @@ export async function claimNotificationJobs(
   now: Date,
   workerId: string,
   database: ClaimDb = prisma,
+  audience: 'ALL' | 'CLIENT' | 'STAFF' = 'ALL',
 ) {
   if (!/^[A-Za-z0-9_-]{1,64}$/u.test(workerId)) throw new BotApiError('INVALID_REQUEST', 400);
-  return database.$transaction(async (tx) => {
-    const candidates = await tx.botNotificationJob.findMany({
-      where: {
-        availableAt: { lte: now },
-        attempts: { lt: 5 },
-        OR: [
-          { status: { in: ['PENDING', 'ERROR'] }, claimToken: null },
-          { status: 'PROCESSING', leaseExpiresAt: { lt: now } },
-        ],
-      },
-      orderBy: [{ availableAt: 'asc' }, { id: 'asc' }],
-      take: 25,
-      select: { id: true, claimToken: true, leaseExpiresAt: true, status: true },
-    });
-    const claimed = [];
-    for (const candidate of candidates) {
-      const claimToken = `${workerId}:${candidate.id}:${randomUUID()}`;
-      const updated = await tx.botNotificationJob.updateMany({
+  return database.$transaction(
+    async (tx) => {
+      const candidates = await tx.botNotificationJob.findMany({
         where: {
-          id: candidate.id,
-          claimToken: candidate.claimToken,
-          status: candidate.status,
-          ...(candidate.status === 'PROCESSING'
-            ? { leaseExpiresAt: candidate.leaseExpiresAt }
-            : {}),
+          availableAt: { lte: now },
+          attempts: { lt: 5 },
+          AND: [
+            {
+              OR: [
+                { status: { in: ['PENDING', 'ERROR'] }, claimToken: null },
+                { status: 'PROCESSING', leaseExpiresAt: { lt: now } },
+              ],
+            },
+            ...(audience === 'CLIENT'
+              ? [{ identity: { is: { kind: 'CLIENT' as const, isActive: true } } }]
+              : audience === 'STAFF'
+                ? [
+                    {
+                      OR: [
+                        { identityId: null },
+                        { identity: { is: { kind: 'STAFF' as const, isActive: true } } },
+                      ],
+                    },
+                  ]
+                : []),
+          ],
         },
-        data: {
-          status: 'PROCESSING',
-          claimToken,
-          leaseExpiresAt: new Date(now.getTime() + LEASE_MS),
-          attempts: { increment: 1 },
-        },
+        orderBy: [{ availableAt: 'asc' }, { id: 'asc' }],
+        take: 25,
+        select: { id: true, claimToken: true, leaseExpiresAt: true, status: true },
       });
-      if (updated.count !== 1) continue;
-      const job = await tx.botNotificationJob.findUnique({
-        where: { claimToken },
-        select: {
-          id: true,
-          companyId: true,
-          claimToken: true,
-          template: true,
-          payload: true,
-          chatId: true,
-          identity: {
-            select: {
-              telegramUserId: true,
-              isActive: true,
-              clientId: true,
-              companyId: true,
-              kind: true,
+      const claimed = [];
+      for (const candidate of candidates) {
+        const claimToken = `${workerId}:${candidate.id}:${randomUUID()}`;
+        const updated = await tx.botNotificationJob.updateMany({
+          where: {
+            id: candidate.id,
+            claimToken: candidate.claimToken,
+            status: candidate.status,
+            ...(candidate.status === 'PROCESSING'
+              ? { leaseExpiresAt: candidate.leaseExpiresAt }
+              : {}),
+          },
+          data: {
+            status: 'PROCESSING',
+            claimToken,
+            leaseExpiresAt: new Date(now.getTime() + LEASE_MS),
+            attempts: { increment: 1 },
+          },
+        });
+        if (updated.count !== 1) continue;
+        const job = await tx.botNotificationJob.findUnique({
+          where: { claimToken },
+          select: {
+            id: true,
+            companyId: true,
+            claimToken: true,
+            template: true,
+            payload: true,
+            chatId: true,
+            identity: {
+              select: {
+                telegramUserId: true,
+                isActive: true,
+                clientId: true,
+                companyId: true,
+                kind: true,
+              },
             },
           },
-        },
-      });
-      if (job) {
-        const binding = job.identity
-          ? null
-          : await tx.telegramGroupBinding.findUnique({
-              where: { companyId: job.companyId },
-              select: { telegramChatId: true },
+        });
+        if (job) {
+          const binding = job.identity
+            ? null
+            : await tx.telegramGroupBinding.findUnique({
+                where: { companyId: job.companyId },
+                select: { telegramChatId: true },
+              });
+          const destination = notificationDestination(job, binding?.telegramChatId ?? null);
+          const hydrated = destination
+            ? await hydrateJob(tx, now, {
+                ...job,
+                chatId: job.identity ? null : destination,
+              })
+            : null;
+          if (hydrated) claimed.push(hydrated);
+          else
+            await tx.botNotificationJob.updateMany({
+              where: { id: job.id, claimToken: job.claimToken, status: 'PROCESSING' },
+              data: {
+                status: 'CANCELLED',
+                claimToken: null,
+                leaseExpiresAt: null,
+                lastErrorCode: 'SUPERSEDED_OR_ACCESS_REVOKED',
+              },
             });
-        const destination = notificationDestination(job, binding?.telegramChatId ?? null);
-        const hydrated = destination
-          ? await hydrateJob(tx, now, {
-              ...job,
-              chatId: job.identity ? null : destination,
-            })
-          : null;
-        if (hydrated) claimed.push(hydrated);
-        else
-          await tx.botNotificationJob.updateMany({
-            where: { id: job.id, claimToken: job.claimToken, status: 'PROCESSING' },
-            data: {
-              status: 'CANCELLED',
-              claimToken: null,
-              leaseExpiresAt: null,
-              lastErrorCode: 'SUPERSEDED_OR_ACCESS_REVOKED',
-            },
-          });
+        }
       }
-    }
-    return claimed;
-  });
+      return claimed;
+    },
+    { timeout: 30_000 },
+  );
 }
 
 export async function ackNotificationJob(

@@ -6,16 +6,33 @@ from .callbacks import CLIENT_EXTEND, CLIENT_NEW_RENTAL, CLIENT_RENTALS, COMMON_
 def contact_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="Подтвердить мой телефон", request_contact=True)]],
+        is_persistent=True,
         resize_keyboard=True,
-        one_time_keyboard=True,
+        one_time_keyboard=False,
+        input_field_placeholder="Нажмите кнопку подтверждения ниже",
     )
 
 
 def client_main_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🚗 Моя аренда", callback_data=CLIENT_RENTALS, style="primary"), InlineKeyboardButton(text="📅 Продлить", callback_data=CLIENT_EXTEND, style="success")],
-        [InlineKeyboardButton(text="🧾 Мои штрафы", callback_data="client:fines:0"), InlineKeyboardButton(text="📄 Мой договор", callback_data="client:documents")],
-        [InlineKeyboardButton(text="💬 Связаться с менеджером", callback_data=COMMON_HELP)],
+        [InlineKeyboardButton(text="🚗 Моя аренда", callback_data=CLIENT_RENTALS, style="success"), InlineKeyboardButton(text="📅 Продлить", callback_data=CLIENT_EXTEND)],
+        [InlineKeyboardButton(text="💰 Мой залог", callback_data="client:deposits"), InlineKeyboardButton(text="🧾 Мои штрафы", callback_data="client:fines:0")],
+        [InlineKeyboardButton(text="📄 Мой договор", callback_data="client:documents"), InlineKeyboardButton(text="💬 Связаться с менеджером", callback_data=COMMON_HELP, style="danger")],
+    ])
+
+
+def unresolved_rental_actions() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="💬 Связаться с менеджером",
+            callback_data=COMMON_HELP,
+            style="danger",
+        )],
+        [InlineKeyboardButton(
+            text="🔄 Проверить ещё раз",
+            callback_data="client:menu",
+            style="primary",
+        )],
     ])
 
 def customer_back() -> InlineKeyboardMarkup:

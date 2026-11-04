@@ -37,7 +37,7 @@ export interface TimewebNotificationCreateManyArgs {
     chatId: string;
     template: 'SYSTEM_BILLING_ALERT';
     eventKey: string;
-    payload: { message: string };
+    payload: { message: string; parseMode: 'HTML' };
     availableAt: Date;
   }>;
   skipDuplicates: true;
@@ -79,7 +79,7 @@ export async function runTimewebMonitor(
             chatId: group.telegramChatId,
             template: 'SYSTEM_BILLING_ALERT',
             eventKey: eventKey(input.companyId, snapshot.depletesAt),
-            payload: { message: formatTimewebAlert(snapshot) },
+            payload: { message: formatTimewebAlert(snapshot), parseMode: 'HTML' },
             availableAt: checkedAt,
           },
         ],

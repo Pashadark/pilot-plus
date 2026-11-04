@@ -1,47 +1,37 @@
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 
 import { formatLeadCreatedMessage, formatLeadStatusChangedMessage } from './lead-notifications';
 
-const common = {
-  name: 'Анна',
-  lastName: null,
-  phone: '+7 999 123-45-67',
-  source: 'Авито',
-  nextContactAt: null,
-  assignedToName: 'Павел Седов',
-  createdAt: new Date('2026-09-07T08:00:00.000Z'),
+const lead = {
+  name: 'Иван',
+  lastName: 'Иванов',
+  phone: '+7 900 000-00-00',
+  source: 'Сайт Supa Pro',
+  nextContactAt: new Date('2026-10-24T14:00:00Z'),
+  assignedToName: null,
+  createdAt: new Date('2026-10-24T12:00:00Z'),
   leadsUrl: 'https://supapro.ru/leads',
 };
 
-describe('lead Telegram messages', () => {
-  it('renders a missing Avito phone explicitly', () => {
-    expect(formatLeadCreatedMessage({ ...common, phone: '' })).toContain('Телефон не указан');
-  });
-  it('formats a new lead with an explicit unscheduled state', () => {
-    const message = formatLeadCreatedMessage(common);
+it('formats a new lead with the shared Supa Pro block layout', () => {
+  const message = formatLeadCreatedMessage(lead);
 
-    expect(message).toContain('📥 <b>Новая заявка</b>');
-    expect(message).toContain('<b>Анна</b>');
-    expect(message).toContain('Время не назначено');
-    expect(message).not.toContain('\n\n');
-    expect(message).toContain('<a href="https://supapro.ru/leads">Открыть заявки</a>');
+  expect(message).toContain('📥 <b>Новая заявка</b>');
+  expect(message).toContain('👤 <b>Клиент</b>\n├ Иван Иванов\n└ 📞 <code>+7 900 000-00-00</code>');
+  expect(message).toContain('📍 <b>Источник</b>\n└ Сайт Supa Pro');
+  expect(message).toContain('🗓 <b>Следующий контакт</b>\n└ 24.10.2026, 17:00 МСК');
+  expect(message).toContain('👨‍💼 <b>Ответственный</b>\n└ Не назначен');
+  expect(message).not.toContain('<a href=');
+});
+
+it('formats a lead status transition as its own block', () => {
+  const message = formatLeadStatusChangedMessage({
+    ...lead,
+    actorName: 'Павел Седов',
+    previousStatus: 'NEW',
+    status: 'QUALIFIED',
   });
 
-  it('formats the status transition and escapes all untrusted HTML', () => {
-    const message = formatLeadStatusChangedMessage({
-      ...common,
-      name: '<script>alert(1)</script>',
-      lastName: 'Иванова & Петрова',
-      source: '<Авито>',
-      assignedToName: null,
-      actorName: 'Оператор <1>',
-      previousStatus: 'NEW',
-      status: 'CONTACTED',
-    });
-
-    expect(message).toContain('Новая → Связались');
-    expect(message).not.toContain('<script>');
-    expect(message).toContain('&lt;script&gt;');
-    expect(message).toContain('Оператор &lt;1&gt;');
-  });
+  expect(message).toContain('📌 <b>Статус</b>\n├ Было: Новая\n└ Стало: Подтверждена');
+  expect(message).toContain('👨‍💼 <b>Изменил</b>\n└ Павел Седов');
 });

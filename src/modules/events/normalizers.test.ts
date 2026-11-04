@@ -131,6 +131,40 @@ describe('нормализация источников истории', () => {
     expect(event.description).toBe('Сработал датчик удара');
   });
 
+  it('ведёт резкий разгон на точное событие выбранного дня карты', () => {
+    const event = normalizeVehicleEvent({
+      id: 'event-acceleration-1',
+      vehicle,
+      type: 'HARSH_ACCELERATION',
+      title: 'Резкий разгон',
+      description: 'Ускорение до 3,6 м/с².',
+      location: 'Москва',
+      severity: 'WARNING',
+      recordedAt,
+    });
+
+    expect(event.source.href).toBe(
+      '/map?vehicleId=vehicle-1&date=2026-07-27&eventId=event-acceleration-1',
+    );
+  });
+
+  it('ведёт резкое торможение на точное событие выбранного дня карты', () => {
+    const event = normalizeVehicleEvent({
+      id: 'event-braking-1',
+      vehicle,
+      type: 'HARSH_BRAKING',
+      title: 'Резкое торможение',
+      description: 'Скорость снизилась с 92 до 48 км/ч.',
+      location: 'Москва',
+      severity: 'WARNING',
+      recordedAt,
+    });
+
+    expect(event.source.href).toBe(
+      '/map?vehicleId=vehicle-1&date=2026-07-27&eventId=event-braking-1',
+    );
+  });
+
   it('нормализует заправку', () => {
     const event = normalizeFuelRecord({
       id: 'fuel-1',

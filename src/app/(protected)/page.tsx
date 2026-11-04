@@ -1,4 +1,4 @@
-import { CommandCenterDashboard } from '@/modules/dashboard/CommandCenterDashboard';
+import { WorkdayDashboard } from '@/modules/dashboard/WorkdayDashboard';
 import { parseDashboardSelection } from '@/modules/dashboard/date-window';
 import { getDashboardOverviewForCurrentUser } from '@/modules/dashboard/server/queries';
 import { AppShell } from '@/shared/components/app-shell/AppShell';
@@ -21,7 +21,7 @@ export default async function Home({
   return (
     <AppShell breadcrumbs={[{ label: 'СУПА ПРО', href: '/' }, { label: 'Командный центр' }]}>
       <FlashToast kind={flash} />
-      <CommandCenterDashboard overview={overview} weather={weather} />
+      <WorkdayDashboard overview={overview} weather={weather} />
     </AppShell>
   );
 }

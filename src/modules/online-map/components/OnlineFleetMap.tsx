@@ -6,11 +6,7 @@ import maplibregl from 'maplibre-gl';
 
 import { Button, EmptyState, ErrorState } from '@/shared/ui';
 
-import {
-  getFleetMapFallbackStyle,
-  getFleetMapStyleUrl,
-  type FleetMapTheme,
-} from '../map-style';
+import { getFleetMapFallbackStyle, getFleetMapStyleUrl, type FleetMapTheme } from '../map-style';
 import type {
   VehicleTrackEventView,
   VehicleTrackPeriodViewModel,
@@ -19,7 +15,12 @@ import type {
 } from '../track-types';
 import type { OnlineMapVehicle } from '../types';
 import { TrackEventPopup } from './TrackEventPopup';
-import { mountVehicleTrackLayers, VehicleTrackDataSurface } from './VehicleTrackLayers';
+import styles from './OnlineFleetMap.module.css';
+import {
+  mountVehicleTrackLayers,
+  setVehicleTrackPlaybackTrail,
+  VehicleTrackDataSurface,
+} from './VehicleTrackLayers';
 import { VehicleMapMarker } from './VehicleMapMarker';
 
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -55,6 +56,8 @@ export interface OnlineFleetMapProps {
   trackViewModel: VehicleTrackPeriodViewModel | null;
   playbackPoint: VehicleTrackPoint | null;
   playbackHeading?: number;
+  playbackTrail?: readonly VehicleTrackPoint[] | null;
+  playbackActive?: boolean;
   selectedEventId: string | null;
   previewedEventId: string | null;
   previewedSegmentId: string | null;
@@ -70,6 +73,8 @@ export function OnlineFleetMap({
   trackViewModel,
   playbackPoint,
   playbackHeading = 0,
+  playbackTrail = null,
+  playbackActive = false,
   selectedEventId,
   previewedEventId,
   previewedSegmentId,
@@ -92,6 +97,8 @@ export function OnlineFleetMap({
   const selectedEventIdRef = useRef(selectedEventId);
   const onVehicleSelectRef = useRef(onVehicleSelect);
   const playbackPointRef = useRef(playbackPoint);
+  const playbackTrailRef = useRef(playbackTrail);
+  const playbackActiveRef = useRef(playbackActive);
   const onEventPreviewRef = useRef(onEventPreview);
   const onEventActivateRef = useRef(onEventActivate);
   const onSegmentPreviewRef = useRef(onSegmentPreview);
@@ -149,6 +156,11 @@ export function OnlineFleetMap({
   }, [playbackPoint]);
 
   useEffect(() => {
+    playbackTrailRef.current = playbackTrail;
+    playbackActiveRef.current = playbackActive;
+  }, [playbackActive, playbackTrail]);
+
+  useEffect(() => {
     selectedEventIdRef.current = selectedEventId;
   }, [selectedEventId]);
 
@@ -172,7 +184,7 @@ export function OnlineFleetMap({
     mapReadyRef.current = false;
     const map = new maplibregl.Map({
       container,
-      attributionControl: { compact: true },
+      attributionControl: { compact: false },
       style: getFleetMapStyleUrl(mapTheme),
       center: initialPositionedVehicles[0]
         ? [initialPositionedVehicles[0].longitude, initialPositionedVehicles[0].latitude]
@@ -393,8 +405,18 @@ export function OnlineFleetMap({
           onEventPreview: handleEventPreview,
           onEventActivate: activateEvent,
         });
+        setVehicleTrackPlaybackTrail(
+          map,
+          trackViewModel,
+          playbackPointRef.current,
+          playbackTrailRef.current,
+          playbackActiveRef.current,
+        );
 
-        if (fittedTrackRef.current?.map !== map || fittedTrackRef.current.key !== currentTrackInteractionKey) {
+        if (
+          fittedTrackRef.current?.map !== map ||
+          fittedTrackRef.current.key !== currentTrackInteractionKey
+        ) {
           fitTrackBounds(map, trackViewModel, containerRef.current);
           fittedTrackRef.current = { map, key: currentTrackInteractionKey };
         }
@@ -430,7 +452,8 @@ export function OnlineFleetMap({
 
     trackCleanupRef.current = cleanupTrack;
 
-    if (mapReadyRef.current) {
+    if (mapReadyRef.current || map.loaded()) {
+      mapReadyRef.current = true;
       mountTrack();
     } else {
       map.once('load', mountTrack);
@@ -495,6 +518,13 @@ export function OnlineFleetMap({
     if (!map || !trackViewModel) return;
 
     try {
+      setVehicleTrackPlaybackTrail(
+        map,
+        trackViewModel,
+        playbackPoint,
+        playbackTrail,
+        playbackActive,
+      );
       if (!playbackPoint) {
         playbackMarkerRef.current?.remove();
         playbackMarkerRef.current = null;
@@ -513,7 +543,15 @@ export function OnlineFleetMap({
       playbackMarkerRef.current = null;
       queueMicrotask(() => setFailedTrackAttempt(trackAttempt));
     }
-  }, [instanceKey, playbackHeading, playbackPoint, trackAttempt, trackViewModel]);
+  }, [
+    instanceKey,
+    playbackActive,
+    playbackHeading,
+    playbackPoint,
+    playbackTrail,
+    trackAttempt,
+    trackViewModel,
+  ]);
 
   if (positionedVehicles.length === 0) {
     return (
@@ -527,10 +565,12 @@ export function OnlineFleetMap({
   }
 
   return (
-    <div className="relative h-full w-full [&_.maplibregl-ctrl-bottom-right]:right-3 [&_.maplibregl-ctrl-bottom-right]:bottom-[calc(48dvh+max(1rem,env(safe-area-inset-bottom)))] @min-[48rem]:[&_.maplibregl-ctrl-bottom-right]:right-[26rem] @min-[48rem]:[&_.maplibregl-ctrl-bottom-right]:bottom-4">
+    <div
+      className={`${styles.mapShell} relative h-full w-full [&_.maplibregl-ctrl-bottom-right]:right-3 [&_.maplibregl-ctrl-bottom-right]:bottom-[calc(48dvh+max(1rem,env(safe-area-inset-bottom)))] @min-[48rem]:[&_.maplibregl-ctrl-bottom-right]:right-[26rem] @min-[48rem]:[&_.maplibregl-ctrl-bottom-right]:bottom-4`}
+    >
       <div
         ref={containerRef}
-        className="h-full w-full [&_.maplibregl-ctrl-group]:flex [&_.maplibregl-ctrl-group_button]:size-11"
+        className={`${styles.mapLoadingPattern} h-full w-full [&_.maplibregl-ctrl-group]:flex [&_.maplibregl-ctrl-group_button]:size-11`}
         aria-label="Онлайн-карта автопарка"
       />
       {trackViewModel ? (
@@ -642,7 +682,11 @@ function getTrackResourceKey(track: VehicleTrackPeriodViewModel): string {
   return `${track.vehicleId}:${track.period}:${track.trips.map((trip) => trip.date).join('|')}`;
 }
 
-function createPlaybackMarker(map: maplibregl.Map, point: VehicleTrackPoint, heading = 0): maplibregl.Marker {
+function createPlaybackMarker(
+  map: maplibregl.Map,
+  point: VehicleTrackPoint,
+  heading = 0,
+): maplibregl.Marker {
   const element = document.createElement('div');
   element.setAttribute('aria-label', 'Положение автомобиля на маршруте');
   element.dataset.playbackPoint = point.id;

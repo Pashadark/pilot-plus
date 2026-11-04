@@ -9,6 +9,10 @@ import {
   createFineRatingInput,
   recordAutomaticRatingEvent,
 } from '@/modules/client-rating/automatic-events';
+import {
+  reconcileFineDepositReservation,
+  reserveFineFromDeposit,
+} from '@/modules/deposits/server/fine-reservation';
 
 import { FineAccessDeniedError, requireFineManageAccess } from '../access';
 
@@ -66,7 +70,14 @@ export async function assignFineAction(
       async (transaction) => {
         const fine = await transaction.fine.findFirst({
           where: { id: fineId, companyId },
-          select: { id: true, vehicleId: true, status: true },
+          select: {
+            id: true,
+            vehicleId: true,
+            rentalId: true,
+            clientId: true,
+            status: true,
+            currentAmountMinor: true,
+          },
         });
         if (!fine) return notFoundError;
 
@@ -82,6 +93,35 @@ export async function assignFineAction(
 
         const assignedRentalId = rental?.id ?? null;
         const assignedClientId = rental?.clientId ?? null;
+        const assignmentChanged =
+          fine.rentalId !== assignedRentalId || fine.clientId !== assignedClientId;
+        const occurredAt = new Date();
+        if (assignmentChanged && fine.rentalId && fine.clientId) {
+          await reconcileFineDepositReservation(transaction, {
+            companyId,
+            clientId: fine.clientId,
+            rentalId: fine.rentalId,
+            fineId: fine.id,
+            fineAmountMinor: fine.currentAmountMinor,
+            status: 'CANCELLED',
+            occurredAt,
+          });
+        }
+        if (
+          assignmentChanged &&
+          assignedRentalId &&
+          assignedClientId &&
+          ['NEW', 'UNPAID', 'OVERDUE'].includes(fine.status)
+        ) {
+          await reserveFineFromDeposit(transaction, {
+            companyId,
+            clientId: assignedClientId,
+            rentalId: assignedRentalId,
+            fineId: fine.id,
+            fineAmountMinor: fine.currentAmountMinor,
+            occurredAt,
+          });
+        }
         await transaction.fine.update({
           where: { companyId_id: { companyId, id: fine.id } },
           data: {
