@@ -175,11 +175,7 @@ export default async function RentalDetail({
             depositRequiredMinor={rental.depositMinor?.toString() ?? null}
             canEdit={rental.canEdit ?? false}
             rentalStatus={rental.status}
-            depositResolved={rental.operations.some((operation) =>
-              ['RETURNED', 'PARTIALLY_WITHHELD', 'WITHHELD'].includes(
-                operation.depositStatus ?? '',
-              ),
-            )}
+            depositResolved={rental.depositLedgerEntries.length > 0}
             defaultPaymentKind={defaultPaymentKind}
             payments={rental.payments.map((payment) => ({
               id: payment.id,

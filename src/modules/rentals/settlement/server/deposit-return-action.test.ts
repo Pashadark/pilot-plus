@@ -13,7 +13,14 @@ it('records deposit return without photos with amounts, reason, time and audit',
     return { id: 'operation-1' };
   });
   const tx = {
-    rental: { findFirst: vi.fn().mockResolvedValue({ id: 'r', clientId: 'c', vehicleId: 'v', payments: [{ amountMinor: BigInt(2000000) }], operations: [] }) },
+    rental: { findFirst: vi.fn().mockResolvedValue({
+      id: 'r',
+      clientId: 'c',
+      vehicleId: 'v',
+      payments: [{ amountMinor: BigInt(2000000) }],
+      operations: [{ depositStatus: 'PARTIALLY_WITHHELD' }],
+      depositLedgerEntries: [],
+    }) },
     rentalOperation: { create }, auditLog: { create: vi.fn() },
     $queryRaw: vi.fn().mockResolvedValue([{ locked: true }]),
     depositLedgerEntry: {
@@ -43,6 +50,32 @@ it('records deposit return without photos with amounts, reason, time and audit',
     cashDeltaMinor: -1_388_000n, withheldDeltaMinor: 612_000n,
     reason: 'Бензин, штраф', actorUserId: 'u',
   }) });
+});
+
+it('blocks a duplicate return only when the canonical deposit ledger already has one', async () => {
+  const tx = {
+    rental: {
+      findFirst: vi.fn().mockResolvedValue({
+        id: 'r',
+        clientId: 'c',
+        vehicleId: 'v',
+        payments: [{ amountMinor: 2_000_000n }],
+        operations: [],
+        depositLedgerEntries: [{ id: 'ledger-return-1' }],
+      }),
+    },
+  };
+  mocks.transaction.mockImplementation(async (work) => work(tx));
+  const form = new FormData();
+  form.set('companyId', 'co');
+  form.set('rentalId', 'r');
+  form.set('returnedRubles', '20000');
+  form.set('reason', '');
+
+  expect(await returnRentalDepositAction(null, form)).toEqual({
+    ok: false,
+    message: 'Возврат залога по этому договору уже оформлен.',
+  });
 });
 
 it('moves a fine reservation to debt when staff already returned the full deposit', async () => {
@@ -94,6 +127,7 @@ it('moves a fine reservation to debt when staff already returned the full deposi
         contractNumber: 'ME-2026-0050-AA',
         payments: [{ amountMinor: 2_000_000n }],
         operations: [],
+        depositLedgerEntries: [],
       }),
     },
     rentalOperation: { create: vi.fn().mockResolvedValue({ id: 'operation-1' }) },

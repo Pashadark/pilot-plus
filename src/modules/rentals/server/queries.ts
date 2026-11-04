@@ -344,6 +344,11 @@ export async function getRentalDetailForCurrentUser(id: string) {
         orderBy: [{ occurredAt: 'asc' }, { createdAt: 'asc' }],
         take: 100,
       },
+      depositLedgerEntries: {
+        where: { kind: 'DEPOSIT_RETURN' },
+        select: { id: true },
+        take: 1,
+      },
     },
   });
   return rental

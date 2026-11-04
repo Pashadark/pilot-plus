@@ -76,6 +76,7 @@ const rental = {
   priceOverrideReason: null,
   drivers: [],
   operations: [],
+  depositLedgerEntries: [],
   documentVersions: [],
   documentGenerations: [],
   payments: [],

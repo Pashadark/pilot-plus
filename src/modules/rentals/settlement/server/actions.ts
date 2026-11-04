@@ -117,20 +117,15 @@ export async function returnRentalDepositAction(
           },
           client: { select: { firstName: true, middleName: true, lastName: true } },
           vehicle: { select: { make: true, modelName: true, registrationNumber: true } },
-          operations: {
-            where: { status: 'COMMITTED', depositStatus: { not: null } },
-            select: { depositStatus: true },
-            orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
+          depositLedgerEntries: {
+            where: { kind: 'DEPOSIT_RETURN' },
+            select: { id: true },
             take: 1,
           },
         },
       });
       if (!rental) throw new Error('Действующий или завершённый договор не найден.');
-      if (
-        ['RETURNED', 'PARTIALLY_WITHHELD', 'WITHHELD'].includes(
-          rental.operations[0]?.depositStatus ?? '',
-        )
-      ) {
+      if (rental.depositLedgerEntries.length > 0) {
         throw new Error('Возврат залога по этому договору уже оформлен.');
       }
       const collectedMinor = rental.payments.reduce(
