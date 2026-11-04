@@ -105,7 +105,9 @@ export function SelectedVehiclePanel({
       className={`flex flex-col overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] shadow-[var(--shadow-floating)] ${className}`}
     >
       <header className="relative border-b border-[var(--color-border)]">
-        <div className="relative h-32 overflow-hidden bg-[var(--color-elevated)] @min-[48rem]:h-40">
+        <div
+          className={`relative overflow-hidden bg-[var(--color-elevated)] @min-[48rem]:h-40 ${mobileCollapsed ? 'h-[5.5rem]' : 'h-32'}`}
+        >
           {showImage && vehicle.image ? (
             <Image
               src={vehicle.image.src}
@@ -176,7 +178,7 @@ export function SelectedVehiclePanel({
           >
             Карточка автомобиля <FiExternalLink aria-hidden="true" />
           </Link>
-          {rental ? (
+          {rental?.canAccessDetails ? (
             <Link
               href={`/rentals/${rental.id}`}
               aria-label="Открыть договор аренды"
@@ -232,7 +234,7 @@ export function SelectedVehiclePanel({
                   <p className="text-[10px] font-semibold tracking-[0.06em] text-[var(--color-text-secondary)] uppercase">
                     Активная аренда
                   </p>
-                  {rental.clientId ? (
+                  {rental.canAccessDetails && rental.clientId ? (
                     <Link
                       href={`/clients/${rental.clientId}`}
                       className="mt-1 block truncate font-semibold hover:text-[var(--color-primary)]"
@@ -256,38 +258,40 @@ export function SelectedVehiclePanel({
                   </span>
                 ) : null}
               </div>
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-[var(--color-border)] pt-3 text-xs">
-                <div>
-                  <dt className="text-[var(--color-text-secondary)]">Тариф</dt>
-                  <dd className="mt-0.5 font-semibold">
-                    {rental.dailyRateMinor === undefined || !rental.currency
-                      ? 'Не указан'
-                      : formatDailyPrice(rental.dailyRateMinor, rental.currency)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--color-text-secondary)]">Возврат</dt>
-                  <dd className="mt-0.5 font-semibold">
-                    {rental.endsAt ? returnDate.format(new Date(rental.endsAt)) : 'Не указан'}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--color-text-secondary)]">Лимит пробега</dt>
-                  <dd className="mt-0.5 font-semibold">
-                    {rental.includedMileageKm === null || rental.includedMileageKm === undefined
-                      ? 'Не задан'
-                      : `${number.format(rental.includedMileageKm)} км/сутки`}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--color-text-secondary)]">Сегодня</dt>
-                  <dd className="mt-0.5 font-semibold">
-                    {vehicle.dailyDistanceKm === null || vehicle.dailyDistanceKm === undefined
-                      ? 'Нет данных'
-                      : `${number.format(vehicle.dailyDistanceKm)} км`}
-                  </dd>
-                </div>
-              </dl>
+              {rental.canAccessDetails ? (
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-[var(--color-border)] pt-3 text-xs">
+                  <div>
+                    <dt className="text-[var(--color-text-secondary)]">Тариф</dt>
+                    <dd className="mt-0.5 font-semibold">
+                      {rental.dailyRateMinor === undefined || !rental.currency
+                        ? 'Не указан'
+                        : formatDailyPrice(rental.dailyRateMinor, rental.currency)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--color-text-secondary)]">Возврат</dt>
+                    <dd className="mt-0.5 font-semibold">
+                      {rental.endsAt ? returnDate.format(new Date(rental.endsAt)) : 'Не указан'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--color-text-secondary)]">Лимит пробега</dt>
+                    <dd className="mt-0.5 font-semibold">
+                      {rental.includedMileageKm === null || rental.includedMileageKm === undefined
+                        ? 'Не задан'
+                        : `${number.format(rental.includedMileageKm)} км/сутки`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--color-text-secondary)]">Сегодня</dt>
+                    <dd className="mt-0.5 font-semibold">
+                      {vehicle.dailyDistanceKm === null || vehicle.dailyDistanceKm === undefined
+                        ? 'Нет данных'
+                        : `${number.format(vehicle.dailyDistanceKm)} км`}
+                    </dd>
+                  </div>
+                </dl>
+              ) : null}
             </section>
           ) : (
             <p className="rounded-[var(--radius-md)] bg-[var(--color-elevated)] p-3 text-sm text-[var(--color-text-secondary)]">

@@ -1,8 +1,10 @@
 import 'server-only';
 
+import type { CompanyRole } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 import type { SafeUser } from '@/modules/auth/types';
 import { resolveRentalDepositState } from '@/modules/rentals/deposit-state';
+import { canManageRentals } from '@/modules/rentals/server/access';
 import { deriveVehicleGpsStatus } from '@/modules/vehicles/gps-status';
 import { getPilotBusinessDateParts, parsePilotDateTimeLocal } from '@/shared/business-time';
 
@@ -20,6 +22,7 @@ interface OnlineMapRow {
   registrationNumber: string | null;
   odometerKm?: unknown | null;
   includedMileageKm?: number | null;
+  company?: { members: Array<{ role: CompanyRole }> };
   images?: Array<{ localPath: string; alt: string }>;
   positions: Array<{
     latitude: unknown;
@@ -35,6 +38,7 @@ interface OnlineMapRow {
   maintenanceRecords?: Array<{
     odometerKm: unknown | null;
     targetOdometerKm: unknown | null;
+    status: 'PLANNED' | 'IN_PROGRESS' | 'OVERDUE';
   }>;
   rentals?: Array<{
     id: string;
@@ -67,7 +71,7 @@ function numberValue(value: unknown): number | null {
 function moneyMinor(value: bigint | undefined): number | undefined {
   if (value === undefined) return undefined;
   const parsed = Number(value);
-  return Number.isSafeInteger(parsed) ? parsed : 0;
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
 }
 
 function moscowDayRange(now: Date) {
@@ -117,6 +121,14 @@ export async function listOnlineMapVehicles(
       registrationNumber: true,
       odometerKm: true,
       includedMileageKm: true,
+      company: {
+        select: {
+          members: {
+            where: { userId: user.id },
+            select: { role: true },
+          },
+        },
+      },
       images: {
         select: { localPath: true, alt: true },
         orderBy: [{ isPrimary: 'desc' }, { position: 'asc' }],
@@ -144,10 +156,10 @@ export async function listOnlineMapVehicles(
       maintenanceRecords: {
         where: {
           recordType: 'MAINTENANCE',
-          status: { in: ['PLANNED', 'IN_PROGRESS'] },
+          status: { in: ['PLANNED', 'IN_PROGRESS', 'OVERDUE'] },
           targetOdometerKm: { not: null },
         },
-        select: { odometerKm: true, targetOdometerKm: true },
+        select: { odometerKm: true, targetOdometerKm: true, status: true },
         orderBy: [{ scheduledAt: 'asc' }, { createdAt: 'asc' }],
         take: 1,
       },
@@ -202,11 +214,14 @@ export async function listOnlineMapVehicles(
             startOdometerKm: numberValue(maintenanceRecord?.odometerKm),
             targetOdometerKm: maintenanceTargetKm,
             remainingKm: odometerKm === null ? null : Math.max(0, maintenanceTargetKm - odometerKm),
+            status: maintenanceRecord?.status,
           };
+    const canAccessRentalDetails =
+      user.role === 'SUPER_ADMIN' ||
+      Boolean(vehicle.company?.members.some((member) => canManageRentals(member.role)));
     const currentRental = vehicle.rentals?.[0]
       ? {
           id: vehicle.rentals[0].id,
-          clientId: vehicle.rentals[0].client.id,
           contractNumber: vehicle.rentals[0].contractNumber,
           clientName: [
             vehicle.rentals[0].client.lastName,
@@ -215,16 +230,22 @@ export async function listOnlineMapVehicles(
           ]
             .filter(Boolean)
             .join(' '),
-          endsAt: vehicle.rentals[0].endsAt?.toISOString(),
-          dailyRateMinor: moneyMinor(vehicle.rentals[0].dailyRateMinor),
-          currency: vehicle.rentals[0].currency,
-          includedMileageKm:
-            vehicle.rentals[0].includedMileageKm ?? vehicle.includedMileageKm ?? null,
-          depositState: resolveRentalDepositState({
-            expectedMinor: vehicle.rentals[0].depositMinor ?? null,
-            operations: vehicle.rentals[0].operations ?? [],
-            payments: vehicle.rentals[0].payments ?? [],
-          }),
+          canAccessDetails: canAccessRentalDetails,
+          ...(canAccessRentalDetails
+            ? {
+                clientId: vehicle.rentals[0].client.id,
+                endsAt: vehicle.rentals[0].endsAt?.toISOString(),
+                dailyRateMinor: moneyMinor(vehicle.rentals[0].dailyRateMinor),
+                currency: vehicle.rentals[0].currency,
+                includedMileageKm:
+                  vehicle.rentals[0].includedMileageKm ?? vehicle.includedMileageKm ?? null,
+                depositState: resolveRentalDepositState({
+                  expectedMinor: vehicle.rentals[0].depositMinor ?? null,
+                  operations: vehicle.rentals[0].operations ?? [],
+                  payments: vehicle.rentals[0].payments ?? [],
+                }),
+              }
+            : {}),
         }
       : null;
     if (!position) {

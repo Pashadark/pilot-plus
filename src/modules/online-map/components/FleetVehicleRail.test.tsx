@@ -40,12 +40,14 @@ const vehicles: OnlineMapVehicle[] = [
     latitude: null,
     speedKph: 0,
     fuelPercent: null,
+    includedMileageKm: 400,
     lastSeenLabel: 'сигнал ещё не получен',
     address: 'Нет данных GLONASSSoft',
     currentRental: {
       id: 'rental-1',
       contractNumber: 'ME-2026-0030-GA',
       clientName: 'Горбунов Артём Денисович',
+      includedMileageKm: 400,
     },
   },
 ];
@@ -80,7 +82,7 @@ it('показывает удобный список машин и честны�
     'За день 18,6 км',
   );
   expect(screen.getByText('До ТО 738 км')).toBeTruthy();
-  expect(screen.getByText('Лимит 400 км')).toBeTruthy();
+  expect(screen.getByText('Лимит не задан')).toBeTruthy();
   expect(screen.getByRole('progressbar', { name: 'Пробег до ТО Kia K5' })).toBeTruthy();
   expect(screen.getByRole('progressbar', { name: 'Дневной лимит пробега Kia K5' })).toBeTruthy();
   expect(screen.queryByText('52%')).toBeNull();
@@ -91,7 +93,20 @@ it('не выдумывает прогресс, когда телеметрии 
 
   const card = screen.getByRole('button', { name: 'Выбрать Toyota Camry Х069АЕ997' });
   expect(card.textContent).toContain('Нет данных по ТО');
-  expect(card.textContent).toContain('Лимит не задан');
+  expect(card.textContent).toContain('Лимит 400 км');
+});
+
+it('отдельно предупреждает о просроченном ТО', () => {
+  renderRail({
+    vehicles: [
+      {
+        ...vehicles[0],
+        maintenance: { ...vehicles[0].maintenance!, status: 'OVERDUE' },
+      },
+    ],
+  });
+
+  expect(screen.getByText('ТО просрочено')).toBeTruthy();
 });
 
 it('честно показывает загрузку и отсутствие маршрута выбранного дня', () => {

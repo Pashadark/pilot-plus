@@ -20,6 +20,7 @@ export interface OnlineMapVehicle {
     startOdometerKm: number | null;
     targetOdometerKm: number;
     remainingKm: number | null;
+    status?: 'PLANNED' | 'IN_PROGRESS' | 'OVERDUE';
   } | null;
   recordedAt?: string | null;
   lastSeenLabel: string;
@@ -33,6 +34,7 @@ export interface OnlineMapVehicle {
     dailyRateMinor?: number;
     currency?: string;
     includedMileageKm?: number | null;
+    canAccessDetails?: boolean;
     depositState?:
       'NOT_COLLECTED' | 'COLLECTED' | 'RETURNED' | 'PARTIALLY_WITHHELD' | 'WITHHELD' | null;
   } | null;

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 vi.mock('@/modules/maintenance/service-plan-actions', () => ({
   readServicePlan: vi.fn().mockResolvedValue({ canEdit: false, current: null, record: null }),
@@ -44,6 +44,7 @@ it('показывает фото, карточку машины и подтве
       dailyRateMinor: 360_000,
       currency: 'RUB',
       includedMileageKm: 400,
+      canAccessDetails: true,
       depositState: 'COLLECTED',
     },
   } as const;
@@ -69,6 +70,43 @@ it('показывает фото, карточку машины и подтве
   expect(screen.getByText('1 262,5 км')).toBeTruthy();
   expect(screen.getByText('3 600 ₽/сутки')).toBeTruthy();
   expect(screen.getByText('Залог внесён')).toBeTruthy();
+});
+
+it('сбрасывает ошибку фотографии при выборе другой машины', () => {
+  const first = {
+    ...onlineMapVehicles[0],
+    image: { src: '/vehicles/first/images/broken', alt: 'Первая машина' },
+  };
+  const second = {
+    ...onlineMapVehicles[1],
+    image: { src: '/vehicles/second/images/main', alt: 'Вторая машина' },
+  };
+  const { rerender } = render(
+    <SelectedVehiclePanel
+      key={first.id}
+      vehicle={first}
+      onClose={vi.fn()}
+      trackControls={null}
+      trackSummary={null}
+      trackSegments={null}
+      trackEvents={null}
+    />,
+  );
+
+  fireEvent.error(screen.getByRole('img', { name: 'Первая машина' }));
+  rerender(
+    <SelectedVehiclePanel
+      key={second.id}
+      vehicle={second}
+      onClose={vi.fn()}
+      trackControls={null}
+      trackSummary={null}
+      trackSegments={null}
+      trackEvents={null}
+    />,
+  );
+
+  expect(screen.getByRole('img', { name: 'Вторая машина' })).toBeTruthy();
 });
 
 it('показывает устаревший GPS-сигнал красной меткой и последним сигналом', () => {

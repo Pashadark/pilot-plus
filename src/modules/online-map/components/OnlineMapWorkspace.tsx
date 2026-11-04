@@ -33,6 +33,7 @@ import { SelectedVehiclePanel } from './SelectedVehiclePanel';
 import { TrackDateControls } from './TrackDateControls';
 import { TrackDaySummary } from './TrackDaySummary';
 import { TrackEventList } from './TrackEventList';
+import { TrackEventSummary } from './TrackEventSummary';
 import { TrackFineList } from './TrackFineList';
 import { TrackPlayback } from './TrackPlayback';
 import { TrackSpeedLegend } from './TrackSpeedLegend';
@@ -485,6 +486,7 @@ export function OnlineMapWorkspace({
 
       {selectedVehicle ? (
         <SelectedVehiclePanel
+          key={selectedVehicle.id}
           vehicle={selectedVehicle}
           onClose={clearVehicleSelection}
           mobileCollapsed={mobilePanelCollapsed}
@@ -532,13 +534,16 @@ export function OnlineMapWorkspace({
           trackEvents={
             <div className="grid gap-4">
               {trackViewModel ? (
-                <TrackEventList
-                  model={trackViewModel}
-                  previewedEventId={previewedEventId}
-                  selectedEventId={selectedEventId}
-                  onPreview={handleTrackEventPreview}
-                  onActivate={handleTrackEventSelect}
-                />
+                <>
+                  <TrackEventSummary model={trackViewModel} />
+                  <TrackEventList
+                    model={trackViewModel}
+                    previewedEventId={previewedEventId}
+                    selectedEventId={selectedEventId}
+                    onPreview={handleTrackEventPreview}
+                    onActivate={handleTrackEventSelect}
+                  />
+                </>
               ) : null}
               {history?.fines.length ? <TrackFineList fines={history.fines} /> : null}
             </div>

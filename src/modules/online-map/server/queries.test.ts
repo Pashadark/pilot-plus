@@ -98,6 +98,7 @@ it('возвращает фото, пробег, план ТО и подтвер
         {
           odometerKm: { toString: () => '1000' },
           targetOdometerKm: { toString: () => '2000' },
+          status: 'PLANNED',
         },
       ],
       rentals: [
@@ -140,6 +141,7 @@ it('возвращает фото, пробег, план ТО и подтвер
         startOdometerKm: 1000,
         targetOdometerKm: 2000,
         remainingKm: 737.5,
+        status: 'PLANNED',
       },
       currentRental: expect.objectContaining({
         id: 'rental-rich',
@@ -148,6 +150,7 @@ it('возвращает фото, пробег, план ТО и подтвер
         dailyRateMinor: 360_000,
         currency: 'RUB',
         includedMileageKm: 400,
+        canAccessDetails: true,
         depositState: 'COLLECTED',
       }),
     }),
@@ -161,6 +164,50 @@ it('возвращает фото, пробег, план ТО и подтвер
   expect(findMany.mock.calls[0]?.[0].select.trips.where.startedAt.gte).toEqual(
     new Date('2026-08-19T21:00:00.000Z'),
   );
+});
+
+it('не отдаёт финансовые поля аренды участнику без доступа к договорам', async () => {
+  const findMany = vi.fn().mockResolvedValue([
+    {
+      id: 'vehicle-viewer',
+      model: 'Kia K5',
+      registrationNumber: 'М022АН997',
+      company: { members: [{ role: 'VIEWER' }] },
+      positions: [],
+      rentals: [
+        {
+          id: 'rental-secret',
+          contractNumber: 'ME-SECRET',
+          endsAt: new Date('2026-08-25T15:00:00.000Z'),
+          dailyRateMinor: BigInt(500_000),
+          currency: 'RUB',
+          depositMinor: BigInt(2_000_000),
+          includedMileageKm: 300,
+          client: {
+            id: 'client-secret',
+            lastName: 'Иванов',
+            firstName: 'Иван',
+            middleName: null,
+          },
+          payments: [{ kind: 'DEPOSIT', status: 'CONFIRMED', amountMinor: BigInt(2_000_000) }],
+          operations: [],
+        },
+      ],
+    },
+  ]);
+
+  const [vehicle] = await listOnlineMapVehicles(
+    { id: 'viewer', role: 'ADMIN' } as never,
+    { vehicle: { findMany } } as never,
+    new Date('2026-08-20T12:02:00.000Z'),
+  );
+
+  expect(vehicle.currentRental).toEqual({
+    id: 'rental-secret',
+    contractNumber: 'ME-SECRET',
+    clientName: 'Иванов Иван',
+    canAccessDetails: false,
+  });
 });
 
 it('super-admin видит все компании, а устаревшая позиция получает общий красный GPS-статус', async () => {

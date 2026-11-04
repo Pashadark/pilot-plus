@@ -65,7 +65,12 @@ function vehicleBadges(vehicle: OnlineMapVehicle) {
       className: 'bg-[var(--color-warning-soft)] text-[var(--color-warning)]',
     });
   }
-  if (
+  if (vehicle.maintenance?.status === 'OVERDUE') {
+    badges.push({
+      label: 'ТО просрочено',
+      className: 'bg-[var(--color-danger-soft)] text-[var(--color-danger)]',
+    });
+  } else if (
     vehicle.maintenance?.remainingKm !== null &&
     vehicle.maintenance?.remainingKm !== undefined &&
     vehicle.maintenance.remainingKm <= 1000
@@ -108,8 +113,7 @@ export function FleetVehicleCard({
           (maintenance.targetOdometerKm - maintenance.startOdometerKm)) *
         100
       : null;
-  const mileageLimit =
-    vehicle.currentRental?.includedMileageKm ?? vehicle.includedMileageKm ?? null;
+  const mileageLimit = vehicle.currentRental?.includedMileageKm ?? null;
   const mileagePercent =
     dayDistanceKm !== null && mileageLimit !== null && mileageLimit > 0
       ? (dayDistanceKm / mileageLimit) * 100
