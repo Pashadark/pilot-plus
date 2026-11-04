@@ -19,6 +19,14 @@ const vehicles: OnlineMapVehicle[] = [
     latitude: 55.75,
     speedKph: 64,
     fuelPercent: 52,
+    odometerKm: 1262.5,
+    dailyDistanceKm: 50.3,
+    includedMileageKm: 400,
+    maintenance: {
+      startOdometerKm: 1000,
+      targetOdometerKm: 2000,
+      remainingKm: 737.5,
+    },
     lastSeenLabel: '2 минуты назад',
     address: 'Москва',
     currentRental: null,
@@ -68,8 +76,22 @@ it('показывает удобный список машин и честны�
   ).toBe('true');
   expect(screen.getByText('Нет активного водителя')).toBeTruthy();
   expect(screen.getByText('Горбунов Артём Денисович')).toBeTruthy();
-  expect(screen.getByText('18,6 км за день')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Выбрать Kia K5 В342НР797' }).textContent).toContain(
+    'За день 18,6 км',
+  );
+  expect(screen.getByText('До ТО 738 км')).toBeTruthy();
+  expect(screen.getByText('Лимит 400 км')).toBeTruthy();
+  expect(screen.getByRole('progressbar', { name: 'Пробег до ТО Kia K5' })).toBeTruthy();
+  expect(screen.getByRole('progressbar', { name: 'Дневной лимит пробега Kia K5' })).toBeTruthy();
   expect(screen.queryByText('52%')).toBeNull();
+});
+
+it('не выдумывает прогресс, когда телеметрии и плана ТО нет', () => {
+  renderRail({ selectedVehicleId: 'vehicle-2' });
+
+  const card = screen.getByRole('button', { name: 'Выбрать Toyota Camry Х069АЕ997' });
+  expect(card.textContent).toContain('Нет данных по ТО');
+  expect(card.textContent).toContain('Лимит не задан');
 });
 
 it('честно показывает загрузку и отсутствие маршрута выбранного дня', () => {
@@ -96,7 +118,9 @@ it('честно показывает загрузку и отсутствие �
     />,
   );
 
-  expect(screen.getByText('Нет маршрута')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Выбрать Kia K5 В342НР797' }).textContent).toContain(
+    'За день Нет данных',
+  );
 });
 
 it('передаёт поиск, фильтр и выбор машины без координат', async () => {

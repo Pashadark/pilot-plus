@@ -64,6 +64,105 @@ it('возвращает только активные реальные маши
   ]);
 });
 
+it('возвращает фото, пробег, план ТО и подтверждённые условия активной аренды для боковых панелей', async () => {
+  const findMany = vi.fn().mockResolvedValue([
+    {
+      id: 'vehicle-rich',
+      model: 'BMW 520d xDrive',
+      registrationNumber: 'У891АВ797',
+      odometerKm: { toString: () => '1250.5' },
+      includedMileageKm: 400,
+      images: [
+        {
+          localPath: '/vehicles/vehicle-rich/images/image-main',
+          alt: 'BMW 520d xDrive, вид спереди',
+        },
+      ],
+      positions: [
+        {
+          latitude: '55.751244',
+          longitude: '37.618423',
+          speedKph: 0,
+          heading: 127,
+          odometerKm: { toString: () => '1262.5' },
+          fuelLevelPercent: '15',
+          address: 'Северо-восточная хорда, Москва',
+          recordedAt: new Date('2026-08-20T12:00:00.000Z'),
+        },
+      ],
+      trips: [
+        { distanceKm: { toString: () => '32.5' } },
+        { distanceKm: { toString: () => '17.8' } },
+      ],
+      maintenanceRecords: [
+        {
+          odometerKm: { toString: () => '1000' },
+          targetOdometerKm: { toString: () => '2000' },
+        },
+      ],
+      rentals: [
+        {
+          id: 'rental-rich',
+          contractNumber: 'ME-2026-1102-KU',
+          endsAt: new Date('2026-08-25T15:00:00.000Z'),
+          dailyRateMinor: BigInt(360_000),
+          currency: 'RUB',
+          depositMinor: BigInt(1_500_000),
+          includedMileageKm: 400,
+          client: {
+            id: 'client-rich',
+            lastName: 'Кульпинёв',
+            firstName: 'Александр',
+            middleName: 'Витальевич',
+          },
+          payments: [{ kind: 'DEPOSIT', status: 'CONFIRMED', amountMinor: BigInt(1_500_000) }],
+          operations: [],
+        },
+      ],
+    },
+  ]);
+
+  const result = await listOnlineMapVehicles(
+    { id: 'root', role: 'SUPER_ADMIN' } as never,
+    { vehicle: { findMany } } as never,
+    new Date('2026-08-20T12:02:00.000Z'),
+  );
+
+  expect(result[0]).toEqual(
+    expect.objectContaining({
+      image: {
+        src: '/vehicles/vehicle-rich/images/image-main',
+        alt: 'BMW 520d xDrive, вид спереди',
+      },
+      odometerKm: 1262.5,
+      dailyDistanceKm: 50.3,
+      maintenance: {
+        startOdometerKm: 1000,
+        targetOdometerKm: 2000,
+        remainingKm: 737.5,
+      },
+      currentRental: expect.objectContaining({
+        id: 'rental-rich',
+        clientId: 'client-rich',
+        endsAt: '2026-08-25T15:00:00.000Z',
+        dailyRateMinor: 360_000,
+        currency: 'RUB',
+        includedMileageKm: 400,
+        depositState: 'COLLECTED',
+      }),
+    }),
+  );
+  expect(findMany.mock.calls[0]?.[0].select.images).toEqual(
+    expect.objectContaining({
+      orderBy: [{ isPrimary: 'desc' }, { position: 'asc' }],
+      take: 1,
+    }),
+  );
+  expect(findMany.mock.calls[0]?.[0].select.trips.where.startedAt.gte).toEqual(
+    new Date('2026-08-19T21:00:00.000Z'),
+  );
+});
+
 it('super-admin видит все компании, а устаревшая позиция получает общий красный GPS-статус', async () => {
   const findMany = vi.fn().mockResolvedValue([
     {
@@ -140,14 +239,15 @@ it('оставляет реальную машину без координат �
       },
       latitude: null,
       longitude: null,
-      currentRental: {
+      currentRental: expect.objectContaining({
         id: 'rental-1',
         contractNumber: 'ME-2026-0003-BK',
         clientName: 'Горбунов Глеб Геннадьевич',
-      },
+      }),
     }),
   );
   expect(findMany.mock.calls[0]?.[0].select.rentals.select.client.select).toEqual({
+    id: true,
     lastName: true,
     firstName: true,
     middleName: true,

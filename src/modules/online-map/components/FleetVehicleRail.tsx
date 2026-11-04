@@ -1,9 +1,10 @@
 'use client';
 
-import { FiChevronLeft, FiChevronRight, FiMap, FiNavigation, FiSearch } from 'react-icons/fi';
+import { FiChevronLeft, FiChevronRight, FiSearch } from 'react-icons/fi';
 
 import { filterOnlineMapVehicles } from '../filter-vehicles';
 import type { OnlineMapFilter, OnlineMapVehicle } from '../types';
+import { FleetVehicleCard } from './FleetVehicleCard';
 
 const FILTERS: readonly { value: OnlineMapFilter; label: string }[] = [
   { value: 'all', label: 'Все' },
@@ -149,50 +150,18 @@ export function FleetVehicleRail({
           <ul className="grid gap-1.5">
             {filteredVehicles.map((vehicle) => {
               const selected = vehicle.id === selectedVehicleId;
+              const dayDistanceKm = selected
+                ? selectedDayDistanceKm
+                : (vehicle.dailyDistanceKm ?? null);
               return (
                 <li key={vehicle.id}>
-                  <button
-                    type="button"
-                    aria-label={`Выбрать ${vehicle.name} ${vehicle.plate}`}
-                    aria-current={selected ? 'true' : undefined}
-                    onClick={() => onSelect(vehicle)}
-                    className="group relative grid min-h-24 w-full grid-cols-[1fr_auto] gap-x-3 gap-y-2 overflow-hidden rounded-[var(--radius-md)] border border-transparent p-3 text-left transition-colors hover:border-[var(--color-border)] hover:bg-[var(--color-elevated)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-primary)] aria-current:border-[var(--color-primary)] aria-current:bg-[var(--color-primary-soft)]"
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`absolute inset-y-2 left-0 w-1 rounded-r-full ${selected ? 'bg-[var(--color-primary)]' : STATUS_DOT[vehicle.gpsStatus.tone]}`}
-                    />
-                    <span className="min-w-0 pl-1">
-                      <span className="block truncate text-sm font-semibold">{vehicle.name}</span>
-                      <span className="mt-0.5 block text-xs font-medium text-[var(--color-text-secondary)]">
-                        {vehicle.plate}
-                      </span>
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-text-secondary)] tabular-nums">
-                      <FiNavigation aria-hidden="true" />
-                      {vehicle.gpsStatus.key === 'NO_DATA' || vehicle.gpsStatus.key === 'STALE'
-                        ? 'Нет актуальных данных'
-                        : vehicle.speedKph === 0
-                          ? 'Стоит'
-                          : `${vehicle.speedKph} км/ч`}
-                    </span>
-                    <span className="min-w-0 pl-1 text-xs text-[var(--color-text-secondary)]">
-                      <span className="block truncate">
-                        {vehicle.currentRental?.clientName ?? 'Нет активного водителя'}
-                      </span>
-                      <span className="mt-1 block truncate">{vehicle.lastSeenLabel}</span>
-                    </span>
-                    <span className="inline-flex items-center gap-1 self-end text-xs font-medium text-[var(--color-text-secondary)] tabular-nums">
-                      <FiMap aria-hidden="true" />
-                      {selected
-                        ? selectedDayDistanceLoading
-                          ? 'Считаем…'
-                          : selectedDayDistanceKm === null
-                            ? 'Нет маршрута'
-                            : `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(selectedDayDistanceKm)} км за день`
-                        : 'Выберите авто'}
-                    </span>
-                  </button>
+                  <FleetVehicleCard
+                    vehicle={vehicle}
+                    selected={selected}
+                    dayDistanceKm={dayDistanceKm}
+                    dayDistanceLoading={selected && selectedDayDistanceLoading}
+                    onSelect={() => onSelect(vehicle)}
+                  />
                 </li>
               );
             })}
