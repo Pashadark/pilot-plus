@@ -3,6 +3,7 @@ import 'server-only';
 import { Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 import { buildRentalSnapshot } from '@/modules/rentals/domain/build-snapshot';
+import { resolveRentalMileagePolicy } from '@/modules/rentals/domain/mileage-policy';
 import { isLegalTemplateVersion } from '@/modules/rentals/documents/legal-content-v1';
 import { evaluateClientReadiness } from '@/modules/rentals/readiness/evaluate-client-readiness';
 import { evaluateVehicleReadiness } from '@/modules/rentals/readiness/evaluate-vehicle-readiness';
@@ -373,6 +374,12 @@ export function createRentalConfirmation(
       });
       if (overlap) throw new Error('Автомобиль уже занят на выбранный период.');
 
+      const mileagePolicy = resolveRentalMileagePolicy({
+        agreementType: text(rental.agreementType) === 'LEASE_TO_OWN' ? 'LEASE_TO_OWN' : 'STANDARD',
+        billableDays: typeof rental.billableDays === 'number' ? rental.billableDays : 1,
+        includedMileageKm:
+          typeof rental.includedMileageKm === 'number' ? rental.includedMileageKm : null,
+      });
       const snapshot = buildRentalSnapshot({
         confirmedReady: true,
         company: {
@@ -435,8 +442,7 @@ export function createRentalConfirmation(
           transmission: text(vehicle.transmission) || undefined,
           fuelType: text(vehicle.fuelType) || undefined,
           seats: typeof vehicle.seats === 'number' ? vehicle.seats : undefined,
-          includedMileageKm:
-            typeof vehicle.includedMileageKm === 'number' ? vehicle.includedMileageKm : undefined,
+          includedMileageKm: mileagePolicy.dailyLimitKm ?? undefined,
           overageMileagePriceMinor: optionalSafeMinor(vehicle.overageMileagePriceMinor),
           missingFuelPriceMinor: optionalSafeMinor(vehicle.missingFuelPriceMinor),
         },
@@ -478,6 +484,7 @@ export function createRentalConfirmation(
           contractNumber: number,
           confirmedAt,
           confirmedByUserId: actor?.id ?? null,
+          includedMileageKm: mileagePolicy.dailyLimitKm,
           snapshotVersion: 1,
           snapshot: {
             ...snapshot,

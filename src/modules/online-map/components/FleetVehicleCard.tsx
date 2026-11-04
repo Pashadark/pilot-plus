@@ -113,7 +113,8 @@ export function FleetVehicleCard({
           (maintenance.targetOdometerKm - maintenance.startOdometerKm)) *
         100
       : null;
-  const mileageLimit = vehicle.currentRental?.includedMileageKm ?? null;
+  const mileageLimit = vehicle.currentRental?.dailyMileageLimitKm ?? null;
+  const totalMileageLimit = vehicle.currentRental?.totalMileageLimitKm ?? null;
   const mileagePercent =
     dayDistanceKm !== null && mileageLimit !== null && mileageLimit > 0
       ? (dayDistanceKm / mileageLimit) * 100
@@ -226,7 +227,14 @@ export function FleetVehicleCard({
         <span className="grid gap-1">
           <span className="flex justify-between gap-2 text-[9px] text-[var(--color-text-secondary)]">
             <span>
-              {mileageLimit === null ? 'Лимит не задан' : `Лимит ${number.format(mileageLimit)} км`}
+              {mileageLimit === null
+                ? vehicle.currentRental
+                  ? 'Без лимита'
+                  : 'Нет активной аренды'
+                : `Сегодня ${number.format(mileageLimit)} км`}
+              {totalMileageLimit === null
+                ? ''
+                : ` · Договор ${number.format(totalMileageLimit)} км`}
             </span>
             <b>{dayDistanceKm === null ? 'Нет данных' : `${number.format(dayDistanceKm)} км`}</b>
           </span>

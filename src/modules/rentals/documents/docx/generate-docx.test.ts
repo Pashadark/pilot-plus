@@ -138,6 +138,55 @@ describe('generateRentalDocx', () => {
     expect(xml).toContain('ДЕЙСТВИЕ ДОГОВОРА');
   });
 
+  it('prints the daily and total mileage allowance for the whole rental term', async () => {
+    const fourDaySnapshot = {
+      ...snapshot,
+      vehicle: { ...snapshot.vehicle, includedMileageKm: 200 },
+      rental: { ...snapshot.rental, days: 4 },
+    };
+    const xml = documentXml(
+      await generateRentalDocx(fourDaySnapshot, {
+        contractNumber: 'ME-2026-MILEAGE',
+        templateVersion: 'legal-content-v1',
+      }),
+    );
+
+    expect(xml).toContain('200 км/сутки, всего 800 км');
+  });
+
+  it('uses the 200 km daily policy for a legacy standard snapshot without mileage', async () => {
+    const legacySnapshot = {
+      ...snapshot,
+      vehicle: { ...snapshot.vehicle, includedMileageKm: null },
+      rental: { ...snapshot.rental, days: 10 },
+    };
+    const xml = documentXml(
+      await generateRentalDocx(legacySnapshot, {
+        contractNumber: 'ME-2026-LEGACY-MILEAGE',
+        templateVersion: 'legal-content-v1',
+      }),
+    );
+
+    expect(xml).toContain('200 км/сутки, всего 2000 км');
+  });
+
+  it('omits mileage allowance for a lease-to-own snapshot', async () => {
+    const leaseSnapshot = {
+      ...snapshot,
+      agreementType: 'LEASE_TO_OWN',
+      vehicle: { ...snapshot.vehicle, includedMileageKm: null },
+      rental: { ...snapshot.rental, days: 30 },
+    };
+    const xml = documentXml(
+      await generateRentalDocx(leaseSnapshot, {
+        contractNumber: 'ME-2026-LEASE',
+        templateVersion: 'legal-content-v1',
+      }),
+    );
+
+    expect(xml).not.toContain('включённый пробег');
+  });
+
   it('renders immutable issuance details without substituting the primary client as a driver', async () => {
     const xml = documentXml(
       await generateRentalDocx(issuedSnapshot, {

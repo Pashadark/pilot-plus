@@ -43,7 +43,9 @@ it('показывает фото, карточку машины и подтве
       endsAt: '2026-11-12T12:00:00.000Z',
       dailyRateMinor: 360_000,
       currency: 'RUB',
-      includedMileageKm: 400,
+      dailyMileageLimitKm: 200,
+      totalMileageLimitKm: 800,
+      billableDays: 4,
       canAccessDetails: true,
       depositState: 'COLLECTED',
     },
@@ -70,6 +72,36 @@ it('показывает фото, карточку машины и подтве
   expect(screen.getByText('1 262,5 км')).toBeTruthy();
   expect(screen.getByText('3 600 ₽/сутки')).toBeTruthy();
   expect(screen.getByText('Залог внесён')).toBeTruthy();
+  expect(screen.getByText('200 км/день · 800 км за 4 дня')).toBeTruthy();
+});
+
+it('показывает аренду с выкупом без лимита пробега', () => {
+  const vehicle = {
+    ...onlineMapVehicles[0],
+    currentRental: {
+      id: 'rental-lease-to-own',
+      contractNumber: 'ME-2026-1103-BM',
+      clientName: 'Иванов Иван',
+      dailyMileageLimitKm: null,
+      totalMileageLimitKm: null,
+      billableDays: 30,
+      canAccessDetails: true,
+    },
+  } as const;
+
+  render(
+    <SelectedVehiclePanel
+      vehicle={vehicle}
+      onClose={vi.fn()}
+      trackControls={null}
+      trackSummary={null}
+      trackSegments={null}
+      trackEvents={null}
+    />,
+  );
+
+  expect(screen.getByText('Без лимита (аренда с выкупом)')).toBeTruthy();
+  expect(screen.queryByText('Не задан')).toBeNull();
 });
 
 it('сбрасывает ошибку фотографии при выборе другой машины', () => {

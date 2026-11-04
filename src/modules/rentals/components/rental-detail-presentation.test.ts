@@ -6,6 +6,7 @@ const base: RentalDetailInput = {
   id: 'cmswhu2sq0001tu0ghdiulou2',
   contractNumber: 'ME-2026-0001-BK',
   status: 'COMPLETED',
+  agreementType: 'STANDARD',
   snapshot: { importedFrom: 'contracts-001-010', contractNumber: 'ME-2026-0001-BK' },
   clientId: 'client-1',
   clientLabel: 'Барышева Кристина Олеговна',
@@ -44,8 +45,24 @@ describe('rentalDetailPresentation', () => {
     expect(view.finance.dailyRate).toBe('4 700 ₽');
     expect(view.finance.total).toBe('9 400 ₽');
     expect(view.term.billableDaysLabel).toBe('2 дня');
-    expect(view.operations.includedMileage).toBe('250 км');
+    expect(view.operations.includedMileage).toBe('250 км/день · 500 км за 2 дня');
     expect(view.lifecycle.at(-1)?.label).toBe('Аренда завершена');
+  });
+
+  it('подставляет 200 км в день в старый обычный договор без лимита', () => {
+    const view = rentalDetailPresentation({ ...base, includedMileageKm: null });
+
+    expect(view.operations.includedMileage).toBe('200 км/день · 400 км за 2 дня');
+  });
+
+  it('не назначает лимит договору аренды с выкупом', () => {
+    const view = rentalDetailPresentation({
+      ...base,
+      agreementType: 'LEASE_TO_OWN',
+      includedMileageKm: null,
+    });
+
+    expect(view.operations.includedMileage).toBe('Без лимита');
   });
 
   it('использует неизменяемый снимок подтверждённого договора', () => {

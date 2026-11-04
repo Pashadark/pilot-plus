@@ -1,6 +1,7 @@
 import { Paragraph, TextRun } from 'docx';
+import { resolveRentalMileagePolicy } from '../../../domain/mileage-policy';
 import type { RentalSnapshot } from '../../../domain/build-snapshot';
-import { display, displayList, money, table, withUnit } from './helpers';
+import { display, displayList, money, table } from './helpers';
 
 function moscowDateTime(value: string) {
   return new Intl.DateTimeFormat('ru-RU', {
@@ -16,6 +17,19 @@ function moscowDateTime(value: string) {
 
 export function terms(s: RentalSnapshot) {
   const issuance = s.issuance ?? {};
+  const rentalDays = s.rental.days;
+  const mileagePolicy = resolveRentalMileagePolicy({
+    agreementType:
+      (s as RentalSnapshot & { agreementType?: string }).agreementType === 'LEASE_TO_OWN'
+        ? 'LEASE_TO_OWN'
+        : 'STANDARD',
+    billableDays: typeof rentalDays === 'number' ? rentalDays : 1,
+    includedMileageKm: s.vehicle.includedMileageKm,
+  });
+  const mileageTerms =
+    mileagePolicy.dailyLimitKm !== null && mileagePolicy.totalLimitKm !== null
+      ? `включённый пробег ${mileagePolicy.dailyLimitKm} км/сутки, всего ${mileagePolicy.totalLimitKm} км`
+      : undefined;
   return [
     new Paragraph({ children: [new TextRun({ text: '3. СРОК АРЕНДЫ И РАСЧЁТЫ', bold: true })] }),
     table([
@@ -36,7 +50,7 @@ export function terms(s: RentalSnapshot) {
         displayList(
           [
             display(s.rental.conditions),
-            `включённый пробег ${withUnit(s.vehicle.includedMileageKm, 'км')}`,
+            mileageTerms,
             `перерасход ${money(s.vehicle.overageMileagePriceMinor)}`,
             `топливо ${money(s.vehicle.missingFuelPriceMinor)}`,
           ],

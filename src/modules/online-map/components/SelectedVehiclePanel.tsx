@@ -36,6 +36,15 @@ const returnDate = new Intl.DateTimeFormat('ru-RU', {
   minute: '2-digit',
 });
 
+function daysLabel(value: number) {
+  const mod100 = value % 100;
+  const mod10 = value % 10;
+  if (mod100 >= 11 && mod100 <= 14) return `${value} дней`;
+  if (mod10 === 1) return `${value} день`;
+  if (mod10 >= 2 && mod10 <= 4) return `${value} дня`;
+  return `${value} дней`;
+}
+
 const DEPOSIT_LABELS: Record<
   NonNullable<NonNullable<OnlineMapVehicle['currentRental']>['depositState']>,
   string
@@ -279,9 +288,10 @@ export function SelectedVehiclePanel({
                   <div>
                     <dt className="text-[var(--color-text-secondary)]">Лимит пробега</dt>
                     <dd className="mt-0.5 font-semibold">
-                      {rental.includedMileageKm === null || rental.includedMileageKm === undefined
-                        ? 'Не задан'
-                        : `${number.format(rental.includedMileageKm)} км/сутки`}
+                      {rental.dailyMileageLimitKm === null ||
+                      rental.dailyMileageLimitKm === undefined
+                        ? 'Без лимита (аренда с выкупом)'
+                        : `${number.format(rental.dailyMileageLimitKm)} км/день · ${number.format(rental.totalMileageLimitKm ?? rental.dailyMileageLimitKm)} км за ${daysLabel(rental.billableDays ?? 1)}`}
                     </dd>
                   </div>
                   <div>

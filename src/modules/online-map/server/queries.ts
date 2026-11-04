@@ -4,6 +4,7 @@ import type { CompanyRole } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 import type { SafeUser } from '@/modules/auth/types';
 import { resolveRentalDepositState } from '@/modules/rentals/deposit-state';
+import { resolveRentalMileagePolicy } from '@/modules/rentals/domain/mileage-policy';
 import { canManageRentals } from '@/modules/rentals/server/access';
 import { deriveVehicleGpsStatus } from '@/modules/vehicles/gps-status';
 import { getPilotBusinessDateParts, parsePilotDateTimeLocal } from '@/shared/business-time';
@@ -47,6 +48,8 @@ interface OnlineMapRow {
     dailyRateMinor?: bigint;
     currency?: string;
     depositMinor?: bigint | null;
+    agreementType?: 'STANDARD' | 'LEASE_TO_OWN';
+    billableDays?: number;
     includedMileageKm?: number | null;
     client: { id?: string; firstName: string; middleName: string | null; lastName: string };
     payments?: Array<{ kind: string; status: string; amountMinor: bigint }>;
@@ -176,6 +179,8 @@ export async function listOnlineMapVehicles(
           dailyRateMinor: true,
           currency: true,
           depositMinor: true,
+          agreementType: true,
+          billableDays: true,
           includedMileageKm: true,
           client: { select: { id: true, lastName: true, firstName: true, middleName: true } },
           payments: { select: { kind: true, status: true, amountMinor: true } },
@@ -219,30 +224,39 @@ export async function listOnlineMapVehicles(
     const canAccessRentalDetails =
       user.role === 'SUPER_ADMIN' ||
       Boolean(vehicle.company?.members.some((member) => canManageRentals(member.role)));
-    const currentRental = vehicle.rentals?.[0]
+    const activeRental = vehicle.rentals?.[0];
+    const mileagePolicy = activeRental
+      ? resolveRentalMileagePolicy({
+          agreementType: activeRental.agreementType ?? 'STANDARD',
+          billableDays: activeRental.billableDays ?? 1,
+          includedMileageKm: activeRental.includedMileageKm,
+        })
+      : null;
+    const currentRental = activeRental
       ? {
-          id: vehicle.rentals[0].id,
-          contractNumber: vehicle.rentals[0].contractNumber,
+          id: activeRental.id,
+          contractNumber: activeRental.contractNumber,
           clientName: [
-            vehicle.rentals[0].client.lastName,
-            vehicle.rentals[0].client.firstName,
-            vehicle.rentals[0].client.middleName,
+            activeRental.client.lastName,
+            activeRental.client.firstName,
+            activeRental.client.middleName,
           ]
             .filter(Boolean)
             .join(' '),
           canAccessDetails: canAccessRentalDetails,
           ...(canAccessRentalDetails
             ? {
-                clientId: vehicle.rentals[0].client.id,
-                endsAt: vehicle.rentals[0].endsAt?.toISOString(),
-                dailyRateMinor: moneyMinor(vehicle.rentals[0].dailyRateMinor),
-                currency: vehicle.rentals[0].currency,
-                includedMileageKm:
-                  vehicle.rentals[0].includedMileageKm ?? vehicle.includedMileageKm ?? null,
+                clientId: activeRental.client.id,
+                endsAt: activeRental.endsAt?.toISOString(),
+                dailyRateMinor: moneyMinor(activeRental.dailyRateMinor),
+                currency: activeRental.currency,
+                dailyMileageLimitKm: mileagePolicy?.dailyLimitKm ?? null,
+                totalMileageLimitKm: mileagePolicy?.totalLimitKm ?? null,
+                billableDays: mileagePolicy?.billableDays ?? 1,
                 depositState: resolveRentalDepositState({
-                  expectedMinor: vehicle.rentals[0].depositMinor ?? null,
-                  operations: vehicle.rentals[0].operations ?? [],
-                  payments: vehicle.rentals[0].payments ?? [],
+                  expectedMinor: activeRental.depositMinor ?? null,
+                  operations: activeRental.operations ?? [],
+                  payments: activeRental.payments ?? [],
                 }),
               }
             : {}),

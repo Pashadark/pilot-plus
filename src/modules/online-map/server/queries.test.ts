@@ -109,7 +109,9 @@ it('возвращает фото, пробег, план ТО и подтвер
           dailyRateMinor: BigInt(360_000),
           currency: 'RUB',
           depositMinor: BigInt(1_500_000),
-          includedMileageKm: 400,
+          agreementType: 'STANDARD',
+          billableDays: 4,
+          includedMileageKm: null,
           client: {
             id: 'client-rich',
             lastName: 'Кульпинёв',
@@ -149,7 +151,9 @@ it('возвращает фото, пробег, план ТО и подтвер
         endsAt: '2026-08-25T15:00:00.000Z',
         dailyRateMinor: 360_000,
         currency: 'RUB',
-        includedMileageKm: 400,
+        dailyMileageLimitKm: 200,
+        totalMileageLimitKm: 800,
+        billableDays: 4,
         canAccessDetails: true,
         depositState: 'COLLECTED',
       }),
@@ -163,6 +167,45 @@ it('возвращает фото, пробег, план ТО и подтвер
   );
   expect(findMany.mock.calls[0]?.[0].select.trips.where.startedAt.gte).toEqual(
     new Date('2026-08-19T21:00:00.000Z'),
+  );
+  expect(findMany.mock.calls[0]?.[0].select.rentals.select).toEqual(
+    expect.objectContaining({ agreementType: true, billableDays: true }),
+  );
+});
+
+it('не назначает лимит аренде с правом выкупа', async () => {
+  const findMany = vi.fn().mockResolvedValue([
+    {
+      id: 'vehicle-lease-to-own',
+      model: 'BMW 3',
+      registrationNumber: 'Н533УС797',
+      includedMileageKm: 200,
+      positions: [],
+      rentals: [
+        {
+          id: 'rental-lease-to-own',
+          contractNumber: 'ME-2026-1103-BM',
+          agreementType: 'LEASE_TO_OWN',
+          billableDays: 30,
+          includedMileageKm: 200,
+          client: { lastName: 'Иванов', firstName: 'Иван', middleName: null },
+        },
+      ],
+    },
+  ]);
+
+  const [vehicle] = await listOnlineMapVehicles(
+    { id: 'root', role: 'SUPER_ADMIN' } as never,
+    { vehicle: { findMany } } as never,
+    new Date('2026-11-04T09:00:00.000Z'),
+  );
+
+  expect(vehicle.currentRental).toEqual(
+    expect.objectContaining({
+      dailyMileageLimitKm: null,
+      totalMileageLimitKm: null,
+      billableDays: 30,
+    }),
   );
 });
 

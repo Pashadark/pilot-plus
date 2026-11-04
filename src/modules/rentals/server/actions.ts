@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { Prisma } from '@/database/generated/prisma';
 import { prisma } from '@/database/prisma/client';
 import { calculateRental } from '@/modules/rentals/domain/calculate-rental';
+import { STANDARD_DAILY_MILEAGE_LIMIT_KM } from '@/modules/rentals/domain/mileage-policy';
 import {
   calculateEditedRental,
   parseRentalTermsForm,
@@ -418,7 +419,8 @@ async function saveDraft(formData: FormData, rentalId?: string): Promise<RentalA
         servicesMinor: BigInt(calculation.servicesMinor),
         totalPriceMinor: BigInt(calculation.agreedTotalMinor),
         depositMinor: vehicle.depositMinor,
-        includedMileageKm: vehicle.includedMileageKm,
+        includedMileageKm:
+          value.agreementType === 'LEASE_TO_OWN' ? null : STANDARD_DAILY_MILEAGE_LIMIT_KM,
         overageMileagePriceMinor: vehicle.overageMileagePriceMinor,
         missingFuelPriceMinor: vehicle.missingFuelPriceMinor,
         snapshotVersion: 1,

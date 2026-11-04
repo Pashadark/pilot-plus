@@ -23,6 +23,7 @@ type Transaction = {
       vehicleId: string;
       endsAt: Date;
       billableDays: number;
+      agreementType: 'STANDARD' | 'LEASE_TO_OWN';
       includedMileageKm: number | null;
       overageMileagePriceMinor: bigint | null;
       missingFuelPriceMinor: bigint | null;
@@ -73,6 +74,7 @@ function safeMinor(value: bigint | null, label: string) {
 }
 
 export function resolveReturnPricing(input: {
+  agreementType?: 'STANDARD' | 'LEASE_TO_OWN';
   includedMileageKm: number | null;
   overageMileagePriceMinor: bigint | null;
   missingFuelPriceMinor: bigint | null;
@@ -82,12 +84,17 @@ export function resolveReturnPricing(input: {
     missingFuelPriceMinor: bigint | null;
   };
 }) {
+  const leaseToOwn = input.agreementType === 'LEASE_TO_OWN';
   return {
-    includedMileageKmPerDay: input.includedMileageKm ?? input.vehicle?.includedMileageKm ?? 0,
-    overageMileagePriceMinor: safeMinor(
-      input.overageMileagePriceMinor ?? input.vehicle?.overageMileagePriceMinor ?? null,
-      'Цена перепробега',
-    ),
+    includedMileageKmPerDay: leaseToOwn
+      ? 0
+      : (input.includedMileageKm ?? input.vehicle?.includedMileageKm ?? 0),
+    overageMileagePriceMinor: leaseToOwn
+      ? 0
+      : safeMinor(
+          input.overageMileagePriceMinor ?? input.vehicle?.overageMileagePriceMinor ?? null,
+          'Цена перепробега',
+        ),
     missingFuelPriceMinor: safeMinor(
       input.missingFuelPriceMinor ??
         input.vehicle?.missingFuelPriceMinor ??
@@ -168,6 +175,7 @@ export function createRentalReturn(database: Database) {
                 vehicleId: true,
                 endsAt: true,
                 billableDays: true,
+                agreementType: true,
                 includedMileageKm: true,
                 overageMileagePriceMinor: true,
                 missingFuelPriceMinor: true,

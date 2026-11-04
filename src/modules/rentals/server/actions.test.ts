@@ -138,6 +138,42 @@ describe('rental actions', () => {
         },
       }),
     );
+    expect(rentalCreate.mock.calls[0]?.[0].data.includedMileageKm).toBe(200);
+  });
+
+  it('does not assign a mileage limit to a lease-to-own draft', async () => {
+    const rentalCreate = vi.fn().mockResolvedValue({ id: 'rental-lease' });
+    const transaction = {
+      client: { findFirst: vi.fn().mockResolvedValue({ id: 'client-1' }) },
+      vehicle: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'vehicle-1',
+          dailyPriceMinor: 100000,
+          depositMinor: BigInt(500000),
+          includedMileageKm: 300,
+          overageMileagePriceMinor: BigInt(1000),
+          missingFuelPriceMinor: BigInt(5000),
+        }),
+      },
+      contractTemplateVersion: { findFirst: vi.fn().mockResolvedValue({ id: 'template-1' }) },
+      rental: { create: rentalCreate },
+      auditLog: { create: vi.fn().mockResolvedValue({}) },
+    };
+    requireRentalAccess.mockResolvedValue({ user: { id: 'user-1', email: 'staff@example.test' } });
+    prisma.$transaction.mockImplementation((callback: (tx: typeof transaction) => unknown) =>
+      callback(transaction),
+    );
+    const form = new FormData();
+    form.set('companyId', 'company-1');
+    form.set('clientId', 'client-1');
+    form.set('vehicleId', 'vehicle-1');
+    form.set('templateVersionId', 'template-1');
+    form.set('startsAt', '2026-11-03T10:00:00.000Z');
+    form.set('endsAt', '2026-12-03T10:00:00.000Z');
+    form.set('agreementType', 'LEASE_TO_OWN');
+
+    await expect(createRentalDraftAction(null, form)).resolves.toMatchObject({ ok: true });
+    expect(rentalCreate.mock.calls[0]?.[0].data.includedMileageKm).toBeNull();
   });
   it('reserves cancellation for draft and confirmed states', () => {
     expect(['DRAFT', 'CONFIRMED']).toContain('CONFIRMED');

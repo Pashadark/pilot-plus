@@ -47,11 +47,15 @@ export default async function RentalDetail({
     id: rental.id,
     contractNumber: rental.contractNumber,
     status: rental.status,
+    agreementType: rental.agreementType,
     snapshot: rental.snapshot,
     clientId: rental.clientId,
     clientLabel: client,
     vehicleId: rental.vehicleId,
-    vehicleLabel: [vehicleName(rental.vehicle.make, rental.vehicle.modelName), rental.vehicle.registrationNumber]
+    vehicleLabel: [
+      vehicleName(rental.vehicle.make, rental.vehicle.modelName),
+      rental.vehicle.registrationNumber,
+    ]
       .filter(Boolean)
       .join(' · '),
     startsAt: rental.startsAt.toISOString(),
@@ -171,11 +175,10 @@ export default async function RentalDetail({
             depositRequiredMinor={rental.depositMinor?.toString() ?? null}
             canEdit={rental.canEdit ?? false}
             rentalStatus={rental.status}
-            depositResolved={rental.operations.some(
-              (operation) =>
-                ['RETURNED', 'PARTIALLY_WITHHELD', 'WITHHELD'].includes(
-                  operation.depositStatus ?? '',
-                ),
+            depositResolved={rental.operations.some((operation) =>
+              ['RETURNED', 'PARTIALLY_WITHHELD', 'WITHHELD'].includes(
+                operation.depositStatus ?? '',
+              ),
             )}
             defaultPaymentKind={defaultPaymentKind}
             payments={rental.payments.map((payment) => ({

@@ -33,7 +33,9 @@ export interface OnlineMapVehicle {
     endsAt?: string;
     dailyRateMinor?: number;
     currency?: string;
-    includedMileageKm?: number | null;
+    dailyMileageLimitKm?: number | null;
+    totalMileageLimitKm?: number | null;
+    billableDays?: number;
     canAccessDetails?: boolean;
     depositState?:
       'NOT_COLLECTED' | 'COLLECTED' | 'RETURNED' | 'PARTIALLY_WITHHELD' | 'WITHHELD' | null;

@@ -22,6 +22,27 @@ describe('createRentalReturn', () => {
     });
   });
 
+  it('disables mileage charges for a lease-to-own rental', () => {
+    expect(
+      resolveReturnPricing({
+        agreementType: 'LEASE_TO_OWN',
+        includedMileageKm: null,
+        overageMileagePriceMinor: BigInt(1_000),
+        missingFuelPriceMinor: BigInt(15_000),
+        vehicle: {
+          includedMileageKm: 200,
+          overageMileagePriceMinor: BigInt(1_000),
+          missingFuelPriceMinor: BigInt(15_000),
+        },
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        includedMileageKmPerDay: 0,
+        overageMileagePriceMinor: 0,
+      }),
+    );
+  });
+
   it('calculates return charges, leaves the deposit unresolved, and completes atomically', async () => {
     const transaction = {
       companyMember: { findFirst: vi.fn().mockResolvedValue({ id: 'member-1' }) },

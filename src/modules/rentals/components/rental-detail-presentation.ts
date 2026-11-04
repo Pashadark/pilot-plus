@@ -1,10 +1,12 @@
 import { vehicleName } from '@/shared/lib/vehicle-name';
+import { resolveRentalMileagePolicy } from '../domain/mileage-policy';
 export type RentalStatus = 'DRAFT' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
 
 export type RentalDetailInput = {
   id: string;
   contractNumber: string | null;
   status: RentalStatus;
+  agreementType: 'STANDARD' | 'LEASE_TO_OWN';
   snapshot: unknown;
   clientId: string;
   clientLabel: string;
@@ -164,6 +166,13 @@ export function rentalDetailPresentation(detail: RentalDetailInput): RentalDetai
       ? snapshotDays
       : detail.billableDays;
   const currency = optionalText(rentalSnapshot?.currency) ?? detail.currency;
+  const snapshotMileage = vehicleSnapshot?.includedMileageKm;
+  const mileagePolicy = resolveRentalMileagePolicy({
+    agreementType: detail.agreementType,
+    billableDays,
+    includedMileageKm:
+      typeof snapshotMileage === 'number' ? snapshotMileage : detail.includedMileageKm,
+  });
 
   const lifecycle = [
     { key: 'created', label: 'Договор создан', occurredAt: detail.createdAt },
@@ -231,11 +240,9 @@ export function rentalDetailPresentation(detail: RentalDetailInput): RentalDetai
     },
     operations: {
       includedMileage:
-        typeof vehicleSnapshot?.includedMileageKm === 'number'
-          ? `${vehicleSnapshot.includedMileageKm} км`
-          : detail.includedMileageKm === null
-            ? 'Не указано'
-            : `${detail.includedMileageKm} км`,
+        mileagePolicy.dailyLimitKm === null || mileagePolicy.totalLimitKm === null
+          ? 'Без лимита'
+          : `${mileagePolicy.dailyLimitKm} км/день · ${mileagePolicy.totalLimitKm} км за ${daysLabel(mileagePolicy.billableDays)}`,
       overagePrice: money(
         safeMinor(vehicleSnapshot?.overageMileagePriceMinor, detail.overageMileagePriceMinor),
         currency,
