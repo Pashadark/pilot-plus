@@ -3,6 +3,7 @@ const customerTemplates = new Set([
   'CLIENT_RENTAL_LIFECYCLE',
   'CLIENT_IMPOUND_ALERT',
   'CLIENT_GPS_EVENT',
+  'LEASE_TO_OWN_PAYMENT_CLIENT',
 ]);
 const internalTemplates = new Set([
   'CLIENT_SUPPORT_REQUEST',
@@ -19,6 +20,7 @@ const internalTemplates = new Set([
   'AVITO_WAITING',
   'DEPOSIT_RETURNED',
   'SYSTEM_BILLING_ALERT',
+  'LEASE_TO_OWN_PAYMENT_STAFF',
 ]);
 
 export function notificationDestination(

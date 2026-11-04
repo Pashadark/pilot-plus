@@ -37,6 +37,10 @@ import { formatUnpaidFinesReport } from './unpaid-fines-report';
 import { formatTelegramMessage, telegramSection } from './telegram-message';
 import { returnReminderStage } from './client-return-reminders';
 import { notificationDestination } from './notification-routing';
+import {
+  findDueLeasePayment,
+  formatLeasePaymentReminderMessage,
+} from './lease-payment-reminders';
 import type { BotIdentityContext } from './queries';
 
 type ClaimDb = Pick<typeof prisma, '$transaction'>;
@@ -707,6 +711,95 @@ async function hydrateJob(
     } | null;
   },
 ) {
+  if (
+    job.template === 'LEASE_TO_OWN_PAYMENT_STAFF' ||
+    job.template === 'LEASE_TO_OWN_PAYMENT_CLIENT'
+  ) {
+    const customer = job.template === 'LEASE_TO_OWN_PAYMENT_CLIENT';
+    if (
+      customer &&
+      (!job.identity?.isActive ||
+        job.identity.kind !== 'CLIENT' ||
+        !job.identity.clientId ||
+        job.identity.companyId !== job.companyId)
+    ) {
+      return null;
+    }
+    const payload =
+      typeof job.payload === 'object' && job.payload !== null
+        ? (job.payload as Record<string, unknown>)
+        : {};
+    const rentalId = String(payload.rentalId ?? '');
+    const paymentNumber = Number(payload.paymentNumber);
+    const dueDate = String(payload.dueDate ?? '');
+    if (
+      !rentalId ||
+      !Number.isInteger(paymentNumber) ||
+      paymentNumber < 1 ||
+      !/^\d{4}-\d{2}-\d{2}$/u.test(dueDate)
+    ) {
+      return null;
+    }
+    const rental = await tx.rental.findFirst({
+      where: {
+        id: rentalId,
+        companyId: job.companyId,
+        agreementType: 'LEASE_TO_OWN',
+        status: 'ACTIVE',
+        ...(customer ? { clientId: job.identity!.clientId! } : {}),
+      },
+      select: {
+        snapshot: true,
+        contractNumber: true,
+        client: {
+          select: {
+            firstName: true,
+            middleName: true,
+            lastName: true,
+            phoneEncrypted: true,
+          },
+        },
+        vehicle: {
+          select: { make: true, modelName: true, model: true, registrationNumber: true },
+        },
+      },
+    });
+    const payment = rental ? findDueLeasePayment(rental.snapshot, dueDate) : null;
+    if (!rental || !payment || payment.number !== paymentNumber) return null;
+    const contractUrl = publicAppUrl(`/rentals/${encodeURIComponent(rentalId)}`);
+    return {
+      ...job,
+      payload: {
+        message: formatLeasePaymentReminderMessage({
+          vehicle: vehicleTitle(rental.vehicle),
+          registrationNumber: rental.vehicle.registrationNumber,
+          clientName: personName(rental.client),
+          contractNumber: rental.contractNumber,
+          phone: customer ? null : decryptedPhone(rental.client.phoneEncrypted),
+          paymentNumber: payment.number,
+          dueAt: new Date(payment.dueAt),
+          amountMinor: payment.amountMinor,
+          action: customer
+            ? 'Внести оплату; если нужна помощь — связаться с менеджером'
+            : 'Связаться с клиентом и подтвердить оплату',
+        }),
+        parseMode: 'HTML',
+        ...(customer
+          ? { clientMenu: true }
+          : {
+              actions: contractUrl
+                ? [
+                    {
+                      type: 'contract_url',
+                      label: '📄 Открыть договор',
+                      url: contractUrl,
+                    },
+                  ]
+                : [],
+            }),
+      },
+    };
+  }
   if (job.template === 'BOT_RENTAL_REQUEST_CREATED') {
     const payload =
       typeof job.payload === 'object' && job.payload !== null

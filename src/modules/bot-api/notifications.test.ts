@@ -1201,6 +1201,99 @@ describe('bot notification leases', () => {
     });
   });
 
+  it.each([
+    ['LEASE_TO_OWN_PAYMENT_STAFF', null, 'staff:company-1', false],
+    [
+      'LEASE_TO_OWN_PAYMENT_CLIENT',
+      {
+        telegramUserId: '123',
+        isActive: true,
+        clientId: 'client-1',
+        companyId: 'company-1',
+        kind: 'CLIENT',
+      },
+      null,
+      true,
+    ],
+  ] as const)(
+    'hydrates %s from the current unpaid schedule row',
+    async (template, identity, chatId, client) => {
+    const encryptionKey = Buffer.alloc(32, 44).toString('base64');
+    process.env.CLIENT_DATA_ENCRYPTION_KEY = encryptionKey;
+    const tx = {
+      telegramGroupBinding: {
+        findUnique: vi.fn().mockResolvedValue({ telegramChatId: '-100777' }),
+      },
+      botNotificationJob: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ id: 'payment-job-1', claimToken: null, status: 'PENDING' }]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'payment-job-1',
+          companyId: 'company-1',
+          claimToken: 'worker:payment-job-1',
+          template,
+          payload: { rentalId: 'rental-1', paymentNumber: 2, dueDate: '2026-12-03' },
+          identity,
+          chatId,
+        }),
+      },
+      rental: {
+        findFirst: vi.fn().mockResolvedValue({
+          snapshot: {
+            paymentSchedule: [
+              {
+                dueAt: '2026-12-03T15:00:00.000Z',
+                number: 2,
+                status: 'SCHEDULED',
+                amountMinor: '8500000',
+              },
+            ],
+          },
+          contractNumber: 'ME-2026-1103-BT',
+          client: {
+            firstName: 'Иван',
+            middleName: 'Иванович',
+            lastName: 'Иванов',
+            phoneEncrypted: encryptField('+7 900 000-00-00', encryptionKey),
+          },
+          vehicle: {
+            make: 'BMW',
+            modelName: '3',
+            model: '3',
+            registrationNumber: 'Н533УС797',
+          },
+        }),
+      },
+    };
+    const database = { $transaction: vi.fn(async (callback) => callback(tx)) };
+
+    const [claimed] = await claimNotificationJobs(
+      new Date('2026-12-02T06:05:00.000Z'),
+      'worker',
+      database as never,
+    );
+
+    expect((claimed.payload as { message: string }).message).toContain(
+      '⏰ <b>Завтра платёж по аренде с выкупом</b>',
+    );
+    expect((claimed.payload as { message: string }).message).toContain('85 000 ₽');
+    if (client) {
+      expect(claimed.payload).toMatchObject({ parseMode: 'HTML', clientMenu: true });
+      expect(claimed.payload).not.toHaveProperty('actions');
+    } else {
+      expect((claimed.payload as { message: string }).message).toContain('+7 900 000-00-00');
+      expect(claimed.payload).toMatchObject({
+        parseMode: 'HTML',
+        actions: [
+          expect.objectContaining({ type: 'contract_url', label: '📄 Открыть договор' }),
+        ],
+      });
+    }
+    },
+  );
+
   it('acks only the exact live claim token', async () => {
     const database = {
       botNotificationJob: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },

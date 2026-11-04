@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { authenticate, claim, daily, operational, returns, fineSync } = vi.hoisted(() => ({
+const { authenticate, claim, daily, leasePayments, operational, returns, fineSync } = vi.hoisted(() => ({
   authenticate: vi.fn(),
   claim: vi.fn(),
   daily: vi.fn(),
+  leasePayments: vi.fn(),
   operational: vi.fn(),
   returns: vi.fn(),
   fineSync: vi.fn(),
@@ -19,6 +20,9 @@ vi.mock('@/modules/bot-api/notifications', () => ({
   enqueueOperationalAlerts: operational,
   enqueueReturnReminders: returns,
 }));
+vi.mock('@/modules/bot-api/lease-payment-reminders', () => ({
+  enqueueLeasePaymentReminders: leasePayments,
+}));
 vi.mock('@/modules/bot-api/scheduled-fine-sync', () => ({ syncDueCompanyFines: fineSync }));
 
 import { POST } from './route';
@@ -28,6 +32,7 @@ describe('POST /api/bot/v1/notifications/claim', () => {
     authenticate.mockReset().mockResolvedValue({ service: 'TELEGRAM_BOT' });
     claim.mockReset().mockResolvedValue([]);
     daily.mockReset().mockResolvedValue(0);
+    leasePayments.mockReset().mockResolvedValue(0);
     operational.mockReset().mockResolvedValue(0);
     returns.mockReset().mockResolvedValue(0);
     fineSync.mockReset().mockResolvedValue(0);
@@ -44,6 +49,7 @@ describe('POST /api/bot/v1/notifications/claim', () => {
 
     expect(response.status).toBe(200);
     expect(daily).toHaveBeenCalledOnce();
+    expect(leasePayments).toHaveBeenCalledOnce();
     expect(operational).toHaveBeenCalledOnce();
     expect(returns).toHaveBeenCalledOnce();
     expect(fineSync).toHaveBeenCalledOnce();

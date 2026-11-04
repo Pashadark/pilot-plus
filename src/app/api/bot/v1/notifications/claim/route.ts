@@ -8,6 +8,7 @@ import {
   enqueueReturnReminders,
 } from '@/modules/bot-api/notifications';
 import { syncDueCompanyFines } from '@/modules/bot-api/scheduled-fine-sync';
+import { enqueueLeasePaymentReminders } from '@/modules/bot-api/lease-payment-reminders';
 
 const schema = z.object({
   workerId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/u),
@@ -23,6 +24,7 @@ export async function POST(request: Request): Promise<Response> {
     await Promise.allSettled([
       enqueueReturnReminders(now),
       enqueueDailyOperationsDigests(now),
+      enqueueLeasePaymentReminders(now),
       enqueueOperationalAlerts(now),
       syncDueCompanyFines(now),
     ]);

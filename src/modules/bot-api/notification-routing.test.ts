@@ -81,4 +81,23 @@ describe('notification recipient isolation', () => {
       ),
     ).toBeNull();
   });
+
+  it('routes lease payment reminders to the linked client and the bound staff group', () => {
+    const customer = {
+      ...job,
+      template: 'LEASE_TO_OWN_PAYMENT_CLIENT',
+      chatId: null,
+      identity: {
+        kind: 'CLIENT',
+        companyId: 'a',
+        clientId: 'client-a',
+        isActive: true,
+        telegramUserId: '123',
+      },
+    };
+    const staff = { ...job, template: 'LEASE_TO_OWN_PAYMENT_STAFF', chatId: 'staff:a' };
+
+    expect(notificationDestination(customer, null)).toBe('123');
+    expect(notificationDestination(staff, '-100777')).toBe('-100777');
+  });
 });
