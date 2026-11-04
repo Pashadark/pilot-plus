@@ -109,6 +109,24 @@ it('сбрасывает ошибку фотографии при выборе �
   expect(screen.getByRole('img', { name: 'Вторая машина' })).toBeTruthy();
 });
 
+it('скрывает мобильные ссылки при свёрнутой карточке', () => {
+  render(
+    <SelectedVehiclePanel
+      vehicle={onlineMapVehicles[0]}
+      mobileCollapsed
+      onClose={vi.fn()}
+      trackControls={null}
+      trackSummary={null}
+      trackSegments={null}
+      trackEvents={null}
+    />,
+  );
+
+  expect(
+    screen.getByRole('link', { name: 'Открыть карточку автомобиля' }).parentElement?.className,
+  ).toContain('hidden @min-[48rem]:flex');
+});
+
 it('показывает устаревший GPS-сигнал красной меткой и последним сигналом', () => {
   const vehicle = {
     ...onlineMapVehicles[3],

@@ -170,7 +170,9 @@ export function SelectedVehiclePanel({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 px-4 py-2.5">
+        <div
+          className={`${mobileCollapsed ? 'hidden @min-[48rem]:flex' : 'flex'} items-center gap-2 px-4 py-2.5`}
+        >
           <Link
             href={`/vehicles/${vehicle.id}`}
             aria-label="Открыть карточку автомобиля"
