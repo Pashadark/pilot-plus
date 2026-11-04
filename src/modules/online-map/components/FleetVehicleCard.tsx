@@ -225,18 +225,14 @@ export function FleetVehicleCard({
         </span>
 
         <span className="grid gap-1">
-          <span className="flex justify-between gap-2 text-[9px] text-[var(--color-text-secondary)]">
+          <span className="text-[9px] text-[var(--color-text-secondary)]">
             <span>
               {mileageLimit === null
                 ? vehicle.currentRental
                   ? 'Без лимита'
                   : 'Нет активной аренды'
-                : `Сегодня ${number.format(mileageLimit)} км`}
-              {totalMileageLimit === null
-                ? ''
-                : ` · Договор ${number.format(totalMileageLimit)} км`}
+                : `Лимит ${number.format(totalMileageLimit ?? mileageLimit)} км`}
             </span>
-            <b>{dayDistanceKm === null ? 'Нет данных' : `${number.format(dayDistanceKm)} км`}</b>
           </span>
           <span
             role="progressbar"

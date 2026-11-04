@@ -12,10 +12,7 @@ export function resolveRentalMileagePolicy(input: {
     return { dailyLimitKm: null, totalLimitKm: null, billableDays } as const;
   }
 
-  const dailyLimitKm =
-    typeof input.includedMileageKm === 'number' && input.includedMileageKm > 0
-      ? Math.trunc(input.includedMileageKm)
-      : STANDARD_DAILY_MILEAGE_LIMIT_KM;
+  const dailyLimitKm = STANDARD_DAILY_MILEAGE_LIMIT_KM;
 
   return {
     dailyLimitKm,

@@ -72,7 +72,7 @@ it('показывает фото, карточку машины и подтве
   expect(screen.getByText('1 262,5 км')).toBeTruthy();
   expect(screen.getByText('3 600 ₽/сутки')).toBeTruthy();
   expect(screen.getByText('Залог внесён')).toBeTruthy();
-  expect(screen.getByText('200 км/день · 800 км за 4 дня')).toBeTruthy();
+  expect(screen.getByText('Лимит 800 км')).toBeTruthy();
 });
 
 it('показывает аренду с выкупом без лимита пробега', () => {

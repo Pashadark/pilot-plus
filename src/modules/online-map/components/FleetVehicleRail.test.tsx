@@ -95,8 +95,9 @@ it('не выдумывает прогресс, когда телеметрии 
 
   const card = screen.getByRole('button', { name: 'Выбрать Toyota Camry Х069АЕ997' });
   expect(card.textContent).toContain('Нет данных по ТО');
-  expect(card.textContent).toContain('Сегодня 200 км');
-  expect(card.textContent).toContain('Договор 800 км');
+  expect(card.textContent).toContain('Лимит 800 км');
+  expect(card.textContent).not.toContain('Сегодня 200 км');
+  expect(card.textContent).not.toContain('Договор 800 км');
 });
 
 it('отдельно предупреждает о просроченном ТО', () => {

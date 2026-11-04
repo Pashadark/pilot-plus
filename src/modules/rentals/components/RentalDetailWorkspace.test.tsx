@@ -52,7 +52,7 @@ describe('RentalDetailWorkspace', () => {
     expect(screen.getByText('Завершён')).toBeTruthy();
     expect(screen.getAllByText(/15\s000\s₽/u).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/4\s700\s₽/u).length).toBeGreaterThan(0);
-    expect(screen.getByText('250 км/день · 500 км за 2 дня')).toBeTruthy();
+    expect(screen.getByText('200 км/день · 400 км за 2 дня')).toBeTruthy();
     expect(screen.getByText('Аренда завершена')).toBeTruthy();
     expect(container.firstElementChild?.className).toContain('min-w-0');
     expect(container.innerHTML).not.toMatch(/COMPLETED|undefined|null/u);

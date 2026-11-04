@@ -111,7 +111,7 @@ it('возвращает фото, пробег, план ТО и подтвер
           depositMinor: BigInt(1_500_000),
           agreementType: 'STANDARD',
           billableDays: 4,
-          includedMileageKm: null,
+          includedMileageKm: 1_000,
           client: {
             id: 'client-rich',
             lastName: 'Кульпинёв',

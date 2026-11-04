@@ -45,7 +45,7 @@ describe('rentalDetailPresentation', () => {
     expect(view.finance.dailyRate).toBe('4 700 ₽');
     expect(view.finance.total).toBe('9 400 ₽');
     expect(view.term.billableDaysLabel).toBe('2 дня');
-    expect(view.operations.includedMileage).toBe('250 км/день · 500 км за 2 дня');
+    expect(view.operations.includedMileage).toBe('200 км/день · 400 км за 2 дня');
     expect(view.lifecycle.at(-1)?.label).toBe('Аренда завершена');
   });
 

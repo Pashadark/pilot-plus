@@ -126,7 +126,7 @@ describe('createRentalReturn', () => {
     expect(transaction.rentalOperation.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          totalChargeMinor: BigInt(525_000),
+          totalChargeMinor: BigInt(825_000),
           depositStatus: null,
           depositAmountMinor: null,
           depositWithheldMinor: null,
