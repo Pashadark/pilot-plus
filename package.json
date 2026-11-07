@@ -27,6 +27,7 @@
     "system:sync-timeweb": "tsx --conditions=react-server scripts/sync-timeweb-monitor.ts",
     "fuel-stations:import": "tsx --conditions=react-server scripts/import-osm-fuel-stations.ts",
     "vehicles:reconcile-real": "tsx --conditions=react-server scripts/reconcile-real-fleet.ts",
+    "fines:archive-confirmed": "tsx --conditions=react-server scripts/archive-confirmed-fine.ts",
     "test:e2e": "playwright test",
     "test:e2e:auth": "playwright test tests/auth.spec.ts --workers=1",
     "test:e2e:install": "playwright install chromium"

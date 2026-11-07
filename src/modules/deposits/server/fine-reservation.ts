@@ -31,7 +31,7 @@ export interface FineDepositReconciliationInput extends FineDepositReservationIn
   status: 'NEW' | 'UNPAID' | 'OVERDUE' | 'PAID' | 'CANCELLED' | 'ARCHIVED';
 }
 
-type FineLedgerDatabase = Parameters<typeof appendDepositEntry>[0];
+export type FineLedgerDatabase = Parameters<typeof appendDepositEntry>[0];
 
 export async function reserveFineFromDeposit(
   database: FineLedgerDatabase,
