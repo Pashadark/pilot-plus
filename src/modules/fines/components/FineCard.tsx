@@ -39,6 +39,7 @@ const statuses = {
   OVERDUE: 'Просрочен',
   PAID: 'Оплачен',
   CANCELLED: 'Отменён',
+  ARCHIVED: 'Архив',
 };
 
 export function FineCard({
@@ -66,7 +67,7 @@ export function FineCard({
   const parts = fine.vehicleLabel.split(' · ');
   const plate = parts.length > 1 ? parts.pop() : null;
   const paid = fine.status === 'PAID';
-  const closed = paid || fine.status === 'CANCELLED';
+  const closed = paid || fine.status === 'CANCELLED' || fine.status === 'ARCHIVED';
   const discount = discountBadge(fine, referenceTime);
   const confirmed = Boolean(fine.clientLabel && fine.assignmentConfirmedAt);
   const iconClass = 'size-4 shrink-0 text-[var(--color-text-secondary)]';
@@ -103,6 +104,11 @@ export function FineCard({
           <div data-testid="fine-discount-strip" className="text-xs text-[var(--color-danger)]">
             Скидка до {date(fine.discountExpiresAt!)}
           </div>
+        ) : null}
+        {fine.status === 'ARCHIVED' && fine.archivedAt ? (
+          <p className="text-xs text-[var(--color-text-secondary)]">
+            В архиве с {date(fine.archivedAt)}
+          </p>
         ) : null}
         {fine.status === 'NEW' || fine.repeatedOffense || fine.toBailiff ? (
           <div className="flex flex-wrap gap-2">

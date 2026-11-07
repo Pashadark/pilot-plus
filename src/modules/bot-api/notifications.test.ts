@@ -278,6 +278,11 @@ describe('bot notification leases', () => {
       ]),
     );
     expect(JSON.stringify(rows)).not.toMatch(/registrationNumber|phone|firstName|lastName/iu);
+    expect(database.fine.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: { notIn: ['CANCELLED', 'ARCHIVED'] } }),
+      }),
+    );
   });
 
   it('does not scan operational sources outside the 15-minute collection window', async () => {

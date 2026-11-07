@@ -145,7 +145,7 @@ export type ClientFineWorkspaceDto = {
     offenseAt: string;
     currentAmountMinor: string;
     originalAmountMinor: string;
-    status: 'NEW' | 'UNPAID' | 'PAID' | 'OVERDUE';
+    status: 'NEW' | 'UNPAID' | 'PAID' | 'CANCELLED' | 'OVERDUE' | 'ARCHIVED';
     description: string | null;
     articleCode: string | null;
     address: string | null;

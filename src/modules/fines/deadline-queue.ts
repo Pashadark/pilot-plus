@@ -9,12 +9,12 @@ export function deadlineDay(value: string) {
   return new Date(Date.parse(value) + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 function activeDiscount(fine: DeadlineFine, now: string) {
-  return fine.status !== 'PAID' && fine.status !== 'CANCELLED' &&
+  return fine.status !== 'PAID' && fine.status !== 'CANCELLED' && fine.status !== 'ARCHIVED' &&
     fine.discountExpiresAt && Date.parse(fine.discountExpiresAt) >= Date.parse(now) &&
     BigInt(fine.currentAmountMinor) < BigInt(fine.originalAmountMinor);
 }
 export function deadlineGroup(fine: DeadlineFine, now: string): 0 | 1 | 2 {
-  if (fine.status === 'PAID' || fine.status === 'CANCELLED') return 2;
+  if (fine.status === 'PAID' || fine.status === 'CANCELLED' || fine.status === 'ARCHIVED') return 2;
   if (fine.status === 'OVERDUE' || fine.toBailiff) return 0;
   if (!activeDiscount(fine, now)) return 2;
   const day = deadlineDay(fine.discountExpiresAt!);

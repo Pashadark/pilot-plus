@@ -12,7 +12,7 @@ import type { ClientFineWorkspaceDto } from '../types';
 import { Badge, Card } from '@/shared/ui';
 import { ClientFineCopyButton } from './ClientFineCopyButton';
 
-const statusLabels = { NEW: 'Не оплачен', UNPAID: 'Не оплачен', OVERDUE: 'Просрочен', PAID: 'Оплачен' };
+const statusLabels = { NEW: 'Не оплачен', UNPAID: 'Не оплачен', OVERDUE: 'Просрочен', PAID: 'Оплачен', CANCELLED: 'Отменён', ARCHIVED: 'Архив' };
 
 function money(value: string) {
   return new Intl.NumberFormat('ru-RU', {
@@ -43,10 +43,11 @@ export function ClientFineWorkspace({ clientId, workspace }: { clientId: string;
       </div>
       {workspace.fines.map((fine) => {
         const paid = fine.status === 'PAID';
+        const closed = paid || fine.status === 'CANCELLED' || fine.status === 'ARCHIVED';
         return (
           <Card key={fine.id} className="overflow-hidden">
-            <header className={`grid gap-3 p-4 sm:p-5 ${paid ? 'bg-[var(--color-success-soft)]' : 'bg-[var(--color-danger-soft)]'}`}>
-              <div className="flex items-start justify-between gap-3"><div><h2 className="font-bold">{fine.description || 'Нарушение ПДД'}</h2>{fine.articleCode ? <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Статья {fine.articleCode}</p> : null}</div><Badge tone={paid ? 'success' : 'danger'}>{statusLabels[fine.status]}</Badge></div>
+            <header className={`grid gap-3 p-4 sm:p-5 ${paid ? 'bg-[var(--color-success-soft)]' : closed ? 'bg-[var(--color-elevated)]' : 'bg-[var(--color-danger-soft)]'}`}>
+              <div className="flex items-start justify-between gap-3"><div><h2 className="font-bold">{fine.description || 'Нарушение ПДД'}</h2>{fine.articleCode ? <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Статья {fine.articleCode}</p> : null}</div><Badge tone={paid ? 'success' : closed ? 'neutral' : 'danger'}>{statusLabels[fine.status]}</Badge></div>
               <div className="flex flex-wrap items-baseline gap-3"><strong className="text-2xl tabular-nums">{money(fine.currentAmountMinor)}</strong>{fine.currentAmountMinor !== fine.originalAmountMinor ? <del className="text-sm text-[var(--color-text-secondary)]">{money(fine.originalAmountMinor)}</del> : null}</div>
             </header>
             <div className="grid gap-4 p-4 sm:p-5">

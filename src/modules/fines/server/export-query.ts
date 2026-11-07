@@ -11,7 +11,14 @@ import { buildFineSearchWhere, matchesTollSearch } from './search';
 import { loadTollDebts } from './toll-queries';
 import { deadlineDay } from '../deadline-queue';
 
-const statuses = new Set<FineStatus>(['NEW', 'UNPAID', 'PAID', 'CANCELLED', 'OVERDUE']);
+const statuses = new Set<FineStatus>([
+  'NEW',
+  'UNPAID',
+  'PAID',
+  'CANCELLED',
+  'OVERDUE',
+  'ARCHIVED',
+]);
 
 function parseDay(value: string | undefined, endOfDay = false) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) return undefined;
@@ -164,7 +171,7 @@ export async function listFineExportRowsForCurrentUser(
 
   const selectedDay = parseDay(filters.discountDay) ? filters.discountDay : undefined;
   return [...fines, ...tolls].filter(fine => !selectedDay || (
-    fine.status !== 'PAID' && fine.status !== 'CANCELLED' && fine.discountExpiresAt &&
+    fine.status !== 'PAID' && fine.status !== 'CANCELLED' && fine.status !== 'ARCHIVED' && fine.discountExpiresAt &&
     Date.parse(fine.discountExpiresAt) >= Date.now() &&
     BigInt(fine.currentAmountMinor) < BigInt(fine.originalAmountMinor) &&
     deadlineDay(fine.discountExpiresAt) === selectedDay

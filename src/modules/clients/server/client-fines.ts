@@ -109,7 +109,9 @@ export async function getClientFineWorkspace(
         }
       : null,
   }));
-  const unpaid = fines.filter(({ status }) => status !== 'PAID');
+  const unpaid = fines.filter(
+    ({ status }) => status !== 'PAID' && status !== 'CANCELLED' && status !== 'ARCHIVED',
+  );
 
   return {
     summary: {

@@ -6,6 +6,7 @@ describe('discountBadge',()=>{
  it('does not advertise expired or paid discounts',()=>{
  expect(discountBadge(fine,'2026-09-24T01:00:00Z')).toBeNull();
  expect(discountBadge({...fine,status:'PAID'},'2026-09-23T01:00:00Z')).toBeNull();
+ expect(discountBadge({...fine,status:'ARCHIVED'},'2026-09-23T01:00:00Z')).toBeNull();
  });
  it('does not strike out equal amounts',()=>expect(discountBadge({...fine,currentAmountMinor:'150000'},'2026-09-23T01:00:00Z')).toBeNull());
 });

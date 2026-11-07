@@ -66,4 +66,16 @@ describe('FineCard approved 02B', () => {
     expect(html).not.toContain('Оплатить штраф');
     expect(html).toContain('color-success-soft');
   });
+  it('shows an archived fine as neutral and does not offer payment', () => {
+    const html = renderToStaticMarkup(
+      <FineCard
+        {...props}
+        fine={{ ...fine, status: 'ARCHIVED', archivedAt: '2026-11-07T09:00:00.000Z' }}
+      />,
+    );
+    expect(html).toContain('Архив');
+    expect(html).toContain('В архиве с 07.11.2026');
+    expect(html).not.toContain('Оплатить штраф');
+    expect(html).toContain('color-elevated');
+  });
 });

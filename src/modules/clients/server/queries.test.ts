@@ -89,6 +89,7 @@ function createRepository() {
     return [
       { clientId: 'client-1', status: 'UNPAID', currentAmountMinor: BigInt(5_000_00) },
       { clientId: 'client-1', status: 'PAID', currentAmountMinor: BigInt(2_500_00) },
+      { clientId: 'client-1', status: 'ARCHIVED', currentAmountMinor: BigInt(1_500_00) },
     ];
   };
   const calls: { findMany?: unknown; findFirst?: unknown; fineFindMany?: unknown } = {};
@@ -139,7 +140,7 @@ describe('tenant-scoped client queries', () => {
             depositReturnedAt: null,
           },
         },
-        fineSummary: { total: 2, paidAmountMinor: '250000' },
+        fineSummary: { total: 3, paidAmountMinor: '250000' },
       });
       expect(fake.calls.fineFindMany).toMatchObject({
         where: {

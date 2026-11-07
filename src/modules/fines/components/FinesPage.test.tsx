@@ -201,6 +201,7 @@ describe('FinesPage', () => {
     expect(markup).toContain('data-testid="fine-advanced-filters"');
     expect(markup).toContain('Фильтры · 2');
     expect(markup).toContain('open=""');
+    expect(markup).toContain('<option value="ARCHIVED">Архив</option>');
   });
 
   it('opens a separate detail dialog after the manager selects a table row', () => {

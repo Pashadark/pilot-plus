@@ -113,6 +113,7 @@ describe('fine payment actions', () => {
     [[fines[0]], 'missing tenant fine'],
     [[fines[0], { ...fines[1], status: 'PAID' }], 'paid fine'],
     [[fines[0], { ...fines[1], status: 'CANCELLED' }], 'cancelled fine'],
+    [[fines[0], { ...fines[1], status: 'ARCHIVED' }], 'archived fine'],
   ])('rejects %s before the external API', async (loaded) => {
     fineFindMany.mockResolvedValue(loaded);
     await expect(checkFinePaymentAction(null, paymentForm())).resolves.toMatchObject({

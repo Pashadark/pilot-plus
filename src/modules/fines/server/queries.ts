@@ -11,7 +11,14 @@ import { buildFineSearchWhere, matchesTollSearch } from './search';
 import type { FineItem } from '../components/FinesPage';
 import { deadlineDay, deadlineWeek } from '../deadline-queue';
 
-const statuses = new Set<FineStatus>(['NEW', 'UNPAID', 'PAID', 'CANCELLED', 'OVERDUE']);
+const statuses = new Set<FineStatus>([
+  'NEW',
+  'UNPAID',
+  'PAID',
+  'CANCELLED',
+  'OVERDUE',
+  'ARCHIVED',
+]);
 const candidateWindowMs = 72 * 60 * 60 * 1000;
 
 export interface FineListFilters {
@@ -150,6 +157,7 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
   const deadline = (fine: (typeof priorities)[number]) =>
     fine.status !== 'PAID' &&
     fine.status !== 'CANCELLED' &&
+    fine.status !== 'ARCHIVED' &&
     fine.discountExpiresAt &&
     fine.discountExpiresAt >= now &&
     fine.currentAmountMinor < fine.originalAmountMinor
@@ -202,6 +210,7 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
         decreeNumber: true,
         decreeAt: true,
         assignmentConfirmedAt: true,
+        archivedAt: true,
         offenseAt: true,
         currentAmountMinor: true,
         originalAmountMinor: true,
@@ -238,10 +247,16 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
       _sum: { currentAmountMinor: true },
     }),
     prisma.fine.count({
-      where: withinFilteredScope({ OR: [{ vehicleId: null }, { clientId: null }] }),
+      where: withinFilteredScope({
+        status: { in: ['NEW', 'UNPAID', 'OVERDUE'] },
+        OR: [{ vehicleId: null }, { clientId: null }],
+      }),
     }),
     prisma.fine.aggregate({
-      where: withinFilteredScope({ OR: [{ vehicleId: null }, { clientId: null }] }),
+      where: withinFilteredScope({
+        status: { in: ['NEW', 'UNPAID', 'OVERDUE'] },
+        OR: [{ vehicleId: null }, { clientId: null }],
+      }),
       _count: { _all: true },
       _sum: { currentAmountMinor: true },
     }),
@@ -258,9 +273,17 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
       _sum: { currentAmountMinor: true },
     }),
     prisma.fine.count({
-      where: withinFilteredScope({ discountExpiresAt: { gte: now, lte: discountSoon } }),
+      where: withinFilteredScope({
+        status: { in: ['NEW', 'UNPAID', 'OVERDUE'] },
+        discountExpiresAt: { gte: now, lte: discountSoon },
+      }),
     }),
-    prisma.fine.count({ where: withinFilteredScope({ toBailiff: true }) }),
+    prisma.fine.count({
+      where: withinFilteredScope({
+        status: { in: ['NEW', 'UNPAID', 'OVERDUE'] },
+        toBailiff: true,
+      }),
+    }),
   ]);
 
   const attributableFines = records.filter((fine): fine is typeof fine & { vehicleId: string } =>
@@ -328,6 +351,7 @@ export async function listFinesForCurrentUser(filters: FineListFilters) {
       decreeNumber: fine.decreeNumber,
       decreeAt: fine.decreeAt?.toISOString() ?? null,
       assignmentConfirmedAt: fine.assignmentConfirmedAt?.toISOString() ?? null,
+      archivedAt: fine.archivedAt?.toISOString() ?? null,
       rentalId: fine.rentalId,
       offenseAt: fine.offenseAt.toISOString(),
       currentAmountMinor: fine.currentAmountMinor.toString(),

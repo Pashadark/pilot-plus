@@ -57,6 +57,22 @@ describe('getClientFineWorkspace', () => {
             vehicle: null,
             rental: null,
           },
+          {
+            id: 'fine-3',
+            decreeNumber: '18810550260831038050',
+            decreeAt: null,
+            offenseAt: new Date('2026-08-19T10:00:00.000Z'),
+            currentAmountMinor: BigInt(300000),
+            originalAmountMinor: BigInt(300000),
+            status: 'ARCHIVED',
+            description: 'Исчез из реестра провайдера',
+            articleCode: null,
+            address: null,
+            assignmentConfirmedAt: new Date('2026-08-20T08:00:00.000Z'),
+            assignmentSource: 'MANUAL',
+            vehicle: null,
+            rental: null,
+          },
         ];
       },
     };
@@ -76,7 +92,7 @@ describe('getClientFineWorkspace', () => {
         status: { not: 'CANCELLED' },
       },
     });
-    expect(result.summary).toEqual({ total: 2, unpaid: 1, unpaidAmountMinor: '56250' });
+    expect(result.summary).toEqual({ total: 3, unpaid: 1, unpaidAmountMinor: '56250' });
     expect(result.fines[0]).toMatchObject({
       id: 'fine-1',
       decreeNumber: '18810550260831038048',

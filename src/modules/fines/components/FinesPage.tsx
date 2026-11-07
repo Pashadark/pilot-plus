@@ -47,7 +47,8 @@ export interface FineItem {
   offenseAt: string;
   currentAmountMinor: string;
   originalAmountMinor: string;
-  status: 'NEW' | 'UNPAID' | 'PAID' | 'CANCELLED' | 'OVERDUE';
+  status: 'NEW' | 'UNPAID' | 'PAID' | 'CANCELLED' | 'OVERDUE' | 'ARCHIVED';
+  archivedAt?: string | null;
   description: string | null;
   address: string | null;
   comment?: string | null;
@@ -112,6 +113,7 @@ const statusPresentation = {
   PAID: { label: 'Оплачен' },
   CANCELLED: { label: 'Отменён' },
   OVERDUE: { label: 'Просрочен' },
+  ARCHIVED: { label: 'Архив' },
 } as const;
 
 function money(minor: string) {
@@ -129,7 +131,12 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 function payable(fine: FineItem) {
-  return fine.kind !== 'TOLL' && fine.status !== 'PAID' && fine.status !== 'CANCELLED';
+  return (
+    fine.kind !== 'TOLL' &&
+    fine.status !== 'PAID' &&
+    fine.status !== 'CANCELLED' &&
+    fine.status !== 'ARCHIVED'
+  );
 }
 function filterUrl(filters: FineFilters, page: number) {
   const params = new URLSearchParams();
@@ -203,7 +210,7 @@ function FineStatus({ fine }: { fine: FineItem }) {
   const tone =
     fine.status === 'PAID'
       ? 'success'
-      : fine.status === 'CANCELLED'
+      : fine.status === 'CANCELLED' || fine.status === 'ARCHIVED'
         ? 'neutral'
         : fine.status === 'NEW'
           ? 'primary'
@@ -238,7 +245,8 @@ function FineDetailModalContent({
   const promo = getVehiclePromoForFine(fine.vehicleId, fine.vehicleLabel);
   const deadline = discountDeadline(fine, referenceTime);
   const [model, plate] = fine.vehicleLabel.split(' · ');
-  const closed = fine.status === 'PAID' || fine.status === 'CANCELLED';
+  const closed =
+    fine.status === 'PAID' || fine.status === 'CANCELLED' || fine.status === 'ARCHIVED';
 
   return (
     <div data-testid="fine-detail-modal-content" className="space-y-5">
@@ -271,6 +279,7 @@ function FineDetailModalContent({
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">Сумма к оплате</p>
           <strong className="mt-1 block text-2xl tabular-nums">{money(fine.currentAmountMinor)}</strong>
           {fine.currentAmountMinor !== fine.originalAmountMinor ? <del className="mt-1 block text-sm tabular-nums text-[var(--color-text-secondary)]">Полная сумма {money(fine.originalAmountMinor)}</del> : null}
+          {fine.status === 'ARCHIVED' && fine.archivedAt ? <p className="mt-2 text-xs text-[var(--color-text-secondary)]">В архиве с {formatDate(fine.archivedAt)}</p> : null}
         </div>
       </div>
 

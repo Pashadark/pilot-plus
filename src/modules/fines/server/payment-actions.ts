@@ -84,7 +84,8 @@ async function loadPayableFines(companyId: string, fineIds: string[]) {
         !fineIds.includes(fine.id) ||
         !/^\d+$/u.test(fine.externalId) ||
         fine.status === 'PAID' ||
-        fine.status === 'CANCELLED',
+        fine.status === 'CANCELLED' ||
+        fine.status === 'ARCHIVED',
     )
   ) {
     return null;
@@ -232,7 +233,8 @@ export async function createSandboxFineInvoiceAction(
               (fine) =>
                 fine.companyId !== selection.input.companyId ||
                 fine.status === 'PAID' ||
-                fine.status === 'CANCELLED',
+                fine.status === 'CANCELLED' ||
+                fine.status === 'ARCHIVED',
             )
           ) {
             throw new Error('Fine selection changed');

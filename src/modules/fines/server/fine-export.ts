@@ -40,6 +40,15 @@ function rubles(minor: string) {
   return Number(BigInt(minor)) / 100;
 }
 
+const statusLabels: Record<string, string> = {
+  NEW: 'Новый',
+  UNPAID: 'Не оплачен',
+  PAID: 'Оплачен',
+  CANCELLED: 'Отменён',
+  OVERDUE: 'Просрочен',
+  ARCHIVED: 'Архив',
+};
+
 export async function buildFineWorkbook(rows: readonly FineExportRow[]) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'СУПА ПРО';
@@ -83,7 +92,7 @@ export async function buildFineWorkbook(rows: readonly FineExportRow[]) {
       item.address ?? '',
       rubles(item.currentAmountMinor),
       rubles(item.originalAmountMinor),
-      item.status,
+      statusLabels[item.status] ?? item.status,
       item.vehicleLabel,
       item.clientLabel ?? '',
       item.rentalLabel ?? '',

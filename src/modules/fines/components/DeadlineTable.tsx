@@ -33,9 +33,10 @@ export function DeadlineTable({ fines, now, onOpen, selectedIds, onToggle, canSe
             const [model, plate] = fine.vehicleLabel.split(' · ');
             const paid = fine.status === 'PAID';
             const cancelled = fine.status === 'CANCELLED';
-            const discount = fine.discountExpiresAt && Number(fine.currentAmountMinor) < Number(fine.originalAmountMinor);
+            const archived = fine.status === 'ARCHIVED';
+            const discount = !paid && !cancelled && !archived && fine.discountExpiresAt && Number(fine.currentAmountMinor) < Number(fine.originalAmountMinor);
             return <tr key={fine.id} tabIndex={0} aria-label={`Открыть: ${fine.vehicleLabel}, ${fine.description ?? fine.roadLabel}`} onClick={() => onOpen(fine)} onKeyDown={event => {if (event.key === 'Enter' || event.key === ' ') {event.preventDefault(); onOpen(fine);}}}>
-              <td>{canSelect && !paid && !cancelled && fine.kind !== 'TOLL' ? <input type="checkbox" aria-label={`Выбрать штраф ${fine.decreeNumber}`} checked={selectedIds.includes(fine.id)} onClick={e => e.stopPropagation()} onChange={() => onToggle(fine.id)}/> : null}</td>
+              <td>{canSelect && !paid && !cancelled && !archived && fine.kind !== 'TOLL' ? <input type="checkbox" aria-label={`Выбрать штраф ${fine.decreeNumber}`} checked={selectedIds.includes(fine.id)} onClick={e => e.stopPropagation()} onChange={() => onToggle(fine.id)}/> : null}</td>
               <td><div className={styles.vehicle}>{promo && <Image src={promo.localPath} alt={promo.alt} width={88} height={56}/>}<div><strong>{model}</strong><small>{plate}</small></div></div></td>
               <td><div className={styles.violation}><ViolationIconPng description={fine.description} kind={fine.kind}/><div><span title={fine.description ?? undefined}>{fine.description || fine.roadLabel || 'Нарушение ПДД'}</span><small title={fine.address ?? undefined}>{fine.address || (fine.kind === 'TOLL' ? 'Платная дорога' : '')}</small></div></div></td>
               <td>{date(fine.offenseAt)}<small>{time(fine.offenseAt)}</small></td>
@@ -43,7 +44,7 @@ export function DeadlineTable({ fines, now, onOpen, selectedIds, onToggle, canSe
               <td>{fine.rentalLabel || '—'}</td>
               <td><strong className={styles.amount}>{money(fine.currentAmountMinor)}</strong>{discount ? <small><del>{money(fine.originalAmountMinor)}</del></small> : null}</td>
               <td>{discount ? <><span className={styles.deadline} data-tone={!paid && !cancelled ? group : 2}>{date(fine.discountExpiresAt!)}</span><small>до {time(fine.discountExpiresAt!)}</small></> : <small>Без скидки</small>}</td>
-              <td><span className={styles.payment} data-paid={paid} data-cancelled={cancelled}>{paid ? 'Оплачен' : cancelled ? 'Отменён' : fine.status === 'OVERDUE' ? 'Просрочен' : 'Не оплачен'}</span></td>
+              <td><span className={styles.payment} data-paid={paid} data-cancelled={cancelled || archived}>{paid ? 'Оплачен' : cancelled ? 'Отменён' : archived ? 'Архив' : fine.status === 'OVERDUE' ? 'Просрочен' : 'Не оплачен'}</span></td>
               <td><button type="button" className={styles.delivery} onClick={event => {event.stopPropagation(); onOpen(fine);}} aria-label={`Действия: ${fine.kind === 'TOLL' ? fine.roadLabel : fine.description || fine.decreeNumber}`}><FiSend aria-hidden/><span>Нет данных<small>о доставке</small></span></button></td>
             </tr>;
           })}

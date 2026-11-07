@@ -363,7 +363,7 @@ export async function enqueueOperationalAlerts(now: Date, database = prisma) {
       where: {
         companyId: { in: companyIds },
         createdAt: { gte: recentEventsSince, lte: now },
-        status: { not: 'CANCELLED' },
+        status: { notIn: ['CANCELLED', 'ARCHIVED'] },
       },
       select: { id: true, companyId: true, vehicleId: true },
       take: 500,

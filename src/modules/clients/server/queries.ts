@@ -66,7 +66,7 @@ type RawClient = {
 
 type RawFine = {
   clientId: string | null;
-  status: 'NEW' | 'UNPAID' | 'PAID' | 'CANCELLED' | 'OVERDUE';
+  status: 'NEW' | 'UNPAID' | 'PAID' | 'CANCELLED' | 'OVERDUE' | 'ARCHIVED';
   currentAmountMinor: bigint;
 };
 
