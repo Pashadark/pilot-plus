@@ -29,6 +29,7 @@ interface SyncDependencies<Car, NormalizedCar, Fine, NormalizedFine> {
     },
     vehicleId: string | null,
   ): Promise<{ created: boolean }>;
+  reconcileMissing(companyId: string, seenExternalIds: readonly string[]): Promise<void>;
 }
 
 async function allPages<T>(load: (page: number) => Promise<ProviderPage<T>>): Promise<T[]> {
@@ -79,5 +80,16 @@ export async function syncCompanyFinesWithDependencies<Car, NormalizedCar, Fine,
     else updated += 1;
   }
 
-  return { ok: true as const, received: normalizedFines.size, created, updated, unmatched, ...(skipped ? { skipped } : {}) };
+  if (skipped === 0) {
+    await dependencies.reconcileMissing(companyId, [...normalizedFines.keys()]);
+  }
+
+  return {
+    ok: true as const,
+    received: normalizedFines.size,
+    created,
+    updated,
+    unmatched,
+    ...(skipped ? { skipped } : {}),
+  };
 }

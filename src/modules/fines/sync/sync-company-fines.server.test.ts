@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const findIntegration = vi.hoisted(() => vi.fn());
 const updateIntegration = vi.hoisted(() => vi.fn());
 const findFine = vi.hoisted(() => vi.fn());
+const findFines = vi.hoisted(() => vi.fn());
+const updateFine = vi.hoisted(() => vi.fn());
 const findRentals = vi.hoisted(() => vi.fn());
 const upsertFine = vi.hoisted(() => vi.fn());
 const createAssignmentHistory = vi.hoisted(() => vi.fn());
@@ -12,6 +14,7 @@ const transaction = vi.hoisted(() => vi.fn());
 const runSync = vi.hoisted(() => vi.fn());
 const reserveFine = vi.hoisted(() => vi.fn());
 const reconcileFine = vi.hoisted(() => vi.fn());
+const createAuditLog = vi.hoisted(() => vi.fn());
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/services/security/field-encryption', () => ({
@@ -36,9 +39,10 @@ vi.mock('@/database/prisma/client', () => ({
       findUnique: findIntegration,
       update: updateIntegration,
     },
-    fine: { findUnique: findFine, upsert: upsertFine },
+    fine: { findUnique: findFine, findMany: findFines, update: updateFine, upsert: upsertFine },
     rental: { findMany: findRentals, findFirst: findBoundRental },
     fineAssignmentHistory: { create: createAssignmentHistory },
+    auditLog: { create: createAuditLog },
     $transaction: transaction,
   },
 }));
@@ -71,16 +75,20 @@ describe('production company fine sync', () => {
     process.env.CLIENT_DATA_SEARCH_KEY = 'search-key';
     findIntegration.mockResolvedValue({ tokenEncrypted: 'encrypted', enabled: true });
     updateIntegration.mockResolvedValue({ id: 'integration-1' });
+    findFines.mockResolvedValue([]);
+    updateFine.mockResolvedValue({ id: 'fine-db-1' });
     upsertFine.mockResolvedValue({ id: 'fine-db-1' });
     createAssignmentHistory.mockResolvedValue({ id: 'history-1' });
     reserveFine.mockResolvedValue({ id: 'ledger-1' });
     reconcileFine.mockResolvedValue(null);
+    createAuditLog.mockResolvedValue({ id: 'audit-1' });
     transaction.mockImplementation(async (operation: (database: unknown) => Promise<unknown>) =>
       operation({
-        fine: { findUnique: findFine, upsert: upsertFine },
+        fine: { findUnique: findFine, findMany: findFines, update: updateFine, upsert: upsertFine },
         rental: { findMany: findRentals, findFirst: findBoundRental },
         fineAssignmentHistory: { create: createAssignmentHistory },
         clientRatingEvent: { createMany: createRatingEvent },
+        auditLog: { create: createAuditLog },
       }),
     );
     runSync.mockImplementation(
@@ -92,9 +100,11 @@ describe('production company fine sync', () => {
             fine: typeof normalizedFine,
             vehicleId: string | null,
           ): Promise<{ created: boolean }>;
+          reconcileMissing(tenantId: string, seenExternalIds: readonly string[]): Promise<void>;
         },
       ) => {
         await dependencies.upsertFine(companyId, normalizedFine, 'vehicle-1');
+        await dependencies.reconcileMissing(companyId, ['fine-1']);
         return { ok: true, received: 1, created: 0, updated: 1, unmatched: 0 };
       },
     );
@@ -111,6 +121,132 @@ describe('production company fine sync', () => {
     await expect(syncCompanyFines('company-a')).rejects.toThrow(
       'Интеграция Driver Helper не настроена.',
     );
+  });
+
+  it('records the first complete-sync absence without archiving the fine', async () => {
+    findFines.mockResolvedValue([
+      {
+        id: 'fine-missing-1',
+        status: 'UNPAID',
+        providerMissingSince: null,
+        providerMissingSyncCount: 0,
+        clientId: 'client-1',
+        rentalId: 'rental-1',
+        currentAmountMinor: 250_000n,
+      },
+    ]);
+    runSync.mockImplementationOnce(async (companyId, dependencies) => {
+      await dependencies.reconcileMissing(companyId, []);
+      return { ok: true, received: 0, created: 0, updated: 0, unmatched: 0 };
+    });
+
+    await syncCompanyFines('company-1');
+
+    expect(updateFine).toHaveBeenCalledWith({
+      where: { id: 'fine-missing-1' },
+      data: {
+        providerMissingSince: expect.any(Date),
+        providerMissingSyncCount: 1,
+      },
+      select: { id: true },
+    });
+    expect(reconcileFine).not.toHaveBeenCalled();
+    expect(createAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('archives a fine after the second consecutive complete-sync absence', async () => {
+    findFines.mockResolvedValue([
+      {
+        id: 'fine-missing-2',
+        status: 'UNPAID',
+        providerMissingSince: new Date('2026-08-15T09:30:00.000Z'),
+        providerMissingSyncCount: 1,
+        clientId: 'client-1',
+        rentalId: 'rental-1',
+        currentAmountMinor: 250_000n,
+      },
+    ]);
+    runSync.mockImplementationOnce(async (companyId, dependencies) => {
+      await dependencies.reconcileMissing(companyId, []);
+      return { ok: true, received: 0, created: 0, updated: 0, unmatched: 0 };
+    });
+
+    await syncCompanyFines('company-1');
+
+    expect(updateFine).toHaveBeenCalledWith({
+      where: { id: 'fine-missing-2' },
+      data: {
+        status: 'ARCHIVED',
+        providerMissingSyncCount: 2,
+        archivedAt: expect.any(Date),
+        archiveReason: 'MISSING_FROM_PROVIDER',
+      },
+      select: { id: true },
+    });
+    expect(reconcileFine).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        companyId: 'company-1',
+        clientId: 'client-1',
+        rentalId: 'rental-1',
+        fineId: 'fine-missing-2',
+        fineAmountMinor: 250_000n,
+        status: 'ARCHIVED',
+      }),
+    );
+    expect(createAuditLog).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        companyId: 'company-1',
+        actorUserId: null,
+        actorEmailSnapshot: 'system@supapro.local',
+        action: 'ARCHIVE',
+        entityType: 'FINE',
+        entityId: 'fine-missing-2',
+      }),
+      select: { id: true },
+    });
+  });
+
+  it('clears archive evidence when the provider returns the fine again', async () => {
+    findFine.mockResolvedValue({
+      id: 'fine-db-1',
+      vehicleId: 'vehicle-1',
+      rentalId: null,
+      clientId: null,
+      assignmentSource: null,
+      assignmentConfirmedAt: null,
+      assignmentConfirmedByUserId: null,
+      status: 'ARCHIVED',
+    });
+    findRentals.mockResolvedValue([]);
+
+    await syncCompanyFines('company-1');
+
+    expect(upsertFine.mock.calls[0]?.[0].update).toMatchObject({
+      status: 'UNPAID',
+      providerMissingSince: null,
+      providerMissingSyncCount: 0,
+      archivedAt: null,
+      archiveReason: null,
+    });
+  });
+
+  it('only considers active or already archived provider fines for absence reconciliation', async () => {
+    runSync.mockImplementationOnce(async (companyId, dependencies) => {
+      await dependencies.reconcileMissing(companyId, []);
+      return { ok: true, received: 0, created: 0, updated: 0, unmatched: 0 };
+    });
+
+    await syncCompanyFines('company-1');
+
+    expect(findFines).toHaveBeenCalledWith({
+      where: {
+        companyId: 'company-1',
+        provider: 'DRIVER_HELPER',
+        status: { in: ['NEW', 'UNPAID', 'OVERDUE', 'ARCHIVED'] },
+      },
+      select: expect.any(Object),
+    });
   });
 
   it('preserves an existing manual assignment during later synchronization', async () => {
@@ -159,7 +295,7 @@ describe('production company fine sync', () => {
 
     await syncCompanyFines('company-1');
 
-    expect(transaction).toHaveBeenCalledOnce();
+    expect(transaction).toHaveBeenCalledTimes(2);
     expect(upsertFine.mock.calls[0]?.[0].update).toMatchObject({
       vehicleId: 'vehicle-1',
       rentalId: 'exact-rental',

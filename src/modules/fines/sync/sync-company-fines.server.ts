@@ -224,6 +224,10 @@ export async function syncCompanyFines(companyId: string) {
               toBailiff: fine.toBailiff,
               photoState: fine.photoState,
               lastSyncedAt: now,
+              providerMissingSince: null,
+              providerMissingSyncCount: 0,
+              archivedAt: null,
+              archiveReason: null,
             };
             const saved = await transaction.fine.upsert({
               where: { companyId_provider_externalId: uniqueFine },
@@ -291,6 +295,87 @@ export async function syncCompanyFines(companyId: string) {
               });
             }
             return { created: !existing };
+          },
+          { isolationLevel: 'Serializable' },
+        );
+      },
+      reconcileMissing: async (tenantId, seenExternalIds) => {
+        const seen = new Set(seenExternalIds);
+        await prisma.$transaction(
+          async (transaction) => {
+            const candidates = await transaction.fine.findMany({
+              where: {
+                companyId: tenantId,
+                provider: 'DRIVER_HELPER',
+                status: { in: ['NEW', 'UNPAID', 'OVERDUE', 'ARCHIVED'] },
+              },
+              select: {
+                id: true,
+                externalId: true,
+                status: true,
+                providerMissingSince: true,
+                providerMissingSyncCount: true,
+                clientId: true,
+                rentalId: true,
+                currentAmountMinor: true,
+              },
+            });
+
+            for (const fine of candidates) {
+              if (seen.has(fine.externalId) || fine.status === 'ARCHIVED') continue;
+
+              const nextMissingCount = fine.providerMissingSyncCount + 1;
+              if (nextMissingCount < 2) {
+                await transaction.fine.update({
+                  where: { id: fine.id },
+                  data: {
+                    providerMissingSince: fine.providerMissingSince ?? now,
+                    providerMissingSyncCount: nextMissingCount,
+                  },
+                  select: { id: true },
+                });
+                continue;
+              }
+
+              await transaction.fine.update({
+                where: { id: fine.id },
+                data: {
+                  status: 'ARCHIVED',
+                  providerMissingSyncCount: nextMissingCount,
+                  archivedAt: now,
+                  archiveReason: 'MISSING_FROM_PROVIDER',
+                },
+                select: { id: true },
+              });
+              if (fine.clientId && fine.rentalId) {
+                await reconcileFineDepositReservation(transaction, {
+                  companyId: tenantId,
+                  clientId: fine.clientId,
+                  rentalId: fine.rentalId,
+                  fineId: fine.id,
+                  fineAmountMinor: fine.currentAmountMinor,
+                  status: 'ARCHIVED',
+                  occurredAt: now,
+                });
+              }
+              await transaction.auditLog.create({
+                data: {
+                  companyId: tenantId,
+                  actorUserId: null,
+                  actorEmailSnapshot: 'system@supapro.local',
+                  action: 'ARCHIVE',
+                  entityType: 'FINE',
+                  entityId: fine.id,
+                  entityLabel: 'Штраф',
+                  changes: {
+                    fromStatus: fine.status,
+                    toStatus: 'ARCHIVED',
+                    reason: 'MISSING_FROM_PROVIDER',
+                  },
+                },
+                select: { id: true },
+              });
+            }
           },
           { isolationLevel: 'Serializable' },
         );

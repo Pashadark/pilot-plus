@@ -191,6 +191,41 @@ describe('fine deposit reservation', () => {
     });
   });
 
+  it('releases reservation and debt when a provider fine is archived', async () => {
+    const db = databaseWithFineEntries(
+      [
+        deposit(1_000_000n),
+        {
+          cashDeltaMinor: 0n,
+          reservedDeltaMinor: 100_000n,
+          withheldDeltaMinor: 0n,
+          debtDeltaMinor: 331_250n,
+        },
+      ],
+      [{ reservedDeltaMinor: 100_000n, withheldDeltaMinor: 0n, debtDeltaMinor: 331_250n }],
+    );
+
+    await reconcileFineDepositReservation(db as never, {
+      companyId: 'company-1',
+      clientId: 'client-1',
+      rentalId: 'rental-1',
+      fineId: 'fine-1',
+      fineAmountMinor: 375_000n,
+      status: 'ARCHIVED',
+      occurredAt: new Date('2026-10-22T08:30:00.000Z'),
+    });
+
+    expect(db.depositLedgerEntry.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        kind: 'FINE_RESERVATION_RELEASE',
+        reason: 'Штраф перенесён в архив: провайдер больше не возвращает запись',
+        reservedDeltaMinor: -100_000n,
+        withheldDeltaMinor: 0n,
+        debtDeltaMinor: -331_250n,
+      }),
+    });
+  });
+
   it('does not touch historical fines that have no reservation ledger', async () => {
     const db = databaseWithFineEntries([deposit(1_000_000n)], []);
     const result = await reconcileFineDepositReservation(db as never, {

@@ -28,7 +28,7 @@ export interface FineDepositReservationInput {
 }
 
 export interface FineDepositReconciliationInput extends FineDepositReservationInput {
-  status: 'NEW' | 'UNPAID' | 'OVERDUE' | 'PAID' | 'CANCELLED';
+  status: 'NEW' | 'UNPAID' | 'OVERDUE' | 'PAID' | 'CANCELLED' | 'ARCHIVED';
 }
 
 type FineLedgerDatabase = Parameters<typeof appendDepositEntry>[0];
@@ -105,11 +105,14 @@ export async function reconcileFineDepositReservation(
   let kind: 'FINE_RESERVATION_ADJUSTMENT' | 'FINE_RESERVATION_RELEASE' | 'FINE_WITHHOLDING';
   let reason: string;
 
-  if (input.status === 'CANCELLED') {
+  if (input.status === 'CANCELLED' || input.status === 'ARCHIVED') {
     targetReservedMinor = 0n;
     targetDebtMinor = 0n;
     kind = 'FINE_RESERVATION_RELEASE';
-    reason = 'Освобождение резерва отменённого штрафа';
+    reason =
+      input.status === 'ARCHIVED'
+        ? 'Штраф перенесён в архив: провайдер больше не возвращает запись'
+        : 'Освобождение резерва отменённого штрафа';
   } else if (input.status === 'PAID') {
     const securedCapacity = balance.availableMinor + current.reservedMinor + current.withheldMinor;
     targetWithheldMinor =

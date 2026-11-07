@@ -5,6 +5,7 @@ import { syncCompanyFinesWithDependencies } from './sync-company-fines';
 describe('company fine sync', () => {
   it('пропускает штраф без даты и продолжает сохранять корректные штрафы', async () => {
     const upsertFine = vi.fn().mockResolvedValue({ created: true });
+    const reconcileMissing = vi.fn().mockResolvedValue(undefined);
     const dependencies = {
       listCars: vi.fn().mockResolvedValue({ current: 1, last: 1, items: [] }),
       listFines: vi.fn().mockResolvedValue({ current: 1, last: 1, items: ['missing', 'valid'] }),
@@ -12,12 +13,13 @@ describe('company fine sync', () => {
       normalizeCar: vi.fn(),
       normalizeFine: vi.fn((id: string) => ({ externalId: id, providerVehicleId: null,
         offenseAt: id === 'missing' ? null as unknown as Date : new Date('2026-09-18T10:00:00Z') })),
-      upsertLink: vi.fn(), upsertFine,
+      upsertLink: vi.fn(), upsertFine, reconcileMissing,
     };
     const result = await syncCompanyFinesWithDependencies('company-a', dependencies);
     expect(result).toMatchObject({ received: 2, created: 1, skipped: 1 });
     expect(upsertFine).toHaveBeenCalledTimes(1);
     expect(upsertFine).toHaveBeenCalledWith('company-a', expect.objectContaining({ externalId: 'valid' }), null);
+    expect(reconcileMissing).not.toHaveBeenCalled();
   });
   it('paginates, links a vehicle, and idempotently upserts fines', async () => {
     const upsertLink = vi.fn().mockResolvedValue({ vehicleId: 'vehicle-a' });
@@ -25,6 +27,7 @@ describe('company fine sync', () => {
       .fn()
       .mockResolvedValueOnce({ created: true })
       .mockResolvedValueOnce({ created: false });
+    const reconcileMissing = vi.fn().mockResolvedValue(undefined);
     const dependencies = {
       listCars: vi.fn().mockResolvedValueOnce({ current: 1, last: 1, items: [{ id: 7 }] }),
       listFines: vi.fn().mockResolvedValueOnce({
@@ -45,6 +48,7 @@ describe('company fine sync', () => {
       })),
       upsertLink,
       upsertFine,
+      reconcileMissing,
     };
 
     await expect(syncCompanyFinesWithDependencies('company-a', dependencies)).resolves.toEqual({
@@ -60,6 +64,7 @@ describe('company fine sync', () => {
       expect.objectContaining({ externalId: '91' }),
       'vehicle-a',
     );
+    expect(reconcileMissing).toHaveBeenCalledWith('company-a', ['91', 'fine-paid']);
   });
 
   it('caps malformed provider pagination at 200 pages', async () => {
@@ -71,11 +76,35 @@ describe('company fine sync', () => {
       normalizeFine: vi.fn(),
       upsertLink: vi.fn().mockResolvedValue({ vehicleId: null }),
       upsertFine: vi.fn(),
+      reconcileMissing: vi.fn(),
     };
 
     await expect(syncCompanyFinesWithDependencies('company-a', dependencies)).rejects.toThrow(
       'лимит страниц',
     );
     expect(dependencies.listCars).toHaveBeenCalledTimes(200);
+  });
+
+  it('не сверяет исчезнувшие штрафы, если чтение одной из страниц оборвалось', async () => {
+    const reconcileMissing = vi.fn();
+    const dependencies = {
+      listCars: vi.fn().mockResolvedValue({ current: 1, last: 1, items: [] }),
+      listFines: vi.fn().mockResolvedValue({ current: 1, last: 1, items: [{ id: 'fine-1' }] }),
+      listPaidFines: vi.fn().mockRejectedValue(new Error('provider unavailable')),
+      normalizeCar: vi.fn(),
+      normalizeFine: vi.fn((fine: { id: string }) => ({
+        externalId: fine.id,
+        providerVehicleId: null,
+        offenseAt: new Date('2026-08-16T09:30:00.000Z'),
+      })),
+      upsertLink: vi.fn(),
+      upsertFine: vi.fn(),
+      reconcileMissing,
+    };
+
+    await expect(syncCompanyFinesWithDependencies('company-a', dependencies)).rejects.toThrow(
+      'provider unavailable',
+    );
+    expect(reconcileMissing).not.toHaveBeenCalled();
   });
 });
