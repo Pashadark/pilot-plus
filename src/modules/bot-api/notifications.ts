@@ -37,10 +37,7 @@ import { formatUnpaidFinesReport } from './unpaid-fines-report';
 import { formatTelegramMessage, telegramSection } from './telegram-message';
 import { returnReminderStage } from './client-return-reminders';
 import { notificationDestination } from './notification-routing';
-import {
-  findDueLeasePayment,
-  formatLeasePaymentReminderMessage,
-} from './lease-payment-reminders';
+import { findDueLeasePayment, formatLeasePaymentReminderMessage } from './lease-payment-reminders';
 import type { BotIdentityContext } from './queries';
 
 type ClaimDb = Pick<typeof prisma, '$transaction'>;
@@ -1225,6 +1222,7 @@ async function hydrateJob(
       'BORDER_APPROACH',
       'FUEL_STATION_VISIT',
       'IMPOUND_LOT_ENTRY',
+      'SERVICE_CENTER_ARRIVAL',
       'HARSH_ACCELERATION',
       'HARSH_BRAKING',
     ]);
@@ -1396,6 +1394,8 @@ async function hydrateJob(
             stationLabel: typeof payload.stationLabel === 'string' ? payload.stationLabel : null,
             impoundCity: impoundLot?.city ?? null,
             impoundAddress: impoundLot?.address ?? null,
+            serviceAddress:
+              typeof payload.serviceAddress === 'string' ? payload.serviceAddress : null,
           },
           'MANAGER',
         ),

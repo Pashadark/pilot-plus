@@ -1,4 +1,5 @@
 import type { VehicleGpsStatusView } from './gps-status';
+import type { VehicleOperationalStatus } from './operational-status';
 
 export type VehicleStatus = 'MOVING' | 'IDLE' | 'OFFLINE' | 'MAINTENANCE' | 'UNKNOWN';
 export type VehicleFuelType = 'PETROL' | 'DIESEL' | 'ELECTRIC' | 'HYBRID' | 'OTHER';
@@ -44,6 +45,7 @@ export interface VehicleCardDto {
   originalPrice: string;
   features: string[];
   status: VehicleStatus;
+  operationalStatus: VehicleOperationalStatus;
   gpsStatus: VehicleGpsStatusView;
   primaryImage: VehicleImageDto | null;
   activeRental?: {

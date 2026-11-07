@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { syncCompanyLatestPositions } from './sync-company.server';
+import { SERVICE_ZONE } from '@/modules/vehicles/service-zone';
 
 function database() {
   return {
@@ -115,6 +116,53 @@ describe('синхронизация последних позиций GLONASSSo
         lastSuccessAt: new Date('2026-08-20T09:01:00Z'),
         lastErrorCode: null,
       }),
+    });
+  });
+
+  it('после сохранения свежей точки обновляет визит машины в сервис', async () => {
+    const prisma = database();
+    const vehicleServiceVisit = {
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({ id: 'visit-1' }),
+      update: vi.fn(),
+    };
+    const transaction = {
+      vehiclePosition: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      vehicle: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      vehicleServiceVisit,
+    };
+    prisma.$transaction.mockImplementation((callback) => callback(transaction));
+
+    await syncCompanyLatestPositions('company-a', {
+      prisma,
+      createClient: vi.fn(() => ({
+        getLastData: vi.fn().mockResolvedValue([
+          {
+            externalId: '42',
+            receivedAt: '2026-11-07T09:00:10Z',
+            recordedAt: '2026-11-07T09:00:00Z',
+            state: 2,
+            latitude: SERVICE_ZONE.latitude,
+            longitude: SERVICE_ZONE.longitude,
+            speedKph: 0,
+            odometerKm: null,
+            fuelPercent: null,
+            address: SERVICE_ZONE.address,
+          },
+        ]),
+      })),
+      decrypt: vi.fn((value: string) => value),
+      now: () => new Date('2026-11-07T09:00:15Z'),
+    });
+
+    expect(vehicleServiceVisit.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { companyId: 'company-a', vehicleId: 'vehicle-1', exitedAt: null },
+      }),
+    );
+    expect(vehicleServiceVisit.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ companyId: 'company-a', vehicleId: 'vehicle-1' }),
+      select: { id: true },
     });
   });
 

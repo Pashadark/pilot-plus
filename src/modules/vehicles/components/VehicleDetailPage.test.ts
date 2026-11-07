@@ -4,7 +4,10 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { cleanup, fireEvent, render as renderClient, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-vi.mock('@/modules/maintenance/service-plan-actions', () => ({ readServicePlan: vi.fn().mockResolvedValue({ canEdit: false, current: null, record: null }), saveServicePlan: vi.fn() }));
+vi.mock('@/modules/maintenance/service-plan-actions', () => ({
+  readServicePlan: vi.fn().mockResolvedValue({ canEdit: false, current: null, record: null }),
+  saveServicePlan: vi.fn(),
+}));
 
 import type { VehicleDetailDto } from '../types';
 import { VehicleDetailPage } from './VehicleDetailPage';
@@ -34,6 +37,7 @@ const vehicle: VehicleDetailDto = {
   originalPrice: '8 800 ₽',
   features: [],
   status: 'UNKNOWN',
+  operationalStatus: 'AVAILABLE',
   gpsStatus: { key: 'NO_DATA', label: 'Нет связи', tone: 'danger', isConnected: false },
   primaryImage: null,
   telemetry: {
@@ -125,6 +129,7 @@ describe('VehicleDetailPage', () => {
         ...vehicle,
         registrationNumber: 'А429АУ997',
         status: 'IDLE',
+        operationalStatus: 'RENTED',
         currentRentalId: 'rental-active',
         telemetry: {
           odometerKm: 234100,
@@ -164,7 +169,8 @@ describe('VehicleDetailPage', () => {
     const documents = renderPage({ vehicle, activeTab: 'documents' });
 
     expect(overview).toContain('К списку автомобилей');
-    expect(overview).toContain('Последний сигнал');
+    expect(overview).toContain('Свободна');
+    expect(overview).not.toContain('Последний сигнал');
     expect(overview).toContain('Выдать в аренду');
     expect(overview).toContain('Забронировать');
     expect(overview).toContain('На карте');
@@ -322,7 +328,10 @@ describe('VehicleDetailPage', () => {
   });
 
   it('не показывает мойки даже при пустой истории обслуживания', () => {
-    const markup = renderPage({ vehicle: { ...vehicle, maintenanceRecords: [] }, activeTab: 'maintenance' });
+    const markup = renderPage({
+      vehicle: { ...vehicle, maintenanceRecords: [] },
+      activeTab: 'maintenance',
+    });
     expect(markup).toContain('Обслуживание ещё не запланировано');
     expect(markup).not.toContain('История моек');
     expect(markup).not.toContain('Комплексная');

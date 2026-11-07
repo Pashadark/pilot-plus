@@ -607,6 +607,7 @@ model Company {
   gpsSettings               CompanyGpsSettings?
   vehicleGpsOverrides       VehicleGpsSettingsOverride[]
   gpsClientWarnings         GpsClientWarning[]
+  vehicleServiceVisits      VehicleServiceVisit[]
   operationsTasks           OperationsTask[]
   leads                     Lead[]
   avitoInboxEvents          AvitoInboxEvent[]
@@ -1014,6 +1015,7 @@ model Vehicle {
   rentalOperations              RentalOperation[]
   botRentalRequests             BotRentalRequest[]
   fuelStationVisits             FuelStationVisit[]
+  serviceVisits                 VehicleServiceVisit[]
   externalFineLinks             ExternalVehicleLink[]
   telematicsLinks               TelematicsVehicleLink[]
   fines                         Fine[]
@@ -1790,6 +1792,25 @@ model VehiclePosition {
 
   @@unique([vehicleId, provider, externalId])
   @@index([vehicleId, recordedAt])
+}
+
+model VehicleServiceVisit {
+  id                   String    @id @default(cuid())
+  companyId            String
+  company              Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vehicleId            String
+  vehicle              Vehicle   @relation(fields: [companyId, vehicleId], references: [companyId, id], onDelete: Cascade)
+  enteredAt            DateTime  @db.Timestamptz(3)
+  lastInsideAt         DateTime  @db.Timestamptz(3)
+  confirmedAt          DateTime? @db.Timestamptz(3)
+  exitedAt             DateTime? @db.Timestamptz(3)
+  notificationQueuedAt DateTime? @db.Timestamptz(3)
+  createdAt            DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@unique([companyId, id])
+  @@index([companyId, confirmedAt, exitedAt])
+  @@index([vehicleId, enteredAt])
 }
 
 model FuelStation {

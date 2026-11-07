@@ -21,9 +21,12 @@ export function VehicleOverview({ vehicle }: { vehicle: VehicleDetailDto }) {
   const nextRental = vehicle.rentals
     ?.filter((rental) => ['DRAFT', 'CONFIRMED'].includes(rental.status))
     .sort((left, right) => left.startsAt.localeCompare(right.startsAt))[0];
-  const isInPark =
-    vehicle.telemetry.address?.toLocaleLowerCase('ru-RU').includes('зел') &&
-    vehicle.telemetry.address.includes('22');
+  const operationalLabels = {
+    IN_SERVICE: 'В сервисе',
+    RENTED: 'В аренде',
+    IN_PARK: 'В парке',
+    AVAILABLE: 'Свободна',
+  } as const;
 
   return (
     <section className="grid gap-4 lg:grid-cols-2" data-testid="vehicle-overview">
@@ -33,8 +36,8 @@ export function VehicleOverview({ vehicle }: { vehicle: VehicleDetailDto }) {
           <OverviewRow
             icon={<FiCheckCircle />}
             label="Операционный статус"
-            value={isInPark ? 'Автомобиль в парке и готов к выдаче' : vehicle.gpsStatus.label}
-            success={isInPark}
+            value={operationalLabels[vehicle.operationalStatus]}
+            success={['IN_PARK', 'AVAILABLE'].includes(vehicle.operationalStatus)}
           />
           <OverviewRow
             icon={<FiDroplet />}
@@ -49,11 +52,6 @@ export function VehicleOverview({ vehicle }: { vehicle: VehicleDetailDto }) {
             icon={<FiActivity />}
             label="Чистота"
             value={vehicle.washRecords[0]?.status === 'COMPLETED' ? 'Чистая' : 'Требуется проверка'}
-          />
-          <OverviewRow
-            icon={<FiClock />}
-            label="Последний сигнал"
-            value={formatDate(vehicle.telemetry.lastSeenAt)}
           />
         </div>
       </article>

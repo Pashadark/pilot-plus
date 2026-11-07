@@ -50,6 +50,10 @@ const maintenanceRepairsMigrationPath = new URL(
   './migrations/20260913193000_add_vehicle_repairs/migration.sql',
   import.meta.url,
 );
+const serviceVisitMigrationPath = new URL(
+  './migrations/20261107100000_add_vehicle_service_visits/migration.sql',
+  import.meta.url,
+);
 
 describe('доменная схема автопарка', () => {
   it('описывает роли, точечные разрешения и журнал аудита центра администрирования', () => {
@@ -73,6 +77,16 @@ describe('доменная схема автопарка', () => {
     expect(schema).toContain('@@index([companyId, status])');
     expect(schema).toMatch(/registrationNumber\s+String\?/);
     expect(schema).toMatch(/vin\s+String\?/);
+  });
+
+  it('хранит одно активное посещение сервисной зоны на автомобиль', () => {
+    expect(schema).toContain('model VehicleServiceVisit {');
+    expect(schema).toMatch(/serviceVisits\s+VehicleServiceVisit\[\]/u);
+    expect(existsSync(serviceVisitMigrationPath)).toBe(true);
+    const migration = readFileSync(serviceVisitMigrationPath, 'utf8');
+    expect(migration).toContain('CREATE TABLE "VehicleServiceVisit"');
+    expect(migration).toContain('VehicleServiceVisit_one_active_per_vehicle');
+    expect(migration).toContain('WHERE "exitedAt" IS NULL');
   });
 
   it('хранит фамилию и необязательное время следующего контакта заявки', () => {

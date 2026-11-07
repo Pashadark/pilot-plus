@@ -25,6 +25,7 @@ const vehicle: VehicleCardDto = {
   originalPrice: '8 800 ₽',
   features: [],
   status: 'MAINTENANCE',
+  operationalStatus: 'IN_SERVICE',
   gpsStatus: { key: 'IN_PARK', label: 'В парке', tone: 'success', isConnected: true },
   primaryImage: null,
   telemetry: {

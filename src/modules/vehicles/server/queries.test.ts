@@ -453,6 +453,42 @@ describe('запросы автопарка', () => {
       clientName: 'Иванов Иван',
       endsAt: '2026-09-01T10:00:00.000Z',
     });
+    expect(vehicle?.operationalStatus).toBe('RENTED');
+  });
+
+  it('показывает подтверждённый сервис поверх активной аренды', async () => {
+    const repository = {
+      async findMany() {
+        return [
+          {
+            ...rawVehicle,
+            serviceVisits: [{ confirmedAt: new Date('2026-11-07T09:40:00.000Z') }],
+            _count: { rentals: 1 },
+            rentals: [
+              {
+                id: 'rental-active',
+                status: 'ACTIVE',
+                createdAt: new Date('2026-11-01T10:00:00.000Z'),
+                startsAt: new Date('2026-11-01T10:00:00.000Z'),
+                endsAt: new Date('2026-11-20T10:00:00.000Z'),
+                contractNumber: 'ME-2026-0043-AA',
+                client: { firstName: 'Иван', middleName: null, lastName: 'Иванов' },
+              },
+            ],
+          },
+        ];
+      },
+      async findFirst() {
+        return null;
+      },
+    };
+
+    const [vehicle] = await createVehicleQueries(repository).listVehiclesForUser(
+      'user-1',
+      new Date('2026-11-07T10:00:00.000Z'),
+    );
+
+    expect(vehicle?.operationalStatus).toBe('IN_SERVICE');
   });
 
   it('ищет подробности только внутри компании пользователя', async () => {

@@ -49,6 +49,7 @@ function vehicle(
     originalPrice: '8 800 ₽',
     features: [],
     status,
+    operationalStatus: status === 'MAINTENANCE' ? 'IN_SERVICE' : 'AVAILABLE',
     gpsStatus,
     primaryImage: null,
     telemetry: {
@@ -64,55 +65,56 @@ function vehicle(
 
 describe('VehicleCard', () => {
   it.each([
-    ['IN_PARK', 'В парке', '--color-success'],
-    ['MOVING', 'В движении', '--color-primary'],
-    ['IDLE', 'Стоит', '--color-warning'],
-    ['STALE', 'Давно не обновлялся', '--color-danger'],
-    ['NO_DATA', 'Нет связи', '--color-danger'],
-  ] as const)('показывает GPS-статус %s семантическим цветом', (key, label, semanticToken) => {
-    const statuses = {
-      IN_PARK: { key: 'IN_PARK', label: 'В парке', tone: 'success', isConnected: true },
-      MOVING: { key: 'MOVING', label: 'В движении', tone: 'primary', isConnected: true },
-      IDLE: { key: 'IDLE', label: 'Стоит', tone: 'warning', isConnected: true },
-      STALE: { key: 'STALE', label: 'Давно не обновлялся', tone: 'danger', isConnected: false },
-      NO_DATA: { key: 'NO_DATA', label: 'Нет связи', tone: 'danger', isConnected: false },
-    } as const;
+    ['IN_SERVICE', 'В сервисе', '--color-service'],
+    ['RENTED', 'В аренде', '--color-warning'],
+    ['IN_PARK', 'В парке', '--color-primary'],
+    ['AVAILABLE', 'Свободна', '--color-success'],
+  ] as const)(
+    'показывает единый операционный статус %s семантическим цветом',
+    (key, label, semanticToken) => {
+      const item = vehicle({ key: 'IDLE', label: 'Стоит', tone: 'warning', isConnected: true });
+      item.operationalStatus = key;
 
-    render(
-      <ToastProvider>
-        <VehicleCard vehicle={vehicle(statuses[key])} />
-      </ToastProvider>,
-    );
+      render(
+        <ToastProvider>
+          <VehicleCard vehicle={item} />
+        </ToastProvider>,
+      );
 
-    const badge = screen.getByTestId('vehicle-gps-status');
-    expect(badge.textContent).toBe(label);
-    expect(badge.className).toContain(semanticToken);
-    expect(screen.getByText('Последний сигнал').textContent).toBe('Последний сигнал');
-    expect(screen.getByText('22.08.2026, 13:30')).toBeTruthy();
-  });
+      const badge = screen.getByTestId('vehicle-operational-status');
+      expect(badge.textContent).toBe(label);
+      expect(badge.className).toContain(semanticToken);
+      expect(screen.queryByText('Последний сигнал')).toBeNull();
+      expect(screen.queryByText('Последняя поездка')).toBeNull();
+      expect(screen.queryByText('Стоит')).toBeNull();
+    },
+  );
 
-  it('не дублирует legacy telemetry status и оставляет только настоящий бизнес-бейдж', () => {
+  it('не дублирует технический GPS-статус', () => {
     const moving = {
       key: 'MOVING',
       label: 'В движении',
       tone: 'primary',
       isConnected: true,
     } as const;
+    const serviceVehicle = vehicle(moving, 'OFFLINE');
+    serviceVehicle.operationalStatus = 'IN_SERVICE';
     const { rerender } = render(
       <ToastProvider>
-        <VehicleCard vehicle={vehicle(moving, 'OFFLINE')} />
+        <VehicleCard vehicle={serviceVehicle} />
       </ToastProvider>,
     );
 
     expect(screen.queryByText('Не на связи')).toBeNull();
-    expect(screen.getAllByText('В движении')).toHaveLength(1);
+    expect(screen.queryByText('В движении')).toBeNull();
+    expect(screen.getAllByText('В сервисе')).toHaveLength(1);
 
     rerender(
       <ToastProvider>
-        <VehicleCard vehicle={vehicle(moving, 'MAINTENANCE')} />
+        <VehicleCard vehicle={{ ...serviceVehicle, status: 'MAINTENANCE' }} />
       </ToastProvider>,
     );
-    expect(screen.getByText('В ремонте')).toBeTruthy();
+    expect(screen.getByText('В сервисе')).toBeTruthy();
   });
 
   it('показывает место популярности на фотографии и не рисует медаль без места', () => {
@@ -153,6 +155,7 @@ describe('VehicleCard', () => {
       clientName: 'Иванов Иван',
       endsAt: '2026-09-14T10:00:00.000Z',
     };
+    rentedVehicle.operationalStatus = 'RENTED';
 
     render(
       <ToastProvider>
@@ -183,6 +186,7 @@ describe('VehicleCard', () => {
       clientName: 'Даровская Ирина Геннадиевна',
       endsAt: '2026-10-07T11:00:00.000Z',
     };
+    rentedVehicle.operationalStatus = 'RENTED';
 
     render(
       <ToastProvider>
@@ -220,25 +224,25 @@ describe('VehicleCard', () => {
     expect(screen.getByText('PLT-001').parentElement?.textContent).not.toContain('·');
   });
 
-  it('показывает свободный бизнес-статус отдельно от GPS', () => {
+  it('показывает статус парка без второго свободного или GPS-бейджа', () => {
+    const parked = vehicle(
+      {
+        key: 'IN_PARK',
+        label: 'В парке',
+        tone: 'success',
+        isConnected: true,
+      },
+      'IDLE',
+    );
+    parked.operationalStatus = 'IN_PARK';
     render(
       <ToastProvider>
-        <VehicleCard
-          vehicle={vehicle(
-            {
-              key: 'IN_PARK',
-              label: 'В парке',
-              tone: 'success',
-              isConnected: true,
-            },
-            'IDLE',
-          )}
-        />
+        <VehicleCard vehicle={parked} />
       </ToastProvider>,
     );
 
-    expect(screen.getByText('Свободна')).toBeTruthy();
     expect(screen.getByText('В парке')).toBeTruthy();
+    expect(screen.queryByText('Свободна')).toBeNull();
   });
 
   it('показывает топливо компактной шкалой с процентом внутри', () => {

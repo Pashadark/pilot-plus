@@ -189,6 +189,25 @@ describe('operational alert thresholds', () => {
     expect(message).toContain('└ 23.10.2026, 16:00 МСК');
     expect(message).toContain('Срочно связаться с клиентом и проверить эвакуацию');
   });
+
+  it('formats a staff service-arrival alert after the confirmed dwell', () => {
+    const message = formatOperationalAlert({
+      kind: 'SERVICE_CENTER_ARRIVAL',
+      vehicle: 'Toyota Camry',
+      registrationNumber: 'Н541АК997',
+      clientName: 'Иванов Иван Иванович',
+      eventRecordedAt: new Date('2026-11-07T09:40:00Z'),
+      serviceAddress: 'Каширское шоссе, 61 к3А',
+    });
+
+    expect(message).toContain('🔧 <b>Автомобиль в сервисе</b>');
+    expect(message).toContain('🚗 <b>Авто</b>\n└ Toyota Camry');
+    expect(message).toContain('👤 <b>Клиент</b>\n└ Иванов Иван Иванович');
+    expect(message).toContain('📍 <b>Сервис</b>');
+    expect(message).toContain('├ Каширское шоссе, 61 к3А');
+    expect(message).toContain('└ 07.11.2026, 12:40 МСК');
+    expect(message).toContain('Машина находится в зоне сервиса не менее 40 минут');
+  });
   it('includes the full fine description, article and Moscow offense time', () => {
     const message = formatOperationalAlert({
       kind: 'NEW_FINE',

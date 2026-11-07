@@ -27,7 +27,6 @@ import {
 import type {
   VehicleDetailDto,
   VehicleMaintenanceStatus,
-  VehicleStatus,
   VehicleWashKind,
   VehicleWashStatus,
 } from '../types';
@@ -42,22 +41,6 @@ import type { VehicleTab } from './vehicle-tabs';
 import { PILOT_BUSINESS_TIME_ZONE } from '@/shared/business-time';
 import { Badge, Card, CardContent, CardHeader } from '@/shared/ui';
 import { VehicleDocumentsPanel } from '@/modules/vehicles/manage/components/VehicleDocumentsPanel';
-
-
-// ============================================================================
-// СТАТУСЫ
-// ============================================================================
-
-const statuses: Record<
-  VehicleStatus,
-  { label: string; tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral' }
-> = {
-  MOVING: { label: 'В движении', tone: 'success' },
-  IDLE: { label: 'Стоит', tone: 'warning' },
-  OFFLINE: { label: 'Не на связи', tone: 'danger' },
-  MAINTENANCE: { label: 'Обслуживание', tone: 'info' },
-  UNKNOWN: { label: 'Нет телеметрии', tone: 'neutral' },
-};
 
 const maintenanceStatuses: Record<
   VehicleMaintenanceStatus,
@@ -306,7 +289,9 @@ function TabContent({ vehicle, tab }: { vehicle: VehicleDetailDto; tab: VehicleT
 
   // Обслуживание: отдельное рабочее пространство без истории моек.
   if (tab === 'maintenance') {
-    return <VehicleMaintenanceWorkspace vehicleId={vehicle.id} records={vehicle.maintenanceRecords} />;
+    return (
+      <VehicleMaintenanceWorkspace vehicleId={vehicle.id} records={vehicle.maintenanceRecords} />
+    );
   }
 
   if (tab === 'rentals') {
@@ -394,19 +379,17 @@ export function VehicleDetailPage({
   vehicle: VehicleDetailDto;
   activeTab: VehicleTab;
 }) {
-  const status = statuses[vehicle.status] || statuses.UNKNOWN;
-  const isInPark =
-    vehicle.telemetry.address?.toLocaleLowerCase('ru-RU').includes('зел') &&
-    vehicle.telemetry.address.includes('22');
   const activeRental =
     vehicle.currentRentalId === undefined
       ? vehicle.rentals?.find((rental) => rental.status === 'ACTIVE')
       : vehicle.rentals?.find((rental) => rental.id === vehicle.currentRentalId);
-  const visibleStatus = activeRental
-    ? { label: 'В аренде', tone: 'primary' as const }
-    : isInPark
-      ? { label: 'В парке', tone: 'success' as const }
-      : status;
+  const operationalStatuses = {
+    IN_SERVICE: { label: 'В сервисе', tone: 'service' as const },
+    RENTED: { label: 'В аренде', tone: 'warning' as const },
+    IN_PARK: { label: 'В парке', tone: 'primary' as const },
+    AVAILABLE: { label: 'Свободна', tone: 'success' as const },
+  };
+  const visibleStatus = operationalStatuses[vehicle.operationalStatus];
   const latestWash = vehicle.washRecords[0];
   const condition =
     latestWash?.status === 'COMPLETED'
@@ -464,15 +447,6 @@ export function VehicleDetailPage({
                   'Адрес не указан'}
               </p>
             </div>
-          </div>
-          <div className="text-sm">
-            <p className="text-[var(--color-text-secondary)]">Последний сигнал</p>
-            <p className="mt-1 flex items-center gap-2 font-medium">
-              <span
-                className={`size-2.5 rounded-full ${vehicle.gpsStatus.isConnected ? 'bg-[var(--color-success)]' : 'bg-[var(--color-danger)]'}`}
-              />
-              {formatDate(vehicle.telemetry.lastSeenAt)}
-            </p>
           </div>
         </header>
 
@@ -567,7 +541,9 @@ export function VehicleDetailPage({
                 label="Моточасы"
                 value={formatOptionalMetric(vehicle.telemetry.engineHours ?? null, 'ч')}
               />
-              <div className="py-3"><ServicePlanMeter vehicleId={vehicle.id} /></div>
+              <div className="py-3">
+                <ServicePlanMeter vehicleId={vehicle.id} />
+              </div>
               <HeroMetric icon={<FiCheck />} label="ОСАГО" value={getOsagoLabel(vehicle)} />
             </div>
           </section>
@@ -689,7 +665,6 @@ function DriverMetric({ drivers }: { drivers: { id: string; fullName: string }[]
     </div>
   );
 }
-
 
 function getOsagoLabel(vehicle: VehicleDetailDto) {
   const osago = vehicle.documents.find((document) =>

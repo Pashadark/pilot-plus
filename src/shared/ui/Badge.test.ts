@@ -11,4 +11,11 @@ describe('Badge', () => {
     expect(html).toContain('min-h-9');
     expect(html).toContain('В движении');
   });
+
+  it('поддерживает фирменный сервисный тон в обеих темах через токены', () => {
+    const html = renderToStaticMarkup(createElement(Badge, { tone: 'service' }, 'В сервисе'));
+
+    expect(html).toContain('--color-service-soft');
+    expect(html).toContain('--color-service');
+  });
 });

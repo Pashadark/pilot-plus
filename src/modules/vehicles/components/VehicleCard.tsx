@@ -37,15 +37,6 @@ const fuelLabels = {
   OTHER: 'Другое',
 } as const;
 
-function dateOrEmpty(value: string | null) {
-  if (!value) return 'Нет данных';
-  return new Intl.DateTimeFormat('ru-RU', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-    timeZone: PILOT_BUSINESS_TIME_ZONE,
-  }).format(new Date(value));
-}
-
 function rentalDate(value: string) {
   return new Intl.DateTimeFormat('ru-RU', {
     dateStyle: 'short',
@@ -89,11 +80,13 @@ function Specification({
 
 export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
   const { showToast } = useToast();
-  const businessStatus = vehicle.activeRental
-    ? { label: 'В аренде', tone: 'warning' as const }
-    : vehicle.status === 'MAINTENANCE'
-      ? { label: 'В ремонте', tone: 'info' as const }
-      : { label: 'Свободна', tone: 'success' as const };
+  const operationalStatuses = {
+    IN_SERVICE: { label: 'В сервисе', tone: 'service' as const },
+    RENTED: { label: 'В аренде', tone: 'warning' as const },
+    IN_PARK: { label: 'В парке', tone: 'primary' as const },
+    AVAILABLE: { label: 'Свободна', tone: 'success' as const },
+  };
+  const operationalStatus = operationalStatuses[vehicle.operationalStatus];
 
   const explainMissingPosition = () => {
     if (vehicle.telemetry.hasPosition) return;
@@ -136,13 +129,9 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
                 </p>
               </div>
               <div className="flex flex-wrap justify-end gap-1.5">
-                <Badge
-                  tone={vehicle.gpsStatus.tone === 'muted' ? 'neutral' : vehicle.gpsStatus.tone}
-                  data-testid="vehicle-gps-status"
-                >
-                  {vehicle.gpsStatus.label}
+                <Badge tone={operationalStatus.tone} data-testid="vehicle-operational-status">
+                  {operationalStatus.label}
                 </Badge>
-                <Badge tone={businessStatus.tone}>{businessStatus.label}</Badge>
               </div>
             </div>
             <p className="mt-2 flex items-start gap-1.5 text-sm text-[var(--color-text-secondary)]">
@@ -258,24 +247,6 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleCardDto }) {
             <FiTool aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--color-primary)]" />
             <ServicePlanMeter vehicleId={vehicle.id} compact />
           </div>
-          <span className="flex gap-2">
-            <FiClock aria-hidden="true" className="mt-0.5 text-[var(--color-primary)]" />
-            <span>
-              <strong className="block text-xs text-[var(--color-text-tertiary)]">
-                Последний сигнал
-              </strong>
-              {dateOrEmpty(vehicle.telemetry.lastSeenAt)}
-            </span>
-          </span>
-          <span className="flex gap-2">
-            <FiCalendar aria-hidden="true" className="mt-0.5 text-[var(--color-primary)]" />
-            <span>
-              <strong className="block text-xs text-[var(--color-text-tertiary)]">
-                Последняя поездка
-              </strong>
-              {dateOrEmpty(vehicle.telemetry.lastTripAt)}
-            </span>
-          </span>
         </section>
 
         <footer className="grid gap-3 p-4">

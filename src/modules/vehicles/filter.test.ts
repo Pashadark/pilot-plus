@@ -20,6 +20,7 @@ function vehicle(overrides: Partial<VehicleCardDto>): VehicleCardDto {
     originalPrice: '8 800 ₽',
     features: [],
     status: 'UNKNOWN',
+    operationalStatus: 'AVAILABLE',
     gpsStatus: { key: 'NO_DATA', label: 'Нет связи', tone: 'danger', isConnected: false },
     primaryImage: null,
     telemetry: {

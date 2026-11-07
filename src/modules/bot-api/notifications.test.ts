@@ -1051,6 +1051,57 @@ describe('bot notification leases', () => {
     });
   });
 
+  it('hydrates a confirmed service arrival as a staff operational alert', async () => {
+    const tx = {
+      telegramGroupBinding: {
+        findUnique: vi.fn().mockResolvedValue({ telegramChatId: '-100777' }),
+      },
+      botNotificationJob: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ id: 'service-1', claimToken: null, status: 'PENDING' }]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'service-1',
+          companyId: 'company-1',
+          claimToken: 'worker:service-1',
+          template: 'OPERATIONAL_ALERT',
+          payload: {
+            kind: 'SERVICE_CENTER_ARRIVAL',
+            vehicleId: 'vehicle-1',
+            visitId: 'visit-1',
+            recordedAt: '2026-11-07T09:40:00Z',
+            serviceAddress: 'Каширское шоссе, 61 к3А',
+          },
+          identity: null,
+          chatId: '-100777',
+        }),
+      },
+      vehicle: {
+        findFirst: vi.fn().mockResolvedValue({
+          make: 'Toyota',
+          modelName: 'Camry',
+          model: 'Camry',
+          registrationNumber: 'Н541АК997',
+          positions: [{ recordedAt: new Date('2026-11-07T09:40:00Z') }],
+        }),
+      },
+      rental: { findFirst: vi.fn().mockResolvedValue(null) },
+      vehicleEvent: { findFirst: vi.fn().mockResolvedValue(null) },
+    };
+    const database = { $transaction: vi.fn(async (callback) => callback(tx)) };
+
+    const [job] = await claimNotificationJobs(
+      new Date('2026-11-07T09:41:00Z'),
+      'worker',
+      database as never,
+    );
+
+    expect((job.payload as { message: string }).message).toContain('Автомобиль в сервисе');
+    expect((job.payload as { message: string }).message).toContain('Каширское шоссе, 61 к3А');
+    expect(job.identity).toBeNull();
+  });
+
   it('hydrates a new-fine alert with the full decree number', async () => {
     const tx = {
       telegramGroupBinding: {
@@ -1218,79 +1269,77 @@ describe('bot notification leases', () => {
   ] as const)(
     'hydrates %s from the current unpaid schedule row',
     async (template, identity, chatId, client) => {
-    const encryptionKey = Buffer.alloc(32, 44).toString('base64');
-    process.env.CLIENT_DATA_ENCRYPTION_KEY = encryptionKey;
-    const tx = {
-      telegramGroupBinding: {
-        findUnique: vi.fn().mockResolvedValue({ telegramChatId: '-100777' }),
-      },
-      botNotificationJob: {
-        findMany: vi
-          .fn()
-          .mockResolvedValue([{ id: 'payment-job-1', claimToken: null, status: 'PENDING' }]),
-        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-        findUnique: vi.fn().mockResolvedValue({
-          id: 'payment-job-1',
-          companyId: 'company-1',
-          claimToken: 'worker:payment-job-1',
-          template,
-          payload: { rentalId: 'rental-1', paymentNumber: 2, dueDate: '2026-12-03' },
-          identity,
-          chatId,
-        }),
-      },
-      rental: {
-        findFirst: vi.fn().mockResolvedValue({
-          snapshot: {
-            paymentSchedule: [
-              {
-                dueAt: '2026-12-03T15:00:00.000Z',
-                number: 2,
-                status: 'SCHEDULED',
-                amountMinor: '8500000',
-              },
-            ],
-          },
-          contractNumber: 'ME-2026-1103-BT',
-          client: {
-            firstName: 'Иван',
-            middleName: 'Иванович',
-            lastName: 'Иванов',
-            phoneEncrypted: encryptField('+7 900 000-00-00', encryptionKey),
-          },
-          vehicle: {
-            make: 'BMW',
-            modelName: '3',
-            model: '3',
-            registrationNumber: 'Н533УС797',
-          },
-        }),
-      },
-    };
-    const database = { $transaction: vi.fn(async (callback) => callback(tx)) };
+      const encryptionKey = Buffer.alloc(32, 44).toString('base64');
+      process.env.CLIENT_DATA_ENCRYPTION_KEY = encryptionKey;
+      const tx = {
+        telegramGroupBinding: {
+          findUnique: vi.fn().mockResolvedValue({ telegramChatId: '-100777' }),
+        },
+        botNotificationJob: {
+          findMany: vi
+            .fn()
+            .mockResolvedValue([{ id: 'payment-job-1', claimToken: null, status: 'PENDING' }]),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+          findUnique: vi.fn().mockResolvedValue({
+            id: 'payment-job-1',
+            companyId: 'company-1',
+            claimToken: 'worker:payment-job-1',
+            template,
+            payload: { rentalId: 'rental-1', paymentNumber: 2, dueDate: '2026-12-03' },
+            identity,
+            chatId,
+          }),
+        },
+        rental: {
+          findFirst: vi.fn().mockResolvedValue({
+            snapshot: {
+              paymentSchedule: [
+                {
+                  dueAt: '2026-12-03T15:00:00.000Z',
+                  number: 2,
+                  status: 'SCHEDULED',
+                  amountMinor: '8500000',
+                },
+              ],
+            },
+            contractNumber: 'ME-2026-1103-BT',
+            client: {
+              firstName: 'Иван',
+              middleName: 'Иванович',
+              lastName: 'Иванов',
+              phoneEncrypted: encryptField('+7 900 000-00-00', encryptionKey),
+            },
+            vehicle: {
+              make: 'BMW',
+              modelName: '3',
+              model: '3',
+              registrationNumber: 'Н533УС797',
+            },
+          }),
+        },
+      };
+      const database = { $transaction: vi.fn(async (callback) => callback(tx)) };
 
-    const [claimed] = await claimNotificationJobs(
-      new Date('2026-12-02T06:05:00.000Z'),
-      'worker',
-      database as never,
-    );
+      const [claimed] = await claimNotificationJobs(
+        new Date('2026-12-02T06:05:00.000Z'),
+        'worker',
+        database as never,
+      );
 
-    expect((claimed.payload as { message: string }).message).toContain(
-      '⏰ <b>Завтра платёж по аренде с выкупом</b>',
-    );
-    expect((claimed.payload as { message: string }).message).toContain('85 000 ₽');
-    if (client) {
-      expect(claimed.payload).toMatchObject({ parseMode: 'HTML', clientMenu: true });
-      expect(claimed.payload).not.toHaveProperty('actions');
-    } else {
-      expect((claimed.payload as { message: string }).message).toContain('+7 900 000-00-00');
-      expect(claimed.payload).toMatchObject({
-        parseMode: 'HTML',
-        actions: [
-          expect.objectContaining({ type: 'contract_url', label: '📄 Открыть договор' }),
-        ],
-      });
-    }
+      expect((claimed.payload as { message: string }).message).toContain(
+        '⏰ <b>Завтра платёж по аренде с выкупом</b>',
+      );
+      expect((claimed.payload as { message: string }).message).toContain('85 000 ₽');
+      if (client) {
+        expect(claimed.payload).toMatchObject({ parseMode: 'HTML', clientMenu: true });
+        expect(claimed.payload).not.toHaveProperty('actions');
+      } else {
+        expect((claimed.payload as { message: string }).message).toContain('+7 900 000-00-00');
+        expect(claimed.payload).toMatchObject({
+          parseMode: 'HTML',
+          actions: [expect.objectContaining({ type: 'contract_url', label: '📄 Открыть договор' })],
+        });
+      }
     },
   );
 

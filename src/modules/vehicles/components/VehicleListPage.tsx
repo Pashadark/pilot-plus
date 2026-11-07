@@ -5,9 +5,7 @@ import { FiTruck } from 'react-icons/fi';
 import Link from 'next/link';
 
 import { filterVehicles, initialVehicleFilters } from '../filter';
-import { deriveVehicleGpsStatus } from '../gps-status';
 import type { VehicleCardDto } from '../types';
-import { useMinuteNow } from '../use-minute-now';
 import { VehicleFilters } from './VehicleFilters';
 import { VehicleGrid } from './VehicleGrid';
 import { Badge } from '@/shared/ui';
@@ -21,25 +19,7 @@ export function VehicleListPage({
   manageableCompanies?: readonly { id: string; label: string; canArchive: boolean }[];
 }) {
   const [filters, setFilters] = useState(initialVehicleFilters);
-  const minuteNow = useMinuteNow();
-  const liveVehicles = useMemo(
-    () =>
-      minuteNow === null
-        ? vehicles
-        : vehicles.map((vehicle) => ({
-            ...vehicle,
-            gpsStatus: deriveVehicleGpsStatus(
-              {
-                recordedAt: vehicle.telemetry.lastSeenAt,
-                speedKph: vehicle.telemetry.speedKph,
-                address: vehicle.telemetry.address,
-                hasCoordinates: vehicle.telemetry.hasPosition,
-              },
-              minuteNow,
-            ),
-          })),
-    [minuteNow, vehicles],
-  );
+  const liveVehicles = vehicles;
   const filtered = useMemo(() => filterVehicles(liveVehicles, filters), [filters, liveVehicles]);
   const reset = () => setFilters(initialVehicleFilters);
 

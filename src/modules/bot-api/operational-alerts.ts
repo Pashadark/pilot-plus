@@ -44,7 +44,8 @@ export type OperationalAlertMessageInput = {
     | 'LOW_FUEL'
     | 'BORDER_APPROACH'
     | 'FUEL_STATION_VISIT'
-    | 'IMPOUND_LOT_ENTRY';
+    | 'IMPOUND_LOT_ENTRY'
+    | 'SERVICE_CENTER_ARRIVAL';
   vehicle: string;
   registrationNumber: string | null;
   silentForMs?: number | null;
@@ -66,6 +67,7 @@ export type OperationalAlertMessageInput = {
   stationLabel?: string | null;
   impoundCity?: string | null;
   impoundAddress?: string | null;
+  serviceAddress?: string | null;
 };
 
 export type OperationalAlertAudience = 'CLIENT' | 'MANAGER' | 'SUPER_ADMIN';
@@ -360,6 +362,17 @@ export function formatOperationalAlert(input: OperationalAlertMessageInput) {
           input.eventRecordedAt ? `${escapeHtml(atMoscow(input.eventRecordedAt))} МСК` : null,
         ]),
         '⚡ <b>Действие</b>\n└ Срочно связаться с клиентом и проверить эвакуацию',
+      );
+    case 'SERVICE_CENTER_ARRIVAL':
+      return blocks(
+        '🔧 <b>Автомобиль в сервисе</b>',
+        vehicleBlock(input),
+        clientBlock(input),
+        eventBlock('📍 <b>Сервис</b>', [
+          escapeHtml(input.serviceAddress ?? 'Адрес сервиса не указан'),
+          input.eventRecordedAt ? `${escapeHtml(atMoscow(input.eventRecordedAt))} МСК` : null,
+        ]),
+        '⚡ <b>Статус</b>\n└ Машина находится в зоне сервиса не менее 40 минут',
       );
   }
 }

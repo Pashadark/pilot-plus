@@ -5,6 +5,7 @@ import { decryptField } from '@/services/security/field-encryption';
 import { findRussiaBorderProximity } from '@/modules/geography/russia-border';
 import { detectConfirmedImpoundStay } from '@/modules/geography/impound-lots';
 import { processFuelStationPosition } from '@/modules/fuel-stations/server/visit-service';
+import { processVehicleServicePosition } from '@/modules/vehicles/server/service-visit-service';
 
 import { GlonassSoftClient } from './client.server';
 import {
@@ -105,6 +106,11 @@ interface SyncTransaction {
   fuelStationVisit?: {
     findFirst(args: unknown): Promise<unknown>;
     create(args: unknown): Promise<unknown>;
+    update(args: unknown): Promise<unknown>;
+  };
+  vehicleServiceVisit?: {
+    findFirst(args: unknown): Promise<unknown>;
+    create(args: unknown): Promise<{ id: string }>;
     update(args: unknown): Promise<unknown>;
   };
 }
@@ -308,6 +314,16 @@ async function savePoint(
   }
   await enqueueBorderAlert(database, companyId, vehicleId, recordedAt, point, currentVehicle);
   await enqueueImpoundAlert(database, companyId, vehicleId, recordedAt);
+  if (database.vehicleServiceVisit) {
+    await processVehicleServicePosition(database as never, {
+      companyId,
+      vehicleId,
+      latitude: point.latitude,
+      longitude: point.longitude,
+      recordedAt,
+      receivedAt: providerReceivedAt,
+    });
+  }
   if (database.fuelStation && database.fuelStationVisit) {
     await processFuelStationPosition(database as never, {
       companyId,

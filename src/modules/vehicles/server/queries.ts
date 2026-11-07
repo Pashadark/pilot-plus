@@ -6,6 +6,7 @@ import { deriveVehicleGpsStatus } from '../gps-status';
 import { getEffectiveMaintenanceStatus } from '@/modules/maintenance/effective-status';
 import { latestFuelLevelPercent } from '../current-fuel';
 import { driveTypeFromFeatures, fuelConsumptionFromFeatures } from '../technical-features';
+import { deriveVehicleOperationalStatus } from '../operational-status';
 
 interface VehicleRepository {
   findMany(args: unknown): Promise<unknown[]>;
@@ -95,6 +96,9 @@ interface RawVehicle {
       verifiedMime: string;
     }[];
   }[];
+  serviceVisits: {
+    confirmedAt: Date;
+  }[];
   washRecords: {
     id: string;
     kind: VehicleDetailDto['washRecords'][number]['kind'];
@@ -164,6 +168,8 @@ type RawVehicleCard = Pick<
   | 'rentalOperations'
   | 'trips'
   | 'fuelRecords'
+  | 'maintenanceRecords'
+  | 'serviceVisits'
   | 'images'
 >;
 
@@ -242,6 +248,18 @@ const vehicleCardSelect = {
     select: { recordedAt: true, levelPercent: true, consumption: true },
     orderBy: { recordedAt: 'desc' as const },
     take: 20,
+  },
+  maintenanceRecords: {
+    where: { status: { in: ['IN_PROGRESS', 'WAITING_REPAIR', 'DAMAGE_REPORTED'] as const } },
+    select: { id: true, status: true },
+    orderBy: { createdAt: 'desc' as const },
+    take: 1,
+  },
+  serviceVisits: {
+    where: { confirmedAt: { not: null }, exitedAt: null },
+    select: { confirmedAt: true },
+    orderBy: { confirmedAt: 'desc' as const },
+    take: 1,
   },
   images: {
     where: { isPrimary: true },
@@ -370,6 +388,12 @@ const vehicleDetailSelect = {
     orderBy: { createdAt: 'desc' as const },
     take: 50,
   },
+  serviceVisits: {
+    where: { confirmedAt: { not: null }, exitedAt: null },
+    select: { confirmedAt: true },
+    orderBy: { confirmedAt: 'desc' as const },
+    take: 1,
+  },
   washRecords: {
     select: {
       id: true,
@@ -482,6 +506,15 @@ function mapCard(
   const consumptionReading = vehicle.fuelRecords.find((record) => record.consumption != null);
   const trip = vehicle.trips[0];
   const activeRental = vehicle.rentals?.find((rental) => rental.status === 'ACTIVE');
+  const gpsStatus = deriveVehicleGpsStatus(
+    {
+      recordedAt: position?.recordedAt,
+      speedKph: position?.speedKph,
+      address: position?.address,
+      hasCoordinates: Boolean(position),
+    },
+    referenceTime,
+  );
   return {
     id: vehicle.id,
     internalNumber: vehicle.internalNumber,
@@ -503,15 +536,17 @@ function mapCard(
     originalPrice: vehicle.originalPrice,
     features: vehicle.features,
     status: vehicle.status,
-    gpsStatus: deriveVehicleGpsStatus(
-      {
-        recordedAt: position?.recordedAt,
-        speedKph: position?.speedKph,
-        address: position?.address,
-        hasCoordinates: Boolean(position),
-      },
-      referenceTime,
-    ),
+    operationalStatus: deriveVehicleOperationalStatus({
+      hasConfirmedServiceVisit: Boolean(vehicle.serviceVisits?.[0]?.confirmedAt),
+      hasOpenMaintenance:
+        vehicle.status === 'MAINTENANCE' ||
+        (vehicle.maintenanceRecords ?? []).some((record) =>
+          ['IN_PROGRESS', 'WAITING_REPAIR', 'DAMAGE_REPORTED'].includes(record.status),
+        ),
+      hasActiveRental: Boolean(activeRental),
+      gpsStatus: gpsStatus.key,
+    }),
+    gpsStatus,
     primaryImage: vehicle.images[0] ?? null,
     activeRental:
       activeRental?.id && activeRental.endsAt && activeRental.client
@@ -591,10 +626,7 @@ function mapDetail(
   popularityRank: 1 | 2 | 3 | null = null,
 ): VehicleDetailDto {
   const currentRental = vehicle.rentals?.find(
-    (rental) =>
-      rental.status === 'ACTIVE' &&
-      rental.startsAt <= referenceTime &&
-      rental.endsAt > referenceTime,
+    (rental) => rental.status === 'ACTIVE' && rental.startsAt <= referenceTime,
   );
   return {
     ...mapCard(vehicle as RawRankedVehicleCard, referenceTime, popularityRank),

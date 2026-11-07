@@ -20,6 +20,8 @@
   --color-warning-soft: #fef3c7;
   --color-danger: #dc2626;
   --color-danger-soft: #fee2e2;
+  --color-service: #7c3aed;
+  --color-service-soft: #ede9fe;
   --color-border: #e5e7eb;
   --color-border-strong: #d1d5db;
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.05);
@@ -59,6 +61,8 @@
   --color-warning-soft: #78350f;
   --color-danger: #f87171;
   --color-danger-soft: #7f1d1d;
+  --color-service: #c4b5fd;
+  --color-service-soft: #4c1d95;
   --color-border: #374151;
   --color-border-strong: #4b5563;
 }
