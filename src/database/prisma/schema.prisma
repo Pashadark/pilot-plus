@@ -42,6 +42,12 @@ enum FineStatus {
   PAID
   CANCELLED
   OVERDUE
+  ARCHIVED
+}
+
+enum FineArchiveReason {
+  MISSING_FROM_PROVIDER
+  MANUAL_CONFIRMED
 }
 
 enum FineInvoiceStatus {
@@ -1137,6 +1143,10 @@ model Fine {
   photoState                  String?
   providerUpdatedAt           DateTime?               @db.Timestamptz(3)
   lastSyncedAt                DateTime                @db.Timestamptz(3)
+  providerMissingSince        DateTime?               @db.Timestamptz(3)
+  providerMissingSyncCount    Int                     @default(0)
+  archivedAt                  DateTime?               @db.Timestamptz(3)
+  archiveReason               FineArchiveReason?
   assignmentHistory           FineAssignmentHistory[]
   ratingEvents                ClientRatingEvent[]
   invoiceItems                FineInvoiceItem[]

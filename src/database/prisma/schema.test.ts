@@ -54,6 +54,10 @@ const serviceVisitMigrationPath = new URL(
   './migrations/20261107100000_add_vehicle_service_visits/migration.sql',
   import.meta.url,
 );
+const fineArchiveMigrationPath = new URL(
+  './migrations/20261107143000_add_fine_archive_status/migration.sql',
+  import.meta.url,
+);
 
 describe('доменная схема автопарка', () => {
   it('описывает роли, точечные разрешения и журнал аудита центра администрирования', () => {
@@ -353,6 +357,35 @@ describe('доменная схема автопарка', () => {
     expect(migration).toContain('CREATE TABLE "public"."Fine"');
     expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/i);
     expect(migration).not.toMatch(/^\s*UPDATE\b/im);
+  });
+
+  it('хранит доказательства исчезновения штрафа и безопасно переводит его в архив', () => {
+    const fineModel = schema.match(/model Fine \{([\s\S]*?)\n\}/u)?.[1];
+
+    expect(fineModel).toBeDefined();
+    const fineStatusEnum = schema.match(/enum FineStatus \{([\s\S]*?)\n\}/u)?.[1];
+    expect(fineStatusEnum).toMatch(/\bARCHIVED\b/u);
+    expect(schema).toContain('enum FineArchiveReason {');
+    expect(schema).toContain('MISSING_FROM_PROVIDER');
+    expect(schema).toContain('MANUAL_CONFIRMED');
+    expect(fineModel).toMatch(
+      /providerMissingSince\s+DateTime\?\s+@db\.Timestamptz\(3\)/u,
+    );
+    expect(fineModel).toMatch(/providerMissingSyncCount\s+Int\s+@default\(0\)/u);
+    expect(fineModel).toMatch(/archivedAt\s+DateTime\?\s+@db\.Timestamptz\(3\)/u);
+    expect(fineModel).toMatch(/archiveReason\s+FineArchiveReason\?/u);
+    expect(existsSync(fineArchiveMigrationPath)).toBe(true);
+    if (!existsSync(fineArchiveMigrationPath)) return;
+
+    const migration = readFileSync(fineArchiveMigrationPath, 'utf8');
+    expect(migration).toContain(`ALTER TYPE "public"."FineStatus" ADD VALUE 'ARCHIVED'`);
+    expect(migration).toContain('CREATE TYPE "public"."FineArchiveReason"');
+    expect(migration).toContain('ADD COLUMN "providerMissingSyncCount" INTEGER NOT NULL DEFAULT 0');
+    expect(migration).toContain('ADD COLUMN "providerMissingSince" TIMESTAMP(3) WITH TIME ZONE');
+    expect(migration).toContain('ADD COLUMN "archivedAt" TIMESTAMP(3) WITH TIME ZONE');
+    expect(migration).toContain('ADD COLUMN "archiveReason" "public"."FineArchiveReason"');
+    expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE|INDEX)\b/iu);
+    expect(migration).not.toMatch(/^\s*UPDATE\b/imu);
   });
 
   it('хранит sandbox-счета штрафов tenant-scoped с идемпотентностью и безопасными суммами', () => {
