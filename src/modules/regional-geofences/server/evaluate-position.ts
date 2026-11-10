@@ -212,7 +212,16 @@ export async function evaluateRegionalGeofencePosition(
       "updatedAt" = NOW()
     WHERE "id" = ${row.id}
   `);
-  if (!transition.event) return { state: transition.state, eventId: null };
+  if (!transition.event) {
+    return {
+      state: transition.state,
+      eventId: null,
+      eventType: null,
+      rentalId: row.rentalId,
+      clientId: row.clientId,
+      geofenceVersion: row.version,
+    };
+  }
 
   const presentation = eventPresentation(transition.event, transition.eventThresholdKm);
   const outsideDurationMs =
@@ -272,5 +281,12 @@ export async function evaluateRegionalGeofencePosition(
     update: {},
     select: { id: true },
   });
-  return { state: transition.state, eventId: event.id };
+  return {
+    state: transition.state,
+    eventId: event.id,
+    eventType: transition.event,
+    rentalId: row.rentalId,
+    clientId: row.clientId,
+    geofenceVersion: row.version,
+  };
 }

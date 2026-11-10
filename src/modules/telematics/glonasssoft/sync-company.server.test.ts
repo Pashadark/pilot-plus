@@ -1,4 +1,16 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const geofenceMocks = vi.hoisted(() => ({
+  evaluate: vi.fn(),
+  queueClient: vi.fn(),
+}));
+
+vi.mock('@/modules/regional-geofences/server/evaluate-position', () => ({
+  evaluateRegionalGeofencePosition: geofenceMocks.evaluate,
+}));
+vi.mock('@/modules/bot-api/client-regional-geofence-notifications', () => ({
+  queueClientRegionalGeofenceNotifications: geofenceMocks.queueClient,
+}));
 
 import { syncCompanyLatestPositions } from './sync-company.server';
 import { SERVICE_ZONE } from '@/modules/vehicles/service-zone';
@@ -34,6 +46,12 @@ function database() {
 }
 
 describe('синхронизация последних позиций GLONASSSoft', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    geofenceMocks.evaluate.mockResolvedValue(null);
+    geofenceMocks.queueClient.mockResolvedValue({ immediateQueued: true, reminderQueued: true });
+  });
+
   it('останавливается до сети, если интеграция компании выключена', async () => {
     const prisma = database();
     prisma.telematicsIntegration.findUnique.mockResolvedValue(null);
@@ -116,6 +134,65 @@ describe('синхронизация последних позиций GLONASSSo
         lastSuccessAt: new Date('2026-08-20T09:01:00Z'),
         lastErrorCode: null,
       }),
+    });
+  });
+
+  it('ставит клиентские задачи только после подтверждённого выхода из региональной геозоны', async () => {
+    const prisma = database();
+    geofenceMocks.evaluate.mockResolvedValue({
+      state: 'OUTSIDE',
+      eventId: 'event-1',
+      eventType: 'OUTSIDE',
+      rentalId: 'rental-1',
+      clientId: 'client-1',
+      geofenceVersion: 3,
+    });
+    const transaction = {
+      $queryRaw: vi.fn(),
+      $executeRaw: vi.fn(),
+      vehiclePosition: {
+        createMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      vehicle: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      vehicleEvent: { upsert: vi.fn(), createMany: vi.fn() },
+      telegramIdentity: { findUnique: vi.fn() },
+      botNotificationJob: { createMany: vi.fn() },
+    };
+    prisma.$transaction.mockImplementation((callback) => callback(transaction));
+
+    await syncCompanyLatestPositions('company-a', {
+      prisma,
+      createClient: vi.fn(() => ({
+        getLastData: vi.fn().mockResolvedValue([
+          {
+            externalId: '42',
+            receivedAt: '2026-11-10T09:00:02.000Z',
+            recordedAt: '2026-11-10T09:00:00.000Z',
+            state: 4,
+            latitude: 56.1,
+            longitude: 39.1,
+            speedKph: 60,
+            odometerKm: 50000,
+            fuelPercent: 50,
+          },
+        ]),
+      })),
+      decrypt: vi.fn((value: string) => value),
+    });
+
+    expect(geofenceMocks.queueClient).toHaveBeenCalledWith({
+      companyId: 'company-a',
+      vehicleId: 'vehicle-1',
+      rentalId: 'rental-1',
+      clientId: 'client-1',
+      eventId: 'event-1',
+      geofenceVersion: 3,
+      recordedAt: new Date('2026-11-10T09:00:00.000Z'),
+      prisma: transaction,
     });
   });
 

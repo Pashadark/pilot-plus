@@ -7,6 +7,10 @@ import { detectConfirmedImpoundStay } from '@/modules/geography/impound-lots';
 import { processFuelStationPosition } from '@/modules/fuel-stations/server/visit-service';
 import { processVehicleServicePosition } from '@/modules/vehicles/server/service-visit-service';
 import {
+  queueClientRegionalGeofenceNotifications,
+  type ClientRegionalGeofenceNotificationRepository,
+} from '@/modules/bot-api/client-regional-geofence-notifications';
+import {
   evaluateRegionalGeofencePosition,
   type RegionalGeofenceDatabase,
 } from '@/modules/regional-geofences/server/evaluate-position';
@@ -320,31 +324,59 @@ async function savePoint(
   }
   await enqueueBorderAlert(database, companyId, vehicleId, recordedAt, point, currentVehicle);
   if (database.$queryRaw && database.$executeRaw && database.vehicleEvent?.upsert) {
-    await evaluateRegionalGeofencePosition(database as unknown as RegionalGeofenceDatabase, {
-      companyId,
-      vehicleId,
-      position: {
-        latitude: point.latitude,
-        longitude: point.longitude,
-        speedKph: point.speedKph,
-        recordedAt,
-        receivedAt: providerReceivedAt,
+    const regionalGeofenceResult = await evaluateRegionalGeofencePosition(
+      database as unknown as RegionalGeofenceDatabase,
+      {
+        companyId,
+        vehicleId,
+        position: {
+          latitude: point.latitude,
+          longitude: point.longitude,
+          speedKph: point.speedKph,
+          recordedAt,
+          receivedAt: providerReceivedAt,
+        },
+        previous: previous
+          ? {
+              latitude: Number(previous.latitude),
+              longitude: Number(previous.longitude),
+              recordedAt: previous.recordedAt,
+            }
+          : null,
       },
-      previous: previous
-        ? {
-            latitude: Number(previous.latitude),
-            longitude: Number(previous.longitude),
-            recordedAt: previous.recordedAt,
-          }
-        : null,
-    }).catch((error: unknown) => {
+    ).catch((error: unknown) => {
       console.error('regional-geofence-evaluation-failed', {
         companyId,
         vehicleId,
         recordedAt: recordedAt.toISOString(),
         error: error instanceof Error ? error.message : 'unknown',
       });
+      return null;
     });
+    if (
+      regionalGeofenceResult?.eventType === 'OUTSIDE' &&
+      regionalGeofenceResult.eventId &&
+      database.telegramIdentity?.findUnique &&
+      database.botNotificationJob?.createMany
+    ) {
+      await queueClientRegionalGeofenceNotifications({
+        companyId,
+        vehicleId,
+        rentalId: regionalGeofenceResult.rentalId,
+        clientId: regionalGeofenceResult.clientId,
+        eventId: regionalGeofenceResult.eventId,
+        geofenceVersion: regionalGeofenceResult.geofenceVersion,
+        recordedAt,
+        prisma: database as ClientRegionalGeofenceNotificationRepository,
+      }).catch((error: unknown) => {
+        console.error('client-regional-geofence-notification-failed', {
+          companyId,
+          vehicleId,
+          eventId: regionalGeofenceResult.eventId,
+          error: error instanceof Error ? error.message : 'unknown',
+        });
+      });
+    }
   }
   await enqueueImpoundAlert(database, companyId, vehicleId, recordedAt);
   if (database.vehicleServiceVisit) {
