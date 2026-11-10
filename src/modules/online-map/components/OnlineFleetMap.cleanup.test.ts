@@ -675,6 +675,14 @@ it('различает события не только цветом, но и ф
   expect(new Set(semanticImages.map((image) => Array.from(image.data).join(','))).size).toBe(4);
 });
 
+it('отключает пульсацию при reduced motion и на скрытой вкладке', async () => {
+  const { shouldAnimateTrackEventPulse } = await import('./VehicleTrackLayers');
+
+  expect(shouldAnimateTrackEventPulse(true, 'visible')).toBe(false);
+  expect(shouldAnimateTrackEventPulse(false, 'hidden')).toBe(false);
+  expect(shouldAnimateTrackEventPulse(false, 'visible')).toBe(true);
+});
+
 it('создаёт компактные разные маркеры старта и финиша с клетчатым флагом', async () => {
   const { createTrackEndpointIconImage, getTrackEndpointIconId } =
     await import('./VehicleTrackLayers');
@@ -683,19 +691,13 @@ it('создаёт компактные разные маркеры старта
 
   expect(getTrackEndpointIconId('start')).toBe('vehicle-track-endpoint-start');
   expect(getTrackEndpointIconId('finish')).toBe('vehicle-track-endpoint-finish');
-  expect(start).toMatchObject({ width: 64, height: 64 });
-  expect(finish).toMatchObject({ width: 64, height: 64 });
+  expect(start).toMatchObject({ width: 56, height: 56 });
+  expect(finish).toMatchObject({ width: 56, height: 56 });
   expect(Array.from(start.data)).not.toEqual(Array.from(finish.data));
-  const whiteCheckerCells = Array.from({ length: 4 }, (_, row) =>
-    Array.from({ length: 5 }, (_, column) => ({ row, column })),
-  )
-    .flat()
-    .filter(({ row, column }) => (row + column) % 2 === 0)
-    .filter(({ row, column }) => {
-      const offset = ((20 + row * 5) * finish.width + (22 + column * 5)) * 4;
-      return finish.data.slice(offset, offset + 4).every((value) => value === 255);
-    });
-  expect(whiteCheckerCells).toHaveLength(10);
+  const whitePixels = Array.from({ length: finish.width * finish.height }, (_, index) =>
+    Array.from(finish.data.slice(index * 4, index * 4 + 4)),
+  ).filter((pixel) => pixel.join(',') === '255,255,255,255');
+  expect(whitePixels.length).toBeGreaterThan(20);
 });
 
 it('вычисляет fit padding по ширине контейнера карты, а не окна', async () => {
@@ -887,11 +889,8 @@ it('регистрирует видимую линию, hitbox, события, 
     'circle-radius',
     expect.any(Number),
   );
-  expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
-    expect.objectContaining({
-      id: 'vehicle-track-event-leaders',
-      type: 'symbol',
-    }),
+  expect(mapMocks.mapAddLayer).not.toHaveBeenCalledWith(
+    expect.objectContaining({ id: 'vehicle-track-event-leaders' }),
   );
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -948,7 +947,7 @@ it('регистрирует видимую линию, hitbox, события, 
       type: 'symbol',
       layout: expect.objectContaining({
         'icon-image': ['get', 'icon'],
-        'icon-offset': [0, -22],
+        'icon-offset': [0, 0],
       }),
     }),
   );
@@ -986,11 +985,7 @@ it('регистрирует видимую линию, hitbox, события, 
   expect(mapMocks.mapContainer.dataset.trackLineOffset).toBeUndefined();
 });
 
-function pixelAt(
-  image: { width: number; data: Uint8Array },
-  x: number,
-  y: number,
-): number[] {
+function pixelAt(image: { width: number; data: Uint8Array }, x: number, y: number): number[] {
   const offset = (y * image.width + x) * 4;
   return Array.from(image.data.slice(offset, offset + 4));
 }
@@ -1001,7 +996,10 @@ it('показывает доступное русское описание сг
 
   render(createElement(TrackEventPopup, { event, count: 2 }));
 
-  expect(screen.getByRole('article', { name: `Событие: ${event.title}` })).toBeTruthy();
+  const popup = screen.getByRole('article', { name: `Событие: ${event.title}` });
+  expect(popup.className).toContain('bg-[var(--color-surface)]');
+  expect(popup.className).toContain('border-[var(--color-border)]');
+  expect(popup.className).toContain('rounded-[var(--radius-md)]');
   expect(screen.getByText('2 события')).toBeTruthy();
   expect(screen.getByText(`${event.timestamp} · ${event.speedKph} км/ч`)).toBeTruthy();
   expect(screen.getByText(event.address)).toBeTruthy();

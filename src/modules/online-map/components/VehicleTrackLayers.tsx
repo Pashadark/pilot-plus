@@ -21,7 +21,7 @@ const TRACK_LAYER_IDS = [
   'vehicle-track-event-counts',
   'vehicle-track-event-metrics',
   'vehicle-track-event-icons',
-  'vehicle-track-event-leaders',
+  'vehicle-track-event-pulse',
   'vehicle-track-events',
   'vehicle-track-endpoint-labels',
   'vehicle-track-endpoints',
@@ -403,6 +403,13 @@ export function trackEventsToGeoJson(
   };
 }
 
+export function shouldAnimateTrackEventPulse(
+  reducedMotion: boolean,
+  visibilityState: DocumentVisibilityState,
+): boolean {
+  return !reducedMotion && visibilityState !== 'hidden';
+}
+
 export function mountVehicleTrackLayers(
   map: Map,
   options: MountVehicleTrackLayersOptions,
@@ -421,6 +428,60 @@ export function mountVehicleTrackLayers(
   const gradientSourceIds: string[] = [];
   let hoveredSegmentId: string | null = null;
   let hoveredEventId: string | null = null;
+  let pulseFrameId: number | null = null;
+  let pulseFrameScheduling = false;
+  let pulseVisibilityListenerAttached = false;
+
+  const reducedMotion =
+    typeof window !== 'undefined' &&
+    (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+
+  const stopPulse = () => {
+    if (pulseFrameId === null || typeof window === 'undefined') return;
+    window.cancelAnimationFrame(pulseFrameId);
+    pulseFrameId = null;
+  };
+
+  const animatePulse = (timestamp: number) => {
+    pulseFrameId = null;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+
+    const progress = (timestamp % 2_000) / 2_000;
+    try {
+      if (hasMapStyle(map) && map.getLayer('vehicle-track-event-pulse')) {
+        map.setPaintProperty('vehicle-track-event-pulse', 'circle-radius', 14 + progress * 8);
+        map.setPaintProperty('vehicle-track-event-pulse', 'circle-opacity', 0.24 * (1 - progress));
+      }
+    } catch {
+      return;
+    }
+
+    if (typeof window !== 'undefined' && !pulseFrameScheduling) {
+      pulseFrameId = window.requestAnimationFrame(animatePulse);
+    }
+  };
+
+  const startPulse = () => {
+    if (
+      pulseFrameId !== null ||
+      typeof window === 'undefined' ||
+      !shouldAnimateTrackEventPulse(
+        reducedMotion,
+        typeof document === 'undefined' ? 'visible' : document.visibilityState,
+      )
+    ) {
+      return;
+    }
+    pulseFrameScheduling = true;
+    const requestedFrameId = window.requestAnimationFrame(animatePulse);
+    pulseFrameScheduling = false;
+    if (pulseFrameId === null) pulseFrameId = requestedFrameId;
+  };
+
+  const handleVisibilityChange = () => {
+    if (shouldAnimateTrackEventPulse(reducedMotion, document.visibilityState)) startPulse();
+    else stopPulse();
+  };
 
   const handleSegmentMove = (event: MapLayerMouseEvent) => {
     const featureId = getFeatureId(event);
@@ -477,6 +538,12 @@ export function mountVehicleTrackLayers(
   };
 
   const cleanup = () => {
+    stopPulse();
+    if (pulseVisibilityListenerAttached && typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      pulseVisibilityListenerAttached = false;
+    }
+
     map.off('mousemove', 'vehicle-track-hitbox', handleSegmentMove);
     map.off('mouseleave', 'vehicle-track-hitbox', handleSegmentLeave);
     map.off('mousemove', 'vehicle-track-event-hitbox', handleEventMove);
@@ -690,37 +757,13 @@ export function mountVehicleTrackLayers(
       },
     });
     map.addLayer({
-      id: 'vehicle-track-event-leaders',
-      type: 'symbol',
-      source: TRACK_EVENTS_SOURCE_ID,
-      filter: [
-        'in',
-        ['get', 'type'],
-        ['literal', ['speeding', 'harsh-acceleration', 'harsh-braking']],
-      ],
-      layout: {
-        'text-field': '│',
-        'text-size': 20,
-        'text-offset': [0, -0.75],
-        'text-anchor': 'center',
-        'text-allow-overlap': true,
-        'text-ignore-placement': true,
-      },
-      paint: {
-        'text-color': ['get', 'eventColor'],
-        'text-halo-color': markerTheme === 'dark' ? '#343438' : '#f8fafc',
-        'text-halo-width': 0.75,
-        'text-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.58, 15, 1],
-      },
-    });
-    map.addLayer({
       id: 'vehicle-track-event-icons',
       type: 'symbol',
       source: TRACK_EVENTS_SOURCE_ID,
       layout: {
         'icon-image': ['get', 'icon'],
         'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.58, 13, 0.72, 15, 1],
-        'icon-offset': [0, -22],
+        'icon-offset': [0, 0],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
       },
@@ -728,6 +771,20 @@ export function mountVehicleTrackLayers(
         'icon-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.58, 13, 0.72, 15, 1],
       },
     });
+    map.addLayer(
+      {
+        id: 'vehicle-track-event-pulse',
+        type: 'circle',
+        source: TRACK_EVENTS_SOURCE_ID,
+        paint: {
+          'circle-color': ['get', 'eventColor'],
+          'circle-radius': 14,
+          'circle-opacity': 0.2,
+          'circle-stroke-width': 0,
+        },
+      },
+      'vehicle-track-event-icons',
+    );
     map.addLayer({
       id: 'vehicle-track-event-metrics',
       type: 'symbol',
@@ -740,7 +797,7 @@ export function mountVehicleTrackLayers(
       layout: {
         'text-field': ['get', 'metricLabel'],
         'text-size': 12,
-        'text-offset': [1.55, -1.85],
+        'text-offset': [1.55, 0],
         'text-anchor': 'left',
         'text-allow-overlap': true,
         'text-ignore-placement': true,
@@ -788,6 +845,12 @@ export function mountVehicleTrackLayers(
     map.on('mousemove', 'vehicle-track-event-hitbox', handleEventMove);
     map.on('mouseleave', 'vehicle-track-event-hitbox', handleEventLeave);
     map.on('click', 'vehicle-track-event-hitbox', handleEventClick);
+
+    if (!reducedMotion && typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      pulseVisibilityListenerAttached = true;
+      startPulse();
+    }
 
     const container = map.getContainer();
     container.dataset.trackCasingWidth = JSON.stringify(
@@ -870,44 +933,34 @@ export function createTrackEndpointIconImage(
   height: number;
   data: Uint8Array;
 } {
-  const width = 64;
-  const height = 64;
+  const width = 56;
+  const height = 56;
   const data = new Uint8Array(width * height * 4);
-  const center = 31.5;
-  const outline = theme === 'dark' ? ([52, 52, 56, 255] as const) : ([248, 250, 252, 255] as const);
-  const fill = kind === 'start' ? ([22, 163, 74, 255] as const) : ([17, 19, 24, 255] as const);
+  const center = 27.5;
+  const surface = getMarkerSurface(theme);
+  const accent =
+    kind === 'start'
+      ? ([22, 163, 74, 255] as const)
+      : theme === 'dark'
+        ? ([255, 255, 255, 255] as const)
+        : ([17, 19, 24, 255] as const);
 
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const distanceSquared = (x - center) ** 2 + (y - center) ** 2;
-      if (distanceSquared <= 31 ** 2) {
-        setIconPixel(data, width, x, y, outline);
-      }
-      if (distanceSquared <= 28.5 ** 2) {
-        setIconPixel(data, width, x, y, fill);
-      }
-    }
-  }
+  drawCircle(data, width, center, center, 27.5, accent);
+  drawCircle(data, width, center, center, 23.5, surface);
 
   if (kind === 'start') {
-    for (let y = 19; y <= 44; y += 1) {
-      const tipX = 43 - Math.ceil(Math.abs(31.5 - y) * 1.5);
-      for (let x = 23; x <= tipX; x += 1) {
-        setIconPixel(data, width, x, y, [255, 255, 255, 255]);
-      }
-    }
+    drawCircle(data, width, center, center, 10, accent);
+    drawCircle(data, width, center, center, 6, surface);
+    drawCircle(data, width, center, center, 2.5, accent);
   } else {
-    for (let y = 16; y <= 45; y += 1) {
-      for (let x = 17; x <= 19; x += 1) {
-        setIconPixel(data, width, x, y, [255, 255, 255, 255]);
-      }
-    }
+    const flagLight = [255, 255, 255, 255] as const;
+    const flagDark = [49, 54, 64, 255] as const;
+    drawLine(data, width, [18, 16], [18, 41], 3, accent);
     for (let row = 0; row < 4; row += 1) {
       for (let column = 0; column < 5; column += 1) {
-        const color =
-          (row + column) % 2 === 0 ? ([255, 255, 255, 255] as const) : ([49, 54, 64, 255] as const);
-        for (let y = 18 + row * 5; y < 23 + row * 5; y += 1) {
-          for (let x = 20 + column * 5; x < 25 + column * 5; x += 1) {
+        const color = (row + column) % 2 === 0 ? flagLight : flagDark;
+        for (let y = 17 + row * 5; y < 22 + row * 5; y += 1) {
+          for (let x = 20 + column * 4; x < 24 + column * 4; x += 1) {
             setIconPixel(data, width, x, y, color);
           }
         }
@@ -926,42 +979,178 @@ export function createTrackEventIconImage(
   height: number;
   data: Uint8Array;
 } {
-  const width = 48;
-  const height = 48;
+  const width = 56;
+  const height = 56;
   const data = new Uint8Array(width * height * 4);
   const color = getEventIconColor(type);
-  const outline = theme === 'dark' ? ([52, 52, 56, 255] as const) : ([248, 250, 252, 255] as const);
+  const center = 27.5;
 
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const distance = (x - 23.5) ** 2 + (y - 23.5) ** 2;
-      if (distance <= 23 ** 2) {
-        setIconPixel(data, width, x, y, outline);
-      }
-      if (distance <= 21.5 ** 2) {
-        setIconPixel(data, width, x, y, color);
-      }
-    }
+  drawCircle(data, width, center, center, 27.5, color);
+  drawCircle(data, width, center, center, 23.5, getMarkerSurface(theme));
+
+  if (type === 'speeding') {
+    drawSpeedometerGlyph(data, width, color);
+  } else if (type === 'harsh-acceleration') {
+    drawDoubleChevronGlyph(data, width, 'up', color);
+  } else if (type === 'harsh-braking') {
+    drawDoubleChevronGlyph(data, width, 'down', color);
+  } else if (type === 'connection-loss') {
+    drawConnectionLossGlyph(data, width, color);
+  } else {
+    drawPatternGlyph(data, width, TRACK_EVENT_ICON_PATTERNS[type], color);
   }
 
-  TRACK_EVENT_ICON_PATTERNS[type].forEach((row, rowIndex) => {
+  return { width, height, data };
+}
+
+type Rgba = readonly [number, number, number, number];
+
+function getMarkerSurface(theme: 'light' | 'dark'): Rgba {
+  return theme === 'dark' ? [23, 23, 28, 255] : [248, 250, 252, 255];
+}
+
+function drawSpeedometerGlyph(data: Uint8Array, width: number, color: Rgba) {
+  drawArc(data, width, 28, 32, 12, Math.PI, Math.PI * 2, 2.5, color);
+  drawLine(data, width, [28, 32], [36, 24], 2.5, color);
+  drawCircle(data, width, 28, 32, 2.5, color);
+}
+
+function drawDoubleChevronGlyph(
+  data: Uint8Array,
+  width: number,
+  direction: 'up' | 'down',
+  color: Rgba,
+) {
+  const rows = [23, 33];
+  for (const row of rows) {
+    if (direction === 'up') {
+      drawLine(data, width, [19, row + 5], [28, row - 4], 3, color);
+      drawLine(data, width, [28, row - 4], [37, row + 5], 3, color);
+    } else {
+      drawLine(data, width, [19, row - 4], [28, row + 5], 3, color);
+      drawLine(data, width, [28, row + 5], [37, row - 4], 3, color);
+    }
+  }
+}
+
+function drawConnectionLossGlyph(data: Uint8Array, width: number, color: Rgba) {
+  drawArc(data, width, 28, 34, 13, Math.PI * 1.18, Math.PI * 1.82, 2.5, color);
+  drawArc(data, width, 28, 34, 8, Math.PI * 1.18, Math.PI * 1.82, 2.5, color);
+  drawCircle(data, width, 28, 34, 2.5, color);
+  drawLine(data, width, [18, 17], [39, 39], 3, color);
+}
+
+function drawPatternGlyph(
+  data: Uint8Array,
+  width: number,
+  pattern: readonly string[],
+  color: Rgba,
+) {
+  const cellSize = 5;
+  const start = 15;
+  pattern.forEach((row, rowIndex) => {
     [...row].forEach((pixel, columnIndex) => {
       if (pixel !== '1') return;
-      for (let offsetY = 0; offsetY < 4; offsetY += 1) {
-        for (let offsetX = 0; offsetX < 4; offsetX += 1) {
+      for (let offsetY = 0; offsetY < cellSize; offsetY += 1) {
+        for (let offsetX = 0; offsetX < cellSize; offsetX += 1) {
           setIconPixel(
             data,
             width,
-            14 + columnIndex * 4 + offsetX,
-            14 + rowIndex * 4 + offsetY,
-            [255, 255, 255, 255],
+            start + columnIndex * cellSize + offsetX,
+            start + rowIndex * cellSize + offsetY,
+            color,
           );
         }
       }
     });
   });
+}
 
-  return { width, height, data };
+function drawArc(
+  data: Uint8Array,
+  width: number,
+  centerX: number,
+  centerY: number,
+  radius: number,
+  startAngle: number,
+  endAngle: number,
+  thickness: number,
+  color: Rgba,
+) {
+  const steps = Math.max(12, Math.ceil(radius * Math.abs(endAngle - startAngle)));
+  let previous: readonly [number, number] = [
+    centerX + Math.cos(startAngle) * radius,
+    centerY + Math.sin(startAngle) * radius,
+  ];
+  for (let index = 1; index <= steps; index += 1) {
+    const angle = startAngle + ((endAngle - startAngle) * index) / steps;
+    const next: readonly [number, number] = [
+      centerX + Math.cos(angle) * radius,
+      centerY + Math.sin(angle) * radius,
+    ];
+    drawLine(data, width, previous, next, thickness, color);
+    previous = next;
+  }
+}
+
+function drawLine(
+  data: Uint8Array,
+  width: number,
+  from: readonly [number, number],
+  to: readonly [number, number],
+  thickness: number,
+  color: Rgba,
+) {
+  const minX = Math.max(0, Math.floor(Math.min(from[0], to[0]) - thickness));
+  const maxX = Math.min(width - 1, Math.ceil(Math.max(from[0], to[0]) + thickness));
+  const minY = Math.max(0, Math.floor(Math.min(from[1], to[1]) - thickness));
+  const maxY = Math.min(width - 1, Math.ceil(Math.max(from[1], to[1]) + thickness));
+  const segmentX = to[0] - from[0];
+  const segmentY = to[1] - from[1];
+  const segmentLengthSquared = segmentX ** 2 + segmentY ** 2;
+
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      const projection =
+        segmentLengthSquared === 0
+          ? 0
+          : Math.max(
+              0,
+              Math.min(
+                1,
+                ((x - from[0]) * segmentX + (y - from[1]) * segmentY) / segmentLengthSquared,
+              ),
+            );
+      const nearestX = from[0] + projection * segmentX;
+      const nearestY = from[1] + projection * segmentY;
+      if (Math.hypot(x - nearestX, y - nearestY) <= thickness / 2) {
+        setIconPixel(data, width, x, y, color);
+      }
+    }
+  }
+}
+
+function drawCircle(
+  data: Uint8Array,
+  width: number,
+  centerX: number,
+  centerY: number,
+  radius: number,
+  color: Rgba,
+) {
+  const minX = Math.max(0, Math.floor(centerX - radius));
+  const maxX = Math.min(width - 1, Math.ceil(centerX + radius));
+  const minY = Math.max(0, Math.floor(centerY - radius));
+  const maxY = Math.min(width - 1, Math.ceil(centerY + radius));
+  const radiusSquared = radius ** 2;
+
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      if ((x - centerX) ** 2 + (y - centerY) ** 2 <= radiusSquared) {
+        setIconPixel(data, width, x, y, color);
+      }
+    }
+  }
 }
 
 function getEventIconColor(
@@ -971,7 +1160,7 @@ function getEventIconColor(
   if (type === 'harsh-acceleration') return [245, 158, 11, 255];
   if (type === 'harsh-braking') return [0, 103, 255, 255];
   if (type === 'fine') return [124, 58, 237, 255];
-  if (type === 'connection-loss') return [71, 85, 105, 255];
+  if (type === 'connection-loss') return [146, 146, 156, 255];
   if (type === 'refuel') return [37, 99, 235, 255];
   if (type === 'stop') return [245, 158, 11, 255];
   if (type === 'geofence-enter') return [22, 163, 74, 255];
@@ -983,7 +1172,7 @@ function getTrackEventColor(type: VehicleTrackEventView['type']): string {
   if (type === 'harsh-acceleration') return '#f59e0b';
   if (type === 'harsh-braking') return '#0067ff';
   if (type === 'fine') return '#7c3aed';
-  if (type === 'connection-loss') return '#64748b';
+  if (type === 'connection-loss') return '#92929c';
   if (type === 'refuel') return '#2563eb';
   if (type === 'stop') return '#f59e0b';
   return '#8b5cf6';
