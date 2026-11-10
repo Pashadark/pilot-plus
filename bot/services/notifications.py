@@ -1,5 +1,6 @@
 import asyncio
 from html import escape
+from aiogram.exceptions import TelegramBadRequest
 from bot.keyboards.client import client_main_menu
 from bot.keyboards.notifications import notification_actions
 
@@ -45,6 +46,7 @@ def notification_target(job: dict) -> int:
         'CLIENT_RENTAL_LIFECYCLE',
         'CLIENT_IMPOUND_ALERT',
         'CLIENT_GPS_EVENT',
+        'CLIENT_REGIONAL_GEOFENCE_ALERT',
     }:
         target = str(identity.get('telegramUserId') or '')
         if (not chat and identity.get('isActive') is True and identity.get('kind') == 'CLIENT'
@@ -88,20 +90,23 @@ async def send_notification(bot, target, job: dict) -> None:
     text, parse_mode = notification_content(job)
     payload = job.get("payload") or {}
     remember_digest(target, payload)
-    if payload.get("clientMenu") is True:
-        await bot.send_message(target, text, parse_mode=parse_mode, reply_markup=client_main_menu())
-        return
-    markup = notification_actions(payload.get("actions"))
+    markup = (
+        client_main_menu()
+        if payload.get("clientMenu") is True
+        else notification_actions(payload.get("actions"))
+    )
+    kwargs = {}
     if parse_mode:
-        if markup:
-            await bot.send_message(target, text, parse_mode=parse_mode, reply_markup=markup)
-        else:
-            await bot.send_message(target, text, parse_mode=parse_mode)
-    else:
-        if markup:
-            await bot.send_message(target, text, reply_markup=markup)
-        else:
-            await bot.send_message(target, text)
+        kwargs["parse_mode"] = parse_mode
+    if markup:
+        kwargs["reply_markup"] = markup
+    try:
+        await bot.send_message(target, text, **kwargs)
+    except TelegramBadRequest:
+        if not markup:
+            raise
+        kwargs.pop("reply_markup", None)
+        await bot.send_message(target, text, **kwargs)
 
 
 async def notification_worker(bot, api, stop_event: asyncio.Event, staff_chat_id: int | None = None, worker_id: str = "supa-pro-bot", audience: str = "STAFF") -> None:

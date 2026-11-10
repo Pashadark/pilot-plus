@@ -105,12 +105,11 @@ def test_notification_actions_build_safe_url_and_summary_callback_buttons():
     ])
 
     buttons = [button for row in markup.inline_keyboard for button in row]
-    assert buttons[0].url == "tel:+79991234567"
-    assert buttons[1].url == "https://supapro.ru/rentals/r1"
-    assert buttons[2].callback_data == "notify:section:trackers:2026-10-23"
-    assert buttons[3].callback_data == "notify:refresh:2026-10-23"
+    assert buttons[0].url == "https://supapro.ru/rentals/r1"
+    assert buttons[1].callback_data == "notify:section:trackers:2026-10-23"
+    assert buttons[2].callback_data == "notify:refresh:2026-10-23"
     assert all(len(button.callback_data.encode()) <= 64 for button in buttons if button.callback_data)
-    assert [len(row) for row in markup.inline_keyboard] == [2, 1, 1]
+    assert [len(row) for row in markup.inline_keyboard] == [1, 1, 1]
 
 
 def test_notification_actions_support_a_generic_supapro_open_button():
@@ -122,6 +121,17 @@ def test_notification_actions_support_a_generic_supapro_open_button():
     assert markup.inline_keyboard[0][0].url == "https://supapro.ru/leads"
 
 
+def test_notification_actions_omit_tel_urls_that_telegram_rejects_for_inline_buttons():
+    markup = notification_actions([
+        {"type": "phone_url", "label": "📞 Позвонить", "url": "tel:+79991234567"},
+        {"type": "map_url", "label": "🗺 Карта", "url": "https://supapro.ru/map"},
+    ])
+
+    buttons = [button for row in markup.inline_keyboard for button in row]
+    assert [button.text for button in buttons] == ["🗺 Карта"]
+    assert buttons[0].url == "https://supapro.ru/map"
+
+
 def test_impound_actions_build_notify_and_phone_buttons():
     markup = notification_actions([
         {"type": "notify_client", "label": "✉️ Сообщить", "actionId": "rental-1"},
@@ -130,7 +140,7 @@ def test_impound_actions_build_notify_and_phone_buttons():
 
     buttons = [button for row in markup.inline_keyboard for button in row]
     assert buttons[0].callback_data == "notify:client:rental-1:impound"
-    assert buttons[1].url == "tel:+79991234567"
+    assert len(buttons) == 1
 
 
 def test_fine_actions_keep_phone_and_decree_together_and_payment_full_width():
@@ -141,7 +151,7 @@ def test_fine_actions_keep_phone_and_decree_together_and_payment_full_width():
     ])
 
     assert [[button.text for button in row] for row in markup.inline_keyboard] == [
-        ["📞 Позвонить", "📥 Скачать постановление"],
+        ["📥 Скачать постановление"],
         ["💳 Оплатить 562 ₽"],
     ]
 

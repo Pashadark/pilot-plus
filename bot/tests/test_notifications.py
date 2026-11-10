@@ -1,6 +1,8 @@
 from unittest.mock import AsyncMock
 
 import pytest
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.methods import SendMessage
 import bot.services.notifications as notifications
 
 from bot.services.notifications import notification_worker
@@ -13,6 +15,23 @@ def test_client_gps_event_is_delivered_only_to_the_linked_client_identity():
     job = {
         "companyId": "company-1",
         "template": "CLIENT_GPS_EVENT",
+        "chatId": None,
+        "identity": {
+            "telegramUserId": "5370970341",
+            "companyId": "company-1",
+            "clientId": "client-1",
+            "kind": "CLIENT",
+            "isActive": True,
+        },
+    }
+
+    assert notifications.notification_target(job) == 5370970341
+
+
+def test_client_regional_geofence_alert_is_delivered_to_the_linked_client_identity():
+    job = {
+        "companyId": "company-1",
+        "template": "CLIENT_REGIONAL_GEOFENCE_ALERT",
         "chatId": None,
         "identity": {
             "telegramUserId": "5370970341",
@@ -143,6 +162,35 @@ async def test_html_notification_delivers_allow_listed_actions_as_inline_keyboar
     assert [[button.callback_data for button in row] for row in buttons] == [
         ["notify:section:trackers:2026-10-23"],
     ]
+
+
+@pytest.mark.asyncio
+async def test_html_notification_retries_without_keyboard_after_telegram_rejects_markup():
+    bot = AsyncMock()
+    bot.send_message.side_effect = [
+        TelegramBadRequest(
+            method=SendMessage(chat_id=-100777, text="Сервис"),
+            message="Bad Request: wrong HTTP URL specified",
+        ),
+        None,
+    ]
+
+    await send_notification(bot, -100777, {
+        "template": "OPERATIONAL_ALERT",
+        "payload": {
+            "message": "🔧 <b>Автомобиль в сервисе</b>",
+            "parseMode": "HTML",
+            "actions": [
+                {"type": "map_url", "label": "🗺 Карта", "url": "https://supapro.ru/map"},
+            ],
+        },
+    })
+
+    assert bot.send_message.await_count == 2
+    first, second = bot.send_message.await_args_list
+    assert first.kwargs["reply_markup"] is not None
+    assert second.args == (-100777, "🔧 <b>Автомобиль в сервисе</b>")
+    assert second.kwargs == {"parse_mode": "HTML"}
 
 
 @pytest.mark.asyncio

@@ -4,17 +4,14 @@ from urllib.parse import urlparse
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-_URL_ACTIONS = frozenset({"phone_url", "map_url", "contract_url", "decree_url", "payment_url", "open_url"})
+_URL_ACTIONS = frozenset({"map_url", "contract_url", "decree_url", "payment_url", "open_url"})
 _SUMMARY_SECTIONS = frozenset({"critical", "trackers", "totals"})
 _SAFE_ID = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-_PHONE_URL = re.compile(r"^tel:\+[1-9]\d{6,14}$")
 
 
 def _safe_url(action_type: str, value: object) -> str | None:
     url = str(value or "").strip()
-    if action_type == "phone_url":
-        return url if _PHONE_URL.fullmatch(url) else None
     parsed = urlparse(url)
     if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
         return None
