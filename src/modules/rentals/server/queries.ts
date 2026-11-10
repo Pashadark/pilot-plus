@@ -352,7 +352,14 @@ export async function getRentalDetailForCurrentUser(id: string) {
     },
   });
   return rental
-    ? { ...rental, canEdit: accessModule.canEditRental(access, rental.companyId, rental.status) }
+    ? {
+        ...rental,
+        canEdit: accessModule.canEditRental(access, rental.companyId, rental.status),
+        canManageRegionalGeofence: accessModule.canManageRentalRegionalGeofence(
+          access,
+          rental.companyId,
+        ),
+      }
     : null;
 }
 

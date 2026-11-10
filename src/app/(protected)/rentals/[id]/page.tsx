@@ -17,6 +17,11 @@ import {
   moscowWeekRange,
   nextFridayMorning,
 } from '@/modules/rentals/lease-to-own/weekly-inspection';
+import { RentalRegionalGeofenceCard } from '@/modules/regional-geofences/components/RentalRegionalGeofenceCard';
+import {
+  getRentalRegionalGeofenceForCurrentUser,
+  listRussianRegions,
+} from '@/modules/regional-geofences/server/queries';
 export default async function RentalDetail({
   params,
   searchParams,
@@ -42,7 +47,11 @@ export default async function RentalDetail({
   const client = [rental.client.lastName, rental.client.firstName, rental.client.middleName]
     .filter(Boolean)
     .join(' ');
-  const history = await listRentalAuditForCurrentUser(rental.companyId, rental.id);
+  const [history, regions, regionalGeofence] = await Promise.all([
+    listRentalAuditForCurrentUser(rental.companyId, rental.id),
+    listRussianRegions(),
+    getRentalRegionalGeofenceForCurrentUser(rental.id),
+  ]);
   const detail = rentalDetailPresentation({
     id: rental.id,
     contractNumber: rental.contractNumber,
@@ -167,6 +176,13 @@ export default async function RentalDetail({
             </section>
           ) : null}
           <RentalDetailWorkspace detail={detail} />
+          <RentalRegionalGeofenceCard
+            rentalId={rental.id}
+            vehicleId={rental.vehicleId}
+            canEdit={rental.canManageRegionalGeofence}
+            regions={regions}
+            geofence={regionalGeofence}
+          />
           <RentalSettlementCard
             companyId={rental.companyId}
             rentalId={rental.id}

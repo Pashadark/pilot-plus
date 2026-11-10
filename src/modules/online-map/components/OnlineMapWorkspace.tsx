@@ -26,6 +26,7 @@ import type {
 } from '../track-types';
 import type { OnlineMapFilter, OnlineMapVehicle } from '../types';
 import { useVehicleTrackHistory } from '../useVehicleTrackHistory';
+import { useVehicleRegionalGeofence } from '../useVehicleRegionalGeofence';
 import { FleetVehicleRail } from './FleetVehicleRail';
 import type { OnlineFleetMapProps } from './OnlineFleetMap';
 import { OnlineFleetMapClient } from './OnlineFleetMapClient';
@@ -133,6 +134,7 @@ export function OnlineMapWorkspace({
   const selectedVehicle =
     filteredVehicles.find((vehicle) => vehicle.id === selectedVehicleId) ?? null;
   const effectiveSelectedVehicleId = selectedVehicle?.id ?? null;
+  const regionalGeofence = useVehicleRegionalGeofence(effectiveSelectedVehicleId);
   const historyFrom = trackPeriod === 'seven-days' ? addCalendarDays(trackDate, -6) : trackDate;
   const remoteHistory = useVehicleTrackHistory({
     vehicleId: historyProvider ? null : effectiveSelectedVehicleId,
@@ -466,6 +468,7 @@ export function OnlineMapWorkspace({
           <MapComponent
             vehicles={filteredVehicles}
             selectedVehicleId={effectiveSelectedVehicleId}
+            regionalGeofence={regionalGeofence.data}
             trackViewModel={trackViewModel}
             playbackPoint={playbackPoint}
             playbackHeading={playbackHeading}
@@ -488,6 +491,8 @@ export function OnlineMapWorkspace({
         <SelectedVehiclePanel
           key={selectedVehicle.id}
           vehicle={selectedVehicle}
+          regionalGeofence={regionalGeofence.data}
+          regionalGeofenceLoading={regionalGeofence.loading}
           onClose={clearVehicleSelection}
           mobileCollapsed={mobilePanelCollapsed}
           onMobileCollapsedChange={setMobilePanelCollapsed}

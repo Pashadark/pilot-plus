@@ -354,6 +354,7 @@ export async function enqueueOperationalAlerts(now: Date, database = prisma) {
       select: {
         id: true,
         vehicleId: true,
+        rentalId: true,
         type: true,
         vehicle: { select: { companyId: true } },
       },
@@ -505,16 +506,28 @@ export async function enqueueOperationalAlerts(now: Date, database = prisma) {
   }
   for (const event of events) {
     const normalizedType = event.type.toUpperCase();
-    const kind = /GEOFENCE|ZONE|ГЕОЗОН/iu.test(normalizedType)
-      ? 'GEOFENCE_EXIT'
-      : /SPEED|СКОРОСТ/iu.test(normalizedType)
-        ? 'SPEEDING'
-        : null;
+    const kind =
+      normalizedType === 'REGIONAL_GEOFENCE_APPROACH'
+        ? 'REGIONAL_GEOFENCE_APPROACH'
+        : normalizedType === 'REGIONAL_GEOFENCE_OUTSIDE'
+          ? 'REGIONAL_GEOFENCE_EXIT'
+          : normalizedType === 'REGIONAL_GEOFENCE_RETURNED'
+            ? 'REGIONAL_GEOFENCE_RETURN'
+            : /GEOFENCE|ZONE|ГЕОЗОН/iu.test(normalizedType)
+              ? 'GEOFENCE_EXIT'
+              : /SPEED|СКОРОСТ/iu.test(normalizedType)
+                ? 'SPEEDING'
+                : null;
     if (!kind) continue;
     alerts.push({
       companyId: event.vehicle.companyId,
       eventKey: `telemetry:${event.id}:${kind}`,
-      payload: { kind, vehicleId: event.vehicleId, eventId: event.id },
+      payload: {
+        kind,
+        vehicleId: event.vehicleId,
+        eventId: event.id,
+        ...(event.rentalId ? { rentalId: event.rentalId } : {}),
+      },
     });
   }
   for (const fine of fines) {
@@ -1216,6 +1229,9 @@ async function hydrateJob(
       'RETURN_SOON',
       'RETURN_OVERDUE',
       'GEOFENCE_EXIT',
+      'REGIONAL_GEOFENCE_APPROACH',
+      'REGIONAL_GEOFENCE_EXIT',
+      'REGIONAL_GEOFENCE_RETURN',
       'SPEEDING',
       'NEW_FINE',
       'LOW_FUEL',
@@ -1250,6 +1266,7 @@ async function hydrateJob(
             where: { id: rentalId, companyId: job.companyId },
             select: {
               endsAt: true,
+              contractNumber: true,
               client: {
                 select: {
                   firstName: true,
@@ -1271,6 +1288,7 @@ async function hydrateJob(
             orderBy: [{ startsAt: 'desc' }, { id: 'desc' }],
             select: {
               endsAt: true,
+              contractNumber: true,
               client: {
                 select: {
                   firstName: true,
@@ -1284,7 +1302,7 @@ async function hydrateJob(
       eventId
         ? tx.vehicleEvent.findFirst({
             where: { id: eventId, vehicleId },
-            select: { title: true, description: true, recordedAt: true },
+            select: { title: true, description: true, recordedAt: true, details: true },
           })
         : Promise.resolve(null),
       fineId
@@ -1313,6 +1331,10 @@ async function hydrateJob(
       return { ...job, payload: { message: 'Автомобиль уже недоступен.' } };
     }
     const lastSignalAt = vehicle.positions[0]?.recordedAt ?? null;
+    const eventDetails =
+      event?.details && typeof event.details === 'object' && !Array.isArray(event.details)
+        ? (event.details as Record<string, unknown>)
+        : {};
     const clientPhone = rental
       ? decryptedPhone(rental.client.phoneEncrypted)
       : fine?.client
@@ -1396,6 +1418,18 @@ async function hydrateJob(
             impoundAddress: impoundLot?.address ?? null,
             serviceAddress:
               typeof payload.serviceAddress === 'string' ? payload.serviceAddress : null,
+            contractNumber:
+              typeof eventDetails.contractNumber === 'string'
+                ? eventDetails.contractNumber
+                : (rental?.contractNumber ?? null),
+            geofenceDistanceKm: numberOrNull(eventDetails.distanceKm),
+            geofenceCurrentRegion:
+              typeof eventDetails.currentRegion === 'string' ? eventDetails.currentRegion : null,
+            geofenceLastAllowedRegion:
+              typeof eventDetails.lastAllowedRegion === 'string'
+                ? eventDetails.lastAllowedRegion
+                : null,
+            geofenceOutsideDurationMs: numberOrNull(eventDetails.outsideDurationMs),
           },
           'MANAGER',
         ),
@@ -1976,13 +2010,6 @@ async function hydrateJob(
       reminderPayload.stage !== stage)
   )
     return null;
-  const at = new Intl.DateTimeFormat('ru-RU', {
-    timeZone: 'Europe/Moscow',
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(rental.endsAt);
-  const vehicle =
-    `${rental.vehicle.make ?? ''} ${rental.vehicle.modelName ?? rental.vehicle.model} ${rental.vehicle.registrationNumber ?? ''}`.trim();
   if (job.template === 'RENTAL_RETURN_CLIENT')
     return {
       ...job,

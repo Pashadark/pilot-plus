@@ -18,6 +18,7 @@ import { formatDailyPrice } from '@/modules/vehicles/utils';
 import { IconButton } from '@/shared/ui/IconButton';
 
 import type { OnlineMapVehicle } from '../types';
+import type { RegionalGeofenceMapView } from '@/modules/regional-geofences/types';
 
 const statusClasses: Record<VehicleGpsStatusTone, string> = {
   success: 'bg-[var(--color-success-soft)] text-[var(--color-success)]',
@@ -58,6 +59,14 @@ const DEPOSIT_CLASSES: Record<
   WITHHELD: 'bg-[var(--color-danger-soft)] text-[var(--color-danger)]',
 };
 
+const STATE_LABELS: Record<RegionalGeofenceMapView['state'], string> = {
+  INSIDE: 'В зоне',
+  APPROACHING: 'У границы',
+  OUTSIDE_PENDING: 'Проверка выезда',
+  OUTSIDE: 'Вне зоны',
+  RETURNED: 'Вернулся',
+};
+
 function Metric({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0 rounded-[var(--radius-md)] bg-[var(--color-elevated)] p-3">
@@ -71,6 +80,8 @@ function Metric({ label, value }: { label: string; value: ReactNode }) {
 
 export interface SelectedVehiclePanelProps {
   vehicle: OnlineMapVehicle;
+  regionalGeofence?: RegionalGeofenceMapView | null;
+  regionalGeofenceLoading?: boolean;
   onClose: () => void;
   trackControls: ReactNode;
   trackSummary: ReactNode;
@@ -83,6 +94,8 @@ export interface SelectedVehiclePanelProps {
 
 export function SelectedVehiclePanel({
   vehicle,
+  regionalGeofence = null,
+  regionalGeofenceLoading = false,
   onClose,
   trackControls,
   trackSummary,
@@ -301,6 +314,38 @@ export function SelectedVehiclePanel({
               Нет активной аренды
             </p>
           )}
+
+          {rental ? (
+            <section
+              aria-label="Разрешённая территория"
+              className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] p-3 text-sm"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-semibold">Разрешённая территория</h3>
+                {regionalGeofence ? (
+                  <span className="rounded-full bg-[var(--color-primary-soft)] px-2 py-1 text-[10px] font-semibold text-[var(--color-primary)]">
+                    {STATE_LABELS[regionalGeofence.state]}
+                  </span>
+                ) : null}
+              </div>
+              {regionalGeofenceLoading ? (
+                <p className="text-xs text-[var(--color-text-secondary)]">Загружаем геозону…</p>
+              ) : regionalGeofence ? (
+                <>
+                  <p className="text-xs text-[var(--color-text-secondary)]">
+                    {regionalGeofence.regions.map((region) => region.name).join(', ')}
+                  </p>
+                  {regionalGeofence.lastDistanceKm !== null ? (
+                    <p className="text-xs font-semibold">
+                      До внешней границы: {number.format(regionalGeofence.lastDistanceKm)} км
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <p className="text-xs text-[var(--color-text-secondary)]">Геозона не настроена</p>
+              )}
+            </section>
+          ) : null}
 
           <section aria-label="Текущее местоположение" className="grid gap-2 text-sm">
             <p className="flex gap-2 text-[var(--color-text-secondary)]">

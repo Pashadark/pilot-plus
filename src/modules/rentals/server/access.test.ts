@@ -13,6 +13,7 @@ import {
   RentalAccessDeniedError,
   canAccessRentalCompany,
   canEditRental,
+  canManageRentalRegionalGeofence,
   canManageRentals,
   getRentalAccessForUser,
   getRentalAccess,
@@ -98,11 +99,30 @@ describe('серверный доступ к договорам аренды', (
     await expect(requireRentalAccess('company-a')).resolves.toMatchObject({
       scope: 'COMPANY',
       companyIds: ['company-a'],
+      regionalGeofenceCompanyIds: ['company-a'],
     });
     await expect(requireRentalAccess('company-b')).rejects.toThrow(RentalAccessDeniedError);
     await expect(requireRentalAccess('company-b')).rejects.toThrow(
       'Доступ к договорам аренды запрещён.',
     );
+  });
+
+  it('проверяет отдельное право изменения региональной геозоны', () => {
+    const access = {
+      user: superAdmin,
+      scope: 'COMPANY' as const,
+      companyIds: ['company-a', 'company-b'],
+      regionalGeofenceCompanyIds: ['company-a'],
+    };
+
+    expect(canManageRentalRegionalGeofence(access, 'company-a')).toBe(true);
+    expect(canManageRentalRegionalGeofence(access, 'company-b')).toBe(false);
+    expect(
+      canManageRentalRegionalGeofence(
+        { user: superAdmin, scope: 'SYSTEM', companyIds: [] },
+        'company-foreign',
+      ),
+    ).toBe(true);
   });
 
   it('отклоняет запрос без активной сессии', async () => {

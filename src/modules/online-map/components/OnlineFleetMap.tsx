@@ -14,6 +14,7 @@ import type {
   VehicleTrackSegment,
 } from '../track-types';
 import type { OnlineMapVehicle } from '../types';
+import type { RegionalGeofenceMapView } from '@/modules/regional-geofences/types';
 import { TrackEventPopup } from './TrackEventPopup';
 import styles from './OnlineFleetMap.module.css';
 import {
@@ -53,6 +54,7 @@ function flyToVehicle(map: maplibregl.Map, vehicle: OnlineMapVehicle) {
 export interface OnlineFleetMapProps {
   vehicles: readonly OnlineMapVehicle[];
   selectedVehicleId: string | null;
+  regionalGeofence?: RegionalGeofenceMapView | null;
   trackViewModel: VehicleTrackPeriodViewModel | null;
   playbackPoint: VehicleTrackPoint | null;
   playbackHeading?: number;
@@ -70,6 +72,7 @@ export interface OnlineFleetMapProps {
 export function OnlineFleetMap({
   vehicles,
   selectedVehicleId,
+  regionalGeofence = null,
   trackViewModel,
   playbackPoint,
   playbackHeading = 0,
@@ -292,6 +295,84 @@ export function OnlineFleetMap({
       );
     }
   }, [positionedVehicles, selectedVehicleId]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !regionalGeofence) return;
+    let disposed = false;
+    const sourceIds = ['regional-geofence-regions', 'regional-geofence-outer'] as const;
+    const layerIds = [
+      'regional-geofence-fill',
+      'regional-geofence-inner-lines',
+      'regional-geofence-outer-line',
+    ] as const;
+    const mount = () => {
+      if (disposed || map.getSource(sourceIds[0])) return;
+      const beforeId = map.getLayer('vehicle-track-casing') ? 'vehicle-track-casing' : undefined;
+      map.addSource(sourceIds[0], {
+        type: 'geojson',
+        data: regionalGeofence.regionFeatures as GeoJSON.FeatureCollection,
+      });
+      map.addSource(sourceIds[1], {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: regionalGeofence.geometry,
+        } as GeoJSON.Feature,
+      });
+      map.addLayer(
+        {
+          id: layerIds[0],
+          type: 'fill',
+          source: sourceIds[0],
+          paint: {
+            'fill-color': '#0067ff',
+            'fill-opacity': mapTheme === 'dark' ? 0.13 : 0.1,
+          },
+        },
+        beforeId,
+      );
+      map.addLayer(
+        {
+          id: layerIds[1],
+          type: 'line',
+          source: sourceIds[0],
+          paint: {
+            'line-color': mapTheme === 'dark' ? '#777782' : '#64748b',
+            'line-opacity': 0.42,
+            'line-width': 0.7,
+          },
+        },
+        beforeId,
+      );
+      map.addLayer(
+        {
+          id: layerIds[2],
+          type: 'line',
+          source: sourceIds[1],
+          paint: {
+            'line-color': mapTheme === 'dark' ? '#62a0ff' : '#0057d9',
+            'line-opacity': 0.9,
+            'line-width': 2,
+          },
+        },
+        beforeId,
+      );
+    };
+    if (mapReadyRef.current || map.loaded()) mount();
+    else map.once('load', mount);
+    return () => {
+      disposed = true;
+      map.off('load', mount);
+      for (const layerId of [...layerIds].reverse()) {
+        if (map.getLayer(layerId)) map.removeLayer(layerId);
+      }
+      for (const sourceId of [...sourceIds].reverse()) {
+        if (map.getSource(sourceId)) map.removeSource(sourceId);
+      }
+    };
+  }, [instanceKey, mapTheme, regionalGeofence]);
 
   useEffect(() => {
     const map = mapRef.current;

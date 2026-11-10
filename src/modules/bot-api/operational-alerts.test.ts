@@ -208,6 +208,29 @@ describe('operational alert thresholds', () => {
     expect(message).toContain('└ 07.11.2026, 12:40 МСК');
     expect(message).toContain('Машина находится в зоне сервиса не менее 40 минут');
   });
+
+  it('formats a confirmed regional geofence exit with real rental data', () => {
+    const message = formatOperationalAlert({
+      kind: 'REGIONAL_GEOFENCE_EXIT',
+      vehicle: 'Toyota Camry',
+      registrationNumber: 'Р957АН997',
+      clientName: 'Алексей Андреевич',
+      contractNumber: 'ME-2026-1102-BA',
+      eventRecordedAt: new Date('2026-11-10T06:00:00.000Z'),
+      eventDescription: 'Подтверждён выезд за внешнюю границу разрешённой территории.',
+      geofenceCurrentRegion: 'Владимирская область',
+      geofenceLastAllowedRegion: 'Рязанская область',
+    });
+
+    expect(message).toContain('🚨 <b>Нарушение геозоны</b>');
+    expect(message).toContain('Toyota Camry · <code>Р957АН997</code>');
+    expect(message).toContain('Алексей Андреевич');
+    expect(message).toContain('ME-2026-1102-BA');
+    expect(message).toContain('Рязанская область');
+    expect(message).toContain('Владимирская область');
+    expect(message).toContain('10.11.2026, 09:00 МСК');
+  });
+
   it('includes the full fine description, article and Moscow offense time', () => {
     const message = formatOperationalAlert({
       kind: 'NEW_FINE',

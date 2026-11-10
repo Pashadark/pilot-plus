@@ -182,7 +182,9 @@ export function normalizeTrip(source: TripSource): TimelineEventDto {
 export function normalizeVehicleEvent(source: VehicleEventSource): TimelineEventDto {
   const recordedAt = toIso(source.recordedAt);
   const sourceHref =
-    source.type === 'HARSH_ACCELERATION' || source.type === 'HARSH_BRAKING'
+    source.type === 'HARSH_ACCELERATION' ||
+    source.type === 'HARSH_BRAKING' ||
+    source.type?.startsWith('REGIONAL_GEOFENCE_')
       ? `/map?vehicleId=${encodeURIComponent(source.vehicle.id)}&date=${formatBusinessDate(recordedAt)}&eventId=${encodeURIComponent(source.id)}`
       : `/vehicles/${source.vehicle.id}?tab=events`;
   return createTimelineEvent(source, {

@@ -26,6 +26,8 @@
     "telematics:configure-glonasssoft": "tsx --conditions=react-server scripts/configure-glonasssoft.ts",
     "system:sync-timeweb": "tsx --conditions=react-server scripts/sync-timeweb-monitor.ts",
     "fuel-stations:import": "tsx --conditions=react-server scripts/import-osm-fuel-stations.ts",
+    "regional-geofences:import": "tsx --conditions=react-server scripts/import-russian-regions.ts",
+    "regional-geofences:backfill": "tsx --conditions=react-server scripts/backfill-active-rental-regional-geofences.ts",
     "vehicles:reconcile-real": "tsx --conditions=react-server scripts/reconcile-real-fleet.ts",
     "fines:archive-confirmed": "tsx --conditions=react-server scripts/archive-confirmed-fine.ts",
     "test:e2e": "playwright test",

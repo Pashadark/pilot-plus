@@ -37,6 +37,9 @@ export type OperationalAlertMessageInput = {
     | GpsSilenceAlertKind
     | RentalDeadlineAlertKind
     | 'GEOFENCE_EXIT'
+    | 'REGIONAL_GEOFENCE_APPROACH'
+    | 'REGIONAL_GEOFENCE_EXIT'
+    | 'REGIONAL_GEOFENCE_RETURN'
     | 'SPEEDING'
     | 'HARSH_ACCELERATION'
     | 'HARSH_BRAKING'
@@ -68,6 +71,11 @@ export type OperationalAlertMessageInput = {
   impoundCity?: string | null;
   impoundAddress?: string | null;
   serviceAddress?: string | null;
+  contractNumber?: string | null;
+  geofenceDistanceKm?: number | null;
+  geofenceCurrentRegion?: string | null;
+  geofenceLastAllowedRegion?: string | null;
+  geofenceOutsideDurationMs?: number | null;
 };
 
 export type OperationalAlertAudience = 'CLIENT' | 'MANAGER' | 'SUPER_ADMIN';
@@ -247,6 +255,55 @@ export function formatOperationalAlert(input: OperationalAlertMessageInput) {
           input.eventRecordedAt ? `${escapeHtml(atMoscow(input.eventRecordedAt))} МСК` : null,
         ]),
         '⚡ <b>Действие</b>\n└ Немедленно проверить маршрут и связаться с клиентом',
+      );
+    case 'REGIONAL_GEOFENCE_APPROACH':
+      return blocks(
+        '⚠️ <b>Приближение к границе разрешённой территории</b>',
+        vehicleBlock(input),
+        clientBlock(input),
+        eventBlock('📍 <b>Геозона</b>', [
+          input.geofenceDistanceKm == null
+            ? null
+            : `До внешней границы: <b>${escapeHtml(input.geofenceDistanceKm.toFixed(1))} км</b>`,
+          input.geofenceCurrentRegion
+            ? `Текущий регион: ${escapeHtml(input.geofenceCurrentRegion)}`
+            : null,
+          input.eventRecordedAt ? `${escapeHtml(atMoscow(input.eventRecordedAt))} МСК` : null,
+        ]),
+        '⚡ <b>Действие</b>\n└ Проверить маршрут и предупредить клиента',
+      );
+    case 'REGIONAL_GEOFENCE_EXIT':
+      return blocks(
+        '🚨 <b>Нарушение геозоны</b>',
+        vehicleBlock(input),
+        clientBlock(input),
+        eventBlock('📍 <b>Выезд за разрешённую территорию</b>', [
+          input.contractNumber ? `Договор: <code>${escapeHtml(input.contractNumber)}</code>` : null,
+          input.geofenceLastAllowedRegion
+            ? `Последний разрешённый регион: ${escapeHtml(input.geofenceLastAllowedRegion)}`
+            : null,
+          input.geofenceCurrentRegion
+            ? `Текущее местоположение: ${escapeHtml(input.geofenceCurrentRegion)}`
+            : input.eventDescription
+              ? escapeHtml(input.eventDescription)
+              : null,
+          input.eventRecordedAt ? `${escapeHtml(atMoscow(input.eventRecordedAt))} МСК` : null,
+        ]),
+        '⚡ <b>Действие</b>\n└ Срочно связаться с клиентом и проверить маршрут',
+      );
+    case 'REGIONAL_GEOFENCE_RETURN':
+      return blocks(
+        '✅ <b>Возвращение в разрешённую геозону</b>',
+        vehicleBlock(input),
+        clientBlock(input),
+        eventBlock('📍 <b>Возвращение</b>', [
+          input.geofenceCurrentRegion ? `Регион: ${escapeHtml(input.geofenceCurrentRegion)}` : null,
+          input.eventRecordedAt ? `${escapeHtml(atMoscow(input.eventRecordedAt))} МСК` : null,
+          input.geofenceOutsideDurationMs == null
+            ? null
+            : `Вне зоны: ${escapeHtml(duration(input.geofenceOutsideDurationMs))}`,
+        ]),
+        '⚡ <b>Статус</b>\n└ Автомобиль снова находится в разрешённой территории',
       );
     case 'SPEEDING':
       return blocks(

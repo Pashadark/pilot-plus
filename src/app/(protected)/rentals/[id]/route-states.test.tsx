@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   ),
   getRentalDetailForCurrentUser: vi.fn(),
   listRentalAuditForCurrentUser: vi.fn(),
+  listRussianRegions: vi.fn(),
+  getRentalRegionalGeofenceForCurrentUser: vi.fn(),
   rentalDetailPresentation: vi.fn(),
   notFound: vi.fn(() => {
     throw new Error('NEXT_NOT_FOUND');
@@ -39,6 +41,13 @@ vi.mock('@/modules/rentals/server/queries', () => ({
 }));
 vi.mock('@/modules/rentals/components/rental-detail-presentation', () => ({
   rentalDetailPresentation: mocks.rentalDetailPresentation,
+}));
+vi.mock('@/modules/regional-geofences/server/queries', () => ({
+  listRussianRegions: mocks.listRussianRegions,
+  getRentalRegionalGeofenceForCurrentUser: mocks.getRentalRegionalGeofenceForCurrentUser,
+}));
+vi.mock('@/modules/regional-geofences/components/RentalRegionalGeofenceCard', () => ({
+  RentalRegionalGeofenceCard: () => <div data-testid="regional-geofence-card" />,
 }));
 
 import Loading from './loading';
@@ -82,6 +91,7 @@ const rental = {
   payments: [],
   signatures: [],
   canEdit: false,
+  canManageRegionalGeofence: false,
 };
 
 describe('RentalDetail route states', () => {
@@ -89,6 +99,8 @@ describe('RentalDetail route states', () => {
     vi.clearAllMocks();
     mocks.getRentalDetailForCurrentUser.mockResolvedValue(rental);
     mocks.listRentalAuditForCurrentUser.mockResolvedValue([]);
+    mocks.listRussianRegions.mockResolvedValue([]);
+    mocks.getRentalRegionalGeofenceForCurrentUser.mockResolvedValue(null);
     mocks.rentalDetailPresentation.mockReturnValue({
       id: 'rental-1',
       source: { label: 'Импортированный договор' },

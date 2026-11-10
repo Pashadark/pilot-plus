@@ -19,6 +19,7 @@ describe('политика прав компании', () => {
         'VIEW_AUDIT',
         'VIEW_FINES',
         'MANAGE_FINES',
+        'MANAGE_REGIONAL_GEOFENCES',
       ]),
     );
   });
@@ -36,6 +37,7 @@ describe('политика прав компании', () => {
         'VIEW_REPORTS',
         'VIEW_FINES',
         'MANAGE_FINES',
+        'MANAGE_REGIONAL_GEOFENCES',
       ],
     ],
     ['DRIVER', []],
@@ -74,5 +76,11 @@ describe('политика прав компании', () => {
     expect(hasCompanyPermission('COMPANY_ADMIN', [], 'MANAGE_FINES')).toBe(true);
     expect(hasCompanyPermission('DISPATCHER', [], 'VIEW_FINES')).toBe(true);
     expect(hasCompanyPermission('DISPATCHER', [], 'MANAGE_FINES')).toBe(true);
+  });
+
+  it('разрешает администратору и диспетчеру управлять региональными геозонами', () => {
+    expect(hasCompanyPermission('COMPANY_ADMIN', [], 'MANAGE_REGIONAL_GEOFENCES')).toBe(true);
+    expect(hasCompanyPermission('DISPATCHER', [], 'MANAGE_REGIONAL_GEOFENCES')).toBe(true);
+    expect(hasCompanyPermission('VIEWER', [], 'MANAGE_REGIONAL_GEOFENCES')).toBe(false);
   });
 });

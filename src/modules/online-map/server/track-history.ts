@@ -78,6 +78,8 @@ interface VehicleEventRow {
   recordedAt: Date;
   endLatitude: unknown | null;
   endLongitude: unknown | null;
+  startLatitude: unknown | null;
+  startLongitude: unknown | null;
   startSpeedKph: number | null;
   endSpeedKph: number | null;
   durationMs: number | null;
@@ -143,7 +145,15 @@ export async function getOnlineMapTrackHistory(
       },
       events: {
         where: {
-          type: { in: ['HARSH_ACCELERATION', 'HARSH_BRAKING'] },
+          type: {
+            in: [
+              'HARSH_ACCELERATION',
+              'HARSH_BRAKING',
+              'REGIONAL_GEOFENCE_APPROACH',
+              'REGIONAL_GEOFENCE_OUTSIDE',
+              'REGIONAL_GEOFENCE_RETURNED',
+            ],
+          },
           recordedAt: { gte: range.from, lt: range.toExclusive },
         },
         select: {
@@ -154,6 +164,8 @@ export async function getOnlineMapTrackHistory(
           recordedAt: true,
           endLatitude: true,
           endLongitude: true,
+          startLatitude: true,
+          startLongitude: true,
           startSpeedKph: true,
           endSpeedKph: true,
           durationMs: true,
@@ -315,7 +327,9 @@ function toTrackEvent(
   event: VehicleEventRow,
   positions: readonly ValidPosition[],
 ): VehicleTrackEvent | null {
-  if (event.type !== 'HARSH_ACCELERATION' && event.type !== 'HARSH_BRAKING') return null;
+  const isDrivingEvent = event.type === 'HARSH_ACCELERATION' || event.type === 'HARSH_BRAKING';
+  const isRegionalGeofenceEvent = event.type.startsWith('REGIONAL_GEOFENCE_');
+  if (!isDrivingEvent && !isRegionalGeofenceEvent) return null;
   const declaredPointIds = Array.isArray(event.trackPointIds)
     ? event.trackPointIds.filter((value): value is string => typeof value === 'string')
     : [];
@@ -325,19 +339,26 @@ function toTrackEvent(
     : null;
   const nearest = declaredPoint ?? findNearestPosition(event.recordedAt, positions);
   if (!nearest) return null;
-  const latitude = coordinate(event.endLatitude, -90, 90);
-  const longitude = coordinate(event.endLongitude, -180, 180);
+  const latitude = coordinate(event.endLatitude ?? event.startLatitude, -90, 90);
+  const longitude = coordinate(event.endLongitude ?? event.startLongitude, -180, 180);
   const startSpeedKph = Math.max(0, Math.round(event.startSpeedKph ?? 0));
   const endSpeedKph = Math.max(0, Math.round(event.endSpeedKph ?? nearest.speedKph ?? 0));
   const durationSeconds = Math.max(1, Math.round((event.durationMs ?? 0) / 1_000));
 
   return {
     id: event.id,
-    type: event.type === 'HARSH_BRAKING' ? 'harsh-braking' : 'harsh-acceleration',
+    type: isRegionalGeofenceEvent
+      ? event.type === 'REGIONAL_GEOFENCE_RETURNED'
+        ? 'geofence-enter'
+        : 'geofence-exit'
+      : event.type === 'HARSH_BRAKING'
+        ? 'harsh-braking'
+        : 'harsh-acceleration',
     pointId: nearest.id,
     title: event.title,
-    description:
-      event.type === 'HARSH_BRAKING'
+    description: isRegionalGeofenceEvent
+      ? (event.description ?? event.title)
+      : event.type === 'HARSH_BRAKING'
         ? `Скорость снизилась с ${startSpeedKph} до ${endSpeedKph} км/ч за ${durationSeconds} сек.`
         : `Скорость выросла с ${startSpeedKph} до ${endSpeedKph} км/ч за ${durationSeconds} сек.`,
     coordinates:

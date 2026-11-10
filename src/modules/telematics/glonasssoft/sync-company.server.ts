@@ -6,6 +6,10 @@ import { findRussiaBorderProximity } from '@/modules/geography/russia-border';
 import { detectConfirmedImpoundStay } from '@/modules/geography/impound-lots';
 import { processFuelStationPosition } from '@/modules/fuel-stations/server/visit-service';
 import { processVehicleServicePosition } from '@/modules/vehicles/server/service-visit-service';
+import {
+  evaluateRegionalGeofencePosition,
+  type RegionalGeofenceDatabase,
+} from '@/modules/regional-geofences/server/evaluate-position';
 
 import { GlonassSoftClient } from './client.server';
 import {
@@ -52,6 +56,8 @@ interface SyncDatabase {
 }
 
 interface SyncTransaction {
+  $queryRaw?<T>(query: unknown): Promise<T>;
+  $executeRaw?(query: unknown): Promise<number>;
   vehiclePosition: {
     createMany(args: unknown): Promise<{ count: number }>;
     findFirst?: (args: unknown) => Promise<{
@@ -313,6 +319,33 @@ async function savePoint(
     });
   }
   await enqueueBorderAlert(database, companyId, vehicleId, recordedAt, point, currentVehicle);
+  if (database.$queryRaw && database.$executeRaw && database.vehicleEvent?.upsert) {
+    await evaluateRegionalGeofencePosition(database as unknown as RegionalGeofenceDatabase, {
+      companyId,
+      vehicleId,
+      position: {
+        latitude: point.latitude,
+        longitude: point.longitude,
+        speedKph: point.speedKph,
+        recordedAt,
+        receivedAt: providerReceivedAt,
+      },
+      previous: previous
+        ? {
+            latitude: Number(previous.latitude),
+            longitude: Number(previous.longitude),
+            recordedAt: previous.recordedAt,
+          }
+        : null,
+    }).catch((error: unknown) => {
+      console.error('regional-geofence-evaluation-failed', {
+        companyId,
+        vehicleId,
+        recordedAt: recordedAt.toISOString(),
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+    });
+  }
   await enqueueImpoundAlert(database, companyId, vehicleId, recordedAt);
   if (database.vehicleServiceVisit) {
     await processVehicleServicePosition(database as never, {

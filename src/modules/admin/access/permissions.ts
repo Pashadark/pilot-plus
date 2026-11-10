@@ -13,7 +13,8 @@ export type CompanyPermissionValue =
   | 'VIEW_REPORTS'
   | 'VIEW_AUDIT'
   | 'VIEW_FINES'
-  | 'MANAGE_FINES';
+  | 'MANAGE_FINES'
+  | 'MANAGE_REGIONAL_GEOFENCES';
 
 const allCompanyPermissions: readonly CompanyPermissionValue[] = [
   'MANAGE_USERS',
@@ -29,6 +30,7 @@ const allCompanyPermissions: readonly CompanyPermissionValue[] = [
   'VIEW_AUDIT',
   'VIEW_FINES',
   'MANAGE_FINES',
+  'MANAGE_REGIONAL_GEOFENCES',
 ];
 
 const permissionsByRole: Record<CompanyRole, readonly CompanyPermissionValue[]> = {
@@ -43,6 +45,7 @@ const permissionsByRole: Record<CompanyRole, readonly CompanyPermissionValue[]> 
     'VIEW_REPORTS',
     'VIEW_FINES',
     'MANAGE_FINES',
+    'MANAGE_REGIONAL_GEOFENCES',
   ],
   DRIVER: [],
   VIEWER: ['VIEW_CLIENTS', 'VIEW_REPORTS'],

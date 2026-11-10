@@ -34,6 +34,15 @@ enum CompanyPermission {
   VIEW_AUDIT
   VIEW_FINES
   MANAGE_FINES
+  MANAGE_REGIONAL_GEOFENCES
+}
+
+enum RegionalGeofenceState {
+  INSIDE
+  APPROACHING
+  OUTSIDE_PENDING
+  OUTSIDE
+  RETURNED
 }
 
 enum FineStatus {
@@ -523,6 +532,7 @@ model User {
   assignedLeads            Lead[]                    @relation("LeadAssignedTo")
   assignedOwnerVehicles    OwnerVehicleAccess[]      @relation("OwnerVehicleAccessAssignedBy")
   depositLedgerEntries     DepositLedgerEntry[]      @relation("DepositLedgerEntryActor")
+  updatedRegionalGeofences RentalRegionalGeofence[]  @relation("RegionalGeofenceUpdatedBy")
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
 }
@@ -624,6 +634,7 @@ model Company {
   ownerRevenueRules         OwnerRevenueRule[]
   ownerLedgerEntries        OwnerLedgerEntry[]
   depositLedgerEntries      DepositLedgerEntry[]
+  regionalGeofences         RentalRegionalGeofence[]
   createdAt                 DateTime                     @default(now())
   updatedAt                 DateTime                     @updatedAt
 }
@@ -1295,6 +1306,7 @@ model Rental {
   depositLedgerEntries     DepositLedgerEntry[]
   vehicleEvents            VehicleEvent[]
   gpsClientWarnings        GpsClientWarning[]
+  regionalGeofence         RentalRegionalGeofence?
 
   @@unique([companyId, id])
   @@unique([companyId, clientId, id])
@@ -1303,6 +1315,56 @@ model Rental {
   @@index([companyId, vehicleId, startsAt])
   @@index([companyId, clientId, startsAt])
   @@index([companyId, confirmedByUserId, confirmedAt])
+}
+
+model RussianRegion {
+  code                        String                                      @id @db.VarChar(16)
+  nameRu                      String
+  nameEn                      String?
+  source                      String
+  sourceVersion               String
+  sourceUpdatedAt             DateTime?                                   @db.Timestamptz(3)
+  automaticEnforcementAllowed Boolean                                     @default(true)
+  boundary                    Unsupported("geometry(MultiPolygon,4326)")?
+  createdAt                   DateTime                                    @default(now()) @db.Timestamptz(3)
+  updatedAt                   DateTime                                    @updatedAt @db.Timestamptz(3)
+
+  @@index([nameRu])
+}
+
+model RentalRegionalGeofence {
+  id                        String                                      @id @default(cuid())
+  companyId                 String
+  company                   Company                                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  rentalId                  String                                      @unique
+  rental                    Rental                                      @relation(fields: [companyId, rentalId], references: [companyId, id], onDelete: Cascade)
+  enabled                   Boolean                                     @default(true)
+  version                   Int                                         @default(1)
+  regionCodes               String[]                                    @default([])
+  warningDistanceKm         Int                                         @default(10)
+  attentionDistanceKm       Int                                         @default(5)
+  criticalDistanceKm        Int                                         @default(1)
+  hysteresisMeters          Int                                         @default(150)
+  confirmationPoints        Int                                         @default(3)
+  confirmationWindowSeconds Int                                         @default(10)
+  state                     RegionalGeofenceState                       @default(INSIDE)
+  pendingTransition         String?                                     @db.VarChar(16)
+  pendingCount              Int                                         @default(0)
+  pendingSince              DateTime?                                   @db.Timestamptz(3)
+  outsideSince              DateTime?                                   @db.Timestamptz(3)
+  lastEvaluatedAt           DateTime?                                   @db.Timestamptz(3)
+  lastDistanceKm            Decimal?                                    @db.Decimal(10, 3)
+  lastApproachThresholdKm   Int?
+  regionUnion               Unsupported("geometry(MultiPolygon,4326)")?
+  updatedByUserId           String
+  updatedBy                 User                                        @relation("RegionalGeofenceUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+  createdAt                 DateTime                                    @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime                                    @updatedAt @db.Timestamptz(3)
+
+  @@unique([companyId, rentalId])
+  @@index([companyId, enabled])
+  @@index([rentalId, enabled])
+  @@index([state, lastEvaluatedAt])
 }
 
 model RentalPayment {
