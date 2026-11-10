@@ -17,6 +17,10 @@ import { OFFLINE_AFTER_MS } from '@/modules/vehicles/gps-status';
 import { decryptField } from '@/services/security/field-encryption';
 
 import { BotApiError } from './auth';
+import {
+  formatClientRegionalGeofenceMessage,
+  type ClientRegionalGeofenceAlertStage,
+} from './client-regional-geofence-notifications';
 import { moscowDayRange } from './daily-operations';
 import { formatLeadCreatedMessage, formatLeadStatusChangedMessage } from './lead-notifications';
 import {
@@ -859,6 +863,91 @@ async function hydrateJob(
             url: 'https://supapro.ru/rentals',
           },
         ],
+      },
+    };
+  }
+  if (job.template === 'CLIENT_REGIONAL_GEOFENCE_ALERT') {
+    if (
+      !job.identity?.isActive ||
+      job.identity.kind !== 'CLIENT' ||
+      !job.identity.clientId ||
+      job.identity.companyId !== job.companyId
+    ) {
+      return null;
+    }
+    const payload =
+      typeof job.payload === 'object' && job.payload !== null
+        ? (job.payload as Record<string, unknown>)
+        : {};
+    const stage = String(payload.stage ?? '') as ClientRegionalGeofenceAlertStage;
+    const vehicleId = String(payload.vehicleId ?? '');
+    const rentalId = String(payload.rentalId ?? '');
+    const eventId = String(payload.eventId ?? '');
+    const clientId = String(payload.clientId ?? '');
+    const geofenceVersion = Number(payload.geofenceVersion);
+    if (
+      (stage !== 'IMMEDIATE' && stage !== 'ONE_HOUR') ||
+      !vehicleId ||
+      !rentalId ||
+      !eventId ||
+      clientId !== job.identity.clientId ||
+      !Number.isInteger(geofenceVersion) ||
+      geofenceVersion < 1
+    ) {
+      return null;
+    }
+    const [rental, event] = await Promise.all([
+      tx.rental.findFirst({
+        where: {
+          id: rentalId,
+          companyId: job.companyId,
+          clientId,
+          vehicleId,
+          status: { in: ['CONFIRMED', 'ACTIVE'] },
+          startsAt: { lte: now },
+          endsAt: { gte: now },
+        },
+        select: {
+          vehicle: {
+            select: { make: true, modelName: true, model: true, registrationNumber: true },
+          },
+          regionalGeofence: {
+            select: { enabled: true, version: true, state: true },
+          },
+        },
+      }),
+      tx.vehicleEvent.findFirst({
+        where: {
+          id: eventId,
+          companyId: job.companyId,
+          vehicleId,
+          rentalId,
+          clientId,
+          type: 'REGIONAL_GEOFENCE_OUTSIDE',
+        },
+        select: { id: true },
+      }),
+    ]);
+    const geofence = rental?.regionalGeofence;
+    if (
+      !rental ||
+      !event ||
+      !geofence?.enabled ||
+      geofence.version !== geofenceVersion ||
+      (stage === 'ONE_HOUR' && geofence.state !== 'OUTSIDE')
+    ) {
+      return null;
+    }
+    return {
+      ...job,
+      payload: {
+        message: formatClientRegionalGeofenceMessage({
+          stage,
+          vehicle: vehicleTitle(rental.vehicle),
+          registrationNumber: rental.vehicle.registrationNumber,
+        }),
+        parseMode: 'HTML',
+        clientMenu: true,
       },
     };
   }

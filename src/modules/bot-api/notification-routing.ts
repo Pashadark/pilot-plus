@@ -3,6 +3,7 @@ const customerTemplates = new Set([
   'CLIENT_RENTAL_LIFECYCLE',
   'CLIENT_IMPOUND_ALERT',
   'CLIENT_GPS_EVENT',
+  'CLIENT_REGIONAL_GEOFENCE_ALERT',
   'LEASE_TO_OWN_PAYMENT_CLIENT',
 ]);
 const internalTemplates = new Set([

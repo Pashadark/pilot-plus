@@ -65,8 +65,11 @@ describe('notification recipient isolation', () => {
     };
     expect(notificationDestination(customer, null)).toBe('123');
     expect(notificationDestination({ ...customer, chatId: '-123' }, '-123')).toBeNull();
+    expect(notificationDestination({ ...customer, template: 'CLIENT_GPS_EVENT' }, null)).toBe(
+      '123',
+    );
     expect(
-      notificationDestination({ ...customer, template: 'CLIENT_GPS_EVENT' }, null),
+      notificationDestination({ ...customer, template: 'CLIENT_REGIONAL_GEOFENCE_ALERT' }, null),
     ).toBe('123');
     expect(
       notificationDestination(

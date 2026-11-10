@@ -1258,6 +1258,132 @@ describe('bot notification leases', () => {
   });
 
   it.each([
+    ['IMMEDIATE', '🚨 <b>Выезд за разрешённую территорию</b>'],
+    ['ONE_HOUR', '⛔ <b>Автомобиль всё ещё вне разрешённой территории</b>'],
+  ] as const)('hydrates a valid client regional geofence %s alert', async (stage, title) => {
+    const tx = {
+      telegramGroupBinding: { findUnique: vi.fn() },
+      botNotificationJob: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ id: 'geofence-job-1', claimToken: null, status: 'PENDING' }]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'geofence-job-1',
+          companyId: 'company-1',
+          claimToken: 'worker:geofence-job-1',
+          template: 'CLIENT_REGIONAL_GEOFENCE_ALERT',
+          payload: {
+            stage,
+            vehicleId: 'vehicle-1',
+            rentalId: 'rental-1',
+            clientId: 'client-1',
+            eventId: 'event-1',
+            geofenceVersion: 3,
+          },
+          chatId: null,
+          identity: {
+            telegramUserId: '123',
+            isActive: true,
+            clientId: 'client-1',
+            companyId: 'company-1',
+            kind: 'CLIENT',
+          },
+        }),
+      },
+      rental: {
+        findFirst: vi.fn().mockResolvedValue({
+          vehicle: {
+            make: 'Toyota',
+            modelName: 'Camry',
+            model: 'Camry',
+            registrationNumber: 'Р957АН997',
+          },
+          regionalGeofence: { enabled: true, version: 3, state: 'OUTSIDE' },
+        }),
+      },
+      vehicleEvent: { findFirst: vi.fn().mockResolvedValue({ id: 'event-1' }) },
+    };
+    const database = { $transaction: vi.fn(async (callback) => callback(tx)) };
+
+    const [claimed] = await claimNotificationJobs(
+      new Date('2026-11-10T10:00:00.000Z'),
+      'worker',
+      database as never,
+    );
+
+    expect((claimed.payload as { message: string }).message).toContain(title);
+    expect((claimed.payload as { message: string }).message).toMatch(
+      /дистанционно заблокирован|дистанционная блокировка/u,
+    );
+    expect(claimed.payload).toMatchObject({ parseMode: 'HTML', clientMenu: true });
+  });
+
+  it.each([
+    [{ enabled: true, version: 3, state: 'INSIDE' }, 'returned'],
+    [{ enabled: false, version: 3, state: 'OUTSIDE' }, 'disabled'],
+    [{ enabled: true, version: 4, state: 'OUTSIDE' }, 'version changed'],
+  ] as const)('cancels a stale one-hour geofence alert when %s', async (geofence, _reason) => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const tx = {
+      telegramGroupBinding: { findUnique: vi.fn() },
+      botNotificationJob: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ id: 'geofence-job-1', claimToken: null, status: 'PENDING' }]),
+        updateMany,
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'geofence-job-1',
+          companyId: 'company-1',
+          claimToken: 'worker:geofence-job-1',
+          template: 'CLIENT_REGIONAL_GEOFENCE_ALERT',
+          payload: {
+            stage: 'ONE_HOUR',
+            vehicleId: 'vehicle-1',
+            rentalId: 'rental-1',
+            clientId: 'client-1',
+            eventId: 'event-1',
+            geofenceVersion: 3,
+          },
+          chatId: null,
+          identity: {
+            telegramUserId: '123',
+            isActive: true,
+            clientId: 'client-1',
+            companyId: 'company-1',
+            kind: 'CLIENT',
+          },
+        }),
+      },
+      rental: {
+        findFirst: vi.fn().mockResolvedValue({
+          vehicle: {
+            make: 'Toyota',
+            modelName: 'Camry',
+            model: 'Camry',
+            registrationNumber: 'Р957АН997',
+          },
+          regionalGeofence: geofence,
+        }),
+      },
+      vehicleEvent: { findFirst: vi.fn().mockResolvedValue({ id: 'event-1' }) },
+    };
+    const database = { $transaction: vi.fn(async (callback) => callback(tx)) };
+
+    await expect(
+      claimNotificationJobs(new Date('2026-11-10T10:00:00.000Z'), 'worker', database as never),
+    ).resolves.toEqual([]);
+    expect(updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'CANCELLED',
+          lastErrorCode: 'SUPERSEDED_OR_ACCESS_REVOKED',
+        }),
+      }),
+    );
+  });
+
+  it.each([
     ['LEASE_TO_OWN_PAYMENT_STAFF', null, 'staff:company-1', false],
     [
       'LEASE_TO_OWN_PAYMENT_CLIENT',
