@@ -24,7 +24,7 @@ type RegionCollection = {
 
 const prisma = new PrismaClient();
 
-try {
+async function main() {
   const path = resolve('data/regions/russia-admin1.geojson');
   const collection = JSON.parse(await readFile(path, 'utf8')) as RegionCollection;
   if (collection.type !== 'FeatureCollection' || collection.features.length < 70) {
@@ -57,8 +57,12 @@ try {
         "updatedAt" = NOW()
     `);
   }
-
   console.log(`Imported ${collection.features.length} Russian regions.`);
-} finally {
-  await prisma.$disconnect();
 }
+
+void main()
+  .catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(() => prisma.$disconnect());

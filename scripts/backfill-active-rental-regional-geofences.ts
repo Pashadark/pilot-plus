@@ -50,7 +50,7 @@ const overwrite = process.argv.includes('--overwrite');
 const inputPath = argumentValue('--input');
 const actorEmail = argumentValue('--actor-email');
 
-try {
+async function main() {
   if (!inputPath) throw new Error('Укажите --input=<путь к JSON>.');
   const entries = validateInput(JSON.parse(await readFile(resolve(inputPath), 'utf8')));
   const duplicateContracts = entries
@@ -224,6 +224,11 @@ try {
       console.log(`Applied ${entry.contractNumber} (${entry.vehiclePlate}).`);
     }
   }
-} finally {
-  await prisma.$disconnect();
 }
+
+void main()
+  .catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(() => prisma.$disconnect());
