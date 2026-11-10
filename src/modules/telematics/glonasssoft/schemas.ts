@@ -79,23 +79,49 @@ export const terminalMessageSchema = z
   .object({
     id: identifier.optional(),
     messageId: identifier.optional(),
-    recordTime: isoDate,
-    lat: finiteNumber,
-    lon: finiteNumber,
+    recordTime: isoDate.optional(),
+    deviceTime: isoDate.optional(),
+    lat: finiteNumber.optional(),
+    latitude: finiteNumber.optional(),
+    lon: finiteNumber.optional(),
+    longitude: finiteNumber.optional(),
     speed: finiteNumber.nonnegative().optional(),
     mileage: finiteNumber.nonnegative().optional(),
   })
   .passthrough()
-  .transform((value) => ({
-    externalId: String(value.messageId ?? value.id ?? value.recordTime),
-    recordedAt: value.recordTime,
-    latitude: value.lat,
-    longitude: value.lon,
-    speedKph: value.speed ?? 0,
-    odometerKm: value.mileage ?? null,
-  }));
+  .transform((value, context) => {
+    const recordedAt = value.recordTime ?? value.deviceTime;
+    const latitude = value.lat ?? value.latitude;
+    const longitude = value.lon ?? value.longitude;
+    if (
+      recordedAt === undefined ||
+      latitude === undefined ||
+      longitude === undefined ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      context.addIssue({ code: 'custom', message: 'Invalid terminal message' });
+      return z.NEVER;
+    }
+    return {
+      externalId: String(value.messageId ?? value.id ?? recordedAt),
+      recordedAt,
+      latitude,
+      longitude,
+      speedKph: value.speed ?? 0,
+      odometerKm: value.mileage ?? null,
+    };
+  });
 
-export const terminalMessagesSchema = z.array(terminalMessageSchema).max(100_000);
+const terminalMessageListSchema = z.array(terminalMessageSchema).max(100_000);
+export const terminalMessagesSchema = z
+  .union([
+    terminalMessageListSchema,
+    z.object({ messages: terminalMessageListSchema }).passthrough(),
+  ])
+  .transform((value) => (Array.isArray(value) ? value : value.messages));
 export const mileageSchema = z.array(z.record(z.string(), z.unknown())).max(10_000);
 
 export type GlonassSoftVehicle = z.output<typeof vehicleSchema>;

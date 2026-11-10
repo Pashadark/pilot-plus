@@ -139,7 +139,26 @@ describe('GLONASSSoft API client', () => {
           },
         ]),
       )
-      .mockResolvedValueOnce(json([]));
+      .mockResolvedValueOnce(
+        json({
+          messages: [
+            {
+              deviceTime: '2026-08-20T08:59:45Z',
+              serverTime: '2026-08-20T08:59:46.1234567Z',
+              latitude: 55.7559,
+              longitude: 37.6177,
+              speed: 48,
+              altitude: 150,
+              satellites: 12,
+              course: 90,
+              voltage: 13.8,
+              parameters: {},
+              photoCount: 0,
+              protocolType: 1,
+            },
+          ],
+        }),
+      );
     const client = new GlonassSoftClient(options(transport));
 
     await expect(client.getLastData(['42'])).resolves.toMatchObject([
@@ -151,11 +170,22 @@ describe('GLONASSSoft API client', () => {
         address: 'г. Москва, Зелёный проспект, д. 22',
       },
     ]);
-    await client.getTerminalMessages({
-      externalId: '42',
-      from: new Date('2026-08-20T00:00:00Z'),
-      to: new Date('2026-08-21T00:00:00Z'),
-    });
+    await expect(
+      client.getTerminalMessages({
+        externalId: '42',
+        from: new Date('2026-08-20T00:00:00Z'),
+        to: new Date('2026-08-21T00:00:00Z'),
+      }),
+    ).resolves.toEqual([
+      {
+        externalId: '2026-08-20T08:59:45Z',
+        recordedAt: '2026-08-20T08:59:45Z',
+        latitude: 55.7559,
+        longitude: 37.6177,
+        speedKph: 48,
+        odometerKm: null,
+      },
+    ]);
 
     expect(await (transport.mock.calls[1]?.[0] as Request).json()).toEqual({ vehiclesIds: [42] });
     expect(await (transport.mock.calls[2]?.[0] as Request).json()).toEqual({
