@@ -43,6 +43,7 @@ const mapMocks = vi.hoisted(() => {
     mapGetImage: vi.fn(),
     mapRemoveImage: vi.fn(),
     mapGetPaintProperty: vi.fn(),
+    mapSetPaintProperty: vi.fn(),
     mapRemoveLayer: vi.fn(),
     mapRemoveSource: vi.fn(),
     mapSetFeatureState: vi.fn(),
@@ -107,6 +108,7 @@ vi.mock('maplibre-gl', () => {
     getImage = mapMocks.mapGetImage;
     removeImage = mapMocks.mapRemoveImage;
     getPaintProperty = mapMocks.mapGetPaintProperty;
+    setPaintProperty = mapMocks.mapSetPaintProperty;
     removeLayer = mapMocks.mapRemoveLayer;
     removeSource = mapMocks.mapRemoveSource;
     setFeatureState = mapMocks.mapSetFeatureState;
@@ -646,22 +648,31 @@ it('создаёт девять различных raster-иконок собы�
   const images = types.map((type) => createTrackEventIconImage(type));
 
   expect(new Set(ids).size).toBe(9);
-  expect(images.every((image) => image.width === 48 && image.height === 48)).toBe(true);
+  expect(images.every((image) => image.width === 56 && image.height === 56)).toBe(true);
   expect(new Set(images.map((image) => Array.from(image.data).join(','))).size).toBe(9);
 });
 
-it('рисует тонкий контур поинта под светлую и тёмную тему', async () => {
+it('рисует 28px поинт с графитовым центром и тонкой тематической обводкой', async () => {
   const { createTrackEventIconImage } = await import('./VehicleTrackLayers');
-  const dark = createTrackEventIconImage('harsh-braking', 'dark');
-  const light = createTrackEventIconImage('harsh-braking', 'light');
-  const topPixelOffset = (1 * dark.width + 24) * 4;
+  const dark = createTrackEventIconImage('speeding', 'dark');
+  const light = createTrackEventIconImage('speeding', 'light');
 
-  expect(Array.from(dark.data.slice(topPixelOffset, topPixelOffset + 4))).toEqual([
-    52, 52, 56, 255,
-  ]);
-  expect(Array.from(light.data.slice(topPixelOffset, topPixelOffset + 4))).toEqual([
-    248, 250, 252, 255,
-  ]);
+  expect(dark).toMatchObject({ width: 56, height: 56 });
+  expect(pixelAt(dark, 28, 28)).toEqual([23, 23, 28, 255]);
+  expect(pixelAt(light, 28, 28)).toEqual([248, 250, 252, 255]);
+  expect(pixelAt(dark, 28, 1)).toEqual([239, 68, 68, 255]);
+});
+
+it('различает события не только цветом, но и формой иконки', async () => {
+  const { createTrackEventIconImage } = await import('./VehicleTrackLayers');
+  const semanticImages = [
+    createTrackEventIconImage('speeding'),
+    createTrackEventIconImage('harsh-acceleration'),
+    createTrackEventIconImage('harsh-braking'),
+    createTrackEventIconImage('connection-loss'),
+  ];
+
+  expect(new Set(semanticImages.map((image) => Array.from(image.data).join(','))).size).toBe(4);
 });
 
 it('создаёт компактные разные маркеры старта и финиша с клетчатым флагом', async () => {
@@ -756,6 +767,18 @@ it('регистрирует видимую линию, hitbox, события, 
   const track = getTrackViewModel('lada-vesta-a123mr77');
   const onEventActivate = vi.fn();
   const onEventPreview = vi.fn();
+  let pulseFrame: FrameRequestCallback | undefined;
+  const requestFrame = vi.fn((callback: FrameRequestCallback) => {
+    pulseFrame = callback;
+    return 77;
+  });
+  const cancelFrame = vi.fn();
+  vi.stubGlobal('requestAnimationFrame', requestFrame);
+  vi.stubGlobal('cancelAnimationFrame', cancelFrame);
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+  );
   const tripOffsetExpression = ['match', ['get', 'tripIndex'], 1, -5, 2, 5, 0];
   mapMocks.mapGetPaintProperty.mockImplementation((layerId: string, property: string) => {
     if (layerId === 'vehicle-track-casing' && property === 'line-width') return 8;
@@ -772,6 +795,7 @@ it('регистрирует видимую линию, hitbox, события, 
     removeImage: mapMocks.mapRemoveImage,
     getContainer: () => mapMocks.mapContainer,
     getPaintProperty: mapMocks.mapGetPaintProperty,
+    setPaintProperty: mapMocks.mapSetPaintProperty,
     getCanvas: () => mapMocks.canvas,
     getLayer: mapMocks.mapGetLayer,
     getSource: mapMocks.mapGetSource,
@@ -848,6 +872,20 @@ it('регистрирует видимую линию, hitbox, события, 
         'circle-stroke-width': 1,
       }),
     }),
+  );
+  expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'vehicle-track-event-pulse',
+      type: 'circle',
+      source: 'vehicle-track-events',
+    }),
+    'vehicle-track-event-icons',
+  );
+  pulseFrame?.(1_000);
+  expect(mapMocks.mapSetPaintProperty).toHaveBeenCalledWith(
+    'vehicle-track-event-pulse',
+    'circle-radius',
+    expect.any(Number),
   );
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -932,6 +970,7 @@ it('регистрирует видимую линию, hitbox, события, 
   expect(mapMocks.mapContainer.dataset.trackLineOffset).toBe(JSON.stringify(tripOffsetExpression));
 
   unmountLayers();
+  expect(cancelFrame).toHaveBeenCalledWith(77);
   expect(mapMocks.mapOff).toHaveBeenCalledWith(
     'mousemove',
     'vehicle-track-hitbox',
@@ -946,6 +985,15 @@ it('регистрирует видимую линию, hitbox, события, 
   expect(mapMocks.mapContainer.dataset.trackCasingWidth).toBeUndefined();
   expect(mapMocks.mapContainer.dataset.trackLineOffset).toBeUndefined();
 });
+
+function pixelAt(
+  image: { width: number; data: Uint8Array },
+  x: number,
+  y: number,
+): number[] {
+  const offset = (y * image.width + x) * 4;
+  return Array.from(image.data.slice(offset, offset + 4));
+}
 
 it('показывает доступное русское описание сгруппированного события', async () => {
   const { TrackEventPopup } = await import('./TrackEventPopup');
