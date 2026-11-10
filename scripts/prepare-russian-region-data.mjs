@@ -6,6 +6,7 @@ const SOURCE_URL =
   'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_admin_1_states_provinces.geojson';
 const OUTPUT = resolve('data/regions/russia-admin1.geojson');
 const DISPUTED_CODES = new Set(['RU-82', 'RU-90', 'RU-92', 'RU-93', 'RU-94', 'RU-95']);
+const NAME_OVERRIDES = new Map([['RU-ALT', { nameRu: 'Алтайский край', nameEn: 'Altai Krai' }]]);
 
 function asMultiPolygon(geometry) {
   if (geometry?.type === 'MultiPolygon') return geometry;
@@ -37,6 +38,7 @@ const features = source.features
     const properties = feature.properties ?? {};
     const code = String(properties.iso_3166_2 ?? '').trim();
     if (!/^RU-[A-Z0-9]{2,3}$/u.test(code)) throw new Error(`Invalid Russian region code: ${code}`);
+    const nameOverride = NAME_OVERRIDES.get(code);
     const sourceFlags = [properties.featurecla, properties.note, properties.brk_name]
       .filter(Boolean)
       .join(' ');
@@ -44,8 +46,11 @@ const features = source.features
       type: 'Feature',
       properties: {
         code,
-        nameRu: String(properties.name_ru || properties.name || code).trim(),
-        nameEn: String(properties.name_en || properties.name || '').trim() || null,
+        nameRu:
+          nameOverride?.nameRu ?? String(properties.name_ru || properties.name || code).trim(),
+        nameEn:
+          nameOverride?.nameEn ??
+          (String(properties.name_en || properties.name || '').trim() || null),
         source: 'Natural Earth Admin 1',
         sourceVersion: SOURCE_VERSION,
         sourceUrl: SOURCE_URL,
@@ -61,6 +66,9 @@ if (features.length < 70) throw new Error(`Only ${features.length} Russian regio
 const codes = new Set(features.map((feature) => feature.properties.code));
 if (codes.size !== features.length)
   throw new Error('Natural Earth returned duplicate region codes.');
+const names = new Set(features.map((feature) => feature.properties.nameRu));
+if (names.size !== features.length)
+  throw new Error('Natural Earth returned duplicate Russian region names.');
 
 await mkdir(dirname(OUTPUT), { recursive: true });
 await writeFile(
