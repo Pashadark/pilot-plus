@@ -120,6 +120,41 @@ describe('detectAndPersistHarshAcceleration', () => {
     );
   });
 
+  it('сохраняет событие, завершившееся внутри дозагруженного окна до последней точки', async () => {
+    const upsert = vi.fn().mockResolvedValue({ id: 'event-1' });
+    const prisma = repository({
+      vehiclePosition: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            position('p4', 4, 37.8),
+            position('p3', 3, 37.8),
+            position('p2', 2, 25.2),
+            position('p1', 1, 12.6),
+            position('p0', 0, 0),
+          ]),
+      },
+      vehicleEvent: { upsert },
+    });
+
+    await detectAndPersistHarshAcceleration({
+      companyId: 'company-1',
+      vehicleId: 'vehicle-1',
+      endPositionIds: ['p0', 'p1', 'p2', 'p3', 'p4'],
+      prisma,
+    });
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          externalId: 'harsh-acceleration:p0',
+          endSpeedKph: 37.8,
+          trackPointIds: ['p0', 'p1', 'p2', 'p3'],
+        }),
+      }),
+    );
+  });
+
   it('ничего не пишет, когда детектор отключён для автомобиля', async () => {
     const prisma = repository({
       vehicleGpsSettingsOverride: {

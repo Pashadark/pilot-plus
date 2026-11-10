@@ -93,6 +93,41 @@ describe('detectAndPersistHarshBraking', () => {
     expect(prisma.vehicleEvent.upsert).not.toHaveBeenCalled();
   });
 
+  it('сохраняет торможение, завершившееся внутри дозагруженного окна', async () => {
+    const upsert = vi.fn().mockResolvedValue({ id: 'event-1' });
+    const prisma = repository({
+      vehiclePosition: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            position('p4', 4, 0),
+            position('p3', 3, 0),
+            position('p2', 2, 12.6),
+            position('p1', 1, 25.2),
+            position('p0', 0, 37.8),
+          ]),
+      },
+      vehicleEvent: { upsert },
+    });
+
+    await detectAndPersistHarshBraking({
+      companyId: 'company-1',
+      vehicleId: 'vehicle-1',
+      endPositionIds: ['p0', 'p1', 'p2', 'p3', 'p4'],
+      prisma,
+    });
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          externalId: 'harsh-braking:p0',
+          endSpeedKph: 0,
+          trackPointIds: ['p0', 'p1', 'p2', 'p3'],
+        }),
+      }),
+    );
+  });
+
   it('ставит клиентское и служебное уведомления в очередь', async () => {
     const createMany = vi.fn().mockResolvedValue({ count: 1 });
     const prisma = repository({

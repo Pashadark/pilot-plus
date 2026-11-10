@@ -51,6 +51,8 @@ const mapMocks = vi.hoisted(() => {
     resizeObserverCallbacks: [] as ResizeObserverCallback[],
     markerRemove: vi.fn(),
     markerSetLngLat: vi.fn(),
+    markerSetRotation: vi.fn(),
+    markerOptions: [] as Array<Record<string, unknown>>,
     popupRemove: vi.fn(),
     popupOptions: [] as unknown[],
     reactRootContainers: [] as (Element | Document | DocumentFragment)[],
@@ -115,8 +117,9 @@ vi.mock('maplibre-gl', () => {
   class Marker {
     element: HTMLElement;
 
-    constructor(options?: { element?: HTMLElement }) {
+    constructor(options?: { element?: HTMLElement } & Record<string, unknown>) {
       this.element = options?.element ?? document.createElement('div');
+      mapMocks.markerOptions.push(options ?? {});
     }
 
     setLngLat(coordinates: [number, number]) {
@@ -130,6 +133,11 @@ vi.mock('maplibre-gl', () => {
 
     getElement() {
       return this.element;
+    }
+
+    setRotation(rotation: number) {
+      mapMocks.markerSetRotation(rotation);
+      return this;
     }
 
     remove = mapMocks.markerRemove;
@@ -177,6 +185,7 @@ const vehicles: readonly OnlineMapVehicle[] = [
     plate: 'А 123 МР 77',
     gpsStatus: { key: 'MOVING', label: 'В движении', tone: 'primary', isConnected: true },
     speedKph: 42,
+    heading: 90,
     fuelPercent: 68,
     lastSeenLabel: 'сейчас',
     address: 'Красноярск, ул. Карла Маркса',
@@ -200,6 +209,7 @@ beforeEach(() => {
   mapMocks.loadHandlers.clear();
   mapMocks.resizeObserverCallbacks.length = 0;
   mapMocks.popupOptions.length = 0;
+  mapMocks.markerOptions.length = 0;
   mapMocks.reactRootContainers.length = 0;
   mapMocks.mapContainer.replaceChildren();
   delete mapMocks.mapContainer.dataset.trackCasingWidth;
@@ -278,6 +288,41 @@ it('не пересоздаёт карту при GPS-обновлении ак�
   expect(mapMocks.mapConstruct).toHaveBeenCalledTimes(1);
   expect(mapMocks.mapRemove).not.toHaveBeenCalled();
   expect(mapMocks.markerSetLngLat).toHaveBeenCalledWith([92.861, 56.019]);
+});
+
+it('укладывает маркер машины в плоскость карты и обновляет его курс через MapLibre', () => {
+  const props = {
+    vehicles,
+    selectedVehicleId: vehicles[0].id,
+    trackViewModel: null,
+    playbackPoint: null,
+    selectedEventId: null,
+    previewedEventId: null,
+    previewedSegmentId: null,
+    onVehicleSelect: vi.fn(),
+    onEventPreview: vi.fn(),
+    onEventActivate: vi.fn(),
+    onSegmentPreview: vi.fn(),
+  };
+  const { rerender } = render(createElement(OnlineFleetMap, props));
+
+  expect(mapMocks.markerOptions[0]).toEqual(
+    expect.objectContaining({
+      anchor: 'center',
+      pitchAlignment: 'map',
+      rotationAlignment: 'map',
+      rotation: 90,
+    }),
+  );
+
+  rerender(
+    createElement(OnlineFleetMap, {
+      ...props,
+      vehicles: [{ ...vehicles[0], heading: 135 }],
+    }),
+  );
+
+  expect(mapMocks.markerSetRotation).toHaveBeenCalledWith(135);
 });
 
 it('поднимает мобильные контролы карты над панелью высотой 48dvh и safe area', () => {

@@ -58,7 +58,7 @@ it('показывает компактную угловую стрелку по
 
   const glyph = screen.getByTestId('vehicle-map-arrow');
   expect(glyph.getAttribute('data-heading')).toBe('127');
-  expect(glyph.getAttribute('style')).toContain('rotate(127deg)');
+  expect(glyph.getAttribute('style')).toBeNull();
   expect(glyph.querySelector('svg path')?.getAttribute('d')).toBe('M16 1 29 31 16 25 3 31Z');
   expect(screen.queryByTestId('vehicle-map-car')).toBeNull();
   expect(glyph.className).toContain('--color-primary');

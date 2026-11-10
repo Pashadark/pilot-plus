@@ -53,12 +53,17 @@ export interface HarshBrakingRepository {
 
 const SETTINGS_KEYS = Object.keys(DEFAULT_GPS_SETTINGS) as Array<keyof ResolvedGpsSettings>;
 
-export async function detectAndPersistHarshBraking(input: {
-  companyId: string;
-  vehicleId: string;
-  latestPositionId: string;
-  prisma: HarshBrakingRepository;
-}): Promise<{ createdEventIds: string[] }> {
+type EventPositionSelector =
+  | { latestPositionId: string; endPositionIds?: never }
+  | { latestPositionId?: never; endPositionIds: readonly string[] };
+
+export async function detectAndPersistHarshBraking(
+  input: {
+    companyId: string;
+    vehicleId: string;
+    prisma: HarshBrakingRepository;
+  } & EventPositionSelector,
+): Promise<{ createdEventIds: string[] }> {
   const [companyRow, vehicleRow] = await Promise.all([
     input.prisma.companyGpsSettings.findUnique({ where: { companyId: input.companyId } }),
     input.prisma.vehicleGpsSettingsOverride.findUnique({ where: { vehicleId: input.vehicleId } }),
@@ -68,6 +73,11 @@ export async function detectAndPersistHarshBraking(input: {
     vehicleRow ? toVehicleOverride(vehicleRow) : null,
   );
   if (!settings.brakingDetectionEnabled) return { createdEventIds: [] };
+
+  const endPositionIds = new Set(
+    input.endPositionIds ?? (input.latestPositionId ? [input.latestPositionId] : []),
+  );
+  if (endPositionIds.size === 0) return { createdEventIds: [] };
 
   const positions = await input.prisma.vehiclePosition.findMany({
     where: { vehicleId: input.vehicleId, provider: 'GLONASSSOFT' },
@@ -80,7 +90,7 @@ export async function detectAndPersistHarshBraking(input: {
       address: true,
     },
     orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
-    take: 20,
+    take: Math.min(1_200, Math.max(20, endPositionIds.size + 20)),
   });
   const orderedPositions = [...positions].sort(
     (left, right) => left.recordedAt.getTime() - right.recordedAt.getTime(),
@@ -93,7 +103,7 @@ export async function detectAndPersistHarshBraking(input: {
     confirmationWindowMs: settings.confirmationWindowMs,
     mergeWindowMs: settings.mergeWindowMs,
     maximumGapMs: settings.maximumGapMs,
-  }).filter((event) => event.endPointId === input.latestPositionId);
+  }).filter((event) => endPositionIds.has(event.endPointId));
   const eventIds: string[] = [];
 
   for (const event of events) {

@@ -33,8 +33,11 @@ export class TelematicsSyncError extends Error {
 }
 
 type LastData = Awaited<ReturnType<GlonassSoftClient['getLastData']>>[number];
+type TerminalMessage = Awaited<ReturnType<GlonassSoftClient['getTerminalMessages']>>[number];
 
 const SPEEDING_ALERT_THRESHOLD_KPH = 145;
+const MAX_MOTION_HISTORY_LOOKBACK_MS = 10 * 60_000;
+const MAX_MOTION_EVENT_POINTS = 1_200;
 
 interface SyncDatabase {
   telematicsIntegration: {
@@ -55,6 +58,10 @@ interface SyncDatabase {
         registrationNumberNormalized: string;
       }>
     >;
+  };
+  vehiclePosition?: {
+    createMany?(args: unknown): Promise<{ count: number }>;
+    findMany?(args: unknown): Promise<Array<{ vehicleId: string; recordedAt: Date }>>;
   };
   $transaction<T>(callback: (database: SyncTransaction) => Promise<T>): Promise<T>;
 }
@@ -127,6 +134,17 @@ interface SyncTransaction {
 
 interface SyncClient {
   getLastData(externalIds: readonly string[]): Promise<readonly LastData[]>;
+  getTerminalMessages?(input: {
+    externalId: string;
+    from: Date;
+    to: Date;
+  }): Promise<readonly TerminalMessage[]>;
+}
+
+interface MotionHistoryWindow {
+  from: Date;
+  to: Date;
+  points: TerminalMessage[];
 }
 
 interface SyncDependencies {
@@ -187,6 +205,13 @@ export async function syncCompanyLatestPositions(
     });
     const data = await client.getLastData(links.map((link) => link.externalId));
     const linkByExternalId = new Map(links.map((link) => [link.externalId, link]));
+    const motionHistoryByVehicle = await loadMotionHistoryWindows({
+      companyId,
+      client,
+      data,
+      links,
+      prisma: deps.prisma,
+    });
     let saved = 0;
     let skipped = 0;
     const changedVehicleIds: string[] = [];
@@ -197,8 +222,20 @@ export async function syncCompanyLatestPositions(
           skipped += 1;
           continue;
         }
-        const changed = await savePoint(database, companyId, link.vehicleId, point);
+        const motionHistory = motionHistoryByVehicle.get(link.vehicleId);
+        const changed = await savePoint(database, companyId, link.vehicleId, point, {
+          deferMotionDetection: motionHistory !== undefined,
+        });
         if (changed) {
+          if (motionHistory) {
+            await saveMotionHistoryPoints(
+              database,
+              link.vehicleId,
+              motionHistory.points,
+              deps.now(),
+            );
+            await persistMotionEventsForWindow(database, companyId, link.vehicleId, motionHistory);
+          }
           saved += 1;
           changedVehicleIds.push(link.vehicleId);
         }
@@ -224,11 +261,134 @@ export async function syncCompanyLatestPositions(
   }
 }
 
+async function loadMotionHistoryWindows(input: {
+  companyId: string;
+  client: SyncClient;
+  data: readonly LastData[];
+  links: readonly { vehicleId: string; externalId: string }[];
+  prisma: SyncDatabase;
+}): Promise<Map<string, MotionHistoryWindow>> {
+  const result = new Map<string, MotionHistoryWindow>();
+  const positionRepository = input.prisma.vehiclePosition;
+  if (!input.client.getTerminalMessages || !positionRepository?.findMany) return result;
+
+  const previousRows = await positionRepository.findMany({
+    where: {
+      vehicleId: { in: input.links.map((link) => link.vehicleId) },
+      provider: 'GLONASSSOFT',
+    },
+    select: { vehicleId: true, recordedAt: true },
+    orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+    distinct: ['vehicleId'],
+  });
+  const previousAtByVehicle = new Map(
+    previousRows.map((row) => [row.vehicleId, row.recordedAt] as const),
+  );
+  const linkByExternalId = new Map(input.links.map((link) => [link.externalId, link] as const));
+
+  for (const latest of input.data) {
+    const link = linkByExternalId.get(latest.externalId);
+    if (!link) continue;
+    const latestAt = new Date(latest.recordedAt);
+    const previousAt = previousAtByVehicle.get(link.vehicleId);
+    if (previousAt && previousAt.getTime() >= latestAt.getTime()) continue;
+
+    const earliestAllowed = latestAt.getTime() - MAX_MOTION_HISTORY_LOOKBACK_MS;
+    const from = new Date(Math.max(previousAt?.getTime() ?? earliestAllowed, earliestAllowed));
+    const to = new Date(latestAt.getTime() + 1);
+    try {
+      const messages = await input.client.getTerminalMessages({
+        externalId: link.externalId,
+        from,
+        to,
+      });
+      const pointsByExternalId = new Map<string, TerminalMessage>();
+      for (const message of messages) {
+        const recordedAt = new Date(message.recordedAt);
+        if (recordedAt < from || recordedAt >= latestAt) continue;
+        pointsByExternalId.set(message.externalId, message);
+      }
+      const points = [...pointsByExternalId.values()]
+        .sort(
+          (left, right) =>
+            new Date(left.recordedAt).getTime() - new Date(right.recordedAt).getTime(),
+        )
+        .slice(-MAX_MOTION_EVENT_POINTS);
+      result.set(link.vehicleId, {
+        from: points[0] ? new Date(points[0].recordedAt) : from,
+        to: latestAt,
+        points,
+      });
+    } catch (error) {
+      console.error('glonasssoft-motion-history-sync-failed', {
+        companyId: input.companyId,
+        vehicleId: link.vehicleId,
+        code: safeErrorCode(error),
+      });
+    }
+  }
+
+  return result;
+}
+
+async function saveMotionHistoryPoints(
+  database: SyncTransaction,
+  vehicleId: string,
+  points: readonly TerminalMessage[],
+  receivedAt: Date,
+): Promise<void> {
+  if (points.length === 0) return;
+  await database.vehiclePosition.createMany({
+    data: points.map((point) => {
+      const recordedAt = new Date(point.recordedAt);
+      return {
+        vehicleId,
+        latitude: point.latitude,
+        longitude: point.longitude,
+        speedKph: Math.round(point.speedKph),
+        odometerKm: point.odometerKm,
+        recordedAt,
+        provider: 'GLONASSSOFT',
+        externalId: point.externalId,
+        providerRecordedAt: recordedAt,
+        receivedAt,
+      };
+    }),
+    skipDuplicates: true,
+  });
+}
+
+async function persistMotionEventsForWindow(
+  database: SyncTransaction,
+  companyId: string,
+  vehicleId: string,
+  window: MotionHistoryWindow,
+): Promise<void> {
+  if (!database.vehiclePosition.findMany) return;
+  const positions = await database.vehiclePosition.findMany({
+    where: {
+      vehicleId,
+      provider: 'GLONASSSOFT',
+      recordedAt: { gte: window.from, lte: window.to },
+    },
+    select: { id: true },
+    orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+    take: MAX_MOTION_EVENT_POINTS,
+  });
+  const endPositionIds = positions.flatMap((position) =>
+    typeof position.id === 'string' ? [position.id] : [],
+  );
+  if (endPositionIds.length === 0) return;
+  await persistHarshAccelerationEvent(database, companyId, vehicleId, null, endPositionIds);
+  await persistHarshBrakingEvent(database, companyId, vehicleId, null, endPositionIds);
+}
+
 async function savePoint(
   database: SyncTransaction,
   companyId: string,
   vehicleId: string,
   point: LastData,
+  options: { deferMotionDetection?: boolean } = {},
 ): Promise<boolean> {
   const recordedAt = new Date(point.recordedAt);
   const providerReceivedAt = new Date(point.receivedAt);
@@ -298,8 +458,10 @@ async function savePoint(
       status: stateToStatus(point.state),
     },
   });
-  await persistHarshAccelerationEvent(database, companyId, vehicleId, externalId);
-  await persistHarshBrakingEvent(database, companyId, vehicleId, externalId);
+  if (!options.deferMotionDetection) {
+    await persistHarshAccelerationEvent(database, companyId, vehicleId, externalId);
+    await persistHarshBrakingEvent(database, companyId, vehicleId, externalId);
+  }
   const previousSpeedKph = previous?.speedKph ?? null;
   const crossedSpeedingThreshold =
     point.speedKph >= SPEEDING_ALERT_THRESHOLD_KPH &&
@@ -405,7 +567,8 @@ async function persistHarshAccelerationEvent(
   database: SyncTransaction,
   companyId: string,
   vehicleId: string,
-  positionExternalId: string,
+  positionExternalId: string | null,
+  endPositionIds?: readonly string[],
 ) {
   if (
     !database.companyGpsSettings?.findUnique ||
@@ -418,31 +581,40 @@ async function persistHarshAccelerationEvent(
     return;
   }
 
-  const latestPosition = await database.vehiclePosition.findFirst({
-    where: { vehicleId, provider: 'GLONASSSOFT', externalId: positionExternalId },
-    select: {
-      id: true,
-      latitude: true,
-      longitude: true,
-      speedKph: true,
-      recordedAt: true,
-    },
-  });
-  if (!latestPosition?.id) return;
+  const latestPosition = endPositionIds
+    ? null
+    : await database.vehiclePosition.findFirst({
+        where: { vehicleId, provider: 'GLONASSSOFT', externalId: positionExternalId },
+        select: {
+          id: true,
+          latitude: true,
+          longitude: true,
+          speedKph: true,
+          recordedAt: true,
+        },
+      });
+  if (!endPositionIds && !latestPosition?.id) return;
 
   await detectAndPersistHarshAcceleration({
     companyId,
     vehicleId,
-    latestPositionId: latestPosition.id,
+    ...(endPositionIds ? { endPositionIds } : { latestPositionId: latestPosition?.id as string }),
     prisma: database as unknown as HarshAccelerationRepository,
-  }).catch(() => undefined);
+  }).catch((error: unknown) => {
+    console.error('harsh-acceleration-detection-failed', {
+      companyId,
+      vehicleId,
+      code: safeErrorCode(error),
+    });
+  });
 }
 
 async function persistHarshBrakingEvent(
   database: SyncTransaction,
   companyId: string,
   vehicleId: string,
-  positionExternalId: string,
+  positionExternalId: string | null,
+  endPositionIds?: readonly string[],
 ) {
   if (
     !database.companyGpsSettings?.findUnique ||
@@ -455,24 +627,32 @@ async function persistHarshBrakingEvent(
     return;
   }
 
-  const latestPosition = await database.vehiclePosition.findFirst({
-    where: { vehicleId, provider: 'GLONASSSOFT', externalId: positionExternalId },
-    select: {
-      id: true,
-      latitude: true,
-      longitude: true,
-      speedKph: true,
-      recordedAt: true,
-    },
-  });
-  if (!latestPosition?.id) return;
+  const latestPosition = endPositionIds
+    ? null
+    : await database.vehiclePosition.findFirst({
+        where: { vehicleId, provider: 'GLONASSSOFT', externalId: positionExternalId },
+        select: {
+          id: true,
+          latitude: true,
+          longitude: true,
+          speedKph: true,
+          recordedAt: true,
+        },
+      });
+  if (!endPositionIds && !latestPosition?.id) return;
 
   await detectAndPersistHarshBraking({
     companyId,
     vehicleId,
-    latestPositionId: latestPosition.id,
+    ...(endPositionIds ? { endPositionIds } : { latestPositionId: latestPosition?.id as string }),
     prisma: database as unknown as HarshBrakingRepository,
-  }).catch(() => undefined);
+  }).catch((error: unknown) => {
+    console.error('harsh-braking-detection-failed', {
+      companyId,
+      vehicleId,
+      code: safeErrorCode(error),
+    });
+  });
 }
 
 async function enqueueImpoundAlert(

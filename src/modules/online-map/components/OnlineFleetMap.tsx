@@ -22,7 +22,7 @@ import {
   setVehicleTrackPlaybackTrail,
   VehicleTrackDataSurface,
 } from './VehicleTrackLayers';
-import { VehicleMapMarker } from './VehicleMapMarker';
+import { normalizeHeading, VehicleMapMarker } from './VehicleMapMarker';
 
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -247,7 +247,13 @@ export function OnlineFleetMap({
         />,
       );
 
-      const marker = new maplibregl.Marker({ element, anchor: 'center' })
+      const marker = new maplibregl.Marker({
+        element,
+        anchor: 'center',
+        pitchAlignment: 'map',
+        rotationAlignment: 'map',
+        rotation: normalizeHeading(vehicle.heading),
+      })
         .setLngLat([vehicle.longitude, vehicle.latitude])
         .addTo(map);
       element.removeAttribute('aria-label');
@@ -282,6 +288,7 @@ export function OnlineFleetMap({
       const vehicle = positionedVehicles.find((candidate) => candidate.id === resource.vehicleId);
       if (!vehicle) continue;
       resource.marker.setLngLat([vehicle.longitude, vehicle.latitude]);
+      resource.marker.setRotation(normalizeHeading(vehicle.heading));
       const { root } = resource;
       root.render(
         <VehicleMapMarker
@@ -615,7 +622,7 @@ export function OnlineFleetMap({
       if (playbackMarkerRef.current) {
         playbackMarkerRef.current.getElement().dataset.playbackPoint = playbackPoint.id;
         playbackMarkerRef.current.setLngLat([...playbackPoint.coordinates]);
-        playbackMarkerRef.current.getElement().style.transform = `rotate(${playbackHeading}deg)`;
+        playbackMarkerRef.current.setRotation(normalizeHeading(playbackHeading));
       } else if (mapReadyRef.current) {
         playbackMarkerRef.current = createPlaybackMarker(map, playbackPoint, playbackHeading);
       }
@@ -774,9 +781,13 @@ function createPlaybackMarker(
   element.className =
     'size-5 border-2 border-white bg-[var(--color-primary)] shadow-[var(--shadow-card)]';
   element.style.clipPath = 'polygon(50% 0%, 100% 100%, 50% 72%, 0% 100%)';
-  element.style.transform = `rotate(${heading}deg)`;
-
-  return new maplibregl.Marker({ element, anchor: 'center' })
+  return new maplibregl.Marker({
+    element,
+    anchor: 'center',
+    pitchAlignment: 'map',
+    rotationAlignment: 'map',
+    rotation: normalizeHeading(heading),
+  })
     .setLngLat([...point.coordinates])
     .addTo(map);
 }

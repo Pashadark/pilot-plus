@@ -48,7 +48,6 @@ export function VehicleMapMarker({ vehicle, selected, onSelect }: VehicleMapMark
             ? 'drop-shadow-[0_0_7px_color-mix(in_srgb,var(--color-primary)_55%,transparent)]'
             : 'drop-shadow-[0_2px_3px_rgba(15,23,42,0.28)]'
         }`}
-        style={{ transform: `rotate(${heading}deg)` }}
       >
         <AngularDirectionArrow />
       </span>
@@ -69,8 +68,7 @@ export function VehicleMapMarker({ vehicle, selected, onSelect }: VehicleMapMark
               : `${vehicle.speedKph} км/ч`}
         </span>
         <span className="block">
-          Топливо:{' '}
-          {vehicle.fuelPercent == null ? 'Нет данных' : `${vehicle.fuelPercent}%`}
+          Топливо: {vehicle.fuelPercent == null ? 'Нет данных' : `${vehicle.fuelPercent}%`}
         </span>
         <span className="block">Последний сигнал: {vehicle.lastSeenLabel}</span>
       </span>
@@ -78,7 +76,7 @@ export function VehicleMapMarker({ vehicle, selected, onSelect }: VehicleMapMark
   );
 }
 
-function normalizeHeading(value: number | null | undefined): number {
+export function normalizeHeading(value: number | null | undefined): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
   return ((Math.round(value) % 360) + 360) % 360;
 }
