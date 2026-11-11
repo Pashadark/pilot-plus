@@ -447,13 +447,14 @@ export function OnlineFleetMap({
           offset: 14,
         });
         eventPreviewPopup = new maplibregl.Popup({
-          className: 'maplibregl-popup-track-pointer',
+          className: 'maplibregl-popup-track-event maplibregl-popup-track-pointer',
           closeButton: false,
           closeOnClick: false,
           focusAfterOpen: false,
           offset: 16,
         });
         eventSelectedPopup = new maplibregl.Popup({
+          className: 'maplibregl-popup-track-event',
           closeButton: true,
           focusAfterOpen: false,
           offset: 16,

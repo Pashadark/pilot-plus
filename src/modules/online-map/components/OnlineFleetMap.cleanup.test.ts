@@ -261,6 +261,23 @@ it('откладывает размонтирование вложенных Rea
   expect(source).not.toContain('root.unmount();');
 });
 
+it('убирает стандартную белую оболочку у подсказок событий маршрута', () => {
+  const styles = readFileSync(
+    resolve('src/modules/online-map/components/OnlineFleetMap.module.css'),
+    'utf8',
+  );
+
+  expect(styles).toContain(
+    '.mapShell :global(.maplibregl-popup-track-event .maplibregl-popup-content)',
+  );
+  expect(styles).toMatch(
+    /\.maplibregl-popup-track-event \.maplibregl-popup-content\)[^{]*\{[^}]*background:\s*transparent;[^}]*padding:\s*0;/s,
+  );
+  expect(styles).toContain(
+    '.mapShell :global(.maplibregl-popup-track-event .maplibregl-popup-tip)',
+  );
+});
+
 it('не пересоздаёт карту при GPS-обновлении активной машины', () => {
   const props = {
     vehicles,
@@ -747,9 +764,16 @@ it('повторно вписывает маршрут при смене contain
   );
   expect(mapMocks.popupOptions).toContainEqual(
     expect.objectContaining({
-      className: 'maplibregl-popup-track-pointer',
+      className: 'maplibregl-popup-track-event maplibregl-popup-track-pointer',
       closeButton: false,
       closeOnClick: false,
+      focusAfterOpen: false,
+    }),
+  );
+  expect(mapMocks.popupOptions).toContainEqual(
+    expect.objectContaining({
+      className: 'maplibregl-popup-track-event',
+      closeButton: true,
       focusAfterOpen: false,
     }),
   );
