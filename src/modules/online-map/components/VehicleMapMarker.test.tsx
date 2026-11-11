@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 import { onlineMapVehicles } from '../fixtures';
 import { VehicleMapMarker } from './VehicleMapMarker';
+import { VehicleMapPopup } from './VehicleMapPopup';
 
 afterEach(cleanup);
 
@@ -26,25 +27,30 @@ it('показывает госномер и позволяет выбрать �
 });
 
 it('показывает в карточке скорость, топливо и время последнего сигнала', () => {
-  render(<VehicleMapMarker vehicle={onlineMapVehicles[0]} selected={false} onSelect={vi.fn()} />);
+  render(<VehicleMapPopup vehicle={onlineMapVehicles[0]} />);
 
-  const marker = screen.getByRole('button', { name: /А 123 МР 77/ });
-  expect(marker.textContent).toContain('Скорость: 48 км/ч');
-  expect(marker.textContent).toContain('Топливо: 72%');
-  expect(marker.textContent).toContain('Последний сигнал: только что');
+  const popup = screen.getByRole('article', { name: /А 123 МР 77/ });
+  expect(screen.getByText('Скорость')).toBeTruthy();
+  expect(screen.getByText('48 км/ч')).toBeTruthy();
+  expect(screen.getByText('Топливо')).toBeTruthy();
+  expect(screen.getByText('72%')).toBeTruthy();
+  expect(popup.textContent).toContain('Последний сигнал: только что');
+  expect(popup.className).toContain('bg-[var(--color-elevated)]');
 });
 
 it('не показывает пустой процент, если топливо не передано', () => {
-  render(
-    <VehicleMapMarker
-      vehicle={{ ...onlineMapVehicles[0], fuelPercent: null }}
-      selected
-      onSelect={vi.fn()}
-    />,
-  );
+  render(<VehicleMapPopup vehicle={{ ...onlineMapVehicles[0], fuelPercent: null }} />);
 
-  expect(screen.getByRole('button').textContent).toContain('Топливо: Нет данных');
-  expect(screen.getByRole('button').textContent).not.toContain('Топливо: %');
+  expect(screen.getByText('Топливо')).toBeTruthy();
+  expect(screen.getByText('Нет данных')).toBeTruthy();
+  expect(screen.getByRole('article').textContent).not.toContain('Топливо%');
+});
+
+it('не вкладывает текстовую карточку во вращающийся маркер', () => {
+  render(<VehicleMapMarker vehicle={onlineMapVehicles[0]} selected onSelect={vi.fn()} />);
+
+  expect(screen.getByRole('button').textContent).toBe('');
+  expect(screen.queryByText(/Скорость:/)).toBeNull();
 });
 
 it('показывает компактную угловую стрелку по направлению движения', () => {
@@ -78,5 +84,7 @@ it('показывает устаревший GPS-сигнал красным с
   render(<VehicleMapMarker vehicle={staleVehicle} selected={false} onSelect={vi.fn()} />);
 
   expect(screen.getByTestId('vehicle-map-arrow').className).toContain('--color-danger');
-  expect(screen.getByText(/Kia K5 · Давно не обновлялся/)).toBeTruthy();
+  cleanup();
+  render(<VehicleMapPopup vehicle={staleVehicle} />);
+  expect(screen.getByText('Давно не обновлялся')).toBeTruthy();
 });

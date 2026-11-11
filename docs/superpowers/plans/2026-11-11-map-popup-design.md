@@ -19,12 +19,14 @@
 ### Task 1: Боковые карточки событий
 
 **Files:**
+
 - Modify: `src/modules/online-map/components/TrackEventPopup.tsx`
 - Modify: `src/modules/online-map/components/OnlineFleetMap.tsx`
 - Modify: `src/modules/online-map/components/OnlineFleetMap.module.css`
 - Test: `src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts`
 
 **Interfaces:**
+
 - Consumes: `VehicleTrackEventView`, `maplibregl.Popup`
 - Produces: `getMapPopupAnchor(map, coordinates): 'left' | 'right'`
 
@@ -36,6 +38,7 @@
 ### Task 2: Горизонтальная карточка автомобиля
 
 **Files:**
+
 - Modify: `src/modules/online-map/components/VehicleMapMarker.tsx`
 - Create: `src/modules/online-map/components/VehicleMapPopup.tsx`
 - Modify: `src/modules/online-map/components/OnlineFleetMap.tsx`
@@ -43,6 +46,7 @@
 - Test: `src/modules/online-map/components/OnlineFleetMap.cleanup.test.ts`
 
 **Interfaces:**
+
 - Consumes: `OnlineMapVehicle`
 - Produces: `VehicleMapPopup({ vehicle })`
 
@@ -51,4 +55,3 @@
 - [ ] Вынести содержимое в `VehicleMapPopup`, добавить отдельный React root и синхронизацию координат выбранной машины.
 - [ ] Запустить focused tests, TypeScript, ESLint и production build.
 - [ ] Проверить наведение и выбор автомобиля на боевой карте после развёртывания.
-

@@ -765,6 +765,7 @@ it('повторно вписывает маршрут при смене contain
   expect(mapMocks.popupOptions).toContainEqual(
     expect.objectContaining({
       className: 'maplibregl-popup-track-event maplibregl-popup-track-pointer',
+      anchor: 'left',
       closeButton: false,
       closeOnClick: false,
       focusAfterOpen: false,
@@ -773,8 +774,17 @@ it('повторно вписывает маршрут при смене contain
   expect(mapMocks.popupOptions).toContainEqual(
     expect.objectContaining({
       className: 'maplibregl-popup-track-event',
+      anchor: 'left',
       closeButton: true,
       focusAfterOpen: false,
+    }),
+  );
+  expect(mapMocks.popupOptions).toContainEqual(
+    expect.objectContaining({
+      className: 'maplibregl-popup-vehicle',
+      anchor: 'left',
+      closeButton: false,
+      closeOnClick: false,
     }),
   );
   mapMocks.mapFitBounds.mockClear();
@@ -1044,11 +1054,12 @@ it('показывает доступное русское описание сг
   render(createElement(TrackEventPopup, { event, count: 2 }));
 
   const popup = screen.getByRole('article', { name: `Событие: ${event.title}` });
-  expect(popup.className).toContain('bg-[var(--color-surface)]');
-  expect(popup.className).toContain('border-[var(--color-border)]');
+  expect(popup.className).toContain('bg-[var(--color-elevated)]');
+  expect(popup.className).toContain('border-[var(--color-border-strong)]');
   expect(popup.className).toContain('rounded-[var(--radius-md)]');
+  expect(popup.querySelector('header')?.textContent).toContain(event.timestamp);
+  expect(popup.querySelector('[data-track-event-metric]')).toBeTruthy();
   expect(screen.getByText('2 события')).toBeTruthy();
-  expect(screen.getByText(`${event.timestamp} · ${event.speedKph} км/ч`)).toBeTruthy();
   expect(screen.getByText(event.address)).toBeTruthy();
   expect(screen.getByText(event.description)).toBeTruthy();
 });

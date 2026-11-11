@@ -23,6 +23,7 @@ import {
   VehicleTrackDataSurface,
 } from './VehicleTrackLayers';
 import { normalizeHeading, VehicleMapMarker } from './VehicleMapMarker';
+import { VehicleMapPopup } from './VehicleMapPopup';
 
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -40,6 +41,13 @@ interface MarkerResource {
   vehicleId: string;
   marker: maplibregl.Marker;
   root: Root;
+}
+
+interface VehiclePopupResource {
+  vehicleId: string;
+  popup: maplibregl.Popup;
+  root: Root;
+  element: HTMLDivElement;
 }
 
 function flyToVehicle(map: maplibregl.Map, vehicle: OnlineMapVehicle) {
@@ -91,6 +99,7 @@ export function OnlineFleetMap({
   const fittedTrackRef = useRef<{ map: maplibregl.Map; key: string } | null>(null);
   const mapReadyRef = useRef(false);
   const markersRef = useRef<MarkerResource[]>([]);
+  const vehiclePopupRef = useRef<VehiclePopupResource | null>(null);
   const playbackMarkerRef = useRef<maplibregl.Marker | null>(null);
   const trackCleanupRef = useRef<(() => void) | null>(null);
   const positionedVehiclesRef = useRef<
@@ -275,6 +284,12 @@ export function OnlineFleetMap({
         marker.remove();
         queueMicrotask(() => root.unmount());
       }
+      vehiclePopupRef.current?.popup.remove();
+      if (vehiclePopupRef.current) {
+        const popupRoot = vehiclePopupRef.current.root;
+        vehiclePopupRef.current = null;
+        queueMicrotask(() => popupRoot.unmount());
+      }
       markersRef.current = [];
       trackCleanupRef.current?.();
       mapReadyRef.current = false;
@@ -302,6 +317,49 @@ export function OnlineFleetMap({
       );
     }
   }, [positionedVehicles, selectedVehicleId]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const vehicle = positionedVehicles.find((candidate) => candidate.id === selectedVehicleId);
+
+    if (!map || !vehicle) {
+      vehiclePopupRef.current?.popup.remove();
+      if (vehiclePopupRef.current) {
+        const popupRoot = vehiclePopupRef.current.root;
+        vehiclePopupRef.current = null;
+        queueMicrotask(() => popupRoot.unmount());
+      }
+      return;
+    }
+
+    let resource = vehiclePopupRef.current;
+    if (!resource || resource.vehicleId !== vehicle.id) {
+      resource?.popup.remove();
+      if (resource) {
+        const previousRoot = resource.root;
+        queueMicrotask(() => previousRoot.unmount());
+      }
+
+      const element = document.createElement('div');
+      const root = createRoot(element);
+      const popup = new maplibregl.Popup({
+        className: 'maplibregl-popup-vehicle',
+        anchor: 'left',
+        closeButton: false,
+        closeOnClick: false,
+        focusAfterOpen: false,
+        offset: 18,
+      });
+      resource = { vehicleId: vehicle.id, popup, root, element };
+      vehiclePopupRef.current = resource;
+    }
+
+    resource.root.render(<VehicleMapPopup vehicle={vehicle} />);
+    resource.popup
+      .setLngLat([vehicle.longitude, vehicle.latitude])
+      .setDOMContent(resource.element)
+      .addTo(map);
+  }, [instanceKey, positionedVehicles, selectedVehicleId]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -448,6 +506,7 @@ export function OnlineFleetMap({
         });
         eventPreviewPopup = new maplibregl.Popup({
           className: 'maplibregl-popup-track-event maplibregl-popup-track-pointer',
+          anchor: 'left',
           closeButton: false,
           closeOnClick: false,
           focusAfterOpen: false,
@@ -455,6 +514,7 @@ export function OnlineFleetMap({
         });
         eventSelectedPopup = new maplibregl.Popup({
           className: 'maplibregl-popup-track-event',
+          anchor: 'left',
           closeButton: true,
           focusAfterOpen: false,
           offset: 16,
