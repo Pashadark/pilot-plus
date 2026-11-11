@@ -394,8 +394,10 @@ export function OnlineFleetMap({
     let disposed = false;
     let layersCleanup: (() => void) | null = null;
     let segmentPopup: maplibregl.Popup | null = null;
-    let eventPopup: maplibregl.Popup | null = null;
-    let eventPopupRoot: Root | null = null;
+    let eventPreviewPopup: maplibregl.Popup | null = null;
+    let eventSelectedPopup: maplibregl.Popup | null = null;
+    let eventPreviewPopupRoot: Root | null = null;
+    let eventSelectedPopupRoot: Root | null = null;
     let fitResizeObserver: ResizeObserver | null = null;
 
     const cleanupTrack = () => {
@@ -405,12 +407,19 @@ export function OnlineFleetMap({
       layersCleanup?.();
       layersCleanup = null;
       segmentPopup?.remove();
-      eventPopup?.remove();
+      eventPreviewPopup?.remove();
+      eventSelectedPopup?.remove();
       segmentPopup = null;
-      eventPopup = null;
-      if (eventPopupRoot) {
-        const root = eventPopupRoot;
-        eventPopupRoot = null;
+      eventPreviewPopup = null;
+      eventSelectedPopup = null;
+      if (eventPreviewPopupRoot) {
+        const root = eventPreviewPopupRoot;
+        eventPreviewPopupRoot = null;
+        queueMicrotask(() => root.unmount());
+      }
+      if (eventSelectedPopupRoot) {
+        const root = eventSelectedPopupRoot;
+        eventSelectedPopupRoot = null;
         queueMicrotask(() => root.unmount());
       }
       playbackMarkerRef.current?.remove();
@@ -430,18 +439,27 @@ export function OnlineFleetMap({
       if (disposed) return;
 
       try {
-        const eventPopupElement = document.createElement('div');
+        const eventPreviewPopupElement = document.createElement('div');
+        const eventSelectedPopupElement = document.createElement('div');
         segmentPopup = new maplibregl.Popup({
           closeButton: false,
           closeOnClick: false,
           offset: 14,
         });
-        eventPopup = new maplibregl.Popup({
+        eventPreviewPopup = new maplibregl.Popup({
+          className: 'maplibregl-popup-track-pointer',
+          closeButton: false,
+          closeOnClick: false,
+          focusAfterOpen: false,
+          offset: 16,
+        });
+        eventSelectedPopup = new maplibregl.Popup({
           closeButton: true,
           focusAfterOpen: false,
           offset: 16,
         });
-        eventPopupRoot = createRoot(eventPopupElement);
+        eventPreviewPopupRoot = createRoot(eventPreviewPopupElement);
+        eventSelectedPopupRoot = createRoot(eventSelectedPopupElement);
 
         const handleSegmentPreview = (segment: VehicleTrackSegment | null) => {
           if (!segment) {
@@ -455,18 +473,32 @@ export function OnlineFleetMap({
             .addTo(map);
           onSegmentPreviewRef.current(segment);
         };
-        const showEvent = (event: VehicleTrackEventView, count: number) => {
-          if (!eventPopup || !eventPopupRoot) return;
-          eventPopupRoot.render(<TrackEventPopup event={event} count={count} />);
-          eventPopup
+        const showEvent = (
+          popup: maplibregl.Popup | null,
+          root: Root | null,
+          element: HTMLDivElement,
+          event: VehicleTrackEventView,
+          count: number,
+        ) => {
+          if (!popup || !root) return;
+          root.render(<TrackEventPopup event={event} count={count} />);
+          popup
             .setLngLat([...event.coordinates])
-            .setDOMContent(eventPopupElement)
+            .setDOMContent(element)
             .addTo(map);
         };
-        const closeEvent = () => eventPopup?.remove();
+        const showEventPreview = (event: VehicleTrackEventView, count: number) =>
+          showEvent(
+            eventPreviewPopup,
+            eventPreviewPopupRoot,
+            eventPreviewPopupElement,
+            event,
+            count,
+          );
+        const closeEventPreview = () => eventPreviewPopup?.remove();
         const handleEventPreview = (event: VehicleTrackEventView | null) => {
           if (!event) {
-            closeEvent();
+            closeEventPreview();
             onEventPreviewRef.current(null);
             return;
           }
@@ -476,15 +508,28 @@ export function OnlineFleetMap({
               candidate.coordinates[0] === event.coordinates[0] &&
               candidate.coordinates[1] === event.coordinates[1],
           ).length;
-          showEvent(event, count);
+          showEventPreview(event, count);
           onEventPreviewRef.current(event);
         };
         const activateEvent = (event: VehicleTrackEventView) => {
+          const count = trackViewModel.events.filter(
+            (candidate) =>
+              candidate.tripId === event.tripId &&
+              candidate.coordinates[0] === event.coordinates[0] &&
+              candidate.coordinates[1] === event.coordinates[1],
+          ).length;
+          showEvent(
+            eventSelectedPopup,
+            eventSelectedPopupRoot,
+            eventSelectedPopupElement,
+            event,
+            count,
+          );
           onEventActivateRef.current(event);
         };
         segmentPreviewRef.current = handleSegmentPreview;
-        eventPreviewRef.current = showEvent;
-        eventPreviewCloseRef.current = closeEvent;
+        eventPreviewRef.current = showEventPreview;
+        eventPreviewCloseRef.current = closeEventPreview;
 
         layersCleanup = mountVehicleTrackLayers(map, {
           trackViewModel,
@@ -525,10 +570,16 @@ export function OnlineFleetMap({
         layersCleanup?.();
         layersCleanup = null;
         segmentPopup?.remove();
-        eventPopup?.remove();
-        if (eventPopupRoot) {
-          const root = eventPopupRoot;
-          eventPopupRoot = null;
+        eventPreviewPopup?.remove();
+        eventSelectedPopup?.remove();
+        if (eventPreviewPopupRoot) {
+          const root = eventPreviewPopupRoot;
+          eventPreviewPopupRoot = null;
+          queueMicrotask(() => root.unmount());
+        }
+        if (eventSelectedPopupRoot) {
+          const root = eventSelectedPopupRoot;
+          eventSelectedPopupRoot = null;
           queueMicrotask(() => root.unmount());
         }
         playbackMarkerRef.current?.remove();

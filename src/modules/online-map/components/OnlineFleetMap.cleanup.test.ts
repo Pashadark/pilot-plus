@@ -745,6 +745,14 @@ it('повторно вписывает маршрут при смене contain
   expect(mapMocks.popupOptions).toContainEqual(
     expect.objectContaining({ closeButton: true, focusAfterOpen: false }),
   );
+  expect(mapMocks.popupOptions).toContainEqual(
+    expect.objectContaining({
+      className: 'maplibregl-popup-track-pointer',
+      closeButton: false,
+      closeOnClick: false,
+      focusAfterOpen: false,
+    }),
+  );
   mapMocks.mapFitBounds.mockClear();
   const trackResize = mapMocks.resizeObserverCallbacks.at(-1);
 
@@ -775,6 +783,7 @@ it('регистрирует видимую линию, hitbox, события, 
     return 77;
   });
   const cancelFrame = vi.fn();
+  const clearTimer = vi.spyOn(window, 'clearTimeout');
   vi.stubGlobal('requestAnimationFrame', requestFrame);
   vi.stubGlobal('cancelAnimationFrame', cancelFrame);
   vi.stubGlobal(
@@ -884,10 +893,16 @@ it('регистрирует видимую линию, hitbox, события, 
     'vehicle-track-event-icons',
   );
   pulseFrame?.(1_000);
+  expect(requestFrame).toHaveBeenCalledTimes(1);
   expect(mapMocks.mapSetPaintProperty).toHaveBeenCalledWith(
     'vehicle-track-event-pulse',
     'circle-radius',
     expect.any(Number),
+  );
+  expect(mapMocks.mapSetPaintProperty).toHaveBeenCalledWith(
+    'vehicle-track-event-pulse',
+    'circle-radius-transition',
+    expect.objectContaining({ duration: expect.any(Number) }),
   );
   expect(mapMocks.mapAddLayer).not.toHaveBeenCalledWith(
     expect.objectContaining({ id: 'vehicle-track-event-leaders' }),
@@ -969,7 +984,8 @@ it('регистрирует видимую линию, hitbox, события, 
   expect(mapMocks.mapContainer.dataset.trackLineOffset).toBe(JSON.stringify(tripOffsetExpression));
 
   unmountLayers();
-  expect(cancelFrame).toHaveBeenCalledWith(77);
+  expect(cancelFrame).not.toHaveBeenCalled();
+  expect(clearTimer).toHaveBeenCalled();
   expect(mapMocks.mapOff).toHaveBeenCalledWith(
     'mousemove',
     'vehicle-track-hitbox',
@@ -1047,8 +1063,9 @@ it('немедленно размонтирует popup root при ошибке
   );
   await act(async () => Promise.resolve());
 
-  expect(mapMocks.reactRootContainers).toHaveLength(1);
+  expect(mapMocks.reactRootContainers).toHaveLength(2);
   expect(mapMocks.reactRootUnmount).toHaveBeenCalledWith(mapMocks.reactRootContainers[0]);
+  expect(mapMocks.reactRootUnmount).toHaveBeenCalledWith(mapMocks.reactRootContainers[1]);
 });
 
 it('повторяет только трековые ресурсы после ошибки, не пересоздавая базовую карту', async () => {

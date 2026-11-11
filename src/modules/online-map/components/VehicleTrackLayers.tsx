@@ -429,7 +429,7 @@ export function mountVehicleTrackLayers(
   let hoveredSegmentId: string | null = null;
   let hoveredEventId: string | null = null;
   let pulseFrameId: number | null = null;
-  let pulseFrameScheduling = false;
+  let pulseTimerId: number | null = null;
   let pulseVisibilityListenerAttached = false;
 
   const reducedMotion =
@@ -437,33 +437,50 @@ export function mountVehicleTrackLayers(
     (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
 
   const stopPulse = () => {
-    if (pulseFrameId === null || typeof window === 'undefined') return;
-    window.cancelAnimationFrame(pulseFrameId);
-    pulseFrameId = null;
+    if (typeof window === 'undefined') return;
+    if (pulseFrameId !== null) {
+      window.cancelAnimationFrame(pulseFrameId);
+      pulseFrameId = null;
+    }
+    if (pulseTimerId !== null) {
+      window.clearTimeout(pulseTimerId);
+      pulseTimerId = null;
+    }
   };
 
-  const animatePulse = (timestamp: number) => {
+  const animatePulse = () => {
     pulseFrameId = null;
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
 
-    const progress = (timestamp % 2_000) / 2_000;
     try {
       if (hasMapStyle(map) && map.getLayer('vehicle-track-event-pulse')) {
-        map.setPaintProperty('vehicle-track-event-pulse', 'circle-radius', 14 + progress * 8);
-        map.setPaintProperty('vehicle-track-event-pulse', 'circle-opacity', 0.24 * (1 - progress));
+        map.setPaintProperty('vehicle-track-event-pulse', 'circle-radius-transition', {
+          duration: 1_650,
+          delay: 0,
+        });
+        map.setPaintProperty('vehicle-track-event-pulse', 'circle-opacity-transition', {
+          duration: 1_650,
+          delay: 0,
+        });
+        map.setPaintProperty('vehicle-track-event-pulse', 'circle-radius', 23);
+        map.setPaintProperty('vehicle-track-event-pulse', 'circle-opacity', 0);
       }
     } catch {
       return;
     }
 
-    if (typeof window !== 'undefined' && !pulseFrameScheduling) {
-      pulseFrameId = window.requestAnimationFrame(animatePulse);
+    if (typeof window !== 'undefined') {
+      pulseTimerId = window.setTimeout(() => {
+        pulseTimerId = null;
+        startPulse();
+      }, 2_100);
     }
   };
 
   const startPulse = () => {
     if (
       pulseFrameId !== null ||
+      pulseTimerId !== null ||
       typeof window === 'undefined' ||
       !shouldAnimateTrackEventPulse(
         reducedMotion,
@@ -472,10 +489,25 @@ export function mountVehicleTrackLayers(
     ) {
       return;
     }
-    pulseFrameScheduling = true;
-    const requestedFrameId = window.requestAnimationFrame(animatePulse);
-    pulseFrameScheduling = false;
-    if (pulseFrameId === null) pulseFrameId = requestedFrameId;
+
+    try {
+      if (hasMapStyle(map) && map.getLayer('vehicle-track-event-pulse')) {
+        map.setPaintProperty('vehicle-track-event-pulse', 'circle-radius-transition', {
+          duration: 0,
+          delay: 0,
+        });
+        map.setPaintProperty('vehicle-track-event-pulse', 'circle-opacity-transition', {
+          duration: 0,
+          delay: 0,
+        });
+        map.setPaintProperty('vehicle-track-event-pulse', 'circle-radius', 14);
+        map.setPaintProperty('vehicle-track-event-pulse', 'circle-opacity', 0.22);
+      }
+    } catch {
+      return;
+    }
+
+    pulseFrameId = window.requestAnimationFrame(animatePulse);
   };
 
   const handleVisibilityChange = () => {
@@ -779,7 +811,7 @@ export function mountVehicleTrackLayers(
         paint: {
           'circle-color': ['get', 'eventColor'],
           'circle-radius': 14,
-          'circle-opacity': 0.2,
+          'circle-opacity': reducedMotion ? 0 : 0.22,
           'circle-stroke-width': 0,
         },
       },
