@@ -865,6 +865,13 @@ it('регистрирует видимую линию, hitbox, события, 
       paint: expect.objectContaining({ 'line-color': '#0067ff' }),
     }),
   );
+  expect(mapMocks.mapAddSource).toHaveBeenCalledWith(
+    'vehicle-track-events',
+    expect.objectContaining({
+      type: 'geojson',
+      promoteId: 'id',
+    }),
+  );
   expect(mapMocks.mapAddLayer).toHaveBeenCalledWith(
     expect.objectContaining({
       id: 'vehicle-track-gradient-0',

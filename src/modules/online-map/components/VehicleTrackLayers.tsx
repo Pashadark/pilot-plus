@@ -627,6 +627,7 @@ export function mountVehicleTrackLayers(
     });
     map.addSource(TRACK_EVENTS_SOURCE_ID, {
       type: 'geojson',
+      promoteId: 'id',
       data: trackEventsToGeoJson(trackViewModel.eventGroups),
     });
     map.addSource(TRACK_ENDPOINTS_SOURCE_ID, {
