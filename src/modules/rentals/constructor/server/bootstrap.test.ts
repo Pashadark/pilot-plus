@@ -42,6 +42,21 @@ describe('rental constructor bootstrap', () => {
       }),
       listVehicles: async () => [],
       getTemplate: async () => ({ id: 'template-a' }),
+      listDocuments: async () => [
+        {
+          id: 'passport-a',
+          clientId: 'client-a',
+          category: 'PASSPORT',
+          title: 'Паспорт',
+          status: 'CLEAN',
+          currentVersion: 1,
+          originalName: null,
+          verifiedMime: null,
+          bytes: null,
+          createdAt: '2026-11-15T09:00:00.000Z',
+          updatedAt: '2026-11-15T09:00:00.000Z',
+        },
+      ],
     });
 
     const result = await bootstrap(access, {
@@ -52,6 +67,7 @@ describe('rental constructor bootstrap', () => {
     expect(result.companyId).toBe('company-a');
     expect(result.preferredClient).toBeNull();
     expect(result.clients.every((client) => client.companyId === 'company-a')).toBe(true);
+    expect(result.documentsByClientId['client-a']).toHaveLength(1);
   });
 
   it('uses the only permitted company for a company user', async () => {
@@ -61,6 +77,7 @@ describe('rental constructor bootstrap', () => {
       getClient: async () => null,
       listVehicles: async () => [],
       getTemplate: async () => null,
+      listDocuments: async () => [],
     });
 
     const result = await bootstrap(

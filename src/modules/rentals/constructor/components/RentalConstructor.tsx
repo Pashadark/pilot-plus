@@ -1,10 +1,21 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import type { RentalConstructorBootstrap } from '../server/bootstrap';
 import type { RentalConstructorSectionId, RentalConstructorState } from '../domain/types';
 import { ConstructorSections } from './ConstructorSections';
+import { ClientSection } from './ClientSection';
+import { DocumentsSection } from './DocumentsSection';
+
+function hasRequiredDocuments(
+  documents: RentalConstructorBootstrap['documentsByClientId'][string] = [],
+) {
+  const categories = new Set(
+    documents.filter((document) => document.status === 'CLEAN').map((document) => document.category),
+  );
+  return categories.has('PASSPORT') && categories.has('DRIVER_LICENSE');
+}
 
 export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorBootstrap }) {
   const [activeSection, setActiveSection] = useState<RentalConstructorSectionId>('general');
@@ -16,10 +27,73 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
       clientId: bootstrap.preferredClient?.id,
       clientFullName: bootstrap.preferredClient?.fullName,
       clientPhone: bootstrap.preferredClient?.phone,
+      documentsReady: bootstrap.preferredClient
+        ? hasRequiredDocuments(bootstrap.documentsByClientId[bootstrap.preferredClient.id])
+        : false,
     }),
     [bootstrap],
   );
-  const [state] = useState(initialState);
+  const [state, setState] = useState(initialState);
+  const selectClient = useCallback(
+    (client: RentalConstructorBootstrap['clients'][number]) => {
+      setState((current) => ({
+        ...current,
+        clientId: client.id,
+        clientFullName: client.fullName,
+        clientPhone: client.phone,
+        clientMode: client.status === 'DRAFT' ? 'new' : 'existing',
+        documentsReady: hasRequiredDocuments(bootstrap.documentsByClientId[client.id]),
+      }));
+    },
+    [bootstrap.documentsByClientId],
+  );
+  const setDocumentsReady = useCallback((ready: boolean) => {
+    setState((current) =>
+      current.documentsReady === ready ? current : { ...current, documentsReady: ready },
+    );
+  }, []);
+
+  const activeContent = (() => {
+    if (activeSection === 'client') {
+      return (
+        <ClientSection
+          companyId={bootstrap.companyId}
+          clients={bootstrap.clients}
+          selectedId={state.clientId}
+          onSelected={selectClient}
+        />
+      );
+    }
+    if (activeSection === 'documents') {
+      return (
+        <DocumentsSection
+          clientId={state.clientId}
+          clientName={state.clientFullName}
+          documents={state.clientId ? (bootstrap.documentsByClientId[state.clientId] ?? []) : []}
+          onReadinessChange={setDocumentsReady}
+        />
+      );
+    }
+    return (
+      <>
+        <h2 className="text-lg font-bold">
+          {activeSection === 'general' ? 'Общие данные' : 'Раздел в подготовке'}
+        </h2>
+        {state.clientFullName ? (
+          <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-elevated)] p-3">
+            <b>{state.clientFullName}</b>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+              {state.clientPhone ?? 'Телефон не указан'}
+            </p>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-[var(--color-text-secondary)]">
+            Выберите существующего клиента или создайте нового.
+          </p>
+        )}
+      </>
+    );
+  })();
 
   return (
     <main className="grid min-w-0 gap-4 p-4 sm:p-6" data-testid="rental-constructor">
@@ -38,21 +112,7 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
       <div className="grid min-h-[68dvh] gap-4 xl:grid-cols-[17rem_minmax(24rem,1fr)_minmax(28rem,1.15fr)]">
         <ConstructorSections active={activeSection} state={state} onSelect={setActiveSection} />
         <section className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
-          <h2 className="text-lg font-bold">
-            {activeSection === 'general' ? 'Общие данные' : 'Клиент'}
-          </h2>
-          {state.clientFullName ? (
-            <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-elevated)] p-3">
-              <b>{state.clientFullName}</b>
-              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                {state.clientPhone ?? 'Телефон не указан'}
-              </p>
-            </div>
-          ) : (
-            <p className="mt-4 text-sm text-[var(--color-text-secondary)]">
-              Выберите существующего клиента или создайте нового.
-            </p>
-          )}
+          {activeContent}
         </section>
         <aside className="hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)] xl:block">
           <h2 className="text-lg font-bold">Предварительный просмотр договора</h2>

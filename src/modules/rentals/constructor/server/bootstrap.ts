@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { prisma } from '@/database/prisma/client';
+import type { ClientDocumentListItem } from '@/modules/client-documents/types';
 import type { ClientAccess } from '@/modules/clients/access';
 import { getClientById, getClientCompanyOptions, getClients } from '@/modules/clients/server/queries';
 import { listRentalDraftVehicleOptions } from '@/modules/rentals/server/draft-vehicle-options';
@@ -32,6 +33,10 @@ type BootstrapDependencies = {
   ): Promise<RentalConstructorClientOption | null>;
   listVehicles(companyId: string): Promise<RentalConstructorVehicleOption[]>;
   getTemplate(companyId: string): Promise<{ id: string } | null>;
+  listDocuments(
+    companyId: string,
+    clientIds: readonly string[],
+  ): Promise<Array<ClientDocumentListItem & { clientId: string }>>;
 };
 
 function scopedAccess(access: ClientAccess, companyId: string): ClientAccess {
@@ -56,13 +61,27 @@ export function createRentalConstructorBootstrap(dependencies: BootstrapDependen
         ? dependencies.getClient(tenantAccess, options.preferredClientId)
         : Promise.resolve(null),
     ]);
+    const scopedClients = clients.filter((client) => client.companyId === companyId);
+    const documents = await dependencies.listDocuments(
+      companyId,
+      scopedClients.map((client) => client.id),
+    );
+    const documentsByClientId = Object.fromEntries(
+      scopedClients.map((client) => [
+        client.id,
+        documents
+          .filter((document) => document.clientId === client.id)
+          .map(({ clientId: _clientId, ...document }) => document),
+      ]),
+    ) satisfies Record<string, ClientDocumentListItem[]>;
 
     return {
       companyId,
       companies,
       templateVersionId: template?.id ?? null,
-      clients: clients.filter((client) => client.companyId === companyId),
+      clients: scopedClients,
       vehicles,
+      documentsByClientId,
       preferredClient:
         preferredClient?.companyId === companyId ? preferredClient : null,
     };
@@ -100,6 +119,36 @@ const getBootstrap = createRentalConstructorBootstrap({
       orderBy: { publishedAt: 'desc' },
       select: { id: true },
     }),
+  listDocuments: async (companyId, clientIds) => {
+    if (clientIds.length === 0) return [];
+    const documents = await prisma.clientDocument.findMany({
+      where: {
+        companyId,
+        clientId: { in: [...clientIds] },
+        archivedAt: null,
+        status: { not: 'ARCHIVED' },
+      },
+      select: {
+        id: true,
+        clientId: true,
+        category: true,
+        title: true,
+        status: true,
+        currentVersion: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+    });
+    return documents.map((document) => ({
+      ...document,
+      originalName: null,
+      verifiedMime: null,
+      bytes: null,
+      createdAt: document.createdAt.toISOString(),
+      updatedAt: document.updatedAt.toISOString(),
+    }));
+  },
 });
 
 export type RentalConstructorBootstrap = Awaited<ReturnType<typeof getBootstrap>>;
