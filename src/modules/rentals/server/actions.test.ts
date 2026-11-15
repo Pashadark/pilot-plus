@@ -27,6 +27,7 @@ import {
   createRentalDraftAction,
   generateRentalDocumentsAction,
   returnRentalAction,
+  updateRentalDraftAction,
 } from './actions';
 
 describe('rental actions', () => {
@@ -91,7 +92,10 @@ describe('rental actions', () => {
   });
 
   it('retains the canonical hidden depositMinor in a saved draft issuance snapshot', async () => {
-    const rentalCreate = vi.fn().mockResolvedValue({ id: 'rental-1' });
+    const rentalCreate = vi.fn().mockResolvedValue({
+      id: 'rental-1',
+      updatedAt: new Date('2026-08-15T10:00:00.000Z'),
+    });
     const transaction = {
       client: { findFirst: vi.fn().mockResolvedValue({ id: 'client-1' }) },
       vehicle: {
@@ -124,6 +128,13 @@ describe('rental actions', () => {
     await expect(createRentalDraftAction(null, form)).resolves.toEqual({
       ok: true,
       rentalId: 'rental-1',
+      updatedAt: '2026-08-15T10:00:00.000Z',
+      calculation: {
+        days: 1,
+        totalMinor: 100000,
+        discountMinor: 0,
+        servicesMinor: 0,
+      },
     });
     expect(rentalCreate.mock.calls[0]?.[0].data.snapshot).toMatchObject({
       issuance: { depositMinor: 125000 },
@@ -142,7 +153,10 @@ describe('rental actions', () => {
   });
 
   it('does not assign a mileage limit to a lease-to-own draft', async () => {
-    const rentalCreate = vi.fn().mockResolvedValue({ id: 'rental-lease' });
+    const rentalCreate = vi.fn().mockResolvedValue({
+      id: 'rental-lease',
+      updatedAt: new Date('2026-11-01T10:00:00.000Z'),
+    });
     const transaction = {
       client: { findFirst: vi.fn().mockResolvedValue({ id: 'client-1' }) },
       vehicle: {
@@ -174,6 +188,53 @@ describe('rental actions', () => {
 
     await expect(createRentalDraftAction(null, form)).resolves.toMatchObject({ ok: true });
     expect(rentalCreate.mock.calls[0]?.[0].data.includedMileageKm).toBeNull();
+  });
+
+  it('rejects a stale expectedUpdatedAt value without overwriting the draft', async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+    const transaction = {
+      client: { findFirst: vi.fn().mockResolvedValue({ id: 'client-1' }) },
+      vehicle: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'vehicle-1',
+          dailyPriceMinor: 100000,
+          depositMinor: BigInt(500000),
+          includedMileageKm: 300,
+          overageMileagePriceMinor: BigInt(1000),
+          missingFuelPriceMinor: BigInt(5000),
+        }),
+      },
+      contractTemplateVersion: { findFirst: vi.fn().mockResolvedValue({ id: 'template-1' }) },
+      rental: { updateMany },
+      auditLog: { create: vi.fn() },
+    };
+    requireRentalAccess.mockResolvedValue({ user: { id: 'user-1', email: 'staff@example.test' } });
+    prisma.$transaction.mockImplementation((callback: (tx: typeof transaction) => unknown) =>
+      callback(transaction),
+    );
+    const form = new FormData();
+    form.set('companyId', 'company-1');
+    form.set('clientId', 'client-1');
+    form.set('vehicleId', 'vehicle-1');
+    form.set('templateVersionId', 'template-1');
+    form.set('rentalId', 'rental-1');
+    form.set('startsAt', '2026-11-03T10:00:00.000Z');
+    form.set('endsAt', '2026-11-04T10:00:00.000Z');
+    form.set('expectedUpdatedAt', '2026-11-01T00:00:00.000Z');
+
+    await expect(updateRentalDraftAction(null, form)).resolves.toEqual({
+      ok: false,
+      code: 'STALE',
+      message: 'Черновик уже изменён в другой вкладке. Обновите данные.',
+    });
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'rental-1',
+          updatedAt: new Date('2026-11-01T00:00:00.000Z'),
+        }),
+      }),
+    );
   });
   it('reserves cancellation for draft and confirmed states', () => {
     expect(['DRAFT', 'CONFIRMED']).toContain('CONFIRMED');

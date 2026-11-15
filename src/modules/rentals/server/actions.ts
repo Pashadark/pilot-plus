@@ -37,6 +37,13 @@ export type RentalActionResult =
       documentVersion?: number;
       mileageKm?: number;
       savedMediaCount?: number;
+      updatedAt?: string;
+      calculation?: {
+        days: number;
+        totalMinor: number;
+        discountMinor: number;
+        servicesMinor: number;
+      };
     }
   | {
       ok: false;
@@ -368,6 +375,11 @@ function draftValues(formData: FormData) {
 async function saveDraft(formData: FormData, rentalId?: string): Promise<RentalActionResult> {
   try {
     const value = draftValues(formData);
+    const expectedUpdatedAtRaw = String(formData.get('expectedUpdatedAt') ?? '').trim();
+    const expectedUpdatedAt = expectedUpdatedAtRaw ? new Date(expectedUpdatedAtRaw) : null;
+    if (expectedUpdatedAt && !Number.isFinite(expectedUpdatedAt.getTime())) {
+      throw new Error('VALIDATION');
+    }
     const access = await requireRentalAccess(value.companyId);
     const result = await prisma.$transaction(async (tx) => {
       const [client, vehicle, template] = await Promise.all([
@@ -431,20 +443,30 @@ async function saveDraft(formData: FormData, rentalId?: string): Promise<RentalA
           issuance: value.issuance,
         },
       };
-      let savedId: string;
+      let saved: { id: string; updatedAt: Date };
       if (rentalId) {
         const updated = await tx.rental.updateMany({
-          where: { id: rentalId, companyId: value.companyId, status: 'DRAFT' },
+          where: {
+            id: rentalId,
+            companyId: value.companyId,
+            status: 'DRAFT',
+            ...(expectedUpdatedAt ? { updatedAt: expectedUpdatedAt } : {}),
+          },
           data,
         });
-        if (updated.count === 0) throw new Error('NOT_DRAFT');
-        savedId = rentalId;
+        if (updated.count === 0) throw new Error(expectedUpdatedAt ? 'STALE' : 'NOT_DRAFT');
+        const current = await tx.rental.findFirst({
+          where: { id: rentalId, companyId: value.companyId, status: 'DRAFT' },
+          select: { id: true, updatedAt: true },
+        });
+        if (!current) throw new Error('NOT_DRAFT');
+        saved = current;
       } else {
         const created = await tx.rental.create({
           data: { companyId: value.companyId, createdByUserId: access.user.id, ...data },
-          select: { id: true },
+          select: { id: true, updatedAt: true },
         });
-        savedId = created.id;
+        saved = created;
       }
       await tx.auditLog.create({
         data: {
@@ -453,15 +475,32 @@ async function saveDraft(formData: FormData, rentalId?: string): Promise<RentalA
           actorEmailSnapshot: access.user.email,
           action: rentalId ? 'UPDATE' : 'CREATE',
           entityType: 'RENTAL',
-          entityId: savedId,
+          entityId: saved.id,
           entityLabel: 'Договор аренды',
           changes: { status: 'DRAFT' },
         },
       });
-      return { id: savedId };
+      return { saved, calculation };
     });
-    return { ok: true, rentalId: result.id };
-  } catch {
+    return {
+      ok: true,
+      rentalId: result.saved.id,
+      updatedAt: result.saved.updatedAt.toISOString(),
+      calculation: {
+        days: result.calculation.days,
+        totalMinor: result.calculation.agreedTotalMinor,
+        discountMinor: result.calculation.discountMinor,
+        servicesMinor: result.calculation.servicesMinor,
+      },
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message === 'STALE') {
+      return {
+        ok: false,
+        code: 'STALE',
+        message: 'Черновик уже изменён в другой вкладке. Обновите данные.',
+      };
+    }
     return { ok: false, code: 'SAVE_FAILED', message: 'Не удалось сохранить черновик договора.' };
   }
 }

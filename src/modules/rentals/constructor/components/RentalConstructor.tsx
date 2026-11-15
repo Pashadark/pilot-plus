@@ -1,12 +1,16 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { moscowLocalToUtc } from '@/modules/rentals/domain/calculate-rental';
 import type { RentalConstructorBootstrap } from '../server/bootstrap';
 import type { RentalConstructorSectionId, RentalConstructorState } from '../domain/types';
+import { saveConstructorDraftAction } from '../server/actions';
 import { ConstructorSections } from './ConstructorSections';
 import { ClientSection } from './ClientSection';
 import { DocumentsSection } from './DocumentsSection';
+import { TermsSection } from './TermsSection';
+import { VehicleSection, vehicleSelectionStatus } from './VehicleSection';
 
 function hasRequiredDocuments(
   documents: RentalConstructorBootstrap['documentsByClientId'][string] = [],
@@ -15,6 +19,55 @@ function hasRequiredDocuments(
     documents.filter((document) => document.status === 'CLEAN').map((document) => document.category),
   );
   return categories.has('PASSPORT') && categories.has('DRIVER_LICENSE');
+}
+
+function draftFormData(state: RentalConstructorState, templateVersionId: string | null) {
+  if (
+    !state.companyId ||
+    !state.clientId ||
+    !state.vehicleId ||
+    !state.startsAt ||
+    !state.endsAt ||
+    !templateVersionId
+  ) {
+    return null;
+  }
+  let startsAt: string;
+  let endsAt: string;
+  try {
+    startsAt = moscowLocalToUtc(state.startsAt).toISOString();
+    endsAt = moscowLocalToUtc(state.endsAt).toISOString();
+  } catch {
+    return null;
+  }
+  const formData = new FormData();
+  const values: Record<string, string | number | undefined | null> = {
+    companyId: state.companyId,
+    clientId: state.clientId,
+    vehicleId: state.vehicleId,
+    templateVersionId,
+    rentalId: state.rentalId,
+    expectedUpdatedAt: state.expectedUpdatedAt,
+    agreementType: state.agreementType,
+    startsAt,
+    endsAt,
+    dailyMinor: state.dailyRateMinor,
+    discountMinor: state.discountMinor ?? 0,
+    servicesMinor: state.servicesMinor ?? 0,
+    depositMinor: state.depositMinor,
+    pickupAddress: state.pickupAddress,
+    returnAddress: state.returnAddress,
+    startMileageKm: state.startMileageKm,
+    startFuelPercent: state.startFuelPercent,
+    territory: state.territory,
+    paymentTerms: state.paymentTerms,
+    allowedDrivers: state.allowedDrivers,
+    conditions: state.conditions,
+  };
+  for (const [key, value] of Object.entries(values)) {
+    formData.set(key, value === undefined || value === null ? '' : String(value));
+  }
+  return formData;
 }
 
 export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorBootstrap }) {
@@ -34,6 +87,12 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
     [bootstrap],
   );
   const [state, setState] = useState(initialState);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveError, setSaveError] = useState('');
+  const savingRef = useRef(false);
+  const rerunSaveRef = useRef(false);
   const selectClient = useCallback(
     (client: RentalConstructorBootstrap['clients'][number]) => {
       setState((current) => ({
@@ -52,6 +111,107 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
       current.documentsReady === ready ? current : { ...current, documentsReady: ready },
     );
   }, []);
+  const patchState = useCallback(
+    (patch: Partial<RentalConstructorState>) => {
+      setState((current) => {
+        const next = { ...current, ...patch };
+        const selectedVehicle = bootstrap.vehicles.find(
+          (vehicle) => vehicle.id === next.vehicleId,
+        );
+        if (selectedVehicle) {
+          next.vehicleAvailable = vehicleSelectionStatus(
+            selectedVehicle,
+            next.startsAt,
+            next.endsAt,
+          ).available;
+        }
+        return next;
+      });
+    },
+    [bootstrap.vehicles],
+  );
+  const autosaveFingerprint = useMemo(
+    () =>
+      JSON.stringify({
+        companyId: state.companyId,
+        clientId: state.clientId,
+        vehicleId: state.vehicleId,
+        agreementType: state.agreementType,
+        startsAt: state.startsAt,
+        endsAt: state.endsAt,
+        dailyRateMinor: state.dailyRateMinor,
+        discountMinor: state.discountMinor,
+        servicesMinor: state.servicesMinor,
+        depositMinor: state.depositMinor,
+        pickupAddress: state.pickupAddress,
+        returnAddress: state.returnAddress,
+        startMileageKm: state.startMileageKm,
+        startFuelPercent: state.startFuelPercent,
+        territory: state.territory,
+        paymentTerms: state.paymentTerms,
+        allowedDrivers: state.allowedDrivers,
+        conditions: state.conditions,
+      }),
+    [
+      state.agreementType,
+      state.allowedDrivers,
+      state.clientId,
+      state.companyId,
+      state.conditions,
+      state.dailyRateMinor,
+      state.depositMinor,
+      state.discountMinor,
+      state.endsAt,
+      state.paymentTerms,
+      state.pickupAddress,
+      state.returnAddress,
+      state.servicesMinor,
+      state.startFuelPercent,
+      state.startMileageKm,
+      state.startsAt,
+      state.territory,
+      state.vehicleId,
+    ],
+  );
+  const performAutosave = useCallback(
+    async function performAutosave() {
+      if (savingRef.current) {
+        rerunSaveRef.current = true;
+        return;
+      }
+      const payload = draftFormData(stateRef.current, bootstrap.templateVersionId);
+      if (!payload) return;
+      savingRef.current = true;
+      setSaveStatus('saving');
+      setSaveError('');
+      const result = await saveConstructorDraftAction(null, payload);
+      if (result.ok) {
+        const next = {
+          ...stateRef.current,
+          rentalId: result.rentalId,
+          expectedUpdatedAt: result.updatedAt,
+        };
+        stateRef.current = next;
+        setState(next);
+        setSaveStatus('saved');
+      } else {
+        setSaveStatus('error');
+        setSaveError(result.message);
+      }
+      savingRef.current = false;
+      if (rerunSaveRef.current) {
+        rerunSaveRef.current = false;
+        void performAutosave();
+      }
+    },
+    [bootstrap.templateVersionId],
+  );
+
+  useEffect(() => {
+    if (!draftFormData(stateRef.current, bootstrap.templateVersionId)) return;
+    const timer = window.setTimeout(() => void performAutosave(), 700);
+    return () => window.clearTimeout(timer);
+  }, [autosaveFingerprint, bootstrap.templateVersionId, performAutosave]);
 
   const activeContent = (() => {
     if (activeSection === 'client') {
@@ -73,6 +233,27 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
           onReadinessChange={setDocumentsReady}
         />
       );
+    }
+    if (activeSection === 'vehicle') {
+      return (
+        <VehicleSection
+          vehicles={bootstrap.vehicles}
+          selectedId={state.vehicleId}
+          startsAt={state.startsAt}
+          endsAt={state.endsAt}
+          onSelected={(vehicle, available) =>
+            patchState({
+              vehicleId: vehicle.id,
+              vehicleAvailable: available,
+              dailyRateMinor: vehicle.dailyMinor,
+              depositMinor: vehicle.depositMinor,
+            })
+          }
+        />
+      );
+    }
+    if (activeSection === 'terms') {
+      return <TermsSection state={state} onChange={patchState} />;
     }
     return (
       <>
@@ -104,8 +285,17 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
             Один процесс: клиент, автомобиль, условия и готовый договор
           </p>
         </div>
-        <span className="rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)]">
-          Черновик · автосохранение
+        <span
+          title={saveError || undefined}
+          className={`rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold ${saveStatus === 'error' ? 'text-[var(--color-danger)]' : 'text-[var(--color-text-secondary)]'}`}
+        >
+          {saveStatus === 'saving'
+            ? 'Сохраняем черновик…'
+            : saveStatus === 'saved'
+              ? 'Черновик сохранён'
+              : saveStatus === 'error'
+                ? 'Ошибка автосохранения'
+                : 'Черновик · автосохранение'}
         </span>
       </header>
 

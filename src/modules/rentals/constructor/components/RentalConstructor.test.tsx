@@ -1,16 +1,26 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../server/actions', () => ({ createConstructorClientAction: vi.fn() }));
+const actionMocks = vi.hoisted(() => ({
+  createClient: vi.fn(),
+  saveDraft: vi.fn(),
+}));
+vi.mock('../server/actions', () => ({
+  createConstructorClientAction: actionMocks.createClient,
+  saveConstructorDraftAction: actionMocks.saveDraft,
+}));
 vi.mock('@/modules/client-documents/actions', () => ({
   uploadClientDocumentAction: vi.fn(),
 }));
 
 import { RentalConstructor } from './RentalConstructor';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 const bootstrap = {
   companyId: 'company-a',
@@ -25,7 +35,20 @@ const bootstrap = {
       status: 'VERIFIED',
     },
   ],
-  vehicles: [],
+  vehicles: [
+    {
+      id: 'vehicle-a',
+      label: 'Toyota Camry Р957АН997',
+      dailyMinor: 300000,
+      depositMinor: 1500000,
+      registrationNumber: 'Р957АН997',
+      imageUrl: null,
+      available: true,
+      reasons: [],
+      legalReady: true,
+      rentalIntervals: [],
+    },
+  ],
   documentsByClientId: {
     'client-a': [
       {
@@ -72,5 +95,34 @@ describe('RentalConstructor', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Документы/ }));
     expect(screen.getByRole('heading', { name: 'Документы клиента' })).toBeTruthy();
+  });
+
+  it('autosaves the same constructor after core rental fields become valid', async () => {
+    vi.useFakeTimers();
+    actionMocks.saveDraft.mockResolvedValue({
+      ok: true,
+      rentalId: 'rental-a',
+      updatedAt: '2026-11-15T10:00:00.000Z',
+      calculation: { days: 2, totalMinor: 600000, discountMinor: 0, servicesMinor: 0 },
+    });
+    render(<RentalConstructor bootstrap={bootstrap} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Автомобиль/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Toyota Camry/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Условия аренды/ }));
+    fireEvent.change(screen.getByLabelText('Начало аренды *'), {
+      target: { value: '2026-11-20T10:00' },
+    });
+    fireEvent.change(screen.getByLabelText('Возврат *'), {
+      target: { value: '2026-11-22T10:00' },
+    });
+
+    await act(async () => vi.advanceTimersByTime(701));
+
+    expect(actionMocks.saveDraft).toHaveBeenCalledTimes(1);
+    const formData = actionMocks.saveDraft.mock.calls[0]?.[1] as FormData;
+    expect(formData.get('vehicleId')).toBe('vehicle-a');
+    expect(formData.get('clientId')).toBe('client-a');
+    vi.useRealTimers();
   });
 });
