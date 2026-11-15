@@ -36,5 +36,8 @@ export type RentalConstructorState = {
   startFuelPercent?: number;
   conditions?: string;
   allowedDrivers?: string;
+  rentReceived?: boolean;
+  depositReceived?: boolean;
+  paymentMethod?: 'CASH' | 'CARD' | 'TRANSFER' | 'OTHER';
 };
 

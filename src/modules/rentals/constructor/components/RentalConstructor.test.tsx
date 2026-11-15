@@ -6,10 +6,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const actionMocks = vi.hoisted(() => ({
   createClient: vi.fn(),
   saveDraft: vi.fn(),
+  finalize: vi.fn(),
+  push: vi.fn(),
+  refresh: vi.fn(),
 }));
 vi.mock('../server/actions', () => ({
   createConstructorClientAction: actionMocks.createClient,
   saveConstructorDraftAction: actionMocks.saveDraft,
+  finalizeRentalConstructorAction: actionMocks.finalize,
+}));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: actionMocks.push, refresh: actionMocks.refresh }),
 }));
 vi.mock('@/modules/client-documents/actions', () => ({
   uploadClientDocumentAction: vi.fn(),
@@ -58,6 +65,18 @@ const bootstrap = {
         id: 'passport-a',
         category: 'PASSPORT' as const,
         title: 'Паспорт',
+        status: 'CLEAN' as const,
+        currentVersion: 1,
+        originalName: null,
+        verifiedMime: null,
+        bytes: null,
+        createdAt: '2026-11-15T09:00:00.000Z',
+        updatedAt: '2026-11-15T09:00:00.000Z',
+      },
+      {
+        id: 'license-a',
+        category: 'DRIVER_LICENSE' as const,
+        title: 'Водительское удостоверение',
         status: 'CLEAN' as const,
         currentVersion: 1,
         originalName: null,
@@ -157,5 +176,46 @@ describe('RentalConstructor', () => {
     expect(saved).not.toContain('Щапова');
     expect(saved).not.toContain('+7 950');
     expect(saved).not.toContain('documentsReady');
+  });
+
+  it('finalizes the saved draft and navigates to the rental', async () => {
+    vi.useFakeTimers();
+    actionMocks.saveDraft.mockResolvedValue({
+      ok: true,
+      rentalId: 'rental-a',
+      updatedAt: '2026-11-15T10:00:00.000Z',
+      calculation: { days: 2, totalMinor: 600000, discountMinor: 0, servicesMinor: 0 },
+    });
+    actionMocks.finalize.mockResolvedValue({
+      ok: true,
+      rentalId: 'rental-a',
+      documentVersion: 1,
+    });
+    render(<RentalConstructor bootstrap={bootstrap} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Автомобиль/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Toyota Camry/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Условия аренды/ }));
+    fireEvent.change(screen.getByLabelText('Начало аренды *'), {
+      target: { value: '2026-11-20T10:00' },
+    });
+    fireEvent.change(screen.getByLabelText('Возврат *'), {
+      target: { value: '2026-11-22T10:00' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Выдача автомобиля/ }));
+    fireEvent.change(screen.getByLabelText('Одометр при выдаче, км *'), {
+      target: { value: '84639' },
+    });
+    fireEvent.change(screen.getByLabelText('Топливо при выдаче, % *'), {
+      target: { value: '75' },
+    });
+
+    await act(async () => vi.advanceTimersByTime(701));
+    fireEvent.click(screen.getByRole('button', { name: /Проверка/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Создать договор' }));
+    await act(async () => Promise.resolve());
+
+    expect(actionMocks.finalize).toHaveBeenCalledTimes(1);
+    expect(actionMocks.push).toHaveBeenCalledWith('/rentals/rental-a');
   });
 });

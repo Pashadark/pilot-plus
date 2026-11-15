@@ -9,10 +9,16 @@ export function ConstructorFooter({
   active,
   onSelect,
   onPreview,
+  onFinalize,
+  finalizing = false,
+  finalDisabled = false,
 }: {
   active: RentalConstructorSectionId;
   onSelect(id: RentalConstructorSectionId): void;
   onPreview(): void;
+  onFinalize(): void;
+  finalizing?: boolean;
+  finalDisabled?: boolean;
 }) {
   const index = constructorSections.findIndex((section) => section.id === active);
   const previous = constructorSections[index - 1];
@@ -38,15 +44,25 @@ export function ConstructorFooter({
         <FiFileText aria-hidden />
         Предпросмотр
       </button>
-      <button
-        type="button"
-        disabled={!next}
-        onClick={() => next && onSelect(next.id)}
-        className="ml-auto inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-35"
-      >
-        <span>{next ? 'Далее' : 'Готово'}</span>
-        <FiArrowRight aria-hidden />
-      </button>
+      {next ? (
+        <button
+          type="button"
+          onClick={() => onSelect(next.id)}
+          className="ml-auto inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 text-sm font-semibold text-white"
+        >
+          <span>Далее</span>
+          <FiArrowRight aria-hidden />
+        </button>
+      ) : (
+        <button
+          type="button"
+          disabled={finalDisabled || finalizing}
+          onClick={onFinalize}
+          className="ml-auto inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-35"
+        >
+          {finalizing ? 'Создаём договор…' : 'Создать договор'}
+        </button>
+      )}
     </footer>
   );
 }

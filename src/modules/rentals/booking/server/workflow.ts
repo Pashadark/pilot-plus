@@ -23,9 +23,71 @@ type BookingTransaction = {
   auditLog: { create(args: unknown): Promise<unknown> };
 };
 
-type BookingDatabase = {
+export type BookingDatabase = {
   $transaction<T>(work: (transaction: BookingTransaction) => Promise<T>): Promise<T>;
 };
+
+export type RentalPaymentInput = {
+  companyId: string;
+  rentalId: string;
+  actorUserId: string;
+  actorEmail: string;
+  kind: 'RENT' | 'DEPOSIT';
+  amountMinor: bigint;
+  method: 'CASH' | 'CARD' | 'TRANSFER' | 'OTHER';
+  idempotencyKey: string;
+};
+
+export function createRentalPaymentRecorder(database: BookingDatabase) {
+  return (input: RentalPaymentInput) =>
+    database.$transaction(async (transaction) => {
+      if (input.amountMinor < 0) throw new Error('PAYMENT_AMOUNT_INVALID');
+      const existing = await transaction.rentalPayment.findUnique({
+        where: {
+          companyId_rentalId_idempotencyKey: {
+            companyId: input.companyId,
+            rentalId: input.rentalId,
+            idempotencyKey: input.idempotencyKey,
+          },
+        },
+        select: { id: true },
+      });
+      if (existing) return { id: existing.id, reused: true as const };
+
+      const payment = await transaction.rentalPayment.create({
+        data: {
+          companyId: input.companyId,
+          rentalId: input.rentalId,
+          kind: input.kind,
+          status: 'CONFIRMED',
+          amountMinor: input.amountMinor,
+          currency: 'RUB',
+          method: input.method,
+          idempotencyKey: input.idempotencyKey,
+          recordedByUserId: input.actorUserId,
+        },
+        select: { id: true },
+      });
+      await transaction.auditLog.create({
+        data: {
+          companyId: input.companyId,
+          actorUserId: input.actorUserId,
+          actorEmailSnapshot: input.actorEmail,
+          action: 'UPDATE',
+          entityType: 'RENTAL',
+          entityId: input.rentalId,
+          entityLabel: 'Договор аренды',
+          changes: {
+            paymentId: payment.id,
+            paymentKind: input.kind,
+            paymentMethod: input.method,
+            amountMinor: input.amountMinor.toString(),
+          },
+        },
+      });
+      return { id: payment.id, reused: false as const };
+    });
+}
 
 export function createBookingFinalizer(database: BookingDatabase) {
   return (input: {

@@ -1,18 +1,24 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { moscowLocalToUtc } from '@/modules/rentals/domain/calculate-rental';
 import { Modal } from '@/shared/ui/Overlays';
 import { buildContractPreview } from '../domain/preview';
+import { validateSection } from '../domain/flow';
 import type { RentalConstructorBootstrap } from '../server/bootstrap';
 import type { RentalConstructorSectionId, RentalConstructorState } from '../domain/types';
-import { saveConstructorDraftAction } from '../server/actions';
+import {
+  finalizeRentalConstructorAction,
+  saveConstructorDraftAction,
+} from '../server/actions';
 import { ContractPreview } from './ContractPreview';
 import { ConstructorFooter } from './ConstructorFooter';
 import { ConstructorSections } from './ConstructorSections';
 import { ClientSection } from './ClientSection';
 import { DocumentsSection } from './DocumentsSection';
+import { HandoverSection } from './HandoverSection';
 import { TermsSection } from './TermsSection';
 import { VehicleSection, vehicleSelectionStatus } from './VehicleSection';
 
@@ -103,6 +109,7 @@ function draftFormData(state: RentalConstructorState, templateVersionId: string 
 }
 
 export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorBootstrap }) {
+  const router = useRouter();
   const [activeSection, setActiveSection] = useState<RentalConstructorSectionId>('general');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [recoveryReady, setRecoveryReady] = useState(false);
@@ -126,6 +133,8 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
   stateRef.current = state;
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveError, setSaveError] = useState('');
+  const [finalizing, setFinalizing] = useState(false);
+  const [finalizeError, setFinalizeError] = useState('');
   const savingRef = useRef(false);
   const rerunSaveRef = useRef(false);
 
@@ -312,6 +321,29 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
     [bootstrap.company, selectedClient, selectedVehicle, state],
   );
 
+  const reviewErrors = validateSection(state, 'review');
+  const finalize = useCallback(async () => {
+    const payload = draftFormData(stateRef.current, bootstrap.templateVersionId);
+    if (!payload || !stateRef.current.rentalId || reviewErrors.length > 0) {
+      setFinalizeError('Заполните обязательные разделы и дождитесь сохранения черновика.');
+      return;
+    }
+    payload.set('rentReceived', String(stateRef.current.rentReceived === true));
+    payload.set('depositReceived', String(stateRef.current.depositReceived === true));
+    payload.set('paymentMethod', stateRef.current.paymentMethod ?? 'OTHER');
+    setFinalizing(true);
+    setFinalizeError('');
+    const result = await finalizeRentalConstructorAction(null, payload);
+    setFinalizing(false);
+    if (result.ok || result.confirmedNeedsDocuments) {
+      const rentalId = result.rentalId ?? stateRef.current.rentalId;
+      router.push(`/rentals/${rentalId}`);
+      router.refresh();
+      return;
+    }
+    setFinalizeError(result.message);
+  }, [bootstrap.templateVersionId, reviewErrors.length, router]);
+
   const activeContent = (() => {
     if (activeSection === 'client') {
       return (
@@ -354,6 +386,45 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
     if (activeSection === 'terms') {
       return <TermsSection state={state} onChange={patchState} />;
     }
+    if (activeSection === 'handover') {
+      return <HandoverSection state={state} onChange={patchState} />;
+    }
+    if (activeSection === 'review') {
+      return (
+        <section className="grid gap-5" aria-labelledby="constructor-review-title">
+          <div>
+            <h2 id="constructor-review-title" className="text-lg font-bold">
+              Проверка и создание договора
+            </h2>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+              Проверьте сведения в предпросмотре перед подтверждением.
+            </p>
+          </div>
+          {reviewErrors.length === 0 ? (
+            <div className="rounded-[var(--radius-md)] bg-[var(--color-success-soft)] p-4 text-sm text-[var(--color-success)]">
+              Все обязательные разделы заполнены. После создания откроется карточка договора.
+            </div>
+          ) : (
+            <div
+              role="alert"
+              className="rounded-[var(--radius-md)] bg-[var(--color-danger-soft)] p-4 text-sm text-[var(--color-danger)]"
+            >
+              <p className="font-semibold">Нужно исправить:</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {reviewErrors.map((error) => (
+                  <li key={error}>{error}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {finalizeError && (
+            <p role="alert" className="text-sm text-[var(--color-danger)]">
+              {finalizeError}
+            </p>
+          )}
+        </section>
+      );
+    }
     return (
       <>
         <h2 className="text-lg font-bold">
@@ -385,6 +456,7 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
           </p>
         </div>
         <span
+          aria-live="polite"
           title={saveError || undefined}
           className={`rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold ${saveStatus === 'error' ? 'text-[var(--color-danger)]' : 'text-[var(--color-text-secondary)]'}`}
         >
@@ -415,6 +487,9 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
         active={activeSection}
         onSelect={setActiveSection}
         onPreview={() => setPreviewOpen(true)}
+        onFinalize={() => void finalize()}
+        finalizing={finalizing}
+        finalDisabled={reviewErrors.length > 0 || !state.rentalId || saveStatus === 'saving'}
       />
 
       <Modal

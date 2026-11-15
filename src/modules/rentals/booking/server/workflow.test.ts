@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createBookingFinalizer } from './workflow';
+import { createBookingFinalizer, createRentalPaymentRecorder } from './workflow';
 
 const receipt = {
   uploadId: 'upload-1',
@@ -82,5 +82,47 @@ describe('createBookingFinalizer', () => {
     });
     expect(transaction.rentalPayment.create).toHaveBeenCalledTimes(1);
     expect(transaction.rentalPaymentReceipt.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('createRentalPaymentRecorder', () => {
+  it('reuses an existing constructor payment by idempotency key', async () => {
+    const { database, transaction } = fixture();
+    transaction.rentalPayment.findUnique.mockResolvedValue({ id: 'payment-existing' });
+    const record = createRentalPaymentRecorder(database as never);
+
+    await expect(
+      record({
+        companyId: 'company-1',
+        rentalId: 'rental-1',
+        actorUserId: 'user-1',
+        actorEmail: 'owner@example.com',
+        kind: 'DEPOSIT',
+        amountMinor: BigInt(15_000_00),
+        method: 'CARD',
+        idempotencyKey: 'constructor:rental-1:deposit',
+      }),
+    ).resolves.toEqual({ id: 'payment-existing', reused: true });
+    expect(transaction.rentalPayment.create).not.toHaveBeenCalled();
+  });
+
+  it('records one confirmed payment with an audit entry', async () => {
+    const { database, transaction } = fixture();
+    const record = createRentalPaymentRecorder(database as never);
+
+    await expect(
+      record({
+        companyId: 'company-1',
+        rentalId: 'rental-1',
+        actorUserId: 'user-1',
+        actorEmail: 'owner@example.com',
+        kind: 'RENT',
+        amountMinor: BigInt(12_000_00),
+        method: 'TRANSFER',
+        idempotencyKey: 'constructor:rental-1:rent',
+      }),
+    ).resolves.toEqual({ id: 'payment-1', reused: false });
+    expect(transaction.rentalPayment.create).toHaveBeenCalledTimes(1);
+    expect(transaction.auditLog.create).toHaveBeenCalledTimes(1);
   });
 });

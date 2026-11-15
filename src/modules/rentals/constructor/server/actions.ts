@@ -1,10 +1,15 @@
+import { prisma } from '@/database/prisma/client';
 import { createClientAction } from '@/modules/clients/actions';
 import type { ClientActionState } from '@/modules/clients/types';
+import { createRentalPaymentRecorder } from '@/modules/rentals/booking/server/workflow';
 import {
+  confirmAndGenerateRentalAction,
   createRentalDraftAction,
+  generateRentalDocumentsAction,
   updateRentalDraftAction,
   type RentalActionResult,
 } from '@/modules/rentals/server/actions';
+import { requireRentalAccess, RentalAccessDeniedError } from '@/modules/rentals/server/access';
 
 export type ConstructorClientResult =
   | {
@@ -123,4 +128,150 @@ export async function saveConstructorDraftAction(
 ): Promise<ConstructorDraftResult> {
   'use server';
   return saveConstructorDraft(previous, formData);
+}
+
+type FinalizedRental = {
+  status: string;
+  totalPriceMinor: bigint;
+  depositMinor: bigint | null;
+};
+
+type FinalizeDependencies = {
+  requireAccess(companyId: string): Promise<{ user: { id: string; email: string } }>;
+  findRental(companyId: string, rentalId: string): Promise<FinalizedRental | null>;
+  saveDraft(previous: RentalActionResult | null, formData: FormData): Promise<RentalActionResult>;
+  confirm(previous: RentalActionResult | null, formData: FormData): Promise<RentalActionResult>;
+  generateDocuments(
+    previous: RentalActionResult | null,
+    formData: FormData,
+  ): Promise<RentalActionResult>;
+  recordPayment(input: {
+    companyId: string;
+    rentalId: string;
+    actorUserId: string;
+    actorEmail: string;
+    kind: 'RENT' | 'DEPOSIT';
+    amountMinor: bigint;
+    method: 'CASH' | 'CARD' | 'TRANSFER' | 'OTHER';
+    idempotencyKey: string;
+  }): Promise<{ id: string; reused: boolean }>;
+};
+
+function paymentMethod(formData: FormData) {
+  const value = String(formData.get('paymentMethod') ?? 'OTHER');
+  return value === 'CASH' || value === 'CARD' || value === 'TRANSFER' || value === 'OTHER'
+    ? value
+    : 'OTHER';
+}
+
+export function createFinalizeRentalConstructorAction(dependencies: FinalizeDependencies) {
+  return async function finalizeRentalConstructor(
+    _previous: RentalActionResult | null,
+    formData: FormData,
+  ): Promise<RentalActionResult> {
+    const companyId = String(formData.get('companyId') ?? '').trim();
+    const rentalId = String(formData.get('rentalId') ?? '').trim();
+    if (!companyId || !rentalId) {
+      return {
+        ok: false,
+        code: 'VALIDATION',
+        message: 'Сначала сохраните обязательные данные договора.',
+      };
+    }
+    try {
+      const access = await dependencies.requireAccess(companyId);
+      const rental = await dependencies.findRental(companyId, rentalId);
+      if (!rental) {
+        return { ok: false, code: 'NOT_FOUND', message: 'Черновик договора не найден.' };
+      }
+
+      let result: RentalActionResult;
+      if (rental.status === 'DRAFT') {
+        const saved = await dependencies.saveDraft(null, formData);
+        if (!saved.ok) return saved;
+        result = await dependencies.confirm(null, formData);
+      } else if (rental.status === 'CONFIRMED') {
+        result = await dependencies.generateDocuments(null, formData);
+      } else {
+        return {
+          ok: false,
+          code: 'FINALIZE_FAILED',
+          message: 'Договор уже находится в другом статусе.',
+        };
+      }
+
+      if (!result.ok && result.code !== 'DOCUMENT_FAILED') return result;
+
+      const method = paymentMethod(formData);
+      const payments: Promise<unknown>[] = [];
+      if (formData.get('rentReceived') === 'true') {
+        payments.push(
+          dependencies.recordPayment({
+            companyId,
+            rentalId,
+            actorUserId: access.user.id,
+            actorEmail: access.user.email,
+            kind: 'RENT',
+            amountMinor: rental.totalPriceMinor,
+            method,
+            idempotencyKey: `constructor:${rentalId}:rent`,
+          }),
+        );
+      }
+      if (formData.get('depositReceived') === 'true' && rental.depositMinor !== null) {
+        payments.push(
+          dependencies.recordPayment({
+            companyId,
+            rentalId,
+            actorUserId: access.user.id,
+            actorEmail: access.user.email,
+            kind: 'DEPOSIT',
+            amountMinor: rental.depositMinor,
+            method,
+            idempotencyKey: `constructor:${rentalId}:deposit`,
+          }),
+        );
+      }
+      await Promise.all(payments);
+      return result;
+    } catch (error) {
+      return error instanceof RentalAccessDeniedError
+        ? {
+            ok: false,
+            code: 'FORBIDDEN',
+            message: 'Доступ к договорам аренды запрещён.',
+          }
+        : {
+            ok: false,
+            code: 'FINALIZE_FAILED',
+            message: 'Не удалось завершить создание договора. Повторите попытку.',
+          };
+    }
+  };
+}
+
+const recordRentalPayment = createRentalPaymentRecorder(prisma as never);
+const finalizeRentalConstructor = createFinalizeRentalConstructorAction({
+  requireAccess: requireRentalAccess,
+  findRental: (companyId, rentalId) =>
+    prisma.rental.findFirst({
+      where: { id: rentalId, companyId },
+      select: {
+        status: true,
+        totalPriceMinor: true,
+        depositMinor: true,
+      },
+    }),
+  saveDraft: updateRentalDraftAction,
+  confirm: confirmAndGenerateRentalAction,
+  generateDocuments: generateRentalDocumentsAction,
+  recordPayment: recordRentalPayment,
+});
+
+export async function finalizeRentalConstructorAction(
+  previous: RentalActionResult | null,
+  formData: FormData,
+): Promise<RentalActionResult> {
+  'use server';
+  return finalizeRentalConstructor(previous, formData);
 }
