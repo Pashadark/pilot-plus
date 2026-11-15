@@ -1,5 +1,7 @@
 'use client';
 
+import { useRef } from 'react';
+
 import { FiCheck } from 'react-icons/fi';
 
 import { constructorSections, sectionStatus } from '../domain/flow';
@@ -14,6 +16,7 @@ export function ConstructorSections({
   state: RentalConstructorState;
   onSelect(id: RentalConstructorSectionId): void;
 }) {
+  const listRef = useRef<HTMLOListElement>(null);
   const complete = constructorSections.filter(
     (section) => sectionStatus(state, section.id) === 'complete',
   ).length;
@@ -26,7 +29,7 @@ export function ConstructorSections({
       <p className="px-2 pt-1 text-xs font-bold tracking-[0.14em] text-[var(--color-text-secondary)] uppercase">
         Разделы
       </p>
-      <ol className="grid gap-2">
+      <ol ref={listRef} className="grid gap-2">
         {constructorSections.map((section, index) => {
           const current = active === section.id;
           const status = sectionStatus(state, section.id);
@@ -37,6 +40,22 @@ export function ConstructorSections({
                 data-testid="constructor-section"
                 aria-current={current ? 'step' : undefined}
                 onClick={() => onSelect(section.id)}
+                onKeyDown={(event) => {
+                  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+                  event.preventDefault();
+                  const buttons = Array.from(
+                    listRef.current?.querySelectorAll<HTMLButtonElement>('button') ?? [],
+                  );
+                  const targetIndex =
+                    event.key === 'Home'
+                      ? 0
+                      : event.key === 'End'
+                        ? buttons.length - 1
+                        : event.key === 'ArrowDown'
+                          ? Math.min(index + 1, buttons.length - 1)
+                          : Math.max(index - 1, 0);
+                  buttons[targetIndex]?.focus();
+                }}
                 className={`flex min-h-11 w-full items-center gap-3 rounded-[var(--radius-md)] border px-3 text-left text-sm font-semibold transition-colors ${
                   current
                     ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'

@@ -106,7 +106,7 @@ describe('RentalConstructor', () => {
     expect(screen.getByText('Москва')).toBeTruthy();
   });
 
-  it('moves between sections without leaving the page', () => {
+  it('moves between sections without leaving the page and transfers focus', async () => {
     render(<RentalConstructor bootstrap={bootstrap} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Клиент/ }));
@@ -114,10 +114,23 @@ describe('RentalConstructor', () => {
     expect(screen.getByRole('button', { name: /Клиент/ }).getAttribute('aria-current')).toBe(
       'step',
     );
-    expect(screen.getByRole('heading', { name: 'Клиент' })).toBeTruthy();
+    const clientHeading = screen.getByRole('heading', { name: 'Клиент' });
+    expect(clientHeading).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(clientHeading));
 
     fireEvent.click(screen.getByRole('button', { name: /Документы/ }));
     expect(screen.getByRole('heading', { name: 'Документы клиента' })).toBeTruthy();
+  });
+
+  it('supports arrow-key navigation across constructor sections', () => {
+    render(<RentalConstructor bootstrap={bootstrap} />);
+    const sections = screen.getAllByTestId('constructor-section');
+
+    sections[0]?.focus();
+    fireEvent.keyDown(sections[0]!, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(sections[1]);
+    fireEvent.keyDown(sections[1]!, { key: 'End' });
+    expect(document.activeElement).toBe(sections[6]);
   });
 
   it('autosaves the same constructor after core rental fields become valid', async () => {
@@ -156,6 +169,18 @@ describe('RentalConstructor', () => {
 
     expect(screen.getByRole('dialog', { name: 'Предварительный просмотр договора' })).toBeTruthy();
     expect(screen.getAllByText('Щапова Анна Петровна').length).toBeGreaterThan(0);
+  });
+
+  it('preserves form values after closing the mobile preview', () => {
+    render(<RentalConstructor bootstrap={bootstrap} />);
+    fireEvent.click(screen.getByRole('button', { name: /Условия аренды/ }));
+    const start = screen.getByLabelText('Начало аренды *') as HTMLInputElement;
+    fireEvent.change(start, { target: { value: '2026-11-20T10:00' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть предпросмотр' }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(start.value).toBe('2026-11-20T10:00');
   });
 
   it('keeps only non-file constructor fields in local recovery', async () => {

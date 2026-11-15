@@ -4,7 +4,7 @@ import {
   createConstructorClientActionWith,
   createFinalizeRentalConstructorAction,
   saveConstructorDraftActionWith,
-} from './actions';
+} from './actions-core';
 
 function validClientFormData() {
   const formData = new FormData();

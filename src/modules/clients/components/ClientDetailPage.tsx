@@ -306,7 +306,7 @@ export function ClientDetailPage({
               ) : null}
               {canCreateRental ? (
                 <Link
-                  href={`/clients/${client.id}/rentals/new`}
+                  href={`/rentals/new?client=${encodeURIComponent(client.id)}`}
                   className="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 text-sm font-semibold text-[var(--color-text-inverse)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
                 >
                   Создать договор

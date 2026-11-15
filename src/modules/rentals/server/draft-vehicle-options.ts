@@ -1,12 +1,27 @@
 import 'server-only';
 
 import { prisma } from '@/database/prisma/client';
-import type { RentalWizardVehicle } from '@/modules/rentals/components/RentalWizard';
 import { evaluateVehicleReadiness } from '@/modules/rentals/readiness/evaluate-vehicle-readiness';
+import type { ReadinessResult } from '@/modules/rentals/readiness/types';
+
+export type RentalDraftVehicleOption = {
+  id: string;
+  label: string;
+  dailyMinor: number;
+  depositMinor?: number;
+  registrationNumber?: string | null;
+  vin?: string | null;
+  imageUrl?: string | null;
+  available: boolean;
+  reasons: readonly string[];
+  legalReady?: boolean;
+  readiness?: ReadinessResult;
+  rentalIntervals?: readonly { startsAt: string; endsAt: string; status: string }[];
+};
 
 export async function listRentalDraftVehicleOptions(
   companyId: string,
-): Promise<RentalWizardVehicle[]> {
+): Promise<RentalDraftVehicleOption[]> {
   const vehicles = await prisma.vehicle.findMany({
     where: { companyId, archivedAt: null, isDemoImport: false },
     select: {

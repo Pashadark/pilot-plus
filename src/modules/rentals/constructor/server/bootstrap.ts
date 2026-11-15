@@ -77,7 +77,18 @@ export function createRentalConstructorBootstrap(dependencies: BootstrapDependen
         client.id,
         documents
           .filter((document) => document.clientId === client.id)
-          .map(({ clientId: _clientId, ...document }) => document),
+          .map((document) => ({
+            id: document.id,
+            category: document.category,
+            title: document.title,
+            status: document.status,
+            currentVersion: document.currentVersion,
+            originalName: document.originalName,
+            verifiedMime: document.verifiedMime,
+            bytes: document.bytes,
+            createdAt: document.createdAt,
+            updatedAt: document.updatedAt,
+          })),
       ]),
     ) satisfies Record<string, ClientDocumentListItem[]>;
 

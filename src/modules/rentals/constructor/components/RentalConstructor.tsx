@@ -137,6 +137,7 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
   const [finalizeError, setFinalizeError] = useState('');
   const savingRef = useRef(false);
   const rerunSaveRef = useRef(false);
+  const activePanelRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     try {
@@ -308,6 +309,13 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
     window.localStorage.setItem(recoveryKey, JSON.stringify(recoverySnapshot(state)));
   }, [autosaveFingerprint, recoveryKey, recoveryReady, state, state.rentalId]);
 
+  useEffect(() => {
+    const heading = activePanelRef.current?.querySelector<HTMLElement>('h2');
+    if (!heading) return;
+    heading.tabIndex = -1;
+    heading.focus();
+  }, [activeSection]);
+
   const selectedClient = bootstrap.clients.find((client) => client.id === state.clientId) ?? null;
   const selectedVehicle =
     bootstrap.vehicles.find((vehicle) => vehicle.id === state.vehicleId) ?? null;
@@ -358,6 +366,7 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
     if (activeSection === 'documents') {
       return (
         <DocumentsSection
+          key={state.clientId ?? 'no-client'}
           clientId={state.clientId}
           clientName={state.clientFullName}
           documents={state.clientId ? (bootstrap.documentsByClientId[state.clientId] ?? []) : []}
@@ -472,7 +481,10 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
 
       <div className="grid min-h-[68dvh] gap-4 xl:grid-cols-[17rem_minmax(26rem,1fr)_minmax(30rem,1.15fr)]">
         <ConstructorSections active={activeSection} state={state} onSelect={setActiveSection} />
-        <section className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
+        <section
+          ref={activePanelRef}
+          className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]"
+        >
           {activeContent}
         </section>
         <aside className="hidden min-w-0 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-elevated)] p-4 shadow-[var(--shadow-card)] xl:block">

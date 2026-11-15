@@ -301,16 +301,15 @@ async function signInAs(page: Page, email: string) {
 
 async function saveDraftWithInterval(page: Page, clientId: string) {
   await page.goto(`/clients/${clientId}/rentals/new`);
-  await expect(page.getByTestId('rental-wizard')).toBeVisible();
-  await page.getByRole('button', { name: 'Далее' }).click();
-  await page.getByLabel('Автомобиль').selectOption(fixture.admin.vehicleId);
-  await page.getByRole('button', { name: 'Далее' }).click();
-  await page.getByLabel('Выдача (Москва)').fill('2026-09-10T10:00');
-  await page.getByLabel('Возврат (Москва)').fill('2026-09-12T10:00');
-  await page.getByLabel('Адрес выдачи').fill('Москва, DEMO ONLY, выдача');
-  await page.getByLabel('Адрес возврата').fill('Москва, DEMO ONLY, возврат');
-  await page.getByRole('button', { name: 'Сохранить черновик' }).click();
-  await expect(page.getByText('Черновик договора сохранён.')).toBeVisible();
+  await expect(page.getByTestId('rental-constructor')).toBeVisible();
+  await page.getByRole('button', { name: /Автомобиль/u }).click();
+  await page.getByRole('button', { name: /E2E Rental/u }).click();
+  await page.getByRole('button', { name: /Условия аренды/u }).click();
+  await page.getByLabel('Начало аренды *').fill('2026-09-10T10:00');
+  await page.getByLabel('Возврат *').fill('2026-09-12T10:00');
+  await page.getByLabel('Место выдачи').fill('Москва, DEMO ONLY, выдача');
+  await page.getByLabel('Место возврата').fill('Москва, DEMO ONLY, возврат');
+  await expect(page.getByText('Черновик сохранён')).toBeVisible();
 }
 
 async function uploadRequiredClientDocuments(page: Page, clientId: string) {
@@ -335,14 +334,13 @@ async function uploadRequiredClientDocuments(page: Page, clientId: string) {
 }
 
 async function advanceDraftToConfirmation(page: Page) {
-  await page.getByRole('button', { name: 'Далее' }).click();
-  await page.getByLabel('Залог, ₽').fill('10000');
-  await page.getByLabel('Условия оплаты').fill('DEMO ONLY: при выдаче');
-  await page.getByLabel('Территория использования').fill('Москва');
+  await page.getByRole('button', { name: /Выдача автомобиля/u }).click();
+  await page.getByLabel('Одометр при выдаче, км *').fill('10000');
+  await page.getByLabel('Топливо при выдаче, % *').fill('80');
   await page.getByLabel('Допущенные водители').fill('DEMO ONLY водитель');
-  await page.getByRole('button', { name: 'Далее' }).click();
-  await page.getByRole('button', { name: 'Далее' }).click();
-  await expect(page.getByRole('button', { name: 'Подтвердить и занять автомобиль' })).toBeEnabled();
+  await expect(page.getByText('Черновик сохранён')).toBeVisible();
+  await page.getByRole('button', { name: /Проверка/u }).click();
+  await expect(page.getByRole('button', { name: 'Создать договор' })).toBeEnabled();
 }
 
 test.describe('rental workflow', () => {
@@ -379,16 +377,17 @@ test.describe('rental workflow', () => {
     test.skip(testInfo.project.name !== 'desktop', 'Полный mutation-flow выполняется один раз.');
     await signInAs(page, fixture.dispatcher.email);
     await uploadRequiredClientDocuments(page, fixture.admin.clientId);
+    await uploadRequiredClientDocuments(page, fixture.dispatcher.clientId);
 
     await saveDraftWithInterval(page, fixture.admin.clientId);
     const overlappingPage = await page.context().newPage();
     await saveDraftWithInterval(overlappingPage, fixture.dispatcher.clientId);
     await advanceDraftToConfirmation(page);
     await advanceDraftToConfirmation(overlappingPage);
-    await page.getByRole('button', { name: 'Подтвердить и занять автомобиль' }).click();
-    await expect(page.getByText('Договор подтверждён, документы готовы.')).toBeVisible();
-    const docx = page.getByRole('link', { name: 'Скачать DOCX' });
-    const pdf = page.getByRole('link', { name: 'Скачать PDF' });
+    await page.getByRole('button', { name: 'Создать договор' }).click();
+    await expect(page).toHaveURL(/\/rentals\/[^/]+$/u);
+    const docx = page.getByRole('link', { name: /Скачать DOCX, версия/u });
+    const pdf = page.getByRole('link', { name: /Скачать PDF, версия/u });
     await expect(docx).toBeVisible();
     await expect(pdf).toBeVisible();
     await Promise.all([page.waitForEvent('download'), docx.click()]);
@@ -447,7 +446,7 @@ test.describe('rental workflow', () => {
       .poll(async () => prisma.rental.count({ where: { id: rentalId, status: 'ACTIVE' } }))
       .toBe(1);
 
-    await overlappingPage.getByRole('button', { name: 'Подтвердить и занять автомобиль' }).click();
+    await overlappingPage.getByRole('button', { name: 'Создать договор' }).click();
     await expect(overlappingPage.getByRole('alert')).toContainText('Автомобиль уже занят');
     await overlappingPage.close();
   });
@@ -467,6 +466,14 @@ test.describe('rental workflow', () => {
   test('calendar is mobile-safe and rentals loading geometry is labelled', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await signInAs(page, fixture.admin.email);
+    await page.goto(`/rentals/new?client=${fixture.admin.clientId}`);
+    await expect(page.getByTestId('rental-constructor')).toBeVisible();
+    await expect(page.getByText('Предварительный просмотр договора')).toBeHidden();
+    await page.getByRole('button', { name: 'Открыть предпросмотр' }).click();
+    await expect(
+      page.getByRole('dialog', { name: 'Предварительный просмотр договора' }),
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
     await page.goto('/rentals');
     await expect(page.getByTestId('rental-list-page')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Договоры аренды' })).toBeVisible();

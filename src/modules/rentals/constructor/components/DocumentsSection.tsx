@@ -77,25 +77,37 @@ function provisionalDocument(
   };
 }
 
-export function DocumentsSection({
-  clientId,
-  clientName,
-  documents,
-  onReadinessChange,
-}: {
+type DocumentsSectionProps = {
   clientId?: string;
   clientName?: string;
   documents: readonly ClientDocumentListItem[];
   onReadinessChange(ready: boolean): void;
-}) {
+};
+
+export function DocumentsSection(props: DocumentsSectionProps) {
+  const revision = props.documents
+    .map((document) => `${document.id}:${document.status}:${document.updatedAt}`)
+    .join('|');
+  return (
+    <DocumentsSectionContent
+      key={`${props.clientId ?? 'no-client'}:${revision}`}
+      {...props}
+    />
+  );
+}
+
+function DocumentsSectionContent({
+  clientId,
+  clientName,
+  documents,
+  onReadinessChange,
+}: DocumentsSectionProps) {
   const [items, setItems] = useState([...documents]);
   const [files, setFiles] = useState<Partial<Record<SlotKey, File>>>({});
   const [errors, setErrors] = useState<Partial<Record<SlotKey, string>>>({});
   const [uploading, setUploading] = useState<SlotKey | null>(null);
   const [autofillOpen, setAutofillOpen] = useState(false);
   const [, startTransition] = useTransition();
-
-  useEffect(() => setItems([...documents]), [documents]);
 
   const ready = useMemo(() => {
     const clean = new Set(
