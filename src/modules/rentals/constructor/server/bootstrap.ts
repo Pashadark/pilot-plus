@@ -15,6 +15,9 @@ export type RentalConstructorClientOption = {
 };
 
 export type RentalConstructorCompanyOption = { id: string; name: string };
+export type RentalConstructorCompany = RentalConstructorCompanyOption & {
+  contractCity: string | null;
+};
 export type RentalConstructorVehicleOption = Awaited<
   ReturnType<typeof listRentalDraftVehicleOptions>
 >[number];
@@ -33,6 +36,7 @@ type BootstrapDependencies = {
   ): Promise<RentalConstructorClientOption | null>;
   listVehicles(companyId: string): Promise<RentalConstructorVehicleOption[]>;
   getTemplate(companyId: string): Promise<{ id: string } | null>;
+  getCompany(companyId: string): Promise<RentalConstructorCompany | null>;
   listDocuments(
     companyId: string,
     clientIds: readonly string[],
@@ -53,14 +57,16 @@ export function createRentalConstructorBootstrap(dependencies: BootstrapDependen
     );
     const companyId = preferredAllowed ? (options.preferredCompanyId as string) : companies[0].id;
     const tenantAccess = scopedAccess(access, companyId);
-    const [clients, vehicles, template, preferredClient] = await Promise.all([
+    const [clients, vehicles, template, preferredClient, company] = await Promise.all([
       dependencies.listClients(tenantAccess, companyId),
       dependencies.listVehicles(companyId),
       dependencies.getTemplate(companyId),
       options.preferredClientId
         ? dependencies.getClient(tenantAccess, options.preferredClientId)
         : Promise.resolve(null),
+      dependencies.getCompany(companyId),
     ]);
+    if (!company) throw new Error('Компания нового договора недоступна.');
     const scopedClients = clients.filter((client) => client.companyId === companyId);
     const documents = await dependencies.listDocuments(
       companyId,
@@ -77,6 +83,8 @@ export function createRentalConstructorBootstrap(dependencies: BootstrapDependen
 
     return {
       companyId,
+      company,
+      userId: access.user.id,
       companies,
       templateVersionId: template?.id ?? null,
       clients: scopedClients,
@@ -118,6 +126,11 @@ const getBootstrap = createRentalConstructorBootstrap({
       where: { companyId, isPublished: true },
       orderBy: { publishedAt: 'desc' },
       select: { id: true },
+    }),
+  getCompany: (companyId) =>
+    prisma.company.findFirst({
+      where: { id: companyId },
+      select: { id: true, name: true, contractCity: true },
     }),
   listDocuments: async (companyId, clientIds) => {
     if (clientIds.length === 0) return [];

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const actionMocks = vi.hoisted(() => ({
@@ -19,11 +19,14 @@ import { RentalConstructor } from './RentalConstructor';
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   vi.useRealTimers();
 });
 
 const bootstrap = {
   companyId: 'company-a',
+  company: { id: 'company-a', name: 'СУПА ПРО Москва', contractCity: 'Москва' },
+  userId: 'user-a',
   companies: [{ id: 'company-a', name: 'СУПА ПРО Москва' }],
   templateVersionId: 'template-a',
   clients: [
@@ -80,7 +83,8 @@ describe('RentalConstructor', () => {
 
     expect(screen.getByRole('heading', { name: 'Новый клиент и договор' })).toBeTruthy();
     expect(screen.getAllByTestId('constructor-section')).toHaveLength(7);
-    expect(screen.getByText('Щапова Анна Петровна')).toBeTruthy();
+    expect(screen.getAllByText('Щапова Анна Петровна').length).toBeGreaterThan(0);
+    expect(screen.getByText('Москва')).toBeTruthy();
   });
 
   it('moves between sections without leaving the page', () => {
@@ -124,5 +128,34 @@ describe('RentalConstructor', () => {
     expect(formData.get('vehicleId')).toBe('vehicle-a');
     expect(formData.get('clientId')).toBe('client-a');
     vi.useRealTimers();
+  });
+
+  it('opens the live contract preview in an accessible mobile dialog', () => {
+    render(<RentalConstructor bootstrap={bootstrap} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть предпросмотр' }));
+
+    expect(screen.getByRole('dialog', { name: 'Предварительный просмотр договора' })).toBeTruthy();
+    expect(screen.getAllByText('Щапова Анна Петровна').length).toBeGreaterThan(0);
+  });
+
+  it('keeps only non-file constructor fields in local recovery', async () => {
+    render(<RentalConstructor bootstrap={bootstrap} />);
+
+    await waitFor(() => {
+      expect(
+        window.localStorage.getItem(
+          'supa-pro:rental-constructor:v1:company-a:user-a',
+        ),
+      ).toBeTruthy();
+    });
+
+    const saved = window.localStorage.getItem(
+      'supa-pro:rental-constructor:v1:company-a:user-a',
+    );
+    expect(saved).toContain('client-a');
+    expect(saved).not.toContain('Щапова');
+    expect(saved).not.toContain('+7 950');
+    expect(saved).not.toContain('documentsReady');
   });
 });

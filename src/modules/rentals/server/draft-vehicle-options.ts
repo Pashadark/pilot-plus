@@ -62,6 +62,7 @@ export async function listRentalDraftVehicleOptions(
       dailyMinor: vehicle.dailyPriceMinor,
       depositMinor: vehicle.depositMinor === null ? undefined : Number(vehicle.depositMinor),
       registrationNumber: vehicle.registrationNumber,
+      vin: vehicle.vin,
       imageUrl: vehicle.images?.[0]?.localPath ?? null,
       available: reasons.length === 0,
       reasons,

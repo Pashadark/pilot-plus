@@ -57,6 +57,11 @@ describe('rental constructor bootstrap', () => {
           updatedAt: '2026-11-15T09:00:00.000Z',
         },
       ],
+      getCompany: async () => ({
+        id: 'company-a',
+        name: 'СУПА ПРО Москва',
+        contractCity: 'Москва',
+      }),
     });
 
     const result = await bootstrap(access, {
@@ -65,6 +70,8 @@ describe('rental constructor bootstrap', () => {
     });
 
     expect(result.companyId).toBe('company-a');
+    expect(result.userId).toBe('user-1');
+    expect(result.company.contractCity).toBe('Москва');
     expect(result.preferredClient).toBeNull();
     expect(result.clients.every((client) => client.companyId === 'company-a')).toBe(true);
     expect(result.documentsByClientId['client-a']).toHaveLength(1);
@@ -78,6 +85,11 @@ describe('rental constructor bootstrap', () => {
       listVehicles: async () => [],
       getTemplate: async () => null,
       listDocuments: async () => [],
+      getCompany: async () => ({
+        id: 'company-a',
+        name: 'СУПА ПРО Москва',
+        contractCity: null,
+      }),
     });
 
     const result = await bootstrap(

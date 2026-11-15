@@ -32,6 +32,7 @@ export type RentalWizardVehicle = {
   dailyMinor: number;
   depositMinor?: number;
   registrationNumber?: string | null;
+  vin?: string | null;
   imageUrl?: string | null;
   available: boolean;
   reasons: readonly string[];

@@ -3,14 +3,46 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { moscowLocalToUtc } from '@/modules/rentals/domain/calculate-rental';
+import { Modal } from '@/shared/ui/Overlays';
+import { buildContractPreview } from '../domain/preview';
 import type { RentalConstructorBootstrap } from '../server/bootstrap';
 import type { RentalConstructorSectionId, RentalConstructorState } from '../domain/types';
 import { saveConstructorDraftAction } from '../server/actions';
+import { ContractPreview } from './ContractPreview';
+import { ConstructorFooter } from './ConstructorFooter';
 import { ConstructorSections } from './ConstructorSections';
 import { ClientSection } from './ClientSection';
 import { DocumentsSection } from './DocumentsSection';
 import { TermsSection } from './TermsSection';
 import { VehicleSection, vehicleSelectionStatus } from './VehicleSection';
+
+const recoveryFields = [
+  'agreementType',
+  'clientId',
+  'vehicleId',
+  'startsAt',
+  'endsAt',
+  'dailyRateMinor',
+  'discountMinor',
+  'servicesMinor',
+  'depositMinor',
+  'pickupAddress',
+  'returnAddress',
+  'territory',
+  'paymentTerms',
+  'startMileageKm',
+  'startFuelPercent',
+  'conditions',
+  'allowedDrivers',
+] as const satisfies readonly (keyof RentalConstructorState)[];
+
+function recoverySnapshot(state: RentalConstructorState) {
+  return Object.fromEntries(
+    recoveryFields.flatMap((field) =>
+      state[field] === undefined ? [] : [[field, state[field]]],
+    ),
+  );
+}
 
 function hasRequiredDocuments(
   documents: RentalConstructorBootstrap['documentsByClientId'][string] = [],
@@ -72,6 +104,9 @@ function draftFormData(state: RentalConstructorState, templateVersionId: string 
 
 export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorBootstrap }) {
   const [activeSection, setActiveSection] = useState<RentalConstructorSectionId>('general');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [recoveryReady, setRecoveryReady] = useState(false);
+  const recoveryKey = `supa-pro:rental-constructor:v1:${bootstrap.companyId}:${bootstrap.userId}`;
   const initialState = useMemo<RentalConstructorState>(
     () => ({
       agreementType: 'STANDARD',
@@ -93,6 +128,50 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
   const [saveError, setSaveError] = useState('');
   const savingRef = useRef(false);
   const rerunSaveRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(recoveryKey);
+      if (raw) {
+        const recovered = JSON.parse(raw) as Partial<RentalConstructorState>;
+        setState((current) => {
+          const next = { ...current };
+          for (const field of recoveryFields) {
+            if (recovered[field] !== undefined) {
+              Object.assign(next, { [field]: recovered[field] });
+            }
+          }
+          const client = bootstrap.clients.find((item) => item.id === next.clientId);
+          if (client) {
+            next.clientId = client.id;
+            next.clientFullName = client.fullName;
+            next.clientPhone = client.phone;
+            next.clientMode = client.status === 'DRAFT' ? 'new' : 'existing';
+            next.documentsReady = hasRequiredDocuments(
+              bootstrap.documentsByClientId[client.id],
+            );
+          } else if (next.clientId) {
+            next.clientId = undefined;
+          }
+          const vehicle = bootstrap.vehicles.find((item) => item.id === next.vehicleId);
+          if (vehicle) {
+            next.vehicleAvailable = vehicleSelectionStatus(
+              vehicle,
+              next.startsAt,
+              next.endsAt,
+            ).available;
+          } else if (next.vehicleId) {
+            next.vehicleId = undefined;
+          }
+          return next;
+        });
+      }
+    } catch {
+      window.localStorage.removeItem(recoveryKey);
+    } finally {
+      setRecoveryReady(true);
+    }
+  }, [bootstrap, recoveryKey]);
   const selectClient = useCallback(
     (client: RentalConstructorBootstrap['clients'][number]) => {
       setState((current) => ({
@@ -194,6 +273,7 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
         stateRef.current = next;
         setState(next);
         setSaveStatus('saved');
+        window.localStorage.removeItem(recoveryKey);
       } else {
         setSaveStatus('error');
         setSaveError(result.message);
@@ -204,14 +284,33 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
         void performAutosave();
       }
     },
-    [bootstrap.templateVersionId],
+    [bootstrap.templateVersionId, recoveryKey],
   );
 
   useEffect(() => {
+    if (!recoveryReady) return;
     if (!draftFormData(stateRef.current, bootstrap.templateVersionId)) return;
     const timer = window.setTimeout(() => void performAutosave(), 700);
     return () => window.clearTimeout(timer);
-  }, [autosaveFingerprint, bootstrap.templateVersionId, performAutosave]);
+  }, [autosaveFingerprint, bootstrap.templateVersionId, performAutosave, recoveryReady]);
+
+  useEffect(() => {
+    if (!recoveryReady || state.rentalId) return;
+    window.localStorage.setItem(recoveryKey, JSON.stringify(recoverySnapshot(state)));
+  }, [autosaveFingerprint, recoveryKey, recoveryReady, state, state.rentalId]);
+
+  const selectedClient = bootstrap.clients.find((client) => client.id === state.clientId) ?? null;
+  const selectedVehicle =
+    bootstrap.vehicles.find((vehicle) => vehicle.id === state.vehicleId) ?? null;
+  const preview = useMemo(
+    () =>
+      buildContractPreview(state, {
+        company: bootstrap.company,
+        client: selectedClient,
+        vehicle: selectedVehicle,
+      }),
+    [bootstrap.company, selectedClient, selectedVehicle, state],
+  );
 
   const activeContent = (() => {
     if (activeSection === 'client') {
@@ -277,7 +376,7 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
   })();
 
   return (
-    <main className="grid min-w-0 gap-4 p-4 sm:p-6" data-testid="rental-constructor">
+    <main className="grid min-w-0 gap-4 p-4 pb-24 sm:p-6 sm:pb-24" data-testid="rental-constructor">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Новый клиент и договор</h1>
@@ -299,24 +398,34 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
         </span>
       </header>
 
-      <div className="grid min-h-[68dvh] gap-4 xl:grid-cols-[17rem_minmax(24rem,1fr)_minmax(28rem,1.15fr)]">
+      <div className="grid min-h-[68dvh] gap-4 xl:grid-cols-[17rem_minmax(26rem,1fr)_minmax(30rem,1.15fr)]">
         <ConstructorSections active={activeSection} state={state} onSelect={setActiveSection} />
         <section className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
           {activeContent}
         </section>
-        <aside className="hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)] xl:block">
+        <aside className="hidden min-w-0 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-elevated)] p-4 shadow-[var(--shadow-card)] xl:block">
           <h2 className="text-lg font-bold">Предварительный просмотр договора</h2>
-          <div className="mt-4 min-h-[52rem] rounded-sm bg-white p-8 text-sm text-neutral-900 shadow-inner">
-            <p className="text-center font-serif text-lg font-bold uppercase">
-              Договор проката транспортного средства
-            </p>
-            <p className="mt-8 font-serif leading-7">
-              Клиент: {state.clientFullName ?? '[не выбран]'}. Документ обновляется по мере
-              заполнения конструктора.
-            </p>
+          <div className="mt-4 max-h-[calc(100dvh-12rem)] overflow-y-auto rounded-[var(--radius-md)] p-2">
+            <ContractPreview preview={preview} />
           </div>
         </aside>
       </div>
+
+      <ConstructorFooter
+        active={activeSection}
+        onSelect={setActiveSection}
+        onPreview={() => setPreviewOpen(true)}
+      />
+
+      <Modal
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        title="Предварительный просмотр договора"
+        className="h-[calc(100dvh-1rem)] max-w-4xl overflow-y-auto p-3 sm:h-[calc(100dvh-2rem)] sm:p-5 xl:hidden"
+        backdropClassName="p-2 sm:p-4 xl:hidden"
+      >
+        <ContractPreview preview={preview} />
+      </Modal>
     </main>
   );
 }
