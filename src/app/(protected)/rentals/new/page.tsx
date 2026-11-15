@@ -1,16 +1,19 @@
 import { AppShell } from '@/shared/components/app-shell/AppShell';
 import { requireClientAccess } from '@/modules/clients/access';
-import { getClients } from '@/modules/clients/server/queries';
-import { NewRentalClientPicker } from '@/modules/rentals/components/NewRentalClientPicker';
+import { RentalConstructor } from '@/modules/rentals/constructor/components/RentalConstructor';
+import { getRentalConstructorBootstrap } from '@/modules/rentals/constructor/server/bootstrap';
 
 export default async function NewRentalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ client?: string; company?: string }>;
 }) {
-  const { q = '' } = await searchParams;
+  const { client, company } = await searchParams;
   const access = await requireClientAccess('VIEW_CLIENTS');
-  const result = await getClients(access, { q, page: 1, pageSize: 30 });
+  const bootstrap = await getRentalConstructorBootstrap(access, {
+    preferredCompanyId: company,
+    preferredClientId: client,
+  });
 
   return (
     <AppShell
@@ -20,15 +23,7 @@ export default async function NewRentalPage({
         { label: 'Новый договор' },
       ]}
     >
-      <NewRentalClientPicker
-        query={q}
-        clients={result.items.map((client) => ({
-          id: client.id,
-          fullName: client.fullName,
-          phone: client.phone,
-          status: client.status,
-        }))}
-      />
+      <RentalConstructor bootstrap={bootstrap} />
     </AppShell>
   );
 }

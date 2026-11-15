@@ -1,0 +1,73 @@
+import { describe, expect, it } from 'vitest';
+
+import type { ClientAccess } from '@/modules/clients/access';
+
+import { createRentalConstructorBootstrap } from './bootstrap';
+
+const access: ClientAccess = {
+  user: {
+    id: 'user-1',
+    email: 'owner@supapro.ru',
+    name: 'Павел',
+    role: 'SUPER_ADMIN',
+    canAccessAdmin: true,
+  },
+  scope: 'SYSTEM',
+  companyIds: [],
+  canManage: true,
+};
+
+describe('rental constructor bootstrap', () => {
+  it('keeps the preferred client inside the selected company', async () => {
+    const bootstrap = createRentalConstructorBootstrap({
+      listCompanies: async () => [
+        { id: 'company-a', name: 'СУПА ПРО Москва' },
+        { id: 'company-b', name: 'СУПА ПРО Казань' },
+      ],
+      listClients: async () => [
+        {
+          id: 'client-a',
+          companyId: 'company-a',
+          fullName: 'Щапова Анна Петровна',
+          phone: '+7 950 080-99-08',
+          status: 'VERIFIED',
+        },
+      ],
+      getClient: async () => ({
+        id: 'client-b',
+        companyId: 'company-b',
+        fullName: 'Чужой клиент',
+        phone: null,
+        status: 'NEW',
+      }),
+      listVehicles: async () => [],
+      getTemplate: async () => ({ id: 'template-a' }),
+    });
+
+    const result = await bootstrap(access, {
+      preferredCompanyId: 'company-a',
+      preferredClientId: 'client-b',
+    });
+
+    expect(result.companyId).toBe('company-a');
+    expect(result.preferredClient).toBeNull();
+    expect(result.clients.every((client) => client.companyId === 'company-a')).toBe(true);
+  });
+
+  it('uses the only permitted company for a company user', async () => {
+    const bootstrap = createRentalConstructorBootstrap({
+      listCompanies: async () => [{ id: 'company-a', name: 'СУПА ПРО Москва' }],
+      listClients: async () => [],
+      getClient: async () => null,
+      listVehicles: async () => [],
+      getTemplate: async () => null,
+    });
+
+    const result = await bootstrap(
+      { ...access, scope: 'COMPANY', companyIds: ['company-a'] },
+      { preferredCompanyId: 'company-b' },
+    );
+
+    expect(result.companyId).toBe('company-a');
+  });
+});
