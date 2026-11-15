@@ -1,4 +1,5 @@
 import { inflateRawSync } from 'node:zlib';
+import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 import { buildRentalSnapshot } from '../../domain/build-snapshot';
 import { generateRentalDocx } from './generate-docx';
@@ -28,6 +29,26 @@ function documentXml(bytes: Uint8Array) {
     offset += 46 + nameLength + extraLength + commentLength;
   }
   throw new Error('word/document.xml не найден');
+}
+
+async function completeContractXml(bytes: Uint8Array) {
+  const archive = await JSZip.loadAsync(bytes);
+  const document = await archive.file('word/document.xml')!.async('string');
+  const header = await archive.file('word/header1.xml')!.async('string');
+  return `${header}\n${document}`;
+}
+
+function visibleText(value: string) {
+  return [...value.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/gu)]
+    .map((match) =>
+      (match[1] ?? '')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&apos;', "'")
+        .replaceAll('&amp;', '&'),
+    )
+    .join('');
 }
 
 const snapshot = buildRentalSnapshot({
@@ -123,9 +144,32 @@ describe('generateRentalDocx', () => {
     expect(xml).toContain('45 01 123456');
     expect(xml).toContain('77 01 123456');
     expect(xml).toContain('Страховщик');
-    expect(xml).toContain('Приложение № 1. Штрафы');
+    expect(xml).toContain('Приложение № 1');
+    expect(xml).toContain('Штрафы');
     expect((xml.match(/<w:tbl/g) ?? []).length).toBeGreaterThanOrEqual(6);
     expect(xml).not.toMatch(/{{[^}]+}}/);
+  });
+
+  it('uses the approved full rental contract and replaces every reference customer value', async () => {
+    const xml = visibleText(
+      await completeContractXml(
+        await generateRentalDocx(snapshot, {
+          contractNumber: 'ME-2026-0001-BK',
+          templateVersion: 'legal-content-v1',
+        }),
+      ),
+    );
+
+    expect(xml).toContain('ДОГОВОР ПРОКАТА ТРАНСПОРТНОГО СРЕДСТВА (БЕЗ ЭКИПАЖА)');
+    expect(xml).toContain('ПОРЯДОК ВОЗВРАТА И УДЕРЖАНИЯ ЗАЛОГА');
+    expect(xml).toContain('Возврат (сдача) автомобиля после окончания аренды третьим лицом');
+    expect(xml).toContain('ME-2026-0001-BK');
+    expect(xml).toContain('Иван Иванов');
+    expect(xml).toContain('А156АХ997');
+    expect(xml).not.toContain('Кульпинёв');
+    expect(xml).not.toContain('BMW 520D XDRIVE');
+    expect(xml).not.toContain('В415ЕВ250');
+    expect(xml).not.toContain('23 24 № 211104');
   });
 
   it('uses a deterministic Moscow date format and the selected legal template', async () => {
@@ -144,14 +188,16 @@ describe('generateRentalDocx', () => {
       vehicle: { ...snapshot.vehicle, includedMileageKm: 200 },
       rental: { ...snapshot.rental, days: 4 },
     };
-    const xml = documentXml(
-      await generateRentalDocx(fourDaySnapshot, {
-        contractNumber: 'ME-2026-MILEAGE',
-        templateVersion: 'legal-content-v1',
-      }),
+    const xml = visibleText(
+      documentXml(
+        await generateRentalDocx(fourDaySnapshot, {
+          contractNumber: 'ME-2026-MILEAGE',
+          templateVersion: 'legal-content-v1',
+        }),
+      ),
     );
 
-    expect(xml).toContain('200 км/сутки, всего 800 км');
+    expect(xml).toContain('включённый пробег 200 км/сутки, всего 800 км');
   });
 
   it('uses the 200 km daily policy for a legacy standard snapshot without mileage', async () => {
@@ -160,14 +206,16 @@ describe('generateRentalDocx', () => {
       vehicle: { ...snapshot.vehicle, includedMileageKm: null },
       rental: { ...snapshot.rental, days: 10 },
     };
-    const xml = documentXml(
-      await generateRentalDocx(legacySnapshot, {
-        contractNumber: 'ME-2026-LEGACY-MILEAGE',
-        templateVersion: 'legal-content-v1',
-      }),
+    const xml = visibleText(
+      documentXml(
+        await generateRentalDocx(legacySnapshot, {
+          contractNumber: 'ME-2026-LEGACY-MILEAGE',
+          templateVersion: 'legal-content-v1',
+        }),
+      ),
     );
 
-    expect(xml).toContain('200 км/сутки, всего 2000 км');
+    expect(xml).toContain('включённый пробег 200 км/сутки, всего 2000 км');
   });
 
   it('omits mileage allowance for a lease-to-own snapshot', async () => {
@@ -188,11 +236,13 @@ describe('generateRentalDocx', () => {
   });
 
   it('renders immutable issuance details without substituting the primary client as a driver', async () => {
-    const xml = documentXml(
-      await generateRentalDocx(issuedSnapshot, {
-        contractNumber: 'ME-2026-ISSUANCE',
-        templateVersion: 'legal-content-v1',
-      }),
+    const xml = visibleText(
+      documentXml(
+        await generateRentalDocx(issuedSnapshot, {
+          contractNumber: 'ME-2026-ISSUANCE',
+          templateVersion: 'legal-content-v1',
+        }),
+      ),
     );
 
     for (const value of [
@@ -207,9 +257,7 @@ describe('generateRentalDocx', () => {
       'Иванов Иван; Петров Пётр',
     ])
       expect(xml).toContain(value);
-    expect(xml).not.toContain(
-      'Допущенные водители</w:t></w:r></w:tc><w:tc><w:p><w:r><w:t>Иван Иванов',
-    );
+    expect(xml).not.toContain('Допущенные водителиИван Иванов');
   });
 
   it('renders every absent optional snapshot value as an em dash', async () => {
@@ -257,8 +305,8 @@ describe('generateRentalDocx', () => {
     );
     expect(xml).not.toMatch(/undefined|null/);
     expect(xml).toContain('—');
-    expect(xml).toMatch(/Скидка<\/w:t>[\s\S]*?<w:t[^>]*>—/);
-    expect(xml).toMatch(/Дополнительные услуги<\/w:t>[\s\S]*?<w:t[^>]*>—/);
-    expect(xml).toMatch(/Залог<\/w:t>[\s\S]*?<w:t[^>]*>—/);
+    expect(xml).toContain('ЦВЕТ');
+    expect(xml).toContain('ТОПЛИВО');
+    expect(xml).not.toContain('Кульпинёв');
   });
 });

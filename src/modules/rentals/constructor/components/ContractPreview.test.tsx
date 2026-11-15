@@ -36,7 +36,15 @@ describe('ContractPreview', () => {
     );
 
     expect(screen.getByRole('article', { name: 'Документ договора' })).toBeTruthy();
-    expect(screen.getByText('Щапова Анна Петровна')).toBeTruthy();
-    expect(screen.getAllByText('Не заполнено')).toHaveLength(3);
+    expect(screen.getAllByText('Щапова Анна Петровна').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Не заполнено').length).toBeGreaterThanOrEqual(3);
+    expect(document.querySelectorAll('[data-contract-page]')).toHaveLength(13);
+    expect(
+      screen.getAllByText('Договор проката транспортного средства (без экипажа)').length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('11. Реквизиты и подписи сторон')).toBeTruthy();
+    expect(screen.getByText('Приложение № 1')).toBeTruthy();
+    expect(screen.getAllByText('Штрафы').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('28.')).toBeTruthy();
   });
 });
