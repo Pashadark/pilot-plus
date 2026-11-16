@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 
 import { moscowLocalToUtc } from '@/modules/rentals/domain/calculate-rental';
 import { Modal } from '@/shared/ui/Overlays';
-import { buildContractPreview } from '../domain/preview';
 import { validateSection } from '../domain/flow';
 import type { RentalConstructorBootstrap } from '../server/bootstrap';
 import type { RentalConstructorSectionId, RentalConstructorState } from '../domain/types';
@@ -316,19 +315,6 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
     heading.focus();
   }, [activeSection]);
 
-  const selectedClient = bootstrap.clients.find((client) => client.id === state.clientId) ?? null;
-  const selectedVehicle =
-    bootstrap.vehicles.find((vehicle) => vehicle.id === state.vehicleId) ?? null;
-  const preview = useMemo(
-    () =>
-      buildContractPreview(state, {
-        company: bootstrap.company,
-        client: selectedClient,
-        vehicle: selectedVehicle,
-      }),
-    [bootstrap.company, selectedClient, selectedVehicle, state],
-  );
-
   const reviewErrors = validateSection(state, 'review');
   const finalize = useCallback(async () => {
     const payload = draftFormData(stateRef.current, bootstrap.templateVersionId);
@@ -490,7 +476,11 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
         <aside className="hidden min-w-0 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-elevated)] p-4 shadow-[var(--shadow-card)] xl:block">
           <h2 className="text-lg font-bold">Предварительный просмотр договора</h2>
           <div className="mt-4 max-h-[calc(100dvh-12rem)] overflow-y-auto rounded-[var(--radius-md)] p-2">
-            <ContractPreview preview={preview} />
+            <ContractPreview
+              rentalId={state.rentalId}
+              version={state.expectedUpdatedAt}
+              saveStatus={saveStatus}
+            />
           </div>
         </aside>
       </div>
@@ -511,7 +501,13 @@ export function RentalConstructor({ bootstrap }: { bootstrap: RentalConstructorB
         className="h-[calc(100dvh-1rem)] max-w-4xl overflow-y-auto p-3 sm:h-[calc(100dvh-2rem)] sm:p-5 xl:hidden"
         backdropClassName="p-2 sm:p-4 xl:hidden"
       >
-        <ContractPreview preview={preview} />
+        {previewOpen ? (
+          <ContractPreview
+            rentalId={state.rentalId}
+            version={state.expectedUpdatedAt}
+            saveStatus={saveStatus}
+          />
+        ) : null}
       </Modal>
     </main>
   );
