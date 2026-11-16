@@ -35,15 +35,36 @@ function valueAfter(lines: string[], label: RegExp) {
 }
 
 export function parseRussianPassportOcr(text: string): PassportOcrFields {
-  const normalized = text.toUpperCase().replace(/[ОO]/gu, '0');
-  const lines = cleanedLines(text.toUpperCase());
+  const upper = text.toUpperCase();
+  const normalized = upper.replace(/[ОO]/gu, '0');
+  const lines = cleanedLines(upper);
   const compact = normalized.replace(/[^А-ЯA-Z0-9.-]+/gu, ' ');
   const passport = /(?:^|\s)(\d{2})\s?(\d{2})\s+(\d{6})(?:\s|$)/u.exec(compact);
   const passportDigits = lines
     .map((line) => line.replace(/\D/gu, ''))
     .find((digits) => digits.length === 10);
   const division = /(\d{3})[-\s](\d{3})/u.exec(compact);
-  const dates = [...compact.matchAll(/\b\d{2}[.\-/]\d{2}[.\-/]\d{4}\b/gu)].map((match) => match[0]);
+  const datePattern = '(\\d{2})\\s*[.\\-/]\\s*(\\d{2})\\s*[.\\-/]\\s*(\\d{4})';
+  const dates = [...upper.matchAll(new RegExp(datePattern, 'gu'))].map(
+    (match) => `${match[1]}.${match[2]}.${match[3]}`,
+  );
+  const issuedDateMatch = new RegExp(`ДАТА\\s+(?:ВЫДАЧИ|ВЫМЕЧИ)\\D{0,24}${datePattern}`, 'u').exec(
+    upper.replace(/\s+/gu, ' '),
+  );
+  const birthDateMatch = new RegExp(
+    `ДАТА\\D{0,16}${datePattern}.{0,40}РОЖДЕНИЯ|ДАТА\\s+РОЖДЕНИЯ\\D{0,16}${datePattern}`,
+    'u',
+  ).exec(upper.replace(/\s+/gu, ' '));
+  const issuedAt = issuedDateMatch
+    ? isoDate(`${issuedDateMatch[1]}.${issuedDateMatch[2]}.${issuedDateMatch[3]}`)
+    : isoDate(dates[0]);
+  const birthDate = birthDateMatch
+    ? isoDate(
+        birthDateMatch[1]
+          ? `${birthDateMatch[1]}.${birthDateMatch[2]}.${birthDateMatch[3]}`
+          : `${birthDateMatch[4]}.${birthDateMatch[5]}.${birthDateMatch[6]}`,
+      )
+    : isoDate(dates.find((date) => isoDate(date) !== issuedAt) ?? dates[1]);
   // JavaScript word boundaries do not treat Cyrillic letters as word characters,
   // therefore use explicit whitespace/end look-ahead for Russian labels.
   const surname = valueAfter(lines, /^(?:ФАМИЛИЯ|SURNAME)(?=\s|$)/u);
@@ -55,7 +76,7 @@ export function parseRussianPassportOcr(text: string): PassportOcrFields {
     ...(surname ? { lastName: surname } : {}),
     ...(firstName ? { firstName } : {}),
     ...(middleName ? { middleName } : {}),
-    ...(dates[1] && isoDate(dates[1]) ? { birthDate: isoDate(dates[1]) } : {}),
+    ...(birthDate ? { birthDate } : {}),
     ...(passport
       ? { passportSeries: `${passport[1]}${passport[2]}` }
       : passportDigits
@@ -66,7 +87,7 @@ export function parseRussianPassportOcr(text: string): PassportOcrFields {
       : passportDigits
         ? { passportNumber: passportDigits.slice(4) }
         : {}),
-    ...(dates[0] && isoDate(dates[0]) ? { passportIssuedAt: isoDate(dates[0]) } : {}),
+    ...(issuedAt ? { passportIssuedAt: issuedAt } : {}),
     ...(division ? { passportDivisionCode: `${division[1]}-${division[2]}` } : {}),
     ...(issuedBy ? { passportIssuedBy: issuedBy } : {}),
   };

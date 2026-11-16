@@ -2,6 +2,8 @@ import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 
 import {
+  createClientOcrImageCandidates,
+  createClientOcrNumberCandidates,
   extractRussianPassportPortrait,
   preprocessDriverLicenseForOcr,
   preprocessRussianPassportForOcr,
@@ -9,6 +11,42 @@ import {
 } from './client-ocr-image';
 
 describe('passport OCR preprocessing', () => {
+  it('prepares both vertical passport edges for serial-number OCR', async () => {
+    const source = await sharp({
+      create: { width: 1800, height: 1080, channels: 3, background: '#f4f1ea' },
+    })
+      .png()
+      .toBuffer();
+
+    const candidates = await createClientOcrNumberCandidates(source, 'PASSPORT_MAIN');
+    const metadata = await Promise.all(
+      candidates.map((candidate) => sharp(candidate).metadata()),
+    );
+
+    expect(candidates).toHaveLength(8);
+    expect(metadata.every((item) => item.width === 1800)).toBe(true);
+  });
+
+  it('keeps all four physical document orientations available for OCR', async () => {
+    const source = await sharp({
+      create: { width: 1200, height: 2000, channels: 3, background: '#f4f1ea' },
+    })
+      .png()
+      .toBuffer();
+
+    const candidates = await createClientOcrImageCandidates(source, 'PASSPORT_MAIN');
+
+    expect(candidates.map((candidate) => candidate.rotation)).toEqual([0, 270, 90, 180]);
+    await expect(
+      Promise.all(candidates.map((candidate) => sharp(candidate.bytes).metadata())),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ width: 1800, height: 3000 }),
+        expect.objectContaining({ width: 1800, height: 1080 }),
+      ]),
+    );
+  });
+
   it('prepares the full spread and rotates the serial-number edge into a text line', async () => {
     const source = await sharp({
       create: { width: 2000, height: 1200, channels: 3, background: '#f4f1ea' },
@@ -31,11 +69,11 @@ describe('passport OCR preprocessing', () => {
 });
 
 describe('preprocessDriverLicenseForOcr', () => {
-  it('уменьшает большое фото прав перед распознаванием', async () => {
+  it('увеличивает мелкий текст на фото прав перед распознаванием', async () => {
     const source = await sharp({
       create: {
-        width: 2880,
-        height: 3840,
+        width: 960,
+        height: 1280,
         channels: 3,
         background: '#ffffff',
       },
@@ -43,11 +81,27 @@ describe('preprocessDriverLicenseForOcr', () => {
       .jpeg()
       .toBuffer();
 
-    const result = await preprocessDriverLicenseForOcr(source);
+    const result = await preprocessDriverLicenseForOcr(source, 270);
     const metadata = await sharp(result).metadata();
 
-    expect(metadata.width).toBe(900);
-    expect(metadata.height).toBe(1200);
+    expect(metadata.width).toBe(1800);
+    expect(metadata.height).toBe(1350);
+  });
+
+  it('prepares the lower-left licence area for number OCR', async () => {
+    const source = await sharp({
+      create: { width: 1800, height: 1350, channels: 3, background: '#ffffff' },
+    })
+      .png()
+      .toBuffer();
+
+    const candidates = await createClientOcrNumberCandidates(source, 'DRIVER_LICENSE');
+    const metadata = await Promise.all(
+      candidates.map((candidate) => sharp(candidate).metadata()),
+    );
+
+    expect(candidates).toHaveLength(2);
+    expect(metadata.every((item) => item.width === 2000)).toBe(true);
   });
 });
 

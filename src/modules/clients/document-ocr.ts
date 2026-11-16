@@ -86,3 +86,68 @@ export function parseClientDocumentOcr(kind: ClientOcrDocumentKind, text: string
   if (kind === 'PASSPORT_REGISTRATION') return parseRegistration(text);
   return parseDriverLicense(text);
 }
+
+export type ClientOcrTextCandidate = {
+  rotation: number;
+  text: string;
+};
+
+export type ClientOcrImageCandidate = {
+  rotation: number;
+  bytes: Uint8Array;
+};
+
+function hasEnoughClientOcrFields(kind: ClientOcrDocumentKind, fields: ClientOcrFields) {
+  if (kind === 'PASSPORT_MAIN') return Object.keys(fields).length >= 5;
+  if (kind === 'PASSPORT_REGISTRATION') return Boolean(fields.registrationAddress);
+  return Boolean(
+    fields.driverLicense && fields.driverLicenseIssuedAt && fields.driverLicenseExpiresAt,
+  );
+}
+
+export function selectBestClientOcrCandidate(
+  kind: ClientOcrDocumentKind,
+  candidates: ClientOcrTextCandidate[],
+) {
+  return candidates
+    .map((candidate) => ({
+      ...candidate,
+      fields: parseClientDocumentOcr(kind, candidate.text),
+    }))
+    .reduce((best, candidate) =>
+      Object.keys(candidate.fields).length > Object.keys(best.fields).length ? candidate : best,
+    );
+}
+
+export function mergeClientOcrSupplementalTexts(
+  kind: ClientOcrDocumentKind,
+  primaryText: string,
+  supplementalTexts: string[],
+) {
+  const merged: ClientOcrFields = { ...parseClientDocumentOcr(kind, primaryText) };
+  const writable = merged as Record<string, string | undefined>;
+  for (const text of supplementalTexts) {
+    const fields = parseClientDocumentOcr(kind, `${primaryText}\n${text}`) as Record<
+      string,
+      string | undefined
+    >;
+    for (const [key, value] of Object.entries(fields)) {
+      if (!writable[key] && value) writable[key] = value;
+    }
+  }
+  return merged;
+}
+
+export async function recognizeBestClientOcrCandidate(
+  kind: ClientOcrDocumentKind,
+  candidates: ClientOcrImageCandidate[],
+  recognize: (candidate: ClientOcrImageCandidate) => Promise<string>,
+) {
+  const recognized: ClientOcrTextCandidate[] = [];
+  for (const candidate of candidates) {
+    recognized.push({ rotation: candidate.rotation, text: await recognize(candidate) });
+    const best = selectBestClientOcrCandidate(kind, recognized);
+    if (hasEnoughClientOcrFields(kind, best.fields)) return best;
+  }
+  return selectBestClientOcrCandidate(kind, recognized);
+}

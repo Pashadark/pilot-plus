@@ -12,12 +12,15 @@ import {
 } from '@/modules/client-documents/file-validation';
 import { getClientAccess } from '@/modules/clients/access';
 import {
+  createClientOcrImageCandidates,
+  createClientOcrNumberCandidates,
   extractRussianPassportPortrait,
-  preprocessDriverLicenseForOcr,
-  preprocessRussianPassportForOcr,
-  preprocessRussianPassportSerialForOcr,
 } from '@/modules/clients/client-ocr-image';
-import { isClientOcrDocumentKind, parseClientDocumentOcr } from '@/modules/clients/document-ocr';
+import {
+  isClientOcrDocumentKind,
+  mergeClientOcrSupplementalTexts,
+  recognizeBestClientOcrCandidate,
+} from '@/modules/clients/document-ocr';
 
 export const runtime = 'nodejs';
 
@@ -47,6 +50,19 @@ function recognize(path: string, options?: { psm?: string; whitelist?: string })
   });
 }
 
+async function recognizeBytes(
+  bytes: Uint8Array,
+  options?: { psm?: string; whitelist?: string },
+) {
+  const path = join(tmpdir(), `supapro-client-document-${randomUUID()}.png`);
+  try {
+    await writeFile(path, bytes, { flag: 'wx' });
+    return await recognize(path, options);
+  } finally {
+    await unlink(path).catch(() => undefined);
+  }
+}
+
 export async function POST(request: Request) {
   const access = await getClientAccess('MANAGE_CLIENTS');
   if (!access) return NextResponse.json({ error: 'Доступ запрещён.' }, { status: 403 });
@@ -70,43 +86,40 @@ export async function POST(request: Request) {
       );
     }
     const isPassport = documentKind === 'PASSPORT_MAIN';
-    const ocrBytes = isPassport
-      ? await preprocessRussianPassportForOcr(bytes)
-      : documentKind === 'DRIVER_LICENSE'
-        ? await preprocessDriverLicenseForOcr(bytes)
-        : bytes;
-    const extension = isPassport || documentKind === 'DRIVER_LICENSE' ? 'png' : validated.extension;
-    const path = join(tmpdir(), `supapro-client-document-${randomUUID()}.${extension}`);
-    const serialPath = isPassport
-      ? join(tmpdir(), `supapro-passport-serial-${randomUUID()}.png`)
-      : null;
-    try {
-      await writeFile(path, ocrBytes, { flag: 'wx' });
-      if (serialPath) {
-        await writeFile(serialPath, await preprocessRussianPassportSerialForOcr(bytes), {
-          flag: 'wx',
-        });
+    const candidates = await createClientOcrImageCandidates(bytes, documentKind);
+    const best = await recognizeBestClientOcrCandidate(documentKind, candidates, (candidate) =>
+      recognizeBytes(candidate.bytes, { psm: isPassport ? '11' : '6' }),
+    );
+    const bestImage = candidates.find((candidate) => candidate.rotation === best.rotation);
+    const supplementalTexts: string[] = [];
+    if (bestImage && documentKind !== 'PASSPORT_REGISTRATION') {
+      for (const numberImage of await createClientOcrNumberCandidates(
+        bestImage.bytes,
+        documentKind,
+      )) {
+        supplementalTexts.push(
+          await recognizeBytes(numberImage, {
+            psm: '11',
+            whitelist: '0123456789 ',
+          }),
+        );
+        const fields = mergeClientOcrSupplementalTexts(
+          documentKind,
+          best.text,
+          supplementalTexts,
+        );
+        if (isPassport ? fields.passportNumber : fields.driverLicense) break;
       }
-      const [text, serialText] = await Promise.all([
-        recognize(path, { psm: isPassport ? '11' : '6' }),
-        serialPath
-          ? recognize(serialPath, { psm: '7', whitelist: '0123456789' })
-          : Promise.resolve(''),
-      ]);
-      const portrait =
-        documentKind === 'PASSPORT_MAIN'
-          ? await extractRussianPassportPortrait(bytes)
-              .then((value) => `data:image/webp;base64,${value.toString('base64')}`)
-              .catch(() => null)
-          : null;
-      return NextResponse.json({
-        fields: parseClientDocumentOcr(documentKind, `${text}\n${serialText}`),
-        portrait,
-      });
-    } finally {
-      await unlink(path).catch(() => undefined);
-      if (serialPath) await unlink(serialPath).catch(() => undefined);
     }
+    const portrait = isPassport
+      ? await extractRussianPassportPortrait(bytes)
+          .then((value) => `data:image/webp;base64,${value.toString('base64')}`)
+          .catch(() => null)
+      : null;
+    return NextResponse.json({
+      fields: mergeClientOcrSupplementalTexts(documentKind, best.text, supplementalTexts),
+      portrait,
+    });
   } catch {
     return NextResponse.json(
       { error: 'Не удалось распознать документ. Заполните поля вручную.' },
