@@ -36,6 +36,20 @@ describe('parseClientDocumentOcr', () => {
     });
   });
 
+  it('исправляет типичные ошибки OCR в номере и дате прав', () => {
+    expect(
+      mergeClientOcrSupplementalTexts(
+        'DRIVER_LICENSE',
+        '02.02.1989 44.04.2021 14.04.2031 5. 9918',
+        ['39 18 956464'],
+      ),
+    ).toEqual({
+      driverLicense: '99 18 956464',
+      driverLicenseIssuedAt: '2021-04-14',
+      driverLicenseExpiresAt: '2031-04-14',
+    });
+  });
+
   it('выбирает поворот, в котором распознаны ключевые поля документа', () => {
     expect(
       selectBestClientOcrCandidate('DRIVER_LICENSE', [
